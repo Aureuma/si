@@ -5298,6 +5298,166 @@ fn aws_ec2_instance_start_json_executes_signed_query_request() {
 }
 
 #[test]
+fn aws_lambda_function_list_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /2015-03-31/functions/?MaxItems=50 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_lambda_list")], r#"{"Functions":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "lambda", "function", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_lambda_list");
+    assert_eq!(parsed["data"]["Functions"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_lambda_function_get_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /2015-03-31/functions/demo-fn HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_lambda_get")], r#"{"FunctionName":"demo-fn"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "lambda", "function", "get", "demo-fn",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_lambda_get");
+    assert_eq!(parsed["data"]["FunctionName"], "demo-fn");
+    server.join();
+}
+
+#[test]
+fn aws_ecr_repository_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.DescribeRepositories\r\n"));
+        assert!(request.contains("content-type: application/x-amz-json-1.1\r\n"));
+        assert!(request.contains(r#"{\"maxResults\":50}"#) || request.contains(r#"{"maxResults":50}"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_repo_list")], r#"{"repositories":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "ecr", "repository", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ecr_repo_list");
+    assert_eq!(parsed["data"]["repositories"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_ecr_repository_create_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.CreateRepository\r\n"));
+        assert!(request.contains(r#""repositoryName":"demo-repo""#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_repo_create")], r#"{"repository":{"repositoryName":"demo-repo"}}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "ecr", "repository", "create", "demo-repo",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ecr_repo_create");
+    assert_eq!(parsed["data"]["repository"]["repositoryName"], "demo-repo");
+    server.join();
+}
+
+#[test]
+fn aws_ecr_image_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.ListImages\r\n"));
+        assert!(request.contains(r#""repositoryName":"demo-repo""#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_image_list")], r#"{"imageIds":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "ecr", "image", "list",
+            "--repository", "demo-repo",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ecr_image_list");
+    assert_eq!(parsed["data"]["imageIds"][0], Value::Null);
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

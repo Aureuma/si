@@ -1708,6 +1708,14 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSEC2Command,
     },
+    Lambda {
+        #[command(subcommand)]
+        command: AWSLambdaCommand,
+    },
+    Ecr {
+        #[command(subcommand)]
+        command: AWSEcrCommand,
+    },
     Doctor {
         #[arg(long)]
         account: Option<String>,
@@ -2156,6 +2164,226 @@ enum AWSEC2InstanceCommand {
         #[arg(long)]
         json: bool,
         #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSLambdaCommand {
+    Function {
+        #[command(subcommand)]
+        command: AWSLambdaFunctionCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSLambdaFunctionCommand {
+    List {
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        id: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSEcrCommand {
+    Repository {
+        #[command(subcommand)]
+        command: AWSEcrRepositoryCommand,
+    },
+    Image {
+        #[command(subcommand)]
+        command: AWSEcrImageCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSEcrRepositoryCommand {
+    List {
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        name: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        scan_on_push: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        name: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        delete_images: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSEcrImageCommand {
+    List {
+        #[arg(long)]
+        repository: String,
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
         raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
@@ -11339,6 +11567,229 @@ fn main() -> Result<()> {
                     }
                 }
             },
+            AWSCommand::Lambda { command } => match command {
+                AWSLambdaCommand::Function { command } => match command {
+                    AWSLambdaFunctionCommand::List {
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_lambda_function_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSLambdaFunctionCommand::Get {
+                        id,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_lambda_function_get(
+                            id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSLambdaFunctionCommand::Delete {
+                        id,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_lambda_function_delete(
+                            id,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                }
+            },
+            AWSCommand::Ecr { command } => match command {
+                AWSEcrCommand::Repository { command } => match command {
+                    AWSEcrRepositoryCommand::List {
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ecr_repository_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSEcrRepositoryCommand::Create {
+                        name,
+                        scan_on_push,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ecr_repository_create(
+                            name,
+                            scan_on_push,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSEcrRepositoryCommand::Delete {
+                        name,
+                        delete_images,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ecr_repository_delete(
+                            name,
+                            delete_images,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                AWSEcrCommand::Image { command } => match command {
+                    AWSEcrImageCommand::List {
+                        repository,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ecr_image_list(
+                            repository,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                }
+            },
             AWSCommand::Doctor {
                 account,
                 region,
@@ -19778,6 +20229,8 @@ fn aws_default_service_endpoint(service: &str, region: &str) -> String {
             }
         }
         "ec2" => format!("https://ec2.{region}.amazonaws.com"),
+        "lambda" => format!("https://lambda.{region}.amazonaws.com"),
+        "ecr" => format!("https://api.ecr.{region}.amazonaws.com"),
         _ => format!("https://{service}.{region}.amazonaws.com"),
     }
 }
@@ -19869,6 +20322,31 @@ fn execute_aws_rest(
             params: params.clone(),
             body: body.to_owned(),
             content_type: content_type.to_owned(),
+            ..AWSAPIRequest::default()
+        },
+    )
+}
+
+fn execute_aws_json(
+    runtime: &AWSRuntimeContext,
+    service: &str,
+    target: &str,
+    payload: &Value,
+) -> std::result::Result<AWSAPIResponse, String> {
+    let mut headers = BTreeMap::new();
+    if !target.trim().is_empty() {
+        headers.insert("x-amz-target".to_owned(), target.trim().to_owned());
+    }
+    execute_aws_api_request(
+        runtime,
+        &AWSAPIRequest {
+            method: "POST".to_owned(),
+            path: "/".to_owned(),
+            service: service.to_owned(),
+            headers,
+            body: payload.to_string(),
+            content_type: "application/x-amz-json-1.1".to_owned(),
+            accept: "application/x-amz-json-1.1".to_owned(),
             ..AWSAPIRequest::default()
         },
     )
@@ -20286,6 +20764,263 @@ fn run_aws_ec2_instance_mutation(
         home,
         settings_file,
         |runtime| execute_aws_query(&runtime, "ec2", "2016-11-15", action, &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_lambda_function_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "lambda",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            let mut params = BTreeMap::new();
+            if limit > 0 {
+                params.insert("MaxItems".to_owned(), limit.to_string());
+            }
+            execute_aws_rest(&runtime, "lambda", "GET", "/2015-03-31/functions/", &params, "", "")
+        },
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_lambda_function_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let id = id.trim().to_owned();
+    if id.is_empty() {
+        anyhow::bail!("aws lambda function get requires a function name or arn");
+    }
+    let response = execute_aws_service_request(
+        "lambda",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_rest(&runtime, "lambda", "GET", &format!("/2015-03-31/functions/{}", id), &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_lambda_function_delete(
+    id: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let id = id.trim().to_owned();
+    if id.is_empty() {
+        anyhow::bail!("aws lambda function delete requires a function name or arn");
+    }
+    if !force {
+        anyhow::bail!("aws lambda function delete requires --force on the Rust path");
+    }
+    let response = execute_aws_service_request(
+        "lambda",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_rest(&runtime, "lambda", "DELETE", &format!("/2015-03-31/functions/{}", id), &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ecr_repository_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "maxResults": limit });
+    let response = execute_aws_service_request(
+        "ecr",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.DescribeRepositories", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ecr_repository_create(
+    name: String,
+    scan_on_push: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let name = name.trim().to_owned();
+    if name.is_empty() {
+        anyhow::bail!("aws ecr repository create requires a repository name");
+    }
+    let payload = if scan_on_push {
+        serde_json::json!({
+            "repositoryName": name,
+            "imageScanningConfiguration": { "scanOnPush": true }
+        })
+    } else {
+        serde_json::json!({ "repositoryName": name })
+    };
+    let response = execute_aws_service_request(
+        "ecr",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.CreateRepository", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ecr_repository_delete(
+    name: String,
+    delete_images: bool,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let name = name.trim().to_owned();
+    if name.is_empty() {
+        anyhow::bail!("aws ecr repository delete requires a repository name");
+    }
+    if !force {
+        anyhow::bail!("aws ecr repository delete requires --force on the Rust path");
+    }
+    let payload = serde_json::json!({
+        "repositoryName": name,
+        "force": delete_images,
+    });
+    let response = execute_aws_service_request(
+        "ecr",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.DeleteRepository", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ecr_image_list(
+    repository: String,
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let repository = repository.trim().to_owned();
+    if repository.is_empty() {
+        anyhow::bail!("aws ecr image list requires --repository");
+    }
+    let payload = serde_json::json!({
+        "repositoryName": repository,
+        "maxResults": limit,
+    });
+    let response = execute_aws_service_request(
+        "ecr",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.ListImages", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
 }
