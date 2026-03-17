@@ -442,6 +442,12 @@ enum BuildInstallerCommand {
         #[arg(long = "no-path-hint", action = ArgAction::SetTrue)]
         no_path_hint: bool,
     },
+    #[command(name = "smoke-host")]
+    SmokeHost,
+    #[command(name = "smoke-npm")]
+    SmokeNpm,
+    #[command(name = "smoke-docker")]
+    SmokeDocker,
 }
 
 #[derive(Debug, Subcommand)]
@@ -17229,6 +17235,394 @@ fn warn_if_installer_path_missing(dir: &Path) {
     }
 }
 
+fn run_installer_smoke_host() -> Result<()> {
+    let root = std::env::current_dir().context("resolve repo root")?;
+    let installer = root.join("tools").join("install-si.sh");
+    let settings_helper = root.join("tools").join("test-install-si-settings.sh");
+    ensure_command_exists("git")?;
+    if !installer.exists() {
+        return Err(anyhow!("FAIL: installer not found at {}", installer.display()));
+    }
+    if !settings_helper.exists() {
+        return Err(anyhow!(
+            "FAIL: installer settings helper test not found at {}",
+            settings_helper.display()
+        ));
+    }
+
+    eprintln!("==> syntax check");
+    run_command_checked(&root, "bash", ["-n", installer.to_str().unwrap_or_default()])?;
+
+    eprintln!("==> installer settings helper tests");
+    run_path_command_checked(&root, &settings_helper, &[])?;
+
+    eprintln!("==> help output");
+    run_path_command_checked(&root, &installer, &["--help"])?;
+
+    let tmp = tempfile::tempdir().context("create temp dir")?;
+    eprintln!("==> dry-run: linux/amd64 install-dir with spaces");
+    let spaced_dir = tmp.path().join("bin dir");
+    fs::create_dir_all(&spaced_dir).with_context(|| format!("create {}", spaced_dir.display()))?;
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--install-dir",
+            spaced_dir.to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> dry-run: darwin/arm64 go download URL computation");
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--os",
+            "darwin",
+            "--arch",
+            "arm64",
+            "--go-mode",
+            "auto",
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> dry-run: no-path-hint flag");
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--no-path-hint",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> dry-run: --yes accepted");
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--yes",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> dry-run: backend local accepted");
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--backend",
+            "local",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> edge: invalid backend rejected");
+    run_path_command_expect_fail(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--backend",
+            "bad-backend",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> edge: install-dir and install-path are mutually exclusive");
+    run_path_command_expect_fail(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--install-dir",
+            tmp.path().join("x").to_str().unwrap_or_default(),
+            "--install-path",
+            tmp.path().join("y").join("si").to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> edge: invalid source-dir rejected");
+    run_path_command_expect_fail(
+        &root,
+        &installer,
+        &[
+            "--dry-run",
+            "--source-dir",
+            tmp.path().join("missing-source").to_str().unwrap_or_default(),
+            "--force",
+        ],
+    )?;
+
+    eprintln!("==> e2e: install from local checkout into temp bin");
+    let install_dir = tmp.path().join("bin");
+    fs::create_dir_all(&install_dir).with_context(|| format!("create {}", install_dir.display()))?;
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--install-dir",
+            install_dir.to_str().unwrap_or_default(),
+            "--force",
+            "--quiet",
+        ],
+    )?;
+    let installed = install_dir.join("si");
+    if !installed.exists() {
+        return Err(anyhow!("FAIL: expected installed binary at {}", installed.display()));
+    }
+    run_path_command_checked(&root, &installed, &["version"])?;
+    run_path_command_checked(&root, &installed, &["--help"])?;
+
+    eprintln!("==> e2e: uninstall");
+    run_path_command_checked(
+        &root,
+        &installer,
+        &[
+            "--install-dir",
+            install_dir.to_str().unwrap_or_default(),
+            "--uninstall",
+            "--quiet",
+        ],
+    )?;
+    if installed.exists() {
+        return Err(anyhow!("FAIL: expected {} to be removed", installed.display()));
+    }
+    eprintln!("==> ok");
+    Ok(())
+}
+
+fn run_installer_smoke_npm() -> Result<()> {
+    let root = std::env::current_dir().context("resolve repo root")?;
+    let version = read_si_version(&root)?;
+    let tmp = tempfile::tempdir().context("create temp dir")?;
+    let assets_dir = tmp.path().join("assets");
+    let npm_out = tmp.path().join("npm");
+    let prefix_dir = tmp.path().join("prefix");
+    for dir in [&assets_dir, &npm_out, &prefix_dir] {
+        fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    }
+
+    run_path_command_checked(
+        &root,
+        &root.join("tools").join("release").join("build-cli-release-assets.sh"),
+        &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+    )?;
+    run_path_command_checked(
+        &root,
+        &root.join("tools").join("release").join("npm").join("build-npm-package.sh"),
+        &["--version", &version, "--out-dir", npm_out.to_str().unwrap_or_default()],
+    )?;
+
+    let tarball = find_npm_package_tarball(&npm_out)?;
+    run_command_checked(
+        &root,
+        "npm",
+        [
+            "install",
+            "--silent",
+            "--global",
+            "--prefix",
+            prefix_dir.to_str().unwrap_or_default(),
+            tarball.to_str().unwrap_or_default(),
+        ],
+    )?;
+    let launcher = prefix_dir.join("bin").join("si");
+    if !launcher.exists() {
+        return Err(anyhow!("si launcher not installed at {}", launcher.display()));
+    }
+    run_path_command_with_env_checked(
+        &root,
+        &launcher,
+        &[("SI_NPM_LOCAL_ARCHIVE_DIR", assets_dir.to_str().unwrap_or_default())],
+        &["version"],
+    )?;
+    println!("npm install smoke passed");
+    Ok(())
+}
+
+fn run_installer_smoke_docker() -> Result<()> {
+    let root = std::env::current_dir().context("resolve root dir")?;
+    let smoke_image =
+        std::env::var("SI_INSTALL_SMOKE_IMAGE").unwrap_or_else(|_| "si-install-smoke:local".to_owned());
+    let nonroot_image =
+        std::env::var("SI_INSTALL_NONROOT_IMAGE").unwrap_or_else(|_| "si-install-nonroot:local".to_owned());
+    let source_dir = std::env::var("SI_INSTALL_SOURCE_DIR").unwrap_or_else(|_| root.display().to_string());
+    let skip_nonroot =
+        std::env::var("SI_INSTALL_SMOKE_SKIP_NONROOT").unwrap_or_default().trim() == "1";
+
+    if StdCommand::new("docker").arg("--version").output().is_err() {
+        eprintln!("SKIP: docker is not available; skipping Docker installer smoke tests");
+        return Ok(());
+    }
+    if !Path::new(&source_dir).join("tools").join("install-si.sh").exists() {
+        return Err(anyhow!("FAIL: installer not found under source dir: {}", source_dir));
+    }
+
+    println!("==> Build root smoke image: {smoke_image}");
+    docker_build_image(
+        &smoke_image,
+        &root.join("tools").join("docker").join("install-sh-smoke").join("Dockerfile"),
+        &root.join("tools").join("docker").join("install-sh-smoke"),
+    )?;
+    println!("==> Run root installer smoke");
+    run_command_checked(
+        &root,
+        "docker",
+        [
+            "run",
+            "--rm",
+            "-t",
+            "-v",
+            &format!("{source_dir}:/workspace/si:ro"),
+            "-e",
+            "SI_INSTALL_SOURCE_DIR=/workspace/si",
+            &smoke_image,
+        ],
+    )?;
+    if skip_nonroot {
+        println!("==> Skip non-root smoke (SI_INSTALL_SMOKE_SKIP_NONROOT=1)");
+        return Ok(());
+    }
+
+    println!("==> Build non-root smoke image: {nonroot_image}");
+    docker_build_image(
+        &nonroot_image,
+        &root.join("tools").join("docker").join("install-sh-nonroot").join("Dockerfile"),
+        &root.join("tools").join("docker").join("install-sh-nonroot"),
+    )?;
+    println!("==> Run non-root installer smoke");
+    run_command_checked(
+        &root,
+        "docker",
+        [
+            "run",
+            "--rm",
+            "-t",
+            "-v",
+            &format!("{source_dir}:/workspace/si:ro"),
+            "-e",
+            "SI_INSTALL_SOURCE_DIR=/workspace/si",
+            &nonroot_image,
+        ],
+    )?;
+    Ok(())
+}
+
+fn docker_build_image(image: &str, dockerfile: &Path, context: &Path) -> Result<()> {
+    if StdCommand::new("docker")
+        .arg("buildx")
+        .arg("version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+    {
+        run_command_checked(
+            Path::new("."),
+            "docker",
+            [
+                "buildx",
+                "build",
+                "--load",
+                "-t",
+                image,
+                "-f",
+                dockerfile.to_str().unwrap_or_default(),
+                context.to_str().unwrap_or_default(),
+            ],
+        )
+    } else {
+        eprintln!("WARNING: docker buildx is not available; falling back to docker build");
+        run_command_checked(
+            Path::new("."),
+            "docker",
+            [
+                "build",
+                "-t",
+                image,
+                "-f",
+                dockerfile.to_str().unwrap_or_default(),
+                context.to_str().unwrap_or_default(),
+            ],
+        )
+    }
+}
+
+fn find_npm_package_tarball(dir: &Path) -> Result<PathBuf> {
+    let mut matches = fs::read_dir(dir)
+        .with_context(|| format!("read {}", dir.display()))?
+        .filter_map(|entry| entry.ok().map(|value| value.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .map(|value| value.starts_with("aureuma-si-") && value.ends_with(".tgz"))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    matches.sort();
+    matches.pop().ok_or_else(|| anyhow!("npm package tarball not found"))
+}
+
+fn run_path_command_checked(dir: &Path, path: &Path, args: &[&str]) -> Result<()> {
+    run_path_command_with_env_checked(dir, path, &[], args)
+}
+
+fn run_path_command_with_env_checked(
+    dir: &Path,
+    path: &Path,
+    env: &[(&str, &str)],
+    args: &[&str],
+) -> Result<()> {
+    let mut command = StdCommand::new(path);
+    command.current_dir(dir).args(args);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let status = command
+        .status()
+        .with_context(|| format!("run {}", path.display()))?;
+    if !status.success() {
+        return Err(anyhow!("{} failed: {}", path.display(), status));
+    }
+    Ok(())
+}
+
+fn run_path_command_expect_fail(dir: &Path, path: &Path, args: &[&str]) -> Result<()> {
+    let status = StdCommand::new(path)
+        .current_dir(dir)
+        .args(args)
+        .status()
+        .with_context(|| format!("run {}", path.display()))?;
+    if status.success() {
+        return Err(anyhow!("expected command to fail: {}", path.display()));
+    }
+    Ok(())
+}
+
 fn run_publish_npm_from_vault(
     repo_root: Option<PathBuf>,
     version: Option<String>,
@@ -17561,6 +17955,9 @@ fn main() -> Result<()> {
                     quiet,
                     no_path_hint,
                 })?,
+                BuildInstallerCommand::SmokeHost => run_installer_smoke_host()?,
+                BuildInstallerCommand::SmokeNpm => run_installer_smoke_npm()?,
+                BuildInstallerCommand::SmokeDocker => run_installer_smoke_docker()?,
             },
             BuildCommand::Npm { command } => match command {
                 BuildNpmCommand::BuildPackage {
