@@ -538,6 +538,7 @@ Progress notes:
 - completed: the npm release helper lane now also runs through Rust for `build-package` and `publish-package`, with Rust-owned package staging/version rewriting, tarball handoff, npm publish dry-run/live flow, and updated release scripts so the main npm packaging path no longer depends on the Go `releasectl` implementation while the vault-assisted wrapper remains the next adjacent slice
 - completed: the remaining npm/Homebrew release helper lane now also runs through Rust for `publish-from-vault`, `homebrew render-core-formula`, `homebrew render-tap-formula`, and `homebrew update-tap-repo`, with Rust-owned vault wrapper dispatch, checksum parsing, formula rendering, and tap-repo update flow plus updated release scripts so the practical Phase 8 release helper surface is no longer blocked on the Go `releasectl` binary
 - completed: the host installer entrypoint now runs through Rust too, with Rust-owned flag validation, source-dir/git-clone resolution, local Go toolchain probing, install-path safety checks, build/install/uninstall execution, and the shipping `tools/install-si.sh` wrapper updated to invoke the Rust implementation while the broader installer smoke drivers remain the next adjacent Phase 8 slice
+- completed: the installer smoke driver lane now runs through Rust too, with Rust-owned host, npm, and docker smoke orchestration plus updated `tools/test-install-si*.sh` wrappers, so the practical Phase 8 install verification surface no longer depends on the Go smoke-driver binaries
 
 ### Phase 9: Primary binary cutover
 
