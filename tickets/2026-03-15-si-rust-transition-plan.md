@@ -574,6 +574,7 @@ Progress notes:
 
 - completed: release-archive verification now also runs through a Rust-owned `build self verify-release-assets` path, and the release workflow uses it to verify archive presence, checksums, and packaged `si`/`si-go` contents before upload, closing the local artifact-verification seam inside the Phase 9 cutover lane
 - completed: the missing Homebrew install smoke now exists as a Rust-owned installer verification path (`build installer smoke-homebrew`) plus wrapper, and the release workflow now upgrades npm verification from version visibility to a real installed-launcher check against published release assets
+- completed: the CLI release workflow now also runs the Rust-owned Homebrew smoke path on a real macOS runner before the final distribution gate, so the Homebrew cutover lane is no longer only covered by local/manual smoke guidance
 
 ### Phase 10: Go retirement
 

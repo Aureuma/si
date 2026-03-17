@@ -225,6 +225,35 @@ jobs:
 
           echo "tools/release/npm/publish-npm-package.sh is missing on this checkout; skipping npm publish for ${tag}."
 
+  verify-homebrew-local-install:
+    name: Verify local Homebrew install path
+    needs: [resolve-tag]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
+
+      - name: Run Homebrew installer smoke
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          HOMEBREW_NO_ENV_HINTS: "1"
+        run: |
+          set -euo pipefail
+          ./tools/test-install-si-homebrew.sh
+
   update-homebrew-tap:
     name: Update homebrew-si tap formula
     needs: [resolve-tag, publish-assets]
@@ -317,7 +346,7 @@ jobs:
 
   verify-release-distribution:
     name: Verify release assets, npm package, and Homebrew tap
-    needs: [resolve-tag, publish-assets, publish-npm, update-homebrew-tap]
+    needs: [resolve-tag, publish-assets, publish-npm, verify-homebrew-local-install, update-homebrew-tap]
     runs-on: ubuntu-latest
     steps:
       - name: Verify release distribution state

@@ -100,3 +100,4 @@ distribution verification job that checks:
 - required GitHub release assets are present
 - npm package visibility/version plus installed-launcher verification against the published release assets (when `NPM_TOKEN` is configured)
 - Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` or fallback `GH_PAT_AUREUMA` is configured)
+- and a separate macOS Homebrew smoke job exercises `./tools/test-install-si-homebrew.sh` on a brew-capable runner before the final gate
