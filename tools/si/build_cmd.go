@@ -26,13 +26,6 @@ func cmdBuild(args []string) {
 }
 
 func cmdBuildSelf(args []string) {
-	delegated, err := runBuildSelfCommand(args)
-	if err != nil {
-		fatal(err)
-	}
-	if delegated {
-		return
-	}
 	if len(args) == 0 {
 		// Default: upgrade installed si from the current checkout.
 		cmdSelfBuild(nil)
@@ -49,14 +42,12 @@ func cmdBuildSelf(args []string) {
 		cmdSelfBuild(args[1:])
 	case "upgrade":
 		cmdSelfUpgrade(args[1:])
-	case "release-assets", "release":
-		cmdSelfReleaseAssets(args[1:])
 	case "run":
 		cmdSelfRun(args[1:])
 	case "help", "-h", "--help":
-		printUsage("usage: si build self [build|upgrade|release-assets|run] [args...]")
+		printUsage("usage: si build self [build|upgrade|run] [args...]")
 	default:
 		printUnknown("build self", args[0])
-		printUsage("usage: si build self [build|upgrade|release-assets|run] [args...]")
+		printUsage("usage: si build self [build|upgrade|run] [args...]")
 	}
 }

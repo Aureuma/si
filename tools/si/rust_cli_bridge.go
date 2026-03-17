@@ -1451,18 +1451,6 @@ func runGoogleCommand(args []string) (bool, error) {
 	}
 }
 
-func runBuildSelfCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "release-assets", "release":
-		return maybeDispatchRustCLIReadOnly("build", append([]string{"self", "release-assets"}, args[1:]...)...)
-	default:
-		return false, nil
-	}
-}
-
 func runGooglePlayCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
