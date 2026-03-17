@@ -15,6 +15,311 @@ fn cargo_bin() -> Command {
 }
 
 #[test]
+fn google_youtube_context_current_json_reads_settings() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    fs::write(
+        &settings_path,
+        r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+default_auth_mode = "api-key"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+default_language_code = "en"
+default_region_code = "US"
+vault_prefix = "google_core"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["google", "youtube", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["project_id"], "yt-core");
+    assert_eq!(parsed["auth_mode"], "api-key");
+    assert_eq!(parsed["language_code"], "en");
+    assert_eq!(parsed["region_code"], "US");
+}
+
+#[test]
+fn google_youtube_auth_status_json_verifies_api_key() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "api-key"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /youtube/v3/search?"));
+        assert!(request.contains("key=key-123"));
+        let body = "{\"items\":[{\"id\":\"v1\"}]}";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args(["google", "youtube", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["verify"], true);
+    assert_eq!(parsed["auth_mode"], "api-key");
+}
+
+#[test]
+fn google_youtube_search_list_all_aggregates_pages() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "api-key"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        for expected_page in ["", "pageToken=t2"] {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).expect("read request");
+            let request = String::from_utf8_lossy(&buffer[..read]);
+            if expected_page.is_empty() {
+                assert!(request.contains("GET /youtube/v3/search?"));
+                assert!(!request.contains("pageToken=t2"));
+                let body = "{\"items\":[{\"id\":\"v1\"}],\"nextPageToken\":\"t2\"}";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).expect("write response");
+            } else {
+                assert!(request.contains("pageToken=t2"));
+                let body = "{\"items\":[{\"id\":\"v2\"}]}";
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).expect("write response");
+            }
+        }
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "search",
+            "list",
+            "--query",
+            "music",
+            "--all",
+            "--home",
+        ])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["count"], 2);
+    assert_eq!(parsed["items"].as_array().expect("items array").len(), 2);
+}
+
+#[test]
+fn google_youtube_support_languages_json_reads_api() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "api-key"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /youtube/v3/i18nLanguages?"));
+        let body = "{\"items\":[{\"id\":\"en\",\"snippet\":{}}]}";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args(["google", "youtube", "support", "languages", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+}
+
+#[test]
+fn google_youtube_doctor_json_runs_checks() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "api-key"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+default_language_code = "en"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).expect("read request");
+            let request = String::from_utf8_lossy(&buffer[..read]);
+            let body = if request.contains("/youtube/v3/search?") {
+                "{\"items\":[{\"id\":\"v1\"}]}"
+            } else {
+                "{\"items\":[{\"id\":\"en\"}]}"
+            };
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).expect("write response");
+        }
+    });
+
+    let output = cargo_bin()
+        .args(["google", "youtube", "doctor", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["checks"].as_array().expect("checks").len(), 3);
+}
+
+#[test]
 fn version_matches_go_repo_version() {
     cargo_bin().arg("version").assert().success().stdout("v0.54.0\n");
 }

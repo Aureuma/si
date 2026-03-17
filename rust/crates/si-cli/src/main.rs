@@ -132,6 +132,11 @@ use si_rs_provider_google::{
     GooglePlacesOverrides, GooglePlacesRuntime, download_places_media,
     execute_places_api_request, list_places_contexts, render_places_context_list_text,
     resolve_places_auth_status, resolve_places_current_context, resolve_places_runtime,
+    GoogleYouTubeAPIRequest, GoogleYouTubeAPIResponse, GoogleYouTubeAuthStatus,
+    GoogleYouTubeContextListEntry, GoogleYouTubeCurrentContext,
+    GoogleYouTubeOverrides, GoogleYouTubeRuntime, execute_youtube_api_request,
+    list_youtube_contexts, render_youtube_context_list_text,
+    resolve_youtube_auth_status, resolve_youtube_current_context, resolve_youtube_runtime,
 };
 use si_rs_provider_oci::{
     OCIAPIRequest, OCIAPIResponse, OCIAPIService, OCIAuthOverrides, OCIAuthStatus,
@@ -6688,6 +6693,10 @@ enum GoogleCommand {
         #[command(subcommand)]
         command: GooglePlacesCommand,
     },
+    Youtube {
+        #[command(subcommand)]
+        command: GoogleYouTubeCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -7217,6 +7226,424 @@ enum GooglePlacesReportCommand {
         settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeCommand {
+    Auth {
+        #[command(subcommand)]
+        command: GoogleYouTubeAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: GoogleYouTubeContextCommand,
+    },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Search {
+        #[command(subcommand)]
+        command: GoogleYouTubeSearchCommand,
+    },
+    Support {
+        #[command(subcommand)]
+        command: GoogleYouTubeSupportCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        content_type: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeSearchCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet")]
+        part: String,
+        #[arg(long = "query")]
+        query: String,
+        #[arg(long = "type")]
+        kind: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long)]
+        order: Option<String>,
+        #[arg(long)]
+        channel_id: Option<String>,
+        #[arg(long)]
+        published_after: Option<String>,
+        #[arg(long)]
+        published_before: Option<String>,
+        #[arg(long)]
+        all: bool,
+        #[arg(long, default_value_t = 5)]
+        max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeSupportCommand {
+    Languages {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "snippet")]
+        part: String,
+        #[arg(long = "hl")]
+        hl: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Regions {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "snippet")]
+        part: String,
+        #[arg(long = "hl")]
+        hl: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Categories {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "snippet")]
+        part: String,
+        #[arg(long = "hl")]
+        hl: Option<String>,
+        #[arg(long = "region")]
+        support_region: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -12781,6 +13208,66 @@ impl From<GooglePlacesAuthStatus> for GooglePlacesAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct GoogleYouTubeContextListPayload {
+    contexts: Vec<GoogleYouTubeContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct GoogleYouTubeCurrentContextPayload {
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    auth_mode: String,
+    language_code: String,
+    region_code: String,
+    source: String,
+    token_source: String,
+    session_source: String,
+    base_url: String,
+    upload_base_url: String,
+}
+
+impl From<GoogleYouTubeCurrentContext> for GoogleYouTubeCurrentContextPayload {
+    fn from(value: GoogleYouTubeCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            project_id: value.project_id,
+            environment: value.environment,
+            auth_mode: value.auth_mode,
+            language_code: value.language_code,
+            region_code: value.region_code,
+            source: value.source,
+            token_source: value.token_source,
+            session_source: value.session_source,
+            base_url: value.base_url,
+            upload_base_url: value.upload_base_url,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct GoogleYouTubeAuthStatusPayload {
+    status: String,
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    auth_mode: String,
+    language_code: String,
+    region_code: String,
+    source: String,
+    token_source: String,
+    session_source: String,
+    api_key_preview: String,
+    access_preview: String,
+    refresh_present: String,
+    base_url: String,
+    upload_base_url: String,
+    verify: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    verify_error: String,
+}
+
+#[derive(Debug, Serialize)]
 struct OpenAIContextListPayload {
     contexts: Vec<OpenAIContextListEntry>,
 }
@@ -17426,6 +17913,432 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+            },
+            GoogleCommand::Youtube { command } => match command {
+                GoogleYouTubeCommand::Auth { command } => match command {
+                    GoogleYouTubeAuthCommand::Status {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_youtube_auth_status(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Context { command } => match command {
+                    GoogleYouTubeContextCommand::List { home, settings_file, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_youtube_context_list(home, settings_file, format)?
+                    }
+                    GoogleYouTubeContextCommand::Current {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_youtube_context_current(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Doctor {
+                    account,
+                    env,
+                    auth_mode,
+                    api_key,
+                    base_url,
+                    upload_base_url,
+                    project_id,
+                    language,
+                    region,
+                    client_id,
+                    client_secret,
+                    redirect_uri,
+                    access_token,
+                    refresh_token,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_youtube_doctor(
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+                GoogleYouTubeCommand::Search { command } => match command {
+                    GoogleYouTubeSearchCommand::List {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        query,
+                        kind,
+                        max_results,
+                        page_token,
+                        order,
+                        channel_id,
+                        published_after,
+                        published_before,
+                        all,
+                        max_pages,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_search_list(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            query,
+                            kind,
+                            max_results,
+                            page_token,
+                            order,
+                            channel_id,
+                            published_after,
+                            published_before,
+                            all,
+                            max_pages,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Support { command } => match command {
+                    GoogleYouTubeSupportCommand::Languages {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        hl,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        let mut params = parse_google_youtube_params(params)?;
+                        params.insert("part".to_owned(), part);
+                        if let Some(hl) = hl.filter(|value| !value.trim().is_empty()) {
+                            params.insert("hl".to_owned(), hl.trim().to_owned());
+                        }
+                        run_google_youtube_support_command(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            "/youtube/v3/i18nLanguages".to_owned(),
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GoogleYouTubeSupportCommand::Regions {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        hl,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        let mut params = parse_google_youtube_params(params)?;
+                        params.insert("part".to_owned(), part);
+                        if let Some(hl) = hl.filter(|value| !value.trim().is_empty()) {
+                            params.insert("hl".to_owned(), hl.trim().to_owned());
+                        }
+                        run_google_youtube_support_command(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            "/youtube/v3/i18nRegions".to_owned(),
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GoogleYouTubeSupportCommand::Categories {
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        hl,
+                        support_region,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        let mut params = parse_google_youtube_params(params)?;
+                        params.insert("part".to_owned(), part);
+                        if let Some(hl) = hl.filter(|value| !value.trim().is_empty()) {
+                            params.insert("hl".to_owned(), hl.trim().to_owned());
+                        }
+                        if let Some(support_region) =
+                            support_region.filter(|value| !value.trim().is_empty())
+                        {
+                            params.insert("regionCode".to_owned(), support_region.trim().to_owned());
+                        }
+                        run_google_youtube_support_command(
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            "/youtube/v3/videoCategories".to_owned(),
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Raw {
+                    account,
+                    env,
+                    auth_mode,
+                    api_key,
+                    base_url,
+                    upload_base_url,
+                    project_id,
+                    language,
+                    region,
+                    client_id,
+                    client_secret,
+                    redirect_uri,
+                    access_token,
+                    refresh_token,
+                    method,
+                    path,
+                    params,
+                    headers,
+                    body,
+                    json_body,
+                    content_type,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_youtube_raw(
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        method,
+                        path,
+                        params,
+                        headers,
+                        body,
+                        json_body,
+                        content_type,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
             },
         },
         Command::OpenAI { command } => match command {
@@ -29123,6 +30036,869 @@ fn show_google_places_context_list(
         OutputFormat::Text => print!("{}", render_places_context_list_text(&contexts)),
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_google_youtube_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_youtube_contexts(&settings.google);
+    match format {
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::to_string_pretty(&GoogleYouTubeContextListPayload { contexts })?
+        ),
+        OutputFormat::Text => print!("{}", render_youtube_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_google_youtube_context_current(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let payload = GoogleYouTubeCurrentContextPayload::from(load_google_youtube_current_context(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?);
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current google youtube context: account={} env={} auth={} project={} language={} region={} base={} upload={}",
+                account,
+                payload.environment,
+                payload.auth_mode,
+                or_dash(&payload.project_id),
+                or_dash(&payload.language_code),
+                or_dash(&payload.region_code),
+                payload.base_url,
+                payload.upload_base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            if !payload.token_source.trim().is_empty() {
+                println!("Token source: {}", payload.token_source);
+            }
+            if !payload.session_source.trim().is_empty() {
+                println!("Session source: {}", payload.session_source);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_google_youtube_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let runtime = load_google_youtube_runtime(
+        account.clone(),
+        environment.clone(),
+        auth_mode.clone(),
+        api_key.clone(),
+        base_url.clone(),
+        upload_base_url.clone(),
+        project_id.clone(),
+        language.clone(),
+        region.clone(),
+        client_id.clone(),
+        client_secret.clone(),
+        redirect_uri.clone(),
+        access_token.clone(),
+        refresh_token.clone(),
+        home.clone(),
+        settings_file.clone(),
+    )?;
+    let status = resolve_google_youtube_auth_payload(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?;
+    let verify = verify_google_youtube_auth(&runtime);
+    let payload = GoogleYouTubeAuthStatusPayload {
+        status: "ready".to_owned(),
+        account_alias: status.account_alias,
+        project_id: status.project_id,
+        environment: status.environment,
+        auth_mode: status.auth_mode,
+        language_code: status.language_code,
+        region_code: status.region_code,
+        source: status.source,
+        token_source: status.token_source,
+        session_source: status.session_source,
+        api_key_preview: status.api_key_preview,
+        access_preview: status.access_preview,
+        refresh_present: status.refresh_present,
+        base_url: status.base_url,
+        upload_base_url: status.upload_base_url,
+        verify: verify.is_ok(),
+        verify_error: verify.err().unwrap_or_default(),
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("Google YouTube auth: ready");
+            println!(
+                "Context: account={} env={} auth={} project={} language={} region={} base={} upload={}",
+                account,
+                payload.environment,
+                payload.auth_mode,
+                or_dash(&payload.project_id),
+                or_dash(&payload.language_code),
+                or_dash(&payload.region_code),
+                payload.base_url,
+                payload.upload_base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            if !payload.token_source.trim().is_empty() {
+                println!("Token source: {}", payload.token_source);
+            }
+            if !payload.session_source.trim().is_empty() {
+                println!("Session source: {}", payload.session_source);
+            }
+            println!("API key preview: {}", or_dash(&payload.api_key_preview));
+            println!("Access preview: {}", or_dash(&payload.access_preview));
+            println!("Refresh present: {}", payload.refresh_present);
+            if payload.verify {
+                println!("Verify: ok");
+            } else {
+                println!("Verify: failed");
+                println!("Verify error: {}", or_dash(&payload.verify_error));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_google_youtube_current_context(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GoogleYouTubeCurrentContext> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_youtube_current_context(
+        &settings.google,
+        &env,
+        &GoogleYouTubeOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            auth_mode: auth_mode.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            upload_base_url: upload_base_url.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+            language: language.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            client_id: client_id.unwrap_or_default(),
+            client_secret: client_secret.unwrap_or_default(),
+            redirect_uri: redirect_uri.unwrap_or_default(),
+            access_token: access_token.unwrap_or_default(),
+            refresh_token: refresh_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_google_youtube_auth_payload(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GoogleYouTubeAuthStatus> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_youtube_auth_status(
+        &settings.google,
+        &env,
+        &GoogleYouTubeOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            auth_mode: auth_mode.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            upload_base_url: upload_base_url.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+            language: language.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            client_id: client_id.unwrap_or_default(),
+            client_secret: client_secret.unwrap_or_default(),
+            redirect_uri: redirect_uri.unwrap_or_default(),
+            access_token: access_token.unwrap_or_default(),
+            refresh_token: refresh_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_google_youtube_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GoogleYouTubeRuntime> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_youtube_runtime(
+        &settings.google,
+        &env,
+        &GoogleYouTubeOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            auth_mode: auth_mode.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            upload_base_url: upload_base_url.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+            language: language.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            client_id: client_id.unwrap_or_default(),
+            client_secret: client_secret.unwrap_or_default(),
+            redirect_uri: redirect_uri.unwrap_or_default(),
+            access_token: access_token.unwrap_or_default(),
+            refresh_token: refresh_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+fn print_google_youtube_api_response(
+    response: &GoogleYouTubeAPIResponse,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
+        OutputFormat::Text => {
+            println!("Status: {} {}", response.status_code, response.status);
+            if !response.request_id.trim().is_empty() {
+                println!("Request ID: {}", response.request_id);
+            }
+            if raw && !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            } else if let Some(data) = &response.data {
+                println!("{}", serde_json::to_string_pretty(data)?);
+            } else if !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_google_youtube_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid --param {raw:?} (expected key=value)");
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("google youtube --param key cannot be empty");
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+fn parse_google_youtube_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in headers {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid --header {raw:?} (expected key=value)");
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("google youtube --header key cannot be empty");
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+fn extract_google_youtube_items(response: &GoogleYouTubeAPIResponse) -> Vec<Value> {
+    response
+        .data
+        .as_ref()
+        .and_then(|value| value.get("items"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn extract_google_youtube_next_page_token(response: &GoogleYouTubeAPIResponse) -> Option<String> {
+    response
+        .data
+        .as_ref()
+        .and_then(|value| value.get("nextPageToken"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+fn execute_google_youtube_list_all(
+    runtime: &GoogleYouTubeRuntime,
+    path: String,
+    mut params: BTreeMap<String, String>,
+    max_pages: usize,
+) -> Result<Value> {
+    let mut items = Vec::new();
+    let mut next_page_token = String::new();
+    for _ in 0..max_pages.max(1) {
+        if next_page_token.trim().is_empty() {
+            params.remove("pageToken");
+        } else {
+            params.insert("pageToken".to_owned(), next_page_token.clone());
+        }
+        let response = execute_youtube_api_request(
+            runtime,
+            &GoogleYouTubeAPIRequest {
+                method: "GET".to_owned(),
+                path: path.clone(),
+                params: params.clone(),
+                ..GoogleYouTubeAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        items.extend(extract_google_youtube_items(&response));
+        next_page_token = extract_google_youtube_next_page_token(&response).unwrap_or_default();
+        if next_page_token.is_empty() {
+            break;
+        }
+    }
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "next_page_token": next_page_token,
+        "items": items,
+    }))
+}
+
+fn verify_google_youtube_auth(runtime: &GoogleYouTubeRuntime) -> Result<(), String> {
+    let mut params = BTreeMap::new();
+    if runtime.auth_mode == "oauth" {
+        params.insert("part".to_owned(), "id".to_owned());
+        params.insert("mine".to_owned(), "true".to_owned());
+        params.insert("maxResults".to_owned(), "1".to_owned());
+        execute_youtube_api_request(
+            runtime,
+            &GoogleYouTubeAPIRequest {
+                method: "GET".to_owned(),
+                path: "/youtube/v3/channels".to_owned(),
+                params,
+                ..GoogleYouTubeAPIRequest::default()
+            },
+        )?;
+    } else {
+        params.insert("part".to_owned(), "id".to_owned());
+        params.insert("maxResults".to_owned(), "1".to_owned());
+        params.insert("type".to_owned(), "video".to_owned());
+        params.insert("q".to_owned(), "music".to_owned());
+        execute_youtube_api_request(
+            runtime,
+            &GoogleYouTubeAPIRequest {
+                method: "GET".to_owned(),
+                path: "/youtube/v3/search".to_owned(),
+                params,
+                ..GoogleYouTubeAPIRequest::default()
+            },
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_search_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    query: String,
+    kind: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    order: Option<String>,
+    channel_id: Option<String>,
+    published_after: Option<String>,
+    published_before: Option<String>,
+    all: bool,
+    max_pages: usize,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    params.insert("q".to_owned(), query.trim().to_owned());
+    if let Some(kind) = kind.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        params.insert("type".to_owned(), kind);
+    }
+    if let Some(max_results) = max_results {
+        params.insert("maxResults".to_owned(), max_results.to_string());
+    }
+    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    if let Some(order) = order.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        params.insert("order".to_owned(), order);
+    }
+    if let Some(channel_id) =
+        channel_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        params.insert("channelId".to_owned(), channel_id);
+    }
+    if let Some(published_after) =
+        published_after.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        params.insert("publishedAfter".to_owned(), published_after);
+    }
+    if let Some(published_before) =
+        published_before.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        params.insert("publishedBefore".to_owned(), published_before);
+    }
+    if !runtime.language_code.trim().is_empty() {
+        params.insert("relevanceLanguage".to_owned(), runtime.language_code.clone());
+    }
+    if !runtime.region_code.trim().is_empty() {
+        params.insert("regionCode".to_owned(), runtime.region_code.clone());
+    }
+    if all {
+        let payload =
+            execute_google_youtube_list_all(&runtime, "/youtube/v3/search".to_owned(), params, max_pages)?;
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/search".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_support_command(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    path: String,
+    mut params: BTreeMap<String, String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?;
+    if path == "/youtube/v3/videoCategories"
+        && !runtime.region_code.trim().is_empty()
+        && !params.contains_key("regionCode")
+    {
+        params.insert("regionCode".to_owned(), runtime.region_code.clone());
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path,
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_doctor(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?;
+    let mut search_params = BTreeMap::new();
+    search_params.insert("part".to_owned(), "id".to_owned());
+    search_params.insert("maxResults".to_owned(), "1".to_owned());
+    search_params.insert("type".to_owned(), "video".to_owned());
+    search_params.insert("q".to_owned(), "music".to_owned());
+    if !runtime.language_code.trim().is_empty() {
+        search_params.insert("relevanceLanguage".to_owned(), runtime.language_code.clone());
+    }
+    if !runtime.region_code.trim().is_empty() {
+        search_params.insert("regionCode".to_owned(), runtime.region_code.clone());
+    }
+    let search = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/search".to_owned(),
+            params: search_params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    );
+    let mut languages_params = BTreeMap::new();
+    languages_params.insert("part".to_owned(), "snippet".to_owned());
+    if !runtime.language_code.trim().is_empty() {
+        languages_params.insert("hl".to_owned(), runtime.language_code.clone());
+    }
+    let languages = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/i18nLanguages".to_owned(),
+            params: languages_params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    );
+    let channel = if runtime.auth_mode == "oauth" {
+        let mut channel_params = BTreeMap::new();
+        channel_params.insert("part".to_owned(), "id".to_owned());
+        channel_params.insert("mine".to_owned(), "true".to_owned());
+        channel_params.insert("maxResults".to_owned(), "1".to_owned());
+        Some(execute_youtube_api_request(
+            &runtime,
+            &GoogleYouTubeAPIRequest {
+                method: "GET".to_owned(),
+                path: "/youtube/v3/channels".to_owned(),
+                params: channel_params,
+                ..GoogleYouTubeAPIRequest::default()
+            },
+        ))
+    } else {
+        None
+    };
+    let payload = serde_json::json!({
+        "ok": search.is_ok() && languages.is_ok() && channel.as_ref().map(|value| value.is_ok()).unwrap_or(true),
+        "context": {
+            "account_alias": runtime.account_alias,
+            "project_id": runtime.project_id,
+            "environment": runtime.environment,
+            "auth_mode": runtime.auth_mode,
+            "language_code": runtime.language_code,
+            "region_code": runtime.region_code,
+            "source": runtime.source,
+            "token_source": runtime.token_source,
+            "session_source": runtime.session_source,
+            "base_url": runtime.base_url,
+            "upload_base_url": runtime.upload_base_url,
+        },
+        "checks": [
+            serde_json::json!({
+                "name": "search.list",
+                "ok": search.is_ok(),
+                "request_id": search.as_ref().ok().map(|value| value.request_id.clone()).unwrap_or_default(),
+                "status_code": search.as_ref().ok().map(|value| value.status_code).unwrap_or_default(),
+                "error": search.as_ref().err().cloned().unwrap_or_default(),
+            }),
+            serde_json::json!({
+                "name": "i18nLanguages.list",
+                "ok": languages.is_ok(),
+                "request_id": languages.as_ref().ok().map(|value| value.request_id.clone()).unwrap_or_default(),
+                "status_code": languages.as_ref().ok().map(|value| value.status_code).unwrap_or_default(),
+                "error": languages.as_ref().err().cloned().unwrap_or_default(),
+            }),
+            serde_json::json!({
+                "name": "channels.list(mine)",
+                "ok": channel.as_ref().map(|value| value.is_ok()).unwrap_or(true),
+                "request_id": channel.as_ref().and_then(|value| value.as_ref().ok().map(|payload| payload.request_id.clone())).unwrap_or_default(),
+                "status_code": channel.as_ref().and_then(|value| value.as_ref().ok().map(|payload| payload.status_code)).unwrap_or_default(),
+                "error": channel.as_ref().and_then(|value| value.as_ref().err().cloned()).unwrap_or_else(|| if runtime.auth_mode == "oauth" { String::new() } else { "skipped (oauth only)".to_owned() }),
+            }),
+        ],
+    });
+    match format {
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    method: String,
+    path: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    content_type: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
+    )?;
+    let json_body = match json_body {
+        Some(value) if !value.trim().is_empty() => {
+            Some(serde_json::from_str::<Value>(&value).map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?)
+        }
+        _ => None,
+    };
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method,
+            path,
+            params: parse_google_youtube_params(params)?,
+            headers: parse_google_youtube_headers(headers)?,
+            json_body,
+            raw_body: body.unwrap_or_default(),
+            content_type: content_type.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
