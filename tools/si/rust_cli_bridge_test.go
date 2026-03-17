@@ -4215,6 +4215,66 @@ func TestRunGoogleYouTubeLiveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGoogleYouTubeMediaDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-youtube-media'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "video upload",
+			args: []string{"video", "upload", "--file", "clip.mp4", "--json"},
+			want: "google\nyoutube\nvideo\nupload\n--file\nclip.mp4\n--json",
+		},
+		{
+			name: "caption download",
+			args: []string{"caption", "download", "--id", "cap1", "--output", "captions.vtt", "--json"},
+			want: "google\nyoutube\ncaption\ndownload\n--id\ncap1\n--output\ncaptions.vtt\n--json",
+		},
+		{
+			name: "thumbnail set",
+			args: []string{"thumbnail", "set", "--video-id", "v1", "--file", "thumb.jpg", "--json"},
+			want: "google\nyoutube\nthumbnail\nset\n--video-id\nv1\n--file\nthumb.jpg\n--json",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := captureOutputForTest(t, func() {
+				delegated, err := runGoogleYouTubeCommand(tc.args)
+				if err != nil {
+					t.Fatalf("runGoogleYouTubeCommand(%s): %v", tc.name, err)
+				}
+				if !delegated {
+					t.Fatalf("expected google youtube media command to delegate to Rust for %s", tc.name)
+				}
+			})
+
+			if strings.TrimSpace(out) != "rust-google-youtube-media" {
+				t.Fatalf("expected delegated Rust google youtube media output, got %q", out)
+			}
+			argsData, err := os.ReadFile(argsPath)
+			if err != nil {
+				t.Fatalf("read args file: %v", err)
+			}
+			if strings.TrimSpace(string(argsData)) != tc.want {
+				t.Fatalf("expected Rust CLI args %q, got %q", tc.want, string(argsData))
+			}
+		})
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
