@@ -16781,46 +16781,14 @@ fn build_release_asset(
         )
     })?;
 
-    let go_output_path = staging_dir.join("si-go");
-    let mut command = StdCommand::new("go");
-    command
-        .current_dir(repo_root)
-        .env("CGO_ENABLED", "0")
-        .env("GOOS", goos)
-        .env("GOARCH", goarch)
-        .arg("build")
-        .arg("-trimpath")
-        .arg("-buildvcs=false")
-        .arg("-ldflags")
-        .arg("-s -w")
-        .arg("-o")
-        .arg(&go_output_path)
-        .arg("./tools/si");
-    if let Some(goarm) = goarm {
-        command.env("GOARM", goarm);
-    }
-    let output = command.output().context("run go build for release asset")?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(anyhow!(
-            "go build failed for {goos}/{goarch}: {}{}{}",
-            output.status,
-            if stdout.trim().is_empty() { "" } else { "\nstdout:\n" },
-            if stdout.trim().is_empty() { stderr.trim().to_owned() } else { format!("{}\nstderr:\n{}", stdout.trim(), stderr.trim()) },
-        ));
-    }
-
     #[cfg(unix)]
     {
-        for path in [&output_path, &go_output_path] {
-            let mut perms = fs::metadata(path)
-                .with_context(|| format!("stat {}", path.display()))?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(path, perms)
-                .with_context(|| format!("chmod {}", path.display()))?;
-        }
+        let mut perms = fs::metadata(&output_path)
+            .with_context(|| format!("stat {}", output_path.display()))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&output_path, perms)
+            .with_context(|| format!("chmod {}", output_path.display()))?;
     }
 
     for required in ["README.md", "LICENSE"] {
@@ -17099,8 +17067,6 @@ struct InstallerRunConfig {
     force: bool,
     uninstall: bool,
     go_mode: String,
-    build_tags: Option<String>,
-    build_ldflags: String,
     os_override: Option<String>,
     arch_override: Option<String>,
     dry_run: bool,
@@ -17111,20 +17077,18 @@ struct InstallerRunConfig {
 fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     validate_installer_config(&cfg)?;
     let install_path = resolve_installer_install_path(&cfg)?;
-    let go_adapter_path = install_path.with_file_name(if cfg!(windows) { "si-go.exe" } else { "si-go" });
     if cfg.uninstall {
         if cfg.dry_run {
             if !cfg.quiet {
                 println!("dry-run: uninstall {}", install_path.display());
-                println!("dry-run: uninstall {}", go_adapter_path.display());
             }
             return Ok(());
         }
-        for path in [&install_path, &go_adapter_path] {
-            match fs::remove_file(path) {
-                Ok(_) => {}
-                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
-                Err(err) => return Err(err).with_context(|| format!("uninstall {}", path.display())),
+        match fs::remove_file(&install_path) {
+            Ok(_) => {}
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(err).with_context(|| format!("uninstall {}", install_path.display()))
             }
         }
         return Ok(());
@@ -17139,17 +17103,14 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
 
     let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
     let cargo_bin = ensure_installer_cargo_toolchain(&cfg.go_mode)?;
-    let go_bin = ensure_installer_go_toolchain(&cfg.go_mode)?;
     if cfg.dry_run {
         if !cfg.quiet {
             println!("rust: using system cargo ({cargo_bin})");
-            println!("go: using system go ({go_bin})");
         }
         return Ok(());
     }
 
     ensure_installer_install_writable(&install_path, cfg.force)?;
-    ensure_installer_install_writable(&go_adapter_path, cfg.force)?;
     let install_dir = install_path
         .parent()
         .ok_or_else(|| anyhow!("invalid install path {}", install_path.display()))?;
@@ -17160,12 +17121,6 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         .with_context(|| format!("create temp output in {}", install_dir.display()))?;
     let tmp_output_path = tmp_output.path().to_path_buf();
     drop(tmp_output);
-    let tmp_go_output = tempfile::Builder::new()
-        .prefix("si-go-build-")
-        .tempfile_in(install_dir)
-        .with_context(|| format!("create temp Go adapter output in {}", install_dir.display()))?;
-    let tmp_go_output_path = tmp_go_output.path().to_path_buf();
-    drop(tmp_go_output);
 
     let mut command = StdCommand::new(&cargo_bin);
     command
@@ -17194,37 +17149,15 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
             tmp_output_path.display()
         )
     })?;
-    let mut go_command = StdCommand::new(&go_bin);
-    go_command
-        .current_dir(&source_dir)
-        .arg("build")
-        .arg("-trimpath")
-        .arg("-buildvcs=false")
-        .arg("-o")
-        .arg(&tmp_go_output_path);
-    if let Some(tags) = cfg.build_tags.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-        go_command.arg("-tags").arg(tags);
-    }
-    let ldflags = cfg.build_ldflags.trim();
-    if !ldflags.is_empty() {
-        go_command.arg("-ldflags").arg(ldflags);
-    }
-    go_command.arg("./tools/si");
-    let status = go_command.status().context("run go build for installer adapter")?;
-    if !status.success() {
-        return Err(anyhow!("build failed: {}", status));
-    }
 
     #[cfg(unix)]
     {
-        for path in [&tmp_output_path, &tmp_go_output_path] {
-            let mut perms = fs::metadata(path)
-                .with_context(|| format!("stat {}", path.display()))?
-                .permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(path, perms)
-                .with_context(|| format!("chmod {}", path.display()))?;
-        }
+        let mut perms = fs::metadata(&tmp_output_path)
+            .with_context(|| format!("stat {}", tmp_output_path.display()))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&tmp_output_path, perms)
+            .with_context(|| format!("chmod {}", tmp_output_path.display()))?;
     }
     fs::rename(&tmp_output_path, &install_path).or_else(|err| {
         if err.kind() == io::ErrorKind::AlreadyExists {
@@ -17235,15 +17168,6 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         }
     })
     .with_context(|| format!("install {}", install_path.display()))?;
-    fs::rename(&tmp_go_output_path, &go_adapter_path).or_else(|err| {
-        if err.kind() == io::ErrorKind::AlreadyExists {
-            let _ = fs::remove_file(&go_adapter_path);
-            fs::rename(&tmp_go_output_path, &go_adapter_path)
-        } else {
-            Err(err)
-        }
-    })
-    .with_context(|| format!("install {}", go_adapter_path.display()))?;
 
     if !cfg.no_path_hint {
         warn_if_installer_path_missing(install_dir);
@@ -17367,17 +17291,6 @@ fn ensure_installer_cargo_toolchain(go_mode: &str) -> Result<String> {
         Ok(_) => Err(anyhow!("cargo toolchain probe failed")),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("cargo toolchain not found on PATH")),
         Err(err) => Err(err).context("probe cargo toolchain"),
-    }
-}
-
-fn ensure_installer_go_toolchain(go_mode: &str) -> Result<String> {
-    let output = StdCommand::new("go").arg("version").output();
-    match output {
-        Ok(output) if output.status.success() => Ok("go".to_owned()),
-        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("go is required for --go-mode system")),
-        Ok(_) => Err(anyhow!("go toolchain probe failed")),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("go toolchain not found on PATH")),
-        Err(err) => Err(err).context("probe go toolchain"),
     }
 }
 
@@ -17917,12 +17830,8 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     }
 
     let installed = PathBuf::from(&prefix).join("bin").join("si");
-    let installed_go = PathBuf::from(&prefix).join("bin").join("si-go");
     if !installed.exists() {
         return Err(anyhow!("expected installed binary at {}", installed.display()));
-    }
-    if !installed_go.exists() {
-        return Err(anyhow!("expected installed Go adapter at {}", installed_go.display()));
     }
     run_path_command_checked(&root, &installed, &["version"])?;
 
@@ -18152,7 +18061,7 @@ fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: Stri
     download_file(&source_url, temp.path())?;
     let digest = sha256_file(temp.path())?;
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n  depends_on \"go\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n    system \"go\", \"build\", \"-trimpath\", \"-buildvcs=false\", \"-ldflags\", \"-s -w\", \"-o\", bin/\"si-go\", \"./tools/si\"\n    chmod 0o755, bin/\"si-go\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
     );
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
@@ -18283,15 +18192,11 @@ fn verify_release_archive_contents(path: &Path) -> Result<()> {
     names.sort();
 
     let has_si = names.iter().any(|name| name == "si" || name.ends_with("/si"));
-    let has_adapter = names.iter().any(|name| name == "si-go" || name.ends_with("/si-go"));
     let has_readme = names.iter().any(|name| name == "README.md" || name.ends_with("/README.md"));
     let has_license = names.iter().any(|name| name == "LICENSE" || name.ends_with("/LICENSE"));
 
     if !has_si {
         return Err(anyhow!("archive missing si binary: {}", path.display()));
-    }
-    if !has_adapter {
-        return Err(anyhow!("archive missing si-go adapter: {}", path.display()));
     }
     if !has_readme {
         return Err(anyhow!("archive missing README.md: {}", path.display()));
@@ -18373,7 +18278,7 @@ fn render_tap_formula_with_base_url(
         .map(|value| value.trim_end_matches('/').to_owned())
         .unwrap_or_else(|| format!("https://github.com/{}/releases/download/{}", repo, version));
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    adapter = Dir[\"#{{stage}}/si_*/si-go\"].first\n    adapter = (stage/\"si-go\").to_s if adapter.nil? && (stage/\"si-go\").exist?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n    unless adapter.nil? || adapter.empty?\n      bin.install adapter => \"si-go\"\n      chmod 0o755, bin/\"si-go\"\n    end\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
         lookup(&asset_darwin_arm64)?,
         lookup(&asset_darwin_amd64)?,
         lookup(&asset_linux_arm64)?,
@@ -18431,38 +18336,105 @@ fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) 
     Ok(())
 }
 
-fn run_go_compat_with_current_args() -> Result<()> {
-    let cwd = std::env::current_dir().context("read current dir")?;
-    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let (program, prefix_args): (std::ffi::OsString, Vec<std::ffi::OsString>) =
-        if let Some(path) = std::env::var_os("SI_GO_COMPAT_BIN").filter(|value| !value.is_empty()) {
-            (path, Vec::new())
-        } else {
-            let current_exe = std::env::current_exe().context("resolve current executable")?;
-            let sibling = current_exe.with_file_name(if cfg!(windows) { "si-go.exe" } else { "si-go" });
-            if sibling.exists() {
-                (sibling.into_os_string(), Vec::new())
-            } else if cwd.join("tools").join("si").join("go.mod").exists() {
-                (
-                    "go".into(),
-                    vec!["run".into(), "-trimpath".into(), "-buildvcs=false".into(), "./tools/si".into()],
-                )
-            } else {
-                return Err(anyhow!(
-                    "Go compatibility adapter not found; set SI_GO_COMPAT_BIN or install sibling si-go"
-                ));
-            }
-        };
-    let status = StdCommand::new(&program)
-        .current_dir(&cwd)
-        .args(&prefix_args)
-        .args(&args)
-        .status()
-        .with_context(|| format!("run Go compatibility adapter {}", PathBuf::from(&program).display()))?;
-    match status.code() {
-        Some(code) => std::process::exit(code),
-        None => Err(anyhow!("Go compatibility adapter terminated by signal")),
+#[derive(Debug, Serialize)]
+struct PublicDoctorPayload {
+    ok: bool,
+    provider: String,
+    base_url: String,
+    method: String,
+    path: String,
+    checks: Vec<DoctorCheckPayload>,
+}
+
+fn resolve_public_probe_url(base_url: &str, path: &str) -> Result<String> {
+    let base = url::Url::parse(base_url.trim())
+        .with_context(|| format!("invalid base url {}", base_url.trim()))?;
+    let reference = url::Url::parse(path.trim()).or_else(|_| base.join(path.trim()))
+        .with_context(|| format!("invalid probe path {}", path.trim()))?;
+    Ok(reference.to_string())
+}
+
+fn execute_public_probe(
+    provider: &str,
+    label: &str,
+    base_url: &str,
+    method: &str,
+    path: &str,
+    user_agent: &str,
+    accept: &str,
+    extra_headers: &[(&str, &str)],
+    format: OutputFormat,
+) -> Result<()> {
+    let endpoint = resolve_public_probe_url(base_url, path)?;
+    let mut request = BlockingHttpClient::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .context("build public probe client")?
+        .request(
+            reqwest::Method::from_bytes(method.trim().as_bytes()).context("parse probe method")?,
+            endpoint,
+        );
+    if !user_agent.trim().is_empty() {
+        request = request.header("User-Agent", user_agent.trim());
     }
+    if !accept.trim().is_empty() {
+        request = request.header("Accept", accept.trim());
+    }
+    for (key, value) in extra_headers {
+        if !key.trim().is_empty() {
+            request = request.header(*key, value.trim());
+        }
+    }
+    let response = request.send();
+    let (ok, detail) = match response {
+        Ok(response) => {
+            let status_code = response.status().as_u16();
+            let snippet = response
+                .text()
+                .unwrap_or_default()
+                .chars()
+                .take(220)
+                .collect::<String>();
+            let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
+            let mut detail = format!("status={status_code}");
+            if !snippet.is_empty() {
+                detail.push_str(" body=");
+                detail.push_str(&snippet);
+            }
+            (status_code < 500, detail)
+        }
+        Err(err) => (false, err.to_string()),
+    };
+    let payload = PublicDoctorPayload {
+        ok,
+        provider: provider.to_owned(),
+        base_url: base_url.trim().to_owned(),
+        method: method.trim().to_owned(),
+        path: path.trim().to_owned(),
+        checks: vec![DoctorCheckPayload {
+            name: "public.probe".to_owned(),
+            ok,
+            detail: detail.clone(),
+        }],
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            println!("{label} doctor: {}", if ok { "ok" } else { "issues found" });
+            println!("Public probe: {} {} (unauthenticated)", payload.method, payload.path);
+            println!("Base URL: {}", payload.base_url);
+            println!(
+                "  {:<3} {:<12} {}",
+                if ok { "OK" } else { "ERR" },
+                "public.probe",
+                detail,
+            );
+        }
+    }
+    if !ok {
+        anyhow::bail!("{provider} public doctor failed");
+    }
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -18515,8 +18487,8 @@ fn main() -> Result<()> {
                     uninstall,
                     go_mode,
                     go_version: _go_version,
-                    build_tags,
-                    build_ldflags,
+                    build_tags: _build_tags,
+                    build_ldflags: _build_ldflags,
                     link_go: _link_go,
                     no_link_go: _no_link_go,
                     with_buildx: _with_buildx,
@@ -18538,8 +18510,6 @@ fn main() -> Result<()> {
                     force,
                     uninstall,
                     go_mode,
-                    build_tags,
-                    build_ldflags,
                     os_override,
                     arch_override,
                     dry_run,
@@ -29880,7 +29850,36 @@ fn show_apple_appstore_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        return run_go_compat_with_current_args();
+        let probe_url = std::env::var("SI_RUST_APPLE_APPSTORE_PUBLIC_PROBE_URL")
+            .unwrap_or_else(|_| "https://developer.apple.com/sample-code/app-store-connect/app-store-connect-openapi-specification.zip".to_owned());
+        let response = BlockingHttpClient::builder()
+            .timeout(std::time::Duration::from_secs(20))
+            .build()
+            .context("build apple appstore public probe client")?
+            .get(probe_url.trim())
+            .send()
+            .with_context(|| format!("run apple appstore public probe {}", probe_url.trim()))?;
+        let ok = response.status().is_success();
+        let payload = serde_json::json!({
+            "ok": ok,
+            "probe": probe_url.trim(),
+            "status_code": response.status().as_u16(),
+            "status": response.status().to_string(),
+        });
+        match format {
+            OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+            OutputFormat::Text => {
+                if !ok {
+                    anyhow::bail!("apple appstore public probe failed: {}", response.status());
+                }
+                println!("apple appstore public probe ok");
+                println!("Probe: {}", probe_url.trim());
+            }
+        }
+        if !ok {
+            anyhow::bail!("apple appstore public probe failed: {}", response.status());
+        }
+        return Ok(());
     }
     show_apple_appstore_auth_status(
         account,
@@ -33823,7 +33822,22 @@ fn run_aws_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        return run_go_compat_with_current_args();
+        let base_url = base_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("https://iam.amazonaws.com");
+        return execute_public_probe(
+            "aws_iam",
+            "AWS",
+            base_url,
+            "GET",
+            "/",
+            "si-aws-iam/1.0",
+            "application/xml",
+            &[],
+            format,
+        );
     }
     let payload = execute_aws_request(
         account,
@@ -43938,7 +43952,22 @@ fn show_oci_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        return run_go_compat_with_current_args();
+        let base_url = base_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("https://iaas.us-ashburn-1.oraclecloud.com");
+        return execute_public_probe(
+            "oci_core",
+            "OCI",
+            base_url,
+            "GET",
+            "/20160918/instances",
+            "si-oci-core/1.0",
+            "application/json",
+            &[],
+            format,
+        );
     }
 
     let home = home.unwrap_or_else(default_home_dir);

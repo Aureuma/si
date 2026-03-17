@@ -76,7 +76,7 @@ git commit -m "Bump version to vX.Y.Z"
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
 - Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
-- Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary plus `si-go`.
+- Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary.
 
 ### 5) Create an annotated tag for the release commit
 ```
