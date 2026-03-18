@@ -472,19 +472,11 @@ fn sign_request(
     ]
     .join("\n");
     let canonical_request_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
-    let credential_scope = format!(
-        "{}/{}/{}/aws4_request",
-        date_stamp,
-        runtime.region.trim(),
-        service.trim()
-    );
-    let string_to_sign = [
-        "AWS4-HMAC-SHA256".to_owned(),
-        amz_date,
-        credential_scope.clone(),
-        canonical_request_hash,
-    ]
-    .join("\n");
+    let credential_scope =
+        format!("{}/{}/{}/aws4_request", date_stamp, runtime.region.trim(), service.trim());
+    let string_to_sign =
+        ["AWS4-HMAC-SHA256".to_owned(), amz_date, credential_scope.clone(), canonical_request_hash]
+            .join("\n");
     let signature = hex::encode(signature_key(
         runtime.secret_key.trim(),
         &date_stamp,
@@ -631,11 +623,7 @@ fn parse_body_data(body: &str, request_id: &str) -> Value {
     if !request_id.trim().is_empty() {
         map.insert("request_id".to_owned(), Value::String(request_id.to_owned()));
     }
-    if map.is_empty() {
-        Value::String(trimmed.to_owned())
-    } else {
-        Value::Object(map)
-    }
+    if map.is_empty() { Value::String(trimmed.to_owned()) } else { Value::Object(map) }
 }
 
 fn xml_root_name(body: &str) -> Option<String> {
@@ -683,11 +671,8 @@ pub fn execute_api_request(
         .build()
         .map_err(|err| format!("build AWS client: {err}"))?;
     let mut headers = request.headers.clone();
-    let accept = if request.accept.trim().is_empty() {
-        "application/xml"
-    } else {
-        request.accept.trim()
-    };
+    let accept =
+        if request.accept.trim().is_empty() { "application/xml" } else { request.accept.trim() };
     let content_type = if request.content_type.trim().is_empty() {
         "application/x-www-form-urlencoded; charset=utf-8"
     } else {

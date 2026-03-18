@@ -214,12 +214,8 @@ pub fn resolve_auth_status(
         resolve_bundle_id_with_override(overrides.bundle_id.as_str(), &alias, &account, env);
     let (locale, locale_source) =
         resolve_locale_with_override(overrides.locale.as_str(), &alias, &account, env);
-    let (platform, platform_source) = resolve_platform_with_override(
-        overrides.platform.as_str(),
-        &alias,
-        &account,
-        env,
-    )?;
+    let (platform, platform_source) =
+        resolve_platform_with_override(overrides.platform.as_str(), &alias, &account, env)?;
     let (_, issuer_source) =
         resolve_issuer_id_with_override(overrides.issuer_id.as_str(), &alias, &account, env)?;
     let (_, key_source) =
@@ -276,12 +272,8 @@ pub fn resolve_runtime(
         resolve_bundle_id_with_override(overrides.bundle_id.as_str(), &alias, &account, env);
     let (locale, locale_source) =
         resolve_locale_with_override(overrides.locale.as_str(), &alias, &account, env);
-    let (platform, platform_source) = resolve_platform_with_override(
-        overrides.platform.as_str(),
-        &alias,
-        &account,
-        env,
-    )?;
+    let (platform, platform_source) =
+        resolve_platform_with_override(overrides.platform.as_str(), &alias, &account, env)?;
     let (issuer_id, issuer_source) =
         resolve_issuer_id_with_override(overrides.issuer_id.as_str(), &alias, &account, env)?;
     let (key_id, key_source) =
@@ -359,9 +351,7 @@ pub fn run_api_request(
     } else if let Some(body) = json_body {
         request = request.header(CONTENT_TYPE, "application/json").json(&body);
     }
-    let response = request
-        .send()
-        .map_err(|err| format!("apple appstore request failed: {err}"))?;
+    let response = request.send().map_err(|err| format!("apple appstore request failed: {err}"))?;
     let status = response.status();
     let request_id = response
         .headers()
@@ -370,9 +360,8 @@ pub fn run_api_request(
         .unwrap_or_default()
         .trim()
         .to_owned();
-    let body = response
-        .text()
-        .map_err(|err| format!("read apple appstore response body: {err}"))?;
+    let body =
+        response.text().map_err(|err| format!("read apple appstore response body: {err}"))?;
     if !status.is_success() {
         let detail = if body.trim().is_empty() {
             status.to_string()
@@ -382,17 +371,11 @@ pub fn run_api_request(
         if request_id.is_empty() {
             return Err(format!("apple appstore request failed: {detail}"));
         }
-        return Err(format!(
-            "apple appstore request failed ({request_id}): {detail}"
-        ));
+        return Err(format!("apple appstore request failed ({request_id}): {detail}"));
     }
     Ok(AppleAppStoreAPIResponse {
         status_code: status.as_u16(),
-        status: status
-            .canonical_reason()
-            .unwrap_or_default()
-            .trim()
-            .to_owned(),
+        status: status.canonical_reason().unwrap_or_default().trim().to_owned(),
         request_id,
         data: serde_json::from_str(&body).ok(),
         body,
@@ -896,8 +879,8 @@ fn resolve_override_private_key_value(raw: &str) -> Result<String, String> {
 }
 
 fn read_private_key_file(path: &str) -> Result<String, String> {
-    let raw =
-        fs::read_to_string(path).map_err(|err| format!("read apple appstore private key file {path}: {err}"))?;
+    let raw = fs::read_to_string(path)
+        .map_err(|err| format!("read apple appstore private key file {path}: {err}"))?;
     if raw.trim().is_empty() {
         return Err(format!("apple appstore private key file {path} is empty"));
     }
@@ -918,22 +901,20 @@ pub fn issue_api_token(runtime: &AppleAppStoreRuntime) -> Result<AppleAppStoreIs
         .as_secs();
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(runtime.key_id.clone());
-    let claims = Claims {
-        iss: runtime.issuer_id.as_str(),
-        aud: "appstoreconnect-v1",
-        exp: now + 20 * 60,
-    };
+    let claims =
+        Claims { iss: runtime.issuer_id.as_str(), aud: "appstoreconnect-v1", exp: now + 20 * 60 };
     let key = EncodingKey::from_ec_pem(runtime.private_key_pem.as_bytes())
         .map_err(|err| format!("parse apple appstore private key: {err}"))?;
-    let value =
-        encode(&header, &claims, &key).map_err(|err| format!("sign apple appstore token: {err}"))?;
-    Ok(AppleAppStoreIssuedToken {
-        value,
-        expires_at_epoch: claims.exp,
-    })
+    let value = encode(&header, &claims, &key)
+        .map_err(|err| format!("sign apple appstore token: {err}"))?;
+    Ok(AppleAppStoreIssuedToken { value, expires_at_epoch: claims.exp })
 }
 
-fn resolve_url(base_url: &str, path: &str, params: &BTreeMap<String, String>) -> Result<String, String> {
+fn resolve_url(
+    base_url: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<String, String> {
     let path = path.trim();
     if path.is_empty() {
         return Err("apple appstore request path is required".to_owned());
@@ -943,13 +924,8 @@ fn resolve_url(base_url: &str, path: &str, params: &BTreeMap<String, String>) ->
     } else {
         let base = Url::parse(base_url.trim())
             .map_err(|err| format!("parse apple appstore base url: {err}"))?;
-        let relative = if path.starts_with('/') {
-            path.to_owned()
-        } else {
-            format!("/{path}")
-        };
-        base.join(&relative)
-            .map_err(|err| format!("resolve apple appstore request url: {err}"))?
+        let relative = if path.starts_with('/') { path.to_owned() } else { format!("/{path}") };
+        base.join(&relative).map_err(|err| format!("resolve apple appstore request url: {err}"))?
     };
     if !params.is_empty() {
         let mut pairs = url.query_pairs_mut();

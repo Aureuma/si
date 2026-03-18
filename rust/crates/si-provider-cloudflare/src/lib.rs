@@ -225,8 +225,7 @@ pub fn resolve_auth_runtime(
     .to_owned();
     let (zone_id, zone_source) =
         resolve_zone_id(&alias, &account, env, &environment, &overrides.zone_id);
-    let (api_token, token_source) =
-        resolve_api_token(&alias, &account, env, &overrides.api_token)?;
+    let (api_token, token_source) = resolve_api_token(&alias, &account, env, &overrides.api_token)?;
     let source = join_sources(&[account_source, zone_source, token_source]);
 
     Ok(CloudflareAuthRuntime {
@@ -272,11 +271,7 @@ pub fn execute_api_request(
     runtime: &CloudflareAuthRuntime,
     request: &CloudflareAPIRequest,
 ) -> Result<CloudflareAPIResponse, String> {
-    let method = if request.method.trim().is_empty() {
-        "GET"
-    } else {
-        request.method.trim()
-    };
+    let method = if request.method.trim().is_empty() { "GET" } else { request.method.trim() };
     let url = resolve_api_url(&runtime.base_url, &request.path, &request.params)?;
     let client = Client::builder()
         .timeout(Duration::from_secs(45))
@@ -353,11 +348,8 @@ pub fn render_api_response_text(response: &CloudflareAPIResponse, raw: bool) -> 
         }
         return ensure_trailing_newline(response.body.clone());
     }
-    let mut out = format!(
-        "Cloudflare API: {} ({})\n",
-        response.status.trim(),
-        response.status_code
-    );
+    let mut out =
+        format!("Cloudflare API: {} ({})\n", response.status.trim(), response.status_code);
     if !response.request_id.trim().is_empty() {
         out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
     }
@@ -421,14 +413,14 @@ fn resolve_account_selection(
     (selected, CloudflareAccountEntry::default())
 }
 
-fn normalize_api_response(response: reqwest::blocking::Response) -> Result<CloudflareAPIResponse, String> {
+fn normalize_api_response(
+    response: reqwest::blocking::Response,
+) -> Result<CloudflareAPIResponse, String> {
     let status = response.status();
     let status_text = status.to_string();
     let headers = response.headers().clone();
     let request_id = first_header(&headers, &["cf-ray", "x-request-id"]);
-    let body = response
-        .text()
-        .map_err(|err| format!("read cloudflare response body: {err}"))?;
+    let body = response.text().map_err(|err| format!("read cloudflare response body: {err}"))?;
     let mut payload = CloudflareAPIResponse {
         status_code: status.as_u16(),
         status: status_text,
@@ -463,11 +455,7 @@ fn normalize_api_response(response: reqwest::blocking::Response) -> Result<Cloud
         return Err(format!(
             "cloudflare request failed: status={} request_id={} body={}",
             payload.status_code,
-            if payload.request_id.is_empty() {
-                "-"
-            } else {
-                payload.request_id.as_str()
-            },
+            if payload.request_id.is_empty() { "-" } else { payload.request_id.as_str() },
             payload.body.trim()
         ));
     }
@@ -497,18 +485,10 @@ fn resolve_api_url(
     } else {
         let base = Url::parse(base_url)
             .map_err(|err| format!("parse cloudflare base url {:?}: {err}", base_url))?;
-        let trimmed = if path.starts_with('/') {
-            path.to_owned()
-        } else {
-            format!("/{path}")
-        };
-        base.join(&trimmed)
-            .map_err(|err| format!("resolve cloudflare path {:?}: {err}", path))?
+        let trimmed = if path.starts_with('/') { path.to_owned() } else { format!("/{path}") };
+        base.join(&trimmed).map_err(|err| format!("resolve cloudflare path {:?}: {err}", path))?
     };
-    if params
-        .iter()
-        .any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty())
-    {
+    if params.iter().any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty()) {
         let mut pairs = url.query_pairs_mut();
         for (key, value) in params {
             let key = key.trim();
@@ -669,11 +649,8 @@ fn resolve_api_token(
     if let Some(value) = env_key(alias, account, "API_TOKEN", env) {
         return Ok((value, format!("env:{}API_TOKEN", env_prefix(alias, account))));
     }
-    if let Some(value) = env
-        .get("CLOUDFLARE_API_TOKEN")
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
+    if let Some(value) =
+        env.get("CLOUDFLARE_API_TOKEN").map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
     {
         return Ok((value.to_owned(), "env:CLOUDFLARE_API_TOKEN".to_owned()));
     }
@@ -864,10 +841,7 @@ mod tests {
         assert_eq!(runtime.zone_id, "zone_staging");
         assert_eq!(runtime.account_id, "acc_core");
         assert_eq!(runtime.base_url, "https://api.example.invalid");
-        assert_eq!(
-            runtime.source,
-            "flag:--account-id,flag:--zone-id,flag:--api-token"
-        );
+        assert_eq!(runtime.source, "flag:--account-id,flag:--zone-id,flag:--api-token");
         let status = CloudflareAuthStatus::from(&runtime);
         assert_eq!(status.token_preview, "cf-tok...");
     }

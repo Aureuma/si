@@ -9,7 +9,7 @@
     clippy::unnecessary_lazy_evaluations,
     clippy::never_loop,
     clippy::ptr_arg,
-    clippy::collapsible_if,
+    clippy::collapsible_if
 )]
 
 use anyhow::{Context, Result, anyhow};
@@ -19,8 +19,8 @@ use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use reqwest::blocking::Client as BlockingHttpClient;
 use regex::Regex;
+use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -57,28 +57,25 @@ use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_apple::{
     AppleAppStoreAPIResponse, AppleAppStoreAuthOverrides, AppleAppStoreAuthStatus,
     AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, AppleAppStoreRuntime,
-    list_appstore_contexts,
-    render_appstore_context_list_text,
-    issue_api_token as issue_apple_appstore_token,
-    resolve_runtime as resolve_apple_appstore_runtime,
-    resolve_auth_status as resolve_apple_appstore_auth_status,
+    issue_api_token as issue_apple_appstore_token, list_appstore_contexts,
+    render_appstore_context_list_text, resolve_auth_status as resolve_apple_appstore_auth_status,
     resolve_current_context as resolve_apple_appstore_current_context,
+    resolve_runtime as resolve_apple_appstore_runtime,
     run_api_request as run_apple_appstore_api_request,
 };
 use si_rs_provider_aws::{
     AWSAPIRequest, AWSAPIResponse, AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry,
     AWSCurrentContext, AWSRuntimeContext, execute_api_request as execute_aws_api_request,
-    list_contexts as list_aws_contexts, render_context_list_text as render_aws_context_list_text,
-    preview_access_key as preview_aws_access_key,
+    list_contexts as list_aws_contexts, preview_access_key as preview_aws_access_key,
+    render_context_list_text as render_aws_context_list_text,
     resolve_current_context as resolve_aws_current_context, resolve_runtime as resolve_aws_runtime,
     verify_auth_status as verify_aws_auth_status,
 };
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
-    CloudflareAPIRequest, CloudflareAPIResponse, CloudflareAuthRuntime, CloudflareAuthStatus,
-    CloudflareAuthOverrides,
-    CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
-    execute_api_request as execute_cloudflare_api_request,
+    CloudflareAPIRequest, CloudflareAPIResponse, CloudflareAuthOverrides, CloudflareAuthRuntime,
+    CloudflareAuthStatus, CloudflareContextListEntry, CloudflareContextOverrides,
+    CloudflareCurrentContext, execute_api_request as execute_cloudflare_api_request,
     list_contexts as list_cloudflare_contexts,
     render_api_response_text as render_cloudflare_api_response_text,
     render_context_list_text as render_cloudflare_context_list_text,
@@ -88,80 +85,59 @@ use si_rs_provider_cloudflare::{
 };
 use si_rs_provider_gcp::{
     GCPAPIRequest, GCPAPIResponse, GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry,
-    GCPCurrentContext, GCPRuntime,
-    execute_api_request as execute_gcp_api_request,
+    GCPCurrentContext, GCPRuntime, execute_api_request as execute_gcp_api_request,
     list_contexts as list_gcp_contexts, render_context_list_text as render_gcp_context_list_text,
     resolve_auth_status as resolve_gcp_auth_status,
     resolve_current_context as resolve_gcp_current_context, resolve_runtime as resolve_gcp_runtime,
 };
 use si_rs_provider_github::{
-    GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
+    GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubBranchCreateOptions,
+    GitHubBranchProtectionOptions, GitHubContextListEntry, GitHubSecretScope,
     add_project_item as github_add_project_item,
-    archive_project_item as github_archive_project_item,
-    archive_repo as github_archive_repo,
+    archive_project_item as github_archive_project_item, archive_repo as github_archive_repo,
     cancel_workflow_run as github_cancel_workflow_run,
     clear_project_item_field_value as github_clear_project_item_field_value,
-    comment_issue as github_comment_issue,
-    create_branch as github_create_branch,
-    create_issue as github_create_issue,
-    create_release as github_create_release,
-    create_repo as github_create_repo,
-    create_pull_request as github_create_pull_request,
-    delete_branch as github_delete_branch,
-    delete_release as github_delete_release,
-    delete_repo as github_delete_repo,
-    delete_secret as github_delete_secret,
-    dispatch_workflow as github_dispatch_workflow,
-    delete_project_item as github_delete_project_item,
-    get_branch as github_get_branch,
+    comment_issue as github_comment_issue, comment_pull_request as github_comment_pull_request,
+    create_branch as github_create_branch, create_issue as github_create_issue,
+    create_pull_request as github_create_pull_request, create_release as github_create_release,
+    create_repo as github_create_repo, delete_branch as github_delete_branch,
+    delete_project_item as github_delete_project_item, delete_release as github_delete_release,
+    delete_repo as github_delete_repo, delete_secret as github_delete_secret,
+    dispatch_workflow as github_dispatch_workflow, get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
     get_pull_request as github_get_pull_request, get_release as github_get_release,
-    get_repo as github_get_repo, list_branches as github_list_branches, list_contexts,
-    list_issues as github_list_issues,
+    get_repo as github_get_repo, get_workflow_logs as github_get_workflow_logs,
+    get_workflow_run as github_get_workflow_run, graphql_query as github_graphql_query,
+    list_branches as github_list_branches, list_contexts, list_issues as github_list_issues,
     list_project_fields as github_list_project_fields,
-    list_project_items as github_list_project_items,
-    list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
-    list_releases as github_list_releases, list_repos as github_list_repos,
-    get_workflow_logs as github_get_workflow_logs,
-    list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
-    GitHubBranchCreateOptions, GitHubBranchProtectionOptions,
-    GitHubSecretScope,
-    graphql_query as github_graphql_query,
-    protect_branch as github_protect_branch,
-    raw_get as github_raw_get,
+    list_project_items as github_list_project_items, list_projects as github_list_projects,
+    list_pull_requests as github_list_pull_requests, list_releases as github_list_releases,
+    list_repos as github_list_repos, list_workflow_runs as github_list_workflow_runs,
+    list_workflows as github_list_workflows, merge_pull_request as github_merge_pull_request,
+    protect_branch as github_protect_branch, raw_get as github_raw_get, render_context_list_text,
     rerun_workflow_run as github_rerun_workflow_run,
-    resolve_access_token as github_resolve_access_token,
-    render_context_list_text, resolve_auth_status, resolve_current_context,
-    resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
-    set_issue_state as github_set_issue_state,
-    set_secret as github_set_secret,
-    comment_pull_request as github_comment_pull_request,
-    merge_pull_request as github_merge_pull_request,
-    get_workflow_run as github_get_workflow_run,
-    upload_release_asset as github_upload_release_asset,
-    unprotect_branch as github_unprotect_branch,
-    unarchive_project_item as github_unarchive_project_item,
-    update_repo as github_update_repo,
-    update_project as github_update_project,
+    resolve_access_token as github_resolve_access_token, resolve_auth_status,
+    resolve_current_context, resolve_project_id as github_resolve_project_id,
+    resolve_runtime as resolve_github_runtime, set_issue_state as github_set_issue_state,
+    set_secret as github_set_secret, unarchive_project_item as github_unarchive_project_item,
+    unprotect_branch as github_unprotect_branch, update_project as github_update_project,
     update_project_item_field_value as github_update_project_item_field_value,
+    update_repo as github_update_repo, upload_release_asset as github_upload_release_asset,
 };
 use si_rs_provider_google::{
-    GooglePlayAPIRequest, GooglePlayAPIResponse, GooglePlayContextListEntry, GooglePlayOverrides,
-    GooglePlayRuntime, execute_play_api_request,
-    list_play_contexts, render_play_context_list_text, resolve_play_auth_status,
-    resolve_play_current_context, resolve_play_runtime,
     GooglePlacesAPIRequest, GooglePlacesAPIResponse, GooglePlacesAuthStatus,
-    GooglePlacesContextListEntry, GooglePlacesCurrentContext,
-    GooglePlacesOverrides, GooglePlacesRuntime, download_places_media,
-    execute_places_api_request, list_places_contexts, render_places_context_list_text,
-    resolve_places_auth_status, resolve_places_current_context, resolve_places_runtime,
-    GoogleYouTubeAPIRequest, GoogleYouTubeAPIResponse, GoogleYouTubeAuthStatus,
-    GoogleYouTubeContextListEntry, GoogleYouTubeCurrentContext,
-    GoogleYouTubeOverrides, GoogleYouTubeRuntime, download_youtube_caption,
-    execute_youtube_api_request, set_youtube_thumbnail, upload_youtube_caption,
-    upload_youtube_video,
-    list_youtube_contexts, render_youtube_context_list_text,
-    resolve_youtube_auth_status, resolve_youtube_current_context, resolve_youtube_runtime,
+    GooglePlacesContextListEntry, GooglePlacesCurrentContext, GooglePlacesOverrides,
+    GooglePlacesRuntime, GooglePlayAPIRequest, GooglePlayAPIResponse, GooglePlayContextListEntry,
+    GooglePlayOverrides, GooglePlayRuntime, GoogleYouTubeAPIRequest, GoogleYouTubeAPIResponse,
+    GoogleYouTubeAuthStatus, GoogleYouTubeContextListEntry, GoogleYouTubeCurrentContext,
+    GoogleYouTubeOverrides, GoogleYouTubeRuntime, download_places_media, download_youtube_caption,
+    execute_places_api_request, execute_play_api_request, execute_youtube_api_request,
+    list_places_contexts, list_play_contexts, list_youtube_contexts,
+    render_places_context_list_text, render_play_context_list_text,
+    render_youtube_context_list_text, resolve_places_auth_status, resolve_places_current_context,
+    resolve_places_runtime, resolve_play_auth_status, resolve_play_current_context,
+    resolve_play_runtime, resolve_youtube_auth_status, resolve_youtube_current_context,
+    resolve_youtube_runtime, set_youtube_thumbnail, upload_youtube_caption, upload_youtube_video,
 };
 use si_rs_provider_oci::{
     OCIAPIRequest, OCIAPIResponse, OCIAPIService, OCIAuthOverrides, OCIAuthStatus,
@@ -176,16 +152,14 @@ use si_rs_provider_oci::{
 use si_rs_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
     OpenAICurrentContext, OpenAIRuntime, archive_project as openai_archive_project,
-    create_admin_api_key as openai_create_admin_api_key,
-    create_project as openai_create_project,
+    create_admin_api_key as openai_create_admin_api_key, create_project as openai_create_project,
     create_project_service_account as openai_create_project_service_account,
-    execute_api_request as execute_openai_api_request,
     delete_admin_api_key as openai_delete_admin_api_key,
     delete_project_api_key as openai_delete_project_api_key,
     delete_project_service_account as openai_delete_project_service_account,
-    get_admin_api_key as openai_get_admin_api_key,
-    get_model as openai_get_model, get_project as openai_get_project,
-    get_project_api_key as openai_get_project_api_key,
+    execute_api_request as execute_openai_api_request,
+    get_admin_api_key as openai_get_admin_api_key, get_model as openai_get_model,
+    get_project as openai_get_project, get_project_api_key as openai_get_project_api_key,
     get_project_service_account as openai_get_project_service_account,
     get_usage_metric as openai_get_usage_metric, list_admin_api_keys as openai_list_admin_api_keys,
     list_contexts as list_openai_contexts, list_models as openai_list_models,
@@ -203,15 +177,14 @@ use si_rs_provider_openai::{
 };
 use si_rs_provider_stripe::{
     StripeAPIRequest, StripeAPIResponse, StripeAuthOverrides, StripeAuthStatus,
-    StripeContextListEntry, StripeCurrentContext,
-    StripeRuntimeContext, execute_api_request as execute_stripe_api_request,
+    StripeContextListEntry, StripeCurrentContext, StripeRuntimeContext,
+    execute_api_request as execute_stripe_api_request, list_all as list_all_stripe_objects,
     list_contexts as list_stripe_contexts,
-    list_all as list_all_stripe_objects,
     render_api_response_text as render_stripe_api_response_text,
     render_context_list_text as render_stripe_context_list_text,
-    resolve_runtime as resolve_stripe_runtime,
     resolve_auth_status as resolve_stripe_auth_status,
     resolve_current_context as resolve_stripe_current_context,
+    resolve_runtime as resolve_stripe_runtime,
 };
 use si_rs_provider_workos::{
     WorkOSAPIRequest, WorkOSAPIResponse, WorkOSAuthOverrides, WorkOSAuthStatus,
@@ -219,7 +192,8 @@ use si_rs_provider_workos::{
     execute_api_request as execute_workos_api_request, list_contexts as list_workos_contexts,
     render_context_list_text as render_workos_context_list_text,
     resolve_auth_status as resolve_workos_auth_status,
-    resolve_current_context as resolve_workos_current_context, resolve_runtime as resolve_workos_runtime,
+    resolve_current_context as resolve_workos_current_context,
+    resolve_runtime as resolve_workos_runtime,
 };
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
@@ -231,10 +205,10 @@ use si_rs_warmup::{
     set_disabled_marker as set_rust_warmup_disabled_marker,
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
-use std::fs;
-use std::fs::File;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fs;
+use std::fs::File;
 use std::io::{self, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -6788,7 +6762,11 @@ enum GCPVertexCommand {
         #[command(subcommand)]
         command: GCPVertexEndpointCommand,
     },
-    #[command(alias = "batch-prediction", alias = "batch-prediction-job", alias = "batch-prediction-jobs")]
+    #[command(
+        alias = "batch-prediction",
+        alias = "batch-prediction-job",
+        alias = "batch-prediction-jobs"
+    )]
     Batch {
         #[command(subcommand)]
         command: GCPVertexBatchCommand,
@@ -6843,43 +6821,215 @@ enum GCPVertexCommand {
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexModelCommand {
-    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
-    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    List {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Get {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexEndpointCommand {
-    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
-    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
-    Predict { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] endpoint: Option<String>, resource: Option<String>, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long)] instances_json: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    List {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Get {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Create {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Delete {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    Predict {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        endpoint: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        instances_json: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexBatchCommand {
-    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
-    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
-    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    List {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Get {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Create {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Cancel {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    Delete {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexPipelineCommand {
-    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
-    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
-    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    List {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Get {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Create {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Cancel {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    Delete {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexOperationCommand {
-    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
-    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
-    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
-    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    List {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Get {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
+    Cancel {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
+    Delete {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -16662,8 +16812,14 @@ fn run_build_self_release_assets(
     let mut archive_names = Vec::new();
     for (goos, goarch, goarm) in targets {
         println!("building release archive for {goos}/{goarch}");
-        let archive_path =
-            build_release_asset(&repo_root, &resolved_out_dir, &resolved_version, goos, goarch, goarm)?;
+        let archive_path = build_release_asset(
+            &repo_root,
+            &resolved_out_dir,
+            &resolved_version,
+            goos,
+            goarch,
+            goarm,
+        )?;
         let archive_name = archive_path
             .file_name()
             .and_then(|value| value.to_str())
@@ -16761,9 +16917,7 @@ fn resolve_self_build_target(
     no_upgrade: bool,
 ) -> Result<SelfBuildTarget> {
     if install_path.is_some() && (no_upgrade || output.is_some()) {
-        return Err(anyhow!(
-            "--install-path cannot be used with --no-upgrade or --output"
-        ));
+        return Err(anyhow!("--install-path cannot be used with --no-upgrade or --output"));
     }
     if no_upgrade || output.is_some() {
         let target = if let Some(path) = output {
@@ -16771,21 +16925,13 @@ fn resolve_self_build_target(
         } else {
             repo_root.join("si")
         };
-        return Ok(SelfBuildTarget {
-            target,
-            upgrade: false,
-        });
+        return Ok(SelfBuildTarget { target, upgrade: false });
     }
-    Ok(SelfBuildTarget {
-        target: resolve_self_install_path(install_path)?,
-        upgrade: true,
-    })
+    Ok(SelfBuildTarget { target: resolve_self_install_path(install_path)?, upgrade: true })
 }
 
 fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()> {
-    let dir = output
-        .parent()
-        .ok_or_else(|| anyhow!("invalid output path {}", output.display()))?;
+    let dir = output.parent().ok_or_else(|| anyhow!("invalid output path {}", output.display()))?;
     fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
     let cargo_target_dir = tempfile::tempdir().context("create temp cargo target dir")?;
     if !quiet {
@@ -16820,11 +16966,7 @@ fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()>
     let tmp_path = tmp.path().to_path_buf();
     drop(tmp);
     fs::copy(&built_binary, &tmp_path).with_context(|| {
-        format!(
-            "copy built binary {} to {}",
-            built_binary.display(),
-            tmp_path.display()
-        )
+        format!("copy built binary {} to {}", built_binary.display(), tmp_path.display())
     })?;
     #[cfg(unix)]
     {
@@ -16835,15 +16977,16 @@ fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()>
         fs::set_permissions(&tmp_path, perms)
             .with_context(|| format!("chmod {}", tmp_path.display()))?;
     }
-    fs::rename(&tmp_path, output).or_else(|err| {
-        if err.kind() == io::ErrorKind::AlreadyExists {
-            let _ = fs::remove_file(output);
-            fs::rename(&tmp_path, output)
-        } else {
-            Err(err)
-        }
-    })
-    .with_context(|| format!("install {}", output.display()))?;
+    fs::rename(&tmp_path, output)
+        .or_else(|err| {
+            if err.kind() == io::ErrorKind::AlreadyExists {
+                let _ = fs::remove_file(output);
+                fs::rename(&tmp_path, output)
+            } else {
+                Err(err)
+            }
+        })
+        .with_context(|| format!("install {}", output.display()))?;
     Ok(())
 }
 
@@ -16865,7 +17008,11 @@ fn run_build_self_build(
     Ok(())
 }
 
-fn run_build_self_upgrade(repo: Option<PathBuf>, install_path: Option<PathBuf>, quiet: bool) -> Result<()> {
+fn run_build_self_upgrade(
+    repo: Option<PathBuf>,
+    install_path: Option<PathBuf>,
+    quiet: bool,
+) -> Result<()> {
     let repo_root = resolve_self_repo_root(repo)?;
     let target = resolve_self_install_path(install_path)?;
     build_self_binary(&repo_root, &target, quiet)?;
@@ -16898,9 +17045,7 @@ fn run_build_self_run(repo: Option<PathBuf>, args: Vec<String>) -> Result<()> {
 fn resolve_release_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
     let start = match repo {
         Some(path) if path.is_absolute() => path,
-        Some(path) => std::env::current_dir()
-            .context("read current dir")?
-            .join(path),
+        Some(path) => std::env::current_dir().context("read current dir")?.join(path),
         None => std::env::current_dir().context("read current dir")?,
     };
     git_repo_root_from(&start)
@@ -16910,11 +17055,7 @@ fn resolve_release_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
 fn resolve_release_version(repo_root: &Path, version: Option<String>) -> Result<String> {
     let value = if let Some(version) = version {
         let trimmed = version.trim();
-        if trimmed.is_empty() {
-            read_si_version(repo_root)?
-        } else {
-            trimmed.to_owned()
-        }
+        if trimmed.is_empty() { read_si_version(repo_root)? } else { trimmed.to_owned() }
     } else {
         read_si_version(repo_root)?
     };
@@ -16930,9 +17071,7 @@ fn resolve_release_version(repo_root: &Path, version: Option<String>) -> Result<
 fn resolve_release_output_dir(out_dir: Option<PathBuf>, repo_root: &Path) -> Result<PathBuf> {
     match out_dir {
         Some(path) if path.is_absolute() => Ok(path),
-        Some(path) => Ok(std::env::current_dir()
-            .context("read current dir")?
-            .join(path)),
+        Some(path) => Ok(std::env::current_dir().context("read current dir")?.join(path)),
         None => Ok(repo_root.join("dist")),
     }
 }
@@ -16946,9 +17085,9 @@ fn read_si_version(repo_root: &Path) -> Result<String> {
         .find(marker)
         .ok_or_else(|| anyhow!("si version constant not found in {}", version_path.display()))?;
     let remainder = &raw[start + marker.len()..];
-    let end = remainder
-        .find('"')
-        .ok_or_else(|| anyhow!("si version constant not terminated in {}", version_path.display()))?;
+    let end = remainder.find('"').ok_or_else(|| {
+        anyhow!("si version constant not terminated in {}", version_path.display())
+    })?;
     Ok(remainder[..end].to_owned())
 }
 
@@ -16969,11 +17108,8 @@ fn build_release_asset(
 
     let temp = tempfile::tempdir().context("create release temp dir")?;
     let version_no_v = version.trim_start_matches('v');
-    let arch_label = if goarch == "arm" {
-        format!("armv{}", goarm.unwrap_or("7"))
-    } else {
-        goarch.to_owned()
-    };
+    let arch_label =
+        if goarch == "arm" { format!("armv{}", goarm.unwrap_or("7")) } else { goarch.to_owned() };
     let artifact_stem = format!("si_{version_no_v}_{goos}_{arch_label}");
     let staging_dir = temp.path().join(&artifact_stem);
     fs::create_dir_all(&staging_dir)
@@ -16997,9 +17133,7 @@ fn build_release_asset(
     if let Some(goarm) = goarm {
         cargo_command.env("GOARM", goarm);
     }
-    let output = cargo_command
-        .output()
-        .context("run cargo build for release asset")?;
+    let output = cargo_command.output().context("run cargo build for release asset")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -17014,17 +17148,10 @@ fn build_release_asset(
             },
         ));
     }
-    let built_binary = cargo_target_dir.join("release").join(if cfg!(windows) {
-        "si-rs.exe"
-    } else {
-        "si-rs"
-    });
+    let built_binary =
+        cargo_target_dir.join("release").join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
     fs::copy(&built_binary, &output_path).with_context(|| {
-        format!(
-            "copy built release binary {} to {}",
-            built_binary.display(),
-            output_path.display()
-        )
+        format!("copy built release binary {} to {}", built_binary.display(), output_path.display())
     })?;
 
     #[cfg(unix)]
@@ -17061,9 +17188,7 @@ fn sha256_file(path: &Path) -> Result<String> {
     let mut hasher = Sha256::new();
     let mut buffer = [0_u8; 8192];
     loop {
-        let read = file
-            .read(&mut buffer)
-            .with_context(|| format!("read {}", path.display()))?;
+        let read = file.read(&mut buffer).with_context(|| format!("read {}", path.display()))?;
         if read == 0 {
             break;
         }
@@ -17106,10 +17231,7 @@ fn run_publish_npm_package(
 
     let token_env = if token_env.trim() == "NPM_TOKEN"
         && std::env::var("NPM_TOKEN").unwrap_or_default().trim().is_empty()
-        && !std::env::var("NPM_GAT_AUREUMA_VANGUARDA")
-            .unwrap_or_default()
-            .trim()
-            .is_empty()
+        && !std::env::var("NPM_GAT_AUREUMA_VANGUARDA").unwrap_or_default().trim().is_empty()
     {
         "NPM_GAT_AUREUMA_VANGUARDA".to_owned()
     } else {
@@ -17147,9 +17269,8 @@ fn run_publish_npm_package(
     if dry_run {
         command.arg("--dry-run");
     }
-    let output = command
-        .output()
-        .with_context(|| format!("run npm publish for {}", package.display()))?;
+    let output =
+        command.output().with_context(|| format!("run npm publish for {}", package.display()))?;
     if !output.status.success() {
         return Err(anyhow!(
             "npm publish failed: {}",
@@ -17197,10 +17318,7 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .output()
         .context("run npm pack")?;
     if !output.status.success() {
-        return Err(anyhow!(
-            "npm pack failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+        return Err(anyhow!("npm pack failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
     }
 
     let mut matches = fs::read_dir(stage.path())
@@ -17209,12 +17327,9 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("tgz"))
         .collect::<Vec<_>>();
     matches.sort();
-    let src = matches
-        .pop()
-        .ok_or_else(|| anyhow!("npm pack did not produce a tarball"))?;
+    let src = matches.pop().ok_or_else(|| anyhow!("npm pack did not produce a tarball"))?;
     let dst = out_dir.join(
-        src.file_name()
-            .ok_or_else(|| anyhow!("invalid npm tarball path {}", src.display()))?,
+        src.file_name().ok_or_else(|| anyhow!("invalid npm tarball path {}", src.display()))?,
     );
     move_file(&src, &dst)?;
     Ok(dst)
@@ -17250,16 +17365,12 @@ fn rewrite_package_version(path: &Path, version: &str) -> Result<()> {
     let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let mut value: Value =
         serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
-    let object = value
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("package.json must be a JSON object"))?;
+    let object =
+        value.as_object_mut().ok_or_else(|| anyhow!("package.json must be a JSON object"))?;
     object.insert("version".to_owned(), Value::String(version.to_owned()));
     fs::write(
         path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&value).context("render package.json")?
-        ),
+        format!("{}\n", serde_json::to_string_pretty(&value).context("render package.json")?),
     )
     .with_context(|| format!("write {}", path.display()))?;
     Ok(())
@@ -17274,7 +17385,9 @@ fn move_file(src: &Path, dst: &Path) -> Result<()> {
             fs::remove_file(src).with_context(|| format!("remove {}", src.display()))?;
             Ok(())
         }
-        Err(err) => Err(err).with_context(|| format!("move {} to {}", src.display(), dst.display())),
+        Err(err) => {
+            Err(err).with_context(|| format!("move {} to {}", src.display(), dst.display()))
+        }
     }
 }
 
@@ -17334,17 +17447,14 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
             Ok(_) => {}
             Err(err) if err.kind() == io::ErrorKind::NotFound => {}
             Err(err) => {
-                return Err(err).with_context(|| format!("uninstall {}", install_path.display()))
+                return Err(err).with_context(|| format!("uninstall {}", install_path.display()));
             }
         }
         return Ok(());
     }
 
     if cfg.backend.trim() != "local" {
-        return Err(anyhow!(
-            "invalid --backend {} (expected local)",
-            cfg.backend.trim()
-        ));
+        return Err(anyhow!("invalid --backend {} (expected local)", cfg.backend.trim()));
     }
 
     let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
@@ -17368,9 +17478,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     let tmp_output_path = tmp_output.path().to_path_buf();
     drop(tmp_output);
 
-    if std::env::var("SI_INSTALLER_USE_PREBUILT")
-        .map(|value| value.trim() == "1")
-        .unwrap_or(false)
+    if std::env::var("SI_INSTALLER_USE_PREBUILT").map(|value| value.trim() == "1").unwrap_or(false)
     {
         let prebuilt = source_dir
             .join(".artifacts")
@@ -17379,10 +17487,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
             .join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
         if prebuilt.exists() {
             if !cfg.quiet {
-                println!(
-                    "rust: using prebuilt installer binary {}",
-                    prebuilt.display()
-                );
+                println!("rust: using prebuilt installer binary {}", prebuilt.display());
             }
             fs::copy(&prebuilt, &tmp_output_path).with_context(|| {
                 format!(
@@ -17452,15 +17557,16 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         fs::set_permissions(&tmp_output_path, perms)
             .with_context(|| format!("chmod {}", tmp_output_path.display()))?;
     }
-    fs::rename(&tmp_output_path, &install_path).or_else(|err| {
-        if err.kind() == io::ErrorKind::AlreadyExists {
-            let _ = fs::remove_file(&install_path);
-            fs::rename(&tmp_output_path, &install_path)
-        } else {
-            Err(err)
-        }
-    })
-    .with_context(|| format!("install {}", install_path.display()))?;
+    fs::rename(&tmp_output_path, &install_path)
+        .or_else(|err| {
+            if err.kind() == io::ErrorKind::AlreadyExists {
+                let _ = fs::remove_file(&install_path);
+                fs::rename(&tmp_output_path, &install_path)
+            } else {
+                Err(err)
+            }
+        })
+        .with_context(|| format!("install {}", install_path.display()))?;
 
     if !cfg.no_path_hint {
         warn_if_installer_path_missing(install_dir);
@@ -17522,12 +17628,15 @@ fn is_effective_root() -> bool {
     }
 }
 
-fn resolve_installer_source_dir(cfg: &InstallerRunConfig) -> Result<(PathBuf, Option<tempfile::TempDir>)> {
+fn resolve_installer_source_dir(
+    cfg: &InstallerRunConfig,
+) -> Result<(PathBuf, Option<tempfile::TempDir>)> {
     if let Some(path) = cfg.source_dir.as_ref() {
         validate_installer_source_dir(path)?;
         return Ok((path.clone(), None));
     }
-    if let Some(repo_url) = cfg.repo_url.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(repo_url) = cfg.repo_url.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
         let path = PathBuf::from(repo_url);
         if path.is_dir() {
             validate_installer_source_dir(&path)?;
@@ -17580,9 +17689,13 @@ fn ensure_installer_cargo_toolchain(go_mode: &str) -> Result<String> {
     let output = StdCommand::new("cargo").arg("--version").output();
     match output {
         Ok(output) if output.status.success() => Ok("cargo".to_owned()),
-        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("cargo is required for --go-mode system")),
+        Ok(_) | Err(_) if go_mode.trim() == "system" => {
+            Err(anyhow!("cargo is required for --go-mode system"))
+        }
         Ok(_) => Err(anyhow!("cargo toolchain probe failed")),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("cargo toolchain not found on PATH")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            Err(anyhow!("cargo toolchain not found on PATH"))
+        }
         Err(err) => Err(err).context("probe cargo toolchain"),
     }
 }
@@ -17613,10 +17726,7 @@ fn warn_if_installer_path_missing(dir: &Path) {
     let path_env = std::env::var_os("PATH").unwrap_or_default();
     let on_path = std::env::split_paths(&path_env).any(|entry| entry == dir);
     if !on_path {
-        eprintln!(
-            "WARNING: install dir is not on PATH for this shell: {}",
-            dir.display()
-        );
+        eprintln!("WARNING: install dir is not on PATH for this shell: {}", dir.display());
     }
 }
 
@@ -17676,7 +17786,8 @@ fn render_installer_settings_doc(current: &str, browser: &str) -> String {
     if lines.last().map(|line| line.is_empty()).unwrap_or(false) {
         lines.pop();
     }
-    let header_pattern = Regex::new(r"^[[:space:]]*\[[^]]+\][[:space:]]*$").expect("valid header regex");
+    let header_pattern =
+        Regex::new(r"^[[:space:]]*\[[^]]+\][[:space:]]*$").expect("valid header regex");
     let login_header_pattern =
         Regex::new(r"^[[:space:]]*\[codex\.login\][[:space:]]*$").expect("valid login regex");
     let default_browser_line =
@@ -17822,13 +17933,7 @@ fn run_installer_smoke_host() -> Result<()> {
     run_path_command_checked(
         &root,
         &installer,
-        &[
-            "--dry-run",
-            "--yes",
-            "--source-dir",
-            root.to_str().unwrap_or_default(),
-            "--force",
-        ],
+        &["--dry-run", "--yes", "--source-dir", root.to_str().unwrap_or_default(), "--force"],
     )?;
 
     eprintln!("==> dry-run: backend local accepted");
@@ -17889,7 +17994,8 @@ fn run_installer_smoke_host() -> Result<()> {
 
     eprintln!("==> e2e: install from local checkout into temp bin");
     let install_dir = tmp.path().join("bin");
-    fs::create_dir_all(&install_dir).with_context(|| format!("create {}", install_dir.display()))?;
+    fs::create_dir_all(&install_dir)
+        .with_context(|| format!("create {}", install_dir.display()))?;
     run_path_command_checked(
         &root,
         &installer,
@@ -17913,12 +18019,7 @@ fn run_installer_smoke_host() -> Result<()> {
     run_path_command_checked(
         &root,
         &installer,
-        &[
-            "--install-dir",
-            install_dir.to_str().unwrap_or_default(),
-            "--uninstall",
-            "--quiet",
-        ],
+        &["--install-dir", install_dir.to_str().unwrap_or_default(), "--uninstall", "--quiet"],
     )?;
     if installed.exists() {
         return Err(anyhow!("FAIL: expected {} to be removed", installed.display()));
@@ -17978,11 +18079,12 @@ fn run_installer_smoke_npm() -> Result<()> {
 
 fn run_installer_smoke_docker() -> Result<()> {
     let root = std::env::current_dir().context("resolve root dir")?;
-    let smoke_image =
-        std::env::var("SI_INSTALL_SMOKE_IMAGE").unwrap_or_else(|_| "si-install-smoke:local".to_owned());
-    let nonroot_image =
-        std::env::var("SI_INSTALL_NONROOT_IMAGE").unwrap_or_else(|_| "si-install-nonroot:local".to_owned());
-    let source_dir = std::env::var("SI_INSTALL_SOURCE_DIR").unwrap_or_else(|_| root.display().to_string());
+    let smoke_image = std::env::var("SI_INSTALL_SMOKE_IMAGE")
+        .unwrap_or_else(|_| "si-install-smoke:local".to_owned());
+    let nonroot_image = std::env::var("SI_INSTALL_NONROOT_IMAGE")
+        .unwrap_or_else(|_| "si-install-nonroot:local".to_owned());
+    let source_dir =
+        std::env::var("SI_INSTALL_SOURCE_DIR").unwrap_or_else(|_| root.display().to_string());
     let skip_nonroot =
         std::env::var("SI_INSTALL_SMOKE_SKIP_NONROOT").unwrap_or_default().trim() == "1";
 
@@ -18063,7 +18165,8 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     let cache_dir = tmp.path().join("homebrew-cache");
     let keg_prefix = tmp.path().join("si-smoke-prefix");
     fs::create_dir_all(&assets_dir).with_context(|| format!("create {}", assets_dir.display()))?;
-    fs::create_dir_all(&formula_dir).with_context(|| format!("create {}", formula_dir.display()))?;
+    fs::create_dir_all(&formula_dir)
+        .with_context(|| format!("create {}", formula_dir.display()))?;
     fs::create_dir_all(&cache_dir).with_context(|| format!("create {}", cache_dir.display()))?;
 
     run_path_command_checked(
@@ -18084,7 +18187,8 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     let rendered = fs::read_to_string(&formula_path)
         .with_context(|| format!("read {}", formula_path.display()))?
         .replacen("class Si < Formula", "class SiSmoke < Formula", 1);
-    fs::write(&formula_path, rendered).with_context(|| format!("write {}", formula_path.display()))?;
+    fs::write(&formula_path, rendered)
+        .with_context(|| format!("write {}", formula_path.display()))?;
 
     let cache_dir_value = cache_dir.display().to_string();
     let keg_prefix_value = keg_prefix.display().to_string();
@@ -18097,9 +18201,11 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     ];
 
     let mut install = StdCommand::new("brew");
-    install
-        .current_dir(&root)
-        .args(["install", "--formula", formula_path.to_str().unwrap_or_default()]);
+    install.current_dir(&root).args([
+        "install",
+        "--formula",
+        formula_path.to_str().unwrap_or_default(),
+    ]);
     for (key, value) in &brew_env {
         install.env(key, value);
     }
@@ -18211,9 +18317,7 @@ fn run_path_command_with_env_checked(
     for (key, value) in env {
         command.env(key, value);
     }
-    let status = command
-        .status()
-        .with_context(|| format!("run {}", path.display()))?;
+    let status = command.status().with_context(|| format!("run {}", path.display()))?;
     if !status.success() {
         return Err(anyhow!("{} failed: {}", path.display(), status));
     }
@@ -18332,12 +18436,9 @@ fn resolve_si_command(repo_root: &Path) -> Result<PathBuf> {
 }
 
 fn vault_key_exists(output: &str, key: &str) -> bool {
-    output.lines().any(|line| {
-        line.split_whitespace()
-            .next()
-            .map(|value| value == key)
-            .unwrap_or(false)
-    })
+    output
+        .lines()
+        .any(|line| line.split_whitespace().next().map(|value| value == key).unwrap_or(false))
 }
 
 fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: String) -> Result<()> {
@@ -18386,7 +18487,8 @@ fn run_homebrew_update_tap_repo(
         return Err(anyhow!("tap dir does not exist: {}", tap_dir.display()));
     }
     let formula_dir = tap_dir.join("Formula");
-    fs::create_dir_all(&formula_dir).with_context(|| format!("create {}", formula_dir.display()))?;
+    fs::create_dir_all(&formula_dir)
+        .with_context(|| format!("create {}", formula_dir.display()))?;
     let formula_path = formula_dir.join("si.rb");
     render_tap_formula_with_base_url(&version, &checksums, &formula_path, &repo, None)?;
     if !do_commit {
@@ -18444,11 +18546,7 @@ fn run_validate_release_version(tag: String) -> Result<()> {
     let cwd = std::env::current_dir().context("read current dir")?;
     let actual = read_si_version(&cwd)?;
     if actual != tag {
-        return Err(anyhow!(
-            "tools/si/version.go has {}, but release tag is {}",
-            actual,
-            tag
-        ));
+        return Err(anyhow!("tools/si/version.go has {}, but release tag is {}", actual, tag));
     }
     println!("release tag and tools/si/version.go are aligned ({tag})");
     Ok(())
@@ -18473,13 +18571,14 @@ fn verify_release_archive_contents(path: &Path) -> Result<()> {
         .entries()
         .with_context(|| format!("read archive entries from {}", path.display()))?
         .map(|entry| {
-            entry
-                .with_context(|| format!("read archive entry from {}", path.display()))
-                .and_then(|entry| {
-                    entry.path()
+            entry.with_context(|| format!("read archive entry from {}", path.display())).and_then(
+                |entry| {
+                    entry
+                        .path()
                         .map(|value| value.display().to_string())
                         .with_context(|| format!("read archive path from {}", path.display()))
-                })
+                },
+            )
         })
         .collect::<Result<Vec<_>>>()?;
     names.sort();
@@ -18531,13 +18630,9 @@ fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Re
 }
 
 fn download_file(url: &str, output: &Path) -> Result<()> {
-    let response = BlockingHttpClient::new()
-        .get(url)
-        .send()
-        .with_context(|| format!("download {}", url))?;
-    let response = response
-        .error_for_status()
-        .with_context(|| format!("download {}", url))?;
+    let response =
+        BlockingHttpClient::new().get(url).send().with_context(|| format!("download {}", url))?;
+    let response = response.error_for_status().with_context(|| format!("download {}", url))?;
     let bytes = response.bytes().context("read download body")?;
     fs::write(output, &bytes).with_context(|| format!("write {}", output.display()))?;
     Ok(())
@@ -18580,8 +18675,7 @@ fn render_tap_formula_with_base_url(
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
-    fs::write(output_path, content)
-        .with_context(|| format!("write {}", output_path.display()))?;
+    fs::write(output_path, content).with_context(|| format!("write {}", output_path.display()))?;
     println!("rendered {}", output_path.display());
     Ok(())
 }
@@ -18642,7 +18736,8 @@ struct PublicDoctorPayload {
 fn resolve_public_probe_url(base_url: &str, path: &str) -> Result<String> {
     let base = url::Url::parse(base_url.trim())
         .with_context(|| format!("invalid base url {}", base_url.trim()))?;
-    let reference = url::Url::parse(path.trim()).or_else(|_| base.join(path.trim()))
+    let reference = url::Url::parse(path.trim())
+        .or_else(|_| base.join(path.trim()))
         .with_context(|| format!("invalid probe path {}", path.trim()))?;
     Ok(reference.to_string())
 }
@@ -18682,12 +18777,7 @@ fn execute_public_probe(
     let (ok, detail) = match response {
         Ok(response) => {
             let status_code = response.status().as_u16();
-            let snippet = response
-                .text()
-                .unwrap_or_default()
-                .chars()
-                .take(220)
-                .collect::<String>();
+            let snippet = response.text().unwrap_or_default().chars().take(220).collect::<String>();
             let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
             let mut detail = format!("status={status_code}");
             if !snippet.is_empty() {
@@ -18716,12 +18806,7 @@ fn execute_public_probe(
             println!("{label} doctor: {}", if ok { "ok" } else { "issues found" });
             println!("Public probe: {} {} (unauthenticated)", payload.method, payload.path);
             println!("Base URL: {}", payload.base_url);
-            println!(
-                "  {:<3} {:<12} {}",
-                if ok { "OK" } else { "ERR" },
-                "public.probe",
-                detail,
-            );
+            println!("  {:<3} {:<12} {}", if ok { "OK" } else { "ERR" }, "public.probe", detail,);
         }
     }
     if !ok {
@@ -18762,12 +18847,12 @@ fn main() -> Result<()> {
                     goarch,
                     goarm,
                     out_dir,
-                }) => run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?,
-                Some(BuildSelfCommand::ReleaseAssets {
-                    repo,
-                    version,
-                    out_dir,
-                }) => run_build_self_release_assets(repo, version, out_dir)?,
+                }) => {
+                    run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?
+                }
+                Some(BuildSelfCommand::ReleaseAssets { repo, version, out_dir }) => {
+                    run_build_self_release_assets(repo, version, out_dir)?
+                }
                 Some(BuildSelfCommand::ValidateReleaseVersion { tag }) => {
                     run_validate_release_version(tag)?
                 }
@@ -18837,11 +18922,9 @@ fn main() -> Result<()> {
                 BuildInstallerCommand::SmokeHomebrew => run_installer_smoke_homebrew()?,
             },
             BuildCommand::Npm { command } => match command {
-                BuildNpmCommand::BuildPackage {
-                    repo_root,
-                    version,
-                    out_dir,
-                } => run_build_npm_package(repo_root, version, out_dir)?,
+                BuildNpmCommand::BuildPackage { repo_root, version, out_dir } => {
+                    run_build_npm_package(repo_root, version, out_dir)?
+                }
                 BuildNpmCommand::PublishPackage {
                     repo_root,
                     version,
@@ -18857,26 +18940,16 @@ fn main() -> Result<()> {
                     file,
                     dry_run,
                 } => run_publish_npm_from_vault(
-                    repo_root,
-                    version,
-                    out_dir,
-                    token_env,
-                    file,
-                    dry_run,
+                    repo_root, version, out_dir, token_env, file, dry_run,
                 )?,
             },
             BuildCommand::Homebrew { command } => match command {
-                BuildHomebrewCommand::RenderCoreFormula {
-                    version,
-                    output,
-                    repo,
-                } => run_homebrew_render_core_formula(version, output, repo)?,
-                BuildHomebrewCommand::RenderTapFormula {
-                    version,
-                    checksums,
-                    output,
-                    repo,
-                } => run_homebrew_render_tap_formula(version, checksums, output, repo)?,
+                BuildHomebrewCommand::RenderCoreFormula { version, output, repo } => {
+                    run_homebrew_render_core_formula(version, output, repo)?
+                }
+                BuildHomebrewCommand::RenderTapFormula { version, checksums, output, repo } => {
+                    run_homebrew_render_tap_formula(version, checksums, output, repo)?
+                }
                 BuildHomebrewCommand::UpdateTapRepo {
                     version,
                     checksums,
@@ -19231,34 +19304,61 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
             },
-            CloudflareCommand::Zone { command } => run_cloudflare_resource_command(
-                cloudflare_zone_spec(),
-                command,
-            )?,
-            CloudflareCommand::Dns { command } => run_cloudflare_resource_command(
-                cloudflare_dns_spec(),
-                command,
-            )?,
+            CloudflareCommand::Zone { command } => {
+                run_cloudflare_resource_command(cloudflare_zone_spec(), command)?
+            }
+            CloudflareCommand::Dns { command } => {
+                run_cloudflare_resource_command(cloudflare_dns_spec(), command)?
+            }
             CloudflareCommand::Email { command } => match command {
-                CloudflareEmailCommand::Rule { command } => run_cloudflare_resource_command(
-                    cloudflare_email_rule_spec(),
-                    command,
-                )?,
-                CloudflareEmailCommand::Address { command } => run_cloudflare_resource_command(
-                    cloudflare_email_address_spec(),
-                    command,
-                )?,
+                CloudflareEmailCommand::Rule { command } => {
+                    run_cloudflare_resource_command(cloudflare_email_rule_spec(), command)?
+                }
+                CloudflareEmailCommand::Address { command } => {
+                    run_cloudflare_resource_command(cloudflare_email_address_spec(), command)?
+                }
                 CloudflareEmailCommand::Settings { command } => match command {
                     CloudflareEmailSettingsCommand::Get {
-                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_email_settings_get(
-                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareEmailSettingsCommand::Enable {
-                        force, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_email_settings_toggle(
                         "enable",
                         force,
@@ -19276,8 +19376,19 @@ fn main() -> Result<()> {
                         settings_file,
                     )?,
                     CloudflareEmailSettingsCommand::Disable {
-                        force, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_email_settings_toggle(
                         "disable",
                         force,
@@ -19466,8 +19577,17 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                 } => run_cloudflare_token_verify(
-                    json, raw, account, env, zone_id, zone, api_token, base_url, account_id,
-                    home, settings_file,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
                 CloudflareTokenCommand::PermissionGroups {
                     json,
@@ -19482,236 +19602,743 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                 } => run_cloudflare_token_permission_groups(
-                    json, raw, account, env, zone_id, zone, api_token, base_url, account_id,
-                    home, settings_file,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
             },
-            CloudflareCommand::Ruleset { command } => run_cloudflare_resource_command(
-                cloudflare_ruleset_spec(),
-                command,
-            )?,
-            CloudflareCommand::Firewall { command } => run_cloudflare_resource_command(
-                cloudflare_firewall_spec(),
-                command,
-            )?,
-            CloudflareCommand::RateLimit { command } => run_cloudflare_resource_command(
-                cloudflare_ratelimit_spec(),
-                command,
-            )?,
+            CloudflareCommand::Ruleset { command } => {
+                run_cloudflare_resource_command(cloudflare_ruleset_spec(), command)?
+            }
+            CloudflareCommand::Firewall { command } => {
+                run_cloudflare_resource_command(cloudflare_firewall_spec(), command)?
+            }
+            CloudflareCommand::RateLimit { command } => {
+                run_cloudflare_resource_command(cloudflare_ratelimit_spec(), command)?
+            }
             CloudflareCommand::Workers { command } => match command {
-                CloudflareWorkersCommand::Script { command } => run_cloudflare_resource_command(
-                    cloudflare_workers_script_spec(),
-                    command,
-                )?,
-                CloudflareWorkersCommand::Route { command } => run_cloudflare_resource_command(
-                    cloudflare_workers_route_spec(),
-                    command,
-                )?,
+                CloudflareWorkersCommand::Script { command } => {
+                    run_cloudflare_resource_command(cloudflare_workers_script_spec(), command)?
+                }
+                CloudflareWorkersCommand::Route { command } => {
+                    run_cloudflare_resource_command(cloudflare_workers_route_spec(), command)?
+                }
                 CloudflareWorkersCommand::Secret { command } => match command {
                     CloudflareWorkersSecretCommand::Set {
-                        script, name, text, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        script,
+                        name,
+                        text,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_workers_secret_set(
-                        script, name, text, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        script,
+                        name,
+                        text,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareWorkersSecretCommand::Delete {
-                        script, name, force, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        script,
+                        name,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_workers_secret_delete(
-                        script, name, force, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        script,
+                        name,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
             CloudflareCommand::Pages { command } => match command {
-                CloudflarePagesCommand::Project { command } => run_cloudflare_resource_command(
-                    cloudflare_pages_project_spec(),
-                    command,
-                )?,
+                CloudflarePagesCommand::Project { command } => {
+                    run_cloudflare_resource_command(cloudflare_pages_project_spec(), command)?
+                }
                 CloudflarePagesCommand::Deploy { command } => match command {
                     CloudflarePagesDeployCommand::List {
-                        project, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        project,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_deploy_list(
-                        project, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        project,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflarePagesDeployCommand::Trigger {
-                        project, body, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        project,
+                        body,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_deploy_trigger(
-                        project, body, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        project,
+                        body,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflarePagesDeployCommand::Rollback {
-                        project, deployment, force, json, raw, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        deployment,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_deploy_rollback(
-                        project, deployment, force, json, raw, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        deployment,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
                 CloudflarePagesCommand::Domain { command } => match command {
                     CloudflarePagesDomainCommand::List {
-                        project, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        project,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_domain_list(
-                        project, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        project,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflarePagesDomainCommand::Get {
-                        project, domain, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_domain_get(
-                        project, domain, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflarePagesDomainCommand::Create {
-                        project, domain, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_domain_create(
-                        project, domain, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflarePagesDomainCommand::Delete {
-                        project, domain, force, json, raw, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_pages_domain_delete(
-                        project, domain, force, json, raw, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        project,
+                        domain,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
-            CloudflareCommand::Queue { command } => run_cloudflare_resource_command(
-                cloudflare_queue_spec(),
-                command,
-            )?,
+            CloudflareCommand::Queue { command } => {
+                run_cloudflare_resource_command(cloudflare_queue_spec(), command)?
+            }
             CloudflareCommand::Waf { command } => {
                 run_cloudflare_read_update_resource_command(cloudflare_waf_spec(), command)?
             }
             CloudflareCommand::R2 { command } => match command {
-                CloudflareR2Command::Bucket { command } => run_cloudflare_resource_command(
-                    cloudflare_r2_bucket_spec(),
-                    command,
-                )?,
+                CloudflareR2Command::Bucket { command } => {
+                    run_cloudflare_resource_command(cloudflare_r2_bucket_spec(), command)?
+                }
                 CloudflareR2Command::Object { command } => match command {
                     CloudflareR2ObjectCommand::List {
-                        bucket, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        bucket,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_r2_object_list(
-                        bucket, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        bucket,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareR2ObjectCommand::Get {
-                        bucket, key, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_r2_object_get(
-                        bucket, key, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareR2ObjectCommand::Put {
-                        bucket, key, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_r2_object_put(
-                        bucket, key, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareR2ObjectCommand::Delete {
-                        bucket, key, force, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_r2_object_delete(
-                        bucket, key, force, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        bucket,
+                        key,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
             CloudflareCommand::D1 { command } => match command {
-                CloudflareD1Command::DB { command } => run_cloudflare_resource_command(
-                    cloudflare_d1_db_spec(),
-                    command,
-                )?,
+                CloudflareD1Command::DB { command } => {
+                    run_cloudflare_resource_command(cloudflare_d1_db_spec(), command)?
+                }
                 CloudflareD1Command::Query {
-                    db, sql, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    db,
+                    sql,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_d1_query(
-                    db, sql, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    db,
+                    sql,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
                 CloudflareD1Command::Migration { command } => match command {
                     CloudflareD1MigrationCommand::List {
-                        db, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        db,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_d1_migration_list(
-                        db, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        db,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareD1MigrationCommand::Apply {
-                        db, body, force, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        db,
+                        body,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_d1_migration_apply(
-                        db, body, force, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        db,
+                        body,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
             CloudflareCommand::KV { command } => match command {
-                CloudflareKVCommand::Namespace { command } => run_cloudflare_resource_command(
-                    cloudflare_kv_namespace_spec(),
-                    command,
-                )?,
+                CloudflareKVCommand::Namespace { command } => {
+                    run_cloudflare_resource_command(cloudflare_kv_namespace_spec(), command)?
+                }
                 CloudflareKVCommand::Key { command } => match command {
                     CloudflareKVKeyCommand::List {
-                        namespace, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        namespace,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_kv_key_list(
-                        namespace, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        namespace,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareKVKeyCommand::Get {
-                        namespace, key, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_kv_key_get(
-                        namespace, key, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareKVKeyCommand::Put {
-                        namespace, key, value, body, json, raw, params, account, env, zone_id,
-                        zone, api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        value,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_kv_key_put(
-                        namespace, key, value, body, json, raw, params, account, env, zone_id,
-                        zone, api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        value,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareKVKeyCommand::Bulk {
-                        namespace, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_kv_key_bulk(
-                        namespace, body, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareKVKeyCommand::Delete {
-                        namespace, key, force, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_kv_key_delete(
-                        namespace, key, force, json, raw, params, account, env, zone_id, zone,
-                        api_token, base_url, account_id, home, settings_file,
+                        namespace,
+                        key,
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
             CloudflareCommand::Access { command } => match command {
-                CloudflareAccessCommand::App { command } => run_cloudflare_resource_command(
-                    cloudflare_access_app_spec(),
-                    command,
-                )?,
-                CloudflareAccessCommand::Policy { command } => run_cloudflare_resource_command(
-                    cloudflare_access_policy_spec(),
-                    command,
-                )?,
+                CloudflareAccessCommand::App { command } => {
+                    run_cloudflare_resource_command(cloudflare_access_app_spec(), command)?
+                }
+                CloudflareAccessCommand::Policy { command } => {
+                    run_cloudflare_resource_command(cloudflare_access_policy_spec(), command)?
+                }
             },
             CloudflareCommand::Tunnel { command } => match command {
                 CloudflareTunnelCommand::List {
-                    max_pages, limit, json, raw, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    max_pages,
+                    limit,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_list(
                     cloudflare_tunnel_spec(),
                     max_pages,
@@ -19730,8 +20357,19 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareTunnelCommand::Get {
-                    id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    id,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_get(
                     cloudflare_tunnel_spec(),
                     id,
@@ -19749,8 +20387,19 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareTunnelCommand::Create {
-                    json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_create(
                     cloudflare_tunnel_spec(),
                     json,
@@ -19768,8 +20417,20 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareTunnelCommand::Update {
-                    id, json, raw, body, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    id,
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_update(
                     cloudflare_tunnel_spec(),
                     id,
@@ -19788,8 +20449,20 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareTunnelCommand::Delete {
-                    id, json, raw, force, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    id,
+                    json,
+                    raw,
+                    force,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_delete(
                     cloudflare_tunnel_spec(),
                     id,
@@ -19808,60 +20481,197 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareTunnelCommand::Token {
-                    tunnel, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    tunnel,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_tunnel_token(
-                    tunnel, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    tunnel,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
             },
             CloudflareCommand::Tls { command } => match command {
                 CloudflareTLSCommand::Get {
-                    setting, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    setting,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_tls_setting_get(
-                    setting, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    setting,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
                 CloudflareTLSCommand::Set {
-                    setting, value, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    setting,
+                    value,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_tls_setting_set(
-                    setting, value, json, raw, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    setting,
+                    value,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
-                CloudflareTLSCommand::Cert { command } => run_cloudflare_resource_command(
-                    cloudflare_tls_cert_spec(),
-                    command,
-                )?,
+                CloudflareTLSCommand::Cert { command } => {
+                    run_cloudflare_resource_command(cloudflare_tls_cert_spec(), command)?
+                }
                 CloudflareTLSCommand::OriginCert { command } => match command {
                     CloudflareOriginCertCommand::List {
-                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_origin_cert_list(
-                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareOriginCertCommand::Create {
-                        body, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_origin_cert_create(
-                        body, json, raw, params, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        body,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareOriginCertCommand::Revoke {
-                        id, force, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        id,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_origin_cert_revoke(
-                        id, force, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        id,
+                        force,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
             CloudflareCommand::LB { command } => match command {
                 CloudflareLBCommand::List {
-                    max_pages, limit, json, raw, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    max_pages,
+                    limit,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_list(
                     cloudflare_lb_spec(),
                     max_pages,
@@ -19880,8 +20690,19 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareLBCommand::Get {
-                    id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    id,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_get(
                     cloudflare_lb_spec(),
                     id,
@@ -19899,8 +20720,19 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareLBCommand::Create {
-                    body, json, raw, params, account, env, zone_id, zone, api_token, base_url,
-                    account_id, home, settings_file,
+                    body,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_create(
                     cloudflare_lb_spec(),
                     json,
@@ -19918,8 +20750,20 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareLBCommand::Update {
-                    id, body, json, raw, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    id,
+                    body,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_update(
                     cloudflare_lb_spec(),
                     id,
@@ -19938,8 +20782,20 @@ fn main() -> Result<()> {
                     settings_file,
                 )?,
                 CloudflareLBCommand::Delete {
-                    id, force, json, raw, params, account, env, zone_id, zone, api_token,
-                    base_url, account_id, home, settings_file,
+                    id,
+                    force,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_resource_delete(
                     cloudflare_lb_spec(),
                     id,
@@ -19957,33 +20813,102 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                 )?,
-                CloudflareLBCommand::Pool { command } => run_cloudflare_resource_command(
-                    cloudflare_lb_pool_spec(),
-                    command,
-                )?,
+                CloudflareLBCommand::Pool { command } => {
+                    run_cloudflare_resource_command(cloudflare_lb_pool_spec(), command)?
+                }
             },
             CloudflareCommand::Cache { command } => match command {
                 CloudflareCacheCommand::Purge {
-                    everything, tags, hosts, prefixes, force, json, raw, account, env, zone_id,
-                    zone, api_token, base_url, account_id, home, settings_file,
+                    everything,
+                    tags,
+                    hosts,
+                    prefixes,
+                    force,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 } => run_cloudflare_cache_purge(
-                    everything, tags, hosts, prefixes, force, json, raw, account, env, zone_id,
-                    zone, api_token, base_url, account_id, home, settings_file,
+                    everything,
+                    tags,
+                    hosts,
+                    prefixes,
+                    force,
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
                 )?,
                 CloudflareCacheCommand::Settings { command } => match command {
                     CloudflareCacheSettingsCommand::Get {
-                        setting, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        setting,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_cache_setting_get(
-                        setting, json, raw, account, env, zone_id, zone, api_token, base_url,
-                        account_id, home, settings_file,
+                        setting,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                     CloudflareCacheSettingsCommand::Set {
-                        setting, value, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        setting,
+                        value,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     } => run_cloudflare_cache_setting_set(
-                        setting, value, json, raw, account, env, zone_id, zone, api_token,
-                        base_url, account_id, home, settings_file,
+                        setting,
+                        value,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
                     )?,
                 },
             },
@@ -20128,7 +21053,24 @@ fn main() -> Result<()> {
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_apple_appstore_app_list(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, limit, home, settings_file, format, raw)?
+                        run_apple_appstore_app_list(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            limit,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     AppleAppStoreAppCommand::Get {
                         account,
@@ -20150,7 +21092,24 @@ fn main() -> Result<()> {
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_apple_appstore_app_get(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, app_id, home, settings_file, format, raw)?
+                        run_apple_appstore_app_get(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            app_id,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     AppleAppStoreAppCommand::Create {
                         account,
@@ -20176,7 +21135,28 @@ fn main() -> Result<()> {
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_apple_appstore_app_create(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, bundle_name, app_name, sku, primary_locale, skip_bundle_create, allow_partial, home, settings_file, format)?
+                        run_apple_appstore_app_create(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            bundle_name,
+                            app_name,
+                            sku,
+                            primary_locale,
+                            skip_bundle_create,
+                            allow_partial,
+                            home,
+                            settings_file,
+                            format,
+                        )?
                     }
                 },
                 AppleAppStoreCommand::Listing { command } => match command {
@@ -20199,7 +21179,23 @@ fn main() -> Result<()> {
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_apple_appstore_listing_get(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, version, home, settings_file, format)?
+                        run_apple_appstore_listing_get(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            version,
+                            home,
+                            settings_file,
+                            format,
+                        )?
                     }
                     AppleAppStoreListingCommand::Update {
                         account,
@@ -20232,7 +21228,35 @@ fn main() -> Result<()> {
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_apple_appstore_listing_update(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, version, create_version, app_info_body, version_body, name, subtitle, privacy_policy_url, description, keywords, marketing_url, promotional_text, support_url, whats_new, home, settings_file, format)?
+                        run_apple_appstore_listing_update(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            version,
+                            create_version,
+                            app_info_body,
+                            version_body,
+                            name,
+                            subtitle,
+                            privacy_policy_url,
+                            description,
+                            keywords,
+                            marketing_url,
+                            promotional_text,
+                            support_url,
+                            whats_new,
+                            home,
+                            settings_file,
+                            format,
+                        )?
                     }
                 },
                 AppleAppStoreCommand::Raw {
@@ -20259,7 +21283,28 @@ fn main() -> Result<()> {
                     format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_apple_appstore_raw(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, method, path, body, content_type, params, home, settings_file, format, raw)?
+                    run_apple_appstore_raw(
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        method,
+                        path,
+                        body,
+                        content_type,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AppleAppStoreCommand::Apply {
                     account,
@@ -20282,7 +21327,25 @@ fn main() -> Result<()> {
                     format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_apple_appstore_apply(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, metadata_dir, version, create_version, home, settings_file, format)?
+                    run_apple_appstore_apply(
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        metadata_dir,
+                        version,
+                        create_version,
+                        home,
+                        settings_file,
+                        format,
+                    )?
                 }
             },
         },
@@ -20496,8 +21559,16 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_bucket_list(
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSS3BucketCommand::Create {
@@ -20518,8 +21589,16 @@ fn main() -> Result<()> {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_bucket_create(
                             bucket.or(bucket_name).unwrap_or_default(),
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSS3BucketCommand::Delete {
@@ -20542,11 +21621,19 @@ fn main() -> Result<()> {
                         run_aws_s3_bucket_delete(
                             bucket.or(bucket_name).unwrap_or_default(),
                             force,
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
-                }
+                },
                 AWSS3Command::Object { command } => match command {
                     AWSS3ObjectCommand::List {
                         bucket,
@@ -20566,8 +21653,19 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_object_list(
-                            bucket, prefix, max_keys, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            bucket,
+                            prefix,
+                            max_keys,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSS3ObjectCommand::Get {
@@ -20588,8 +21686,19 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_object_get(
-                            bucket, key, output, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            bucket,
+                            key,
+                            output,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSS3ObjectCommand::Put {
@@ -20612,8 +21721,21 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_object_put(
-                            bucket, key, body, file, content_type, account, region, base_url,
-                            access_key, secret_key, session_token, home, settings_file, format, raw,
+                            bucket,
+                            key,
+                            body,
+                            file,
+                            content_type,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSS3ObjectCommand::Delete {
@@ -20634,399 +21756,1560 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_s3_object_delete(
-                            bucket, key, force, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            bucket,
+                            key,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
-                }
+                },
             },
             AWSCommand::Secrets { command } => match command {
                 AWSSecretsCommand::List {
-                    limit, account, region, base_url, access_key, secret_key, session_token,
-                    home, settings_file, json, raw, format,
+                    limit,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_secrets_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_secrets_list(
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AWSSecretsCommand::Get {
-                    id, account, region, base_url, access_key, secret_key, session_token,
-                    home, settings_file, json, raw, format,
+                    id,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_secrets_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_secrets_get(
+                        id,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AWSSecretsCommand::Create {
-                    name, value, description, account, region, base_url, access_key, secret_key,
-                    session_token, home, settings_file, json, raw, format,
+                    name,
+                    value,
+                    description,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_secrets_create(name, value, description, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_secrets_create(
+                        name,
+                        value,
+                        description,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AWSSecretsCommand::Put {
-                    id, value, account, region, base_url, access_key, secret_key, session_token,
-                    home, settings_file, json, raw, format,
+                    id,
+                    value,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_secrets_put(id, value, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_secrets_put(
+                        id,
+                        value,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AWSSecretsCommand::Delete {
-                    id, force, force_delete, account, region, base_url, access_key, secret_key,
-                    session_token, home, settings_file, json, raw, format,
+                    id,
+                    force,
+                    force_delete,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_secrets_delete(id, force, force_delete, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_secrets_delete(
+                        id,
+                        force,
+                        force_delete,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
             },
             AWSCommand::Kms { command } => match command {
                 AWSKmsCommand::Key { command } => match command {
                     AWSKmsKeyCommand::List {
-                        limit, account, region, base_url, access_key, secret_key, session_token,
-                        home, settings_file, json, raw, format,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_kms_key_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_kms_key_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     AWSKmsKeyCommand::Describe {
-                        id, account, region, base_url, access_key, secret_key, session_token,
-                        home, settings_file, json, raw, format,
+                        id,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_kms_key_describe(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_kms_key_describe(
+                            id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSKmsCommand::Encrypt {
-                    key_id, plaintext, account, region, base_url, access_key, secret_key,
-                    session_token, home, settings_file, json, raw, format,
+                    key_id,
+                    plaintext,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_kms_encrypt(key_id, plaintext, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_kms_encrypt(
+                        key_id,
+                        plaintext,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
                 AWSKmsCommand::Decrypt {
-                    ciphertext, account, region, base_url, access_key, secret_key, session_token,
-                    home, settings_file, json, raw, format,
+                    ciphertext,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_kms_decrypt(ciphertext, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_kms_decrypt(
+                        ciphertext,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
             },
             AWSCommand::Dynamodb { command } => match command {
                 AWSDynamoDbCommand::Table { command } => match command {
-                    AWSDynamoDbTableCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSDynamoDbTableCommand::List {
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_dynamodb_table_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_dynamodb_table_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSDynamoDbTableCommand::Describe { table, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSDynamoDbTableCommand::Describe {
+                        table,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_dynamodb_table_describe(table, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_dynamodb_table_describe(
+                            table,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSDynamoDbCommand::Item { command } => match command {
-                    AWSDynamoDbItemCommand::Get { table, key_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSDynamoDbItemCommand::Get {
+                        table,
+                        key_json,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_dynamodb_item_get(table, key_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_dynamodb_item_get(
+                            table,
+                            key_json,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSDynamoDbItemCommand::Put { table, item_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSDynamoDbItemCommand::Put {
+                        table,
+                        item_json,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_dynamodb_item_put(table, item_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_dynamodb_item_put(
+                            table,
+                            item_json,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSDynamoDbItemCommand::Delete { table, key_json, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSDynamoDbItemCommand::Delete {
+                        table,
+                        key_json,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_dynamodb_item_delete(table, key_json, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_dynamodb_item_delete(
+                            table,
+                            key_json,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                }
+                },
             },
             AWSCommand::Ssm { command } => match command {
                 AWSSsmCommand::Parameter { command } => match command {
-                    AWSSsmParameterCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSSsmParameterCommand::List {
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_ssm_parameter_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_ssm_parameter_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSSsmParameterCommand::Get { name, decrypt, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSSsmParameterCommand::Get {
+                        name,
+                        decrypt,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_ssm_parameter_get(name, decrypt, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_ssm_parameter_get(
+                            name,
+                            decrypt,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSSsmParameterCommand::Put { name, value, r#type, overwrite, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSSsmParameterCommand::Put {
+                        name,
+                        value,
+                        r#type,
+                        overwrite,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_ssm_parameter_put(name, value, r#type, overwrite, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_ssm_parameter_put(
+                            name,
+                            value,
+                            r#type,
+                            overwrite,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSSsmParameterCommand::Delete { name, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSSsmParameterCommand::Delete {
+                        name,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_ssm_parameter_delete(name, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_ssm_parameter_delete(
+                            name,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                }
+                },
             },
             AWSCommand::Logs { command } => match command {
                 AWSLogsCommand::Group { command } => match command {
-                    AWSLogsGroupCommand::List { limit, prefix, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSLogsGroupCommand::List {
+                        limit,
+                        prefix,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_logs_group_list(limit, prefix, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_logs_group_list(
+                            limit,
+                            prefix,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSLogsCommand::Stream { command } => match command {
-                    AWSLogsStreamCommand::List { group, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSLogsStreamCommand::List {
+                        group,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_logs_stream_list(group, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_logs_stream_list(
+                            group,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
-                AWSLogsCommand::Events { group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                AWSLogsCommand::Events {
+                    group,
+                    stream,
+                    filter_pattern,
+                    start,
+                    end,
+                    limit,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_logs_events(group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_logs_events(
+                        group,
+                        stream,
+                        filter_pattern,
+                        start,
+                        end,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
             },
             AWSCommand::Cloudwatch { command } => match command {
-                AWSCloudWatchCommand::Metric { namespace, name, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                AWSCloudWatchCommand::Metric {
+                    namespace,
+                    name,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_aws_cloudwatch_metric_list(namespace, name, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    run_aws_cloudwatch_metric_list(
+                        namespace,
+                        name,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
             },
             AWSCommand::Bedrock { command } => match command {
                 AWSBedrockCommand::FoundationModel { command } => match command {
-                    AWSBedrockFoundationModelCommand::List { provider, output_modality, inference_type, customization_type, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockFoundationModelCommand::List {
+                        provider,
+                        output_modality,
+                        inference_type,
+                        customization_type,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_foundation_model_list(provider, output_modality, inference_type, customization_type, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_foundation_model_list(
+                            provider,
+                            output_modality,
+                            inference_type,
+                            customization_type,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSBedrockFoundationModelCommand::Get { id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockFoundationModelCommand::Get {
+                        id,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_foundation_model_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_foundation_model_get(
+                            id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSBedrockCommand::InferenceProfile { command } => match command {
-                    AWSBedrockInferenceProfileCommand::List { limit, type_equals, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockInferenceProfileCommand::List {
+                        limit,
+                        type_equals,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_inference_profile_list(limit, type_equals, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_inference_profile_list(
+                            limit,
+                            type_equals,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSBedrockInferenceProfileCommand::Get { id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockInferenceProfileCommand::Get {
+                        id,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_inference_profile_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_inference_profile_get(
+                            id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSBedrockCommand::Guardrail { command } => match command {
-                    AWSBedrockGuardrailCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockGuardrailCommand::List {
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_guardrail_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_guardrail_list(
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    AWSBedrockGuardrailCommand::Get { id, version, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    AWSBedrockGuardrailCommand::Get {
+                        id,
+                        version,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_aws_bedrock_guardrail_get(id, version, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                        run_aws_bedrock_guardrail_get(
+                            id,
+                            version,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                 },
                 AWSBedrockCommand::Runtime { command } => match command {
                     AWSBedrockRuntimeCommand::Invoke {
-                        model_id, model, prompt, body, body_file, accept, content_type, trace,
-                        guardrail_id, guardrail_version, account, region, base_url, access_key,
-                        secret_key, session_token, home, settings_file, json, raw, format,
+                        model_id,
+                        model,
+                        prompt,
+                        body,
+                        body_file,
+                        accept,
+                        content_type,
+                        trace,
+                        guardrail_id,
+                        guardrail_version,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_runtime_invoke(
                             model_id.or(model).unwrap_or_default(),
-                            prompt, body, body_file, accept, content_type, trace, guardrail_id,
-                            guardrail_version, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            prompt,
+                            body,
+                            body_file,
+                            accept,
+                            content_type,
+                            trace,
+                            guardrail_id,
+                            guardrail_version,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockRuntimeCommand::Converse {
-                        model_id, model, prompt, body, body_file, trace, account, region,
-                        base_url, access_key, secret_key, session_token, home, settings_file,
-                        json, raw, format,
+                        model_id,
+                        model,
+                        prompt,
+                        body,
+                        body_file,
+                        trace,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_runtime_converse(
                             model_id.or(model).unwrap_or_default(),
-                            prompt, body, body_file, trace, account, region, base_url,
-                            access_key, secret_key, session_token, home, settings_file, format,
+                            prompt,
+                            body,
+                            body_file,
+                            trace,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
                             raw,
                         )?
                     }
                     AWSBedrockRuntimeCommand::CountTokens {
-                        model_id, model, prompt, body, body_file, account, region, base_url,
-                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        model_id,
+                        model,
+                        prompt,
+                        body,
+                        body_file,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_runtime_count_tokens(
                             model_id.or(model).unwrap_or_default(),
-                            prompt, body, body_file, account, region, base_url, access_key,
-                            secret_key, session_token, home, settings_file, format, raw,
+                            prompt,
+                            body,
+                            body_file,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                 },
                 AWSBedrockCommand::Job { command } => match command {
                     AWSBedrockJobCommand::Create {
-                        name, role_arn, model_id, input_s3_uri, output_s3_uri, timeout_hours,
-                        client_request_token, tags, body, body_file, account, region, base_url,
-                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        name,
+                        role_arn,
+                        model_id,
+                        input_s3_uri,
+                        output_s3_uri,
+                        timeout_hours,
+                        client_request_token,
+                        tags,
+                        body,
+                        body_file,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_job_create(
-                            name, role_arn, model_id, input_s3_uri, output_s3_uri,
-                            timeout_hours, client_request_token, tags, body, body_file, account,
-                            region, base_url, access_key, secret_key, session_token, home,
-                            settings_file, format, raw,
+                            name,
+                            role_arn,
+                            model_id,
+                            input_s3_uri,
+                            output_s3_uri,
+                            timeout_hours,
+                            client_request_token,
+                            tags,
+                            body,
+                            body_file,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockJobCommand::Get {
-                        id, job, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        id,
+                        job,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_job_get(
                             id.or(job).unwrap_or_default(),
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockJobCommand::List {
-                        limit, status, sort_by, sort_order, account, region, base_url,
-                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        limit,
+                        status,
+                        sort_by,
+                        sort_order,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_job_list(
-                            limit, status, sort_by, sort_order, account, region, base_url,
-                            access_key, secret_key, session_token, home, settings_file, format,
+                            limit,
+                            status,
+                            sort_by,
+                            sort_order,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
                             raw,
                         )?
                     }
                     AWSBedrockJobCommand::Stop {
-                        id, job, force, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        id,
+                        job,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_job_stop(
                             id.or(job).unwrap_or_default(),
-                            force, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            force,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                 },
                 AWSBedrockCommand::Agent { command } => match command {
                     AWSBedrockAgentCommand::List {
-                        limit, account, region, base_url, access_key, secret_key, session_token,
-                        home, settings_file, json, raw, format,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_agent_list(
-                            limit, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockAgentCommand::Get {
-                        id, agent, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        id,
+                        agent,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_agent_get(
                             id.or(agent).unwrap_or_default(),
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockAgentCommand::Alias { command } => match command {
                         AWSBedrockAgentAliasCommand::List {
-                            agent_id, limit, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, json, raw, format,
+                            agent_id,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_aws_bedrock_agent_alias_list(
-                                agent_id, limit, account, region, base_url, access_key,
-                                secret_key, session_token, home, settings_file, format, raw,
+                                agent_id,
+                                limit,
+                                account,
+                                region,
+                                base_url,
+                                access_key,
+                                secret_key,
+                                session_token,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         AWSBedrockAgentAliasCommand::Get {
-                            agent_id, alias_id, account, region, base_url, access_key,
-                            secret_key, session_token, home, settings_file, json, raw, format,
+                            agent_id,
+                            alias_id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_aws_bedrock_agent_alias_get(
-                                agent_id, alias_id, account, region, base_url, access_key,
-                                secret_key, session_token, home, settings_file, format, raw,
+                                agent_id,
+                                alias_id,
+                                account,
+                                region,
+                                base_url,
+                                access_key,
+                                secret_key,
+                                session_token,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                     },
                 },
                 AWSBedrockCommand::KnowledgeBase { command } => match command {
                     AWSBedrockKnowledgeBaseCommand::List {
-                        limit, account, region, base_url, access_key, secret_key, session_token,
-                        home, settings_file, json, raw, format,
+                        limit,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_knowledge_base_list(
-                            limit, account, region, base_url, access_key, secret_key,
-                            session_token, home, settings_file, format, raw,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockKnowledgeBaseCommand::Get {
-                        id, knowledge_base, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        id,
+                        knowledge_base,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_knowledge_base_get(
                             id.or(knowledge_base).unwrap_or_default(),
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockKnowledgeBaseCommand::DataSource { command } => match command {
                         AWSBedrockKnowledgeBaseDataSourceCommand::List {
-                            knowledge_base_id, limit, account, region, base_url, access_key,
-                            secret_key, session_token, home, settings_file, json, raw, format,
+                            knowledge_base_id,
+                            limit,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_aws_bedrock_knowledge_base_data_source_list(
-                                knowledge_base_id, limit, account, region, base_url, access_key,
-                                secret_key, session_token, home, settings_file, format, raw,
+                                knowledge_base_id,
+                                limit,
+                                account,
+                                region,
+                                base_url,
+                                access_key,
+                                secret_key,
+                                session_token,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         AWSBedrockKnowledgeBaseDataSourceCommand::Get {
-                            knowledge_base_id, id, account, region, base_url, access_key,
-                            secret_key, session_token, home, settings_file, json, raw, format,
+                            knowledge_base_id,
+                            id,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_aws_bedrock_knowledge_base_data_source_get(
-                                knowledge_base_id, id, account, region, base_url, access_key,
-                                secret_key, session_token, home, settings_file, format, raw,
+                                knowledge_base_id,
+                                id,
+                                account,
+                                region,
+                                base_url,
+                                access_key,
+                                secret_key,
+                                session_token,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                     },
                 },
                 AWSBedrockCommand::AgentRuntime { command } => match command {
                     AWSBedrockAgentRuntimeCommand::InvokeAgent {
-                        agent_id, agent_alias_id, session_id, input_text, enable_trace,
-                        session_state, session_state_file, body, body_file, account, region,
-                        base_url, access_key, secret_key, session_token, home, settings_file,
-                        json, raw, format,
+                        agent_id,
+                        agent_alias_id,
+                        session_id,
+                        input_text,
+                        enable_trace,
+                        session_state,
+                        session_state_file,
+                        body,
+                        body_file,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_agent_runtime_invoke_agent(
-                            agent_id, agent_alias_id, session_id, input_text, enable_trace,
-                            session_state, session_state_file, body, body_file, account, region,
-                            base_url, access_key, secret_key, session_token, home, settings_file,
-                            format, raw,
+                            agent_id,
+                            agent_alias_id,
+                            session_id,
+                            input_text,
+                            enable_trace,
+                            session_state,
+                            session_state_file,
+                            body,
+                            body_file,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockAgentRuntimeCommand::Retrieve {
-                        knowledge_base_id, query, results, body, body_file, account, region,
-                        base_url, access_key, secret_key, session_token, home, settings_file,
-                        json, raw, format,
+                        knowledge_base_id,
+                        query,
+                        results,
+                        body,
+                        body_file,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_agent_runtime_retrieve(
-                            knowledge_base_id, query, results, body, body_file, account, region,
-                            base_url, access_key, secret_key, session_token, home, settings_file,
-                            format, raw,
+                            knowledge_base_id,
+                            query,
+                            results,
+                            body,
+                            body_file,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSBedrockAgentRuntimeCommand::RetrieveAndGenerate {
-                        knowledge_base_id, query, model_arn, results, body, body_file, account,
-                        region, base_url, access_key, secret_key, session_token, home,
-                        settings_file, json, raw, format,
+                        knowledge_base_id,
+                        query,
+                        model_arn,
+                        results,
+                        body,
+                        body_file,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_bedrock_agent_runtime_retrieve_and_generate(
-                            knowledge_base_id, query, model_arn, results, body, body_file,
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            knowledge_base_id,
+                            query,
+                            model_arn,
+                            results,
+                            body,
+                            body_file,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                 },
@@ -21049,50 +23332,116 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_ec2_instance_list(
-                            ids, account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            ids,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSEC2InstanceCommand::Start {
-                        ids, force, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        ids,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_ec2_instance_mutation(
                             "StartInstances",
                             ids,
                             force,
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSEC2InstanceCommand::Stop {
-                        ids, force, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        ids,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_ec2_instance_mutation(
                             "StopInstances",
                             ids,
                             force,
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     AWSEC2InstanceCommand::Terminate {
-                        ids, force, account, region, base_url, access_key, secret_key,
-                        session_token, home, settings_file, json, raw, format,
+                        ids,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_aws_ec2_instance_mutation(
                             "TerminateInstances",
                             ids,
                             force,
-                            account, region, base_url, access_key, secret_key, session_token,
-                            home, settings_file, format, raw,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
-                }
+                },
             },
             AWSCommand::Lambda { command } => match command {
                 AWSLambdaCommand::Function { command } => match command {
@@ -21185,7 +23534,7 @@ fn main() -> Result<()> {
                             raw,
                         )?
                     }
-                }
+                },
             },
             AWSCommand::Ecr { command } => match command {
                 AWSEcrCommand::Repository { command } => match command {
@@ -21315,7 +23664,7 @@ fn main() -> Result<()> {
                             raw,
                         )?
                     }
-                }
+                },
             },
             AWSCommand::Doctor {
                 account,
@@ -21430,8 +23779,16 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_service_enable(
-                        account, env, project, base_url, access_token, service_name, home,
-                        settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        service_name,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPServiceCommand::Disable {
@@ -21450,8 +23807,17 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_service_disable(
-                        account, env, project, base_url, access_token, service_name, check_usage,
-                        home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        service_name,
+                        check_usage,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPServiceCommand::Get {
@@ -21469,8 +23835,16 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_service_get(
-                        account, env, project, base_url, access_token, service_name, home,
-                        settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        service_name,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPServiceCommand::List {
@@ -21490,8 +23864,18 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_service_list(
-                        account, env, project, base_url, access_token, limit, filter, params,
-                        home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        limit,
+                        filter,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
             },
@@ -21513,8 +23897,18 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_apikey_list(
-                        account, env, project, base_url, access_token, limit, show_deleted,
-                        params, home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        limit,
+                        show_deleted,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPAPIKeyCommand::Get {
@@ -21661,8 +24055,16 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_apikey_lookup(
-                        account, env, project, base_url, access_token, key_string, home,
-                        settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        key_string,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPAPIKeyCommand::Undelete {
@@ -21714,8 +24116,17 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_iam_service_account_list(
-                            account, env, project, base_url, access_token, limit, params, home,
-                            settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            limit,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GCPIAMServiceAccountCommand::Get {
@@ -21829,8 +24240,17 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_iam_service_account_key_list(
-                            account, env, project, base_url, access_token, service_account,
-                            params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            service_account,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GCPIAMServiceAccountKeyCommand::Create {
@@ -21918,8 +24338,16 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_iam_policy_get(
-                            account, env, project, base_url, access_token, resource, home,
-                            settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            resource,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GCPIAMPolicyCommand::Set {
@@ -21971,8 +24399,17 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_iam_policy_test_permissions(
-                            account, env, project, base_url, access_token, resource, permissions,
-                            home, settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            resource,
+                            permissions,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                 },
@@ -21994,8 +24431,18 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_iam_role_list(
-                            account, env, project, base_url, access_token, parent, limit, params,
-                            home, settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            parent,
+                            limit,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GCPIAMRoleCommand::Get {
@@ -22046,8 +24493,17 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_gemini_models_list(
-                            account, env, project, base_url, access_token, api_key, params, home,
-                            settings_file, format, raw,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            api_key,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GCPGeminiModelsCommand::Get {
@@ -22143,8 +24599,20 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_gemini_embed(
-                        account, env, project, base_url, access_token, api_key, model, text,
-                        json_body, params, home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        text,
+                        json_body,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPGeminiCommand::CountTokens {
@@ -22166,8 +24634,20 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_gemini_count_tokens(
-                        account, env, project, base_url, access_token, api_key, model, text,
-                        json_body, params, home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        text,
+                        json_body,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPGeminiCommand::BatchEmbed {
@@ -22189,8 +24669,20 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_gemini_batch_embed(
-                        account, env, project, base_url, access_token, api_key, model, texts,
-                        json_body, params, home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        texts,
+                        json_body,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
                 GCPGeminiCommand::Image { command } => match command {
@@ -22214,8 +24706,20 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_gcp_gemini_image_generate(
-                            account, env, project, base_url, access_token, api_key, model,
-                            prompt, output, transparent, json_body, params, home, settings_file,
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            api_key,
+                            model,
+                            prompt,
+                            output,
+                            transparent,
+                            json_body,
+                            params,
+                            home,
+                            settings_file,
                             format,
                         )?
                     }
@@ -22241,8 +24745,22 @@ fn main() -> Result<()> {
                 } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_gcp_gemini_raw(
-                        account, env, project, base_url, access_token, api_key, method, path,
-                        params, headers, body, json_body, home, settings_file, format, raw,
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        method,
+                        path,
+                        params,
+                        headers,
+                        body,
+                        json_body,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
                     )?
                 }
             },
@@ -22250,100 +24768,459 @@ fn main() -> Result<()> {
                 GCPVertexCommand::Model { command } => match command {
                     GCPVertexModelCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "models", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "models",
+                            None,
+                            limit,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexModelCommand::Get { common, name, resource, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "models", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "models",
+                            name.or(resource),
+                            None,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                 },
                 GCPVertexCommand::Endpoint { command } => match command {
                     GCPVertexEndpointCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "endpoints",
+                            None,
+                            limit,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexEndpointCommand::Get { common, name, resource, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "endpoints",
+                            name.or(resource),
+                            None,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexEndpointCommand::Create { common, body, json_body, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_create(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "endpoints",
+                            body,
+                            json_body,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexEndpointCommand::Delete { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "endpoints",
+                            name.or(resource),
+                            force,
+                            false,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
-                    GCPVertexEndpointCommand::Predict { common, endpoint, resource, body, json_body, instances_json, params } => {
+                    GCPVertexEndpointCommand::Predict {
+                        common,
+                        endpoint,
+                        resource,
+                        body,
+                        json_body,
+                        instances_json,
+                        params,
+                    } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_predict(common.account, common.env, common.project, common.base_url, common.access_token, common.location, endpoint.or(resource), body, json_body, instances_json, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_predict(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            endpoint.or(resource),
+                            body,
+                            json_body,
+                            instances_json,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                 },
                 GCPVertexCommand::Batch { command } => match command {
                     GCPVertexBatchCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "batchPredictionJobs",
+                            None,
+                            limit,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexBatchCommand::Get { common, name, resource, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "batchPredictionJobs",
+                            name.or(resource),
+                            None,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexBatchCommand::Create { common, body, json_body, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_create(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "batchPredictionJobs",
+                            body,
+                            json_body,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexBatchCommand::Cancel { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "batchPredictionJobs",
+                            name.or(resource),
+                            force,
+                            true,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexBatchCommand::Delete { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "batchPredictionJobs",
+                            name.or(resource),
+                            force,
+                            false,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                 },
                 GCPVertexCommand::Pipeline { command } => match command {
                     GCPVertexPipelineCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "pipelineJobs",
+                            None,
+                            limit,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexPipelineCommand::Get { common, name, resource, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "pipelineJobs",
+                            name.or(resource),
+                            None,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexPipelineCommand::Create { common, body, json_body, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_create(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "pipelineJobs",
+                            body,
+                            json_body,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexPipelineCommand::Cancel { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "pipelineJobs",
+                            name.or(resource),
+                            force,
+                            true,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexPipelineCommand::Delete { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "pipelineJobs",
+                            name.or(resource),
+                            force,
+                            false,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                 },
                 GCPVertexCommand::Operation { command } => match command {
                     GCPVertexOperationCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "operations",
+                            None,
+                            limit,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexOperationCommand::Get { common, name, resource, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_list(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "operations",
+                            name.or(resource),
+                            None,
+                            params,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexOperationCommand::Cancel { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "operations",
+                            name.or(resource),
+                            force,
+                            true,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                     GCPVertexOperationCommand::Delete { common, name, resource, force } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
-                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                        run_gcp_vertex_delete_or_cancel(
+                            common.account,
+                            common.env,
+                            common.project,
+                            common.base_url,
+                            common.access_token,
+                            common.location,
+                            "operations",
+                            name.or(resource),
+                            force,
+                            false,
+                            common.home,
+                            common.settings_file,
+                            format,
+                            common.raw,
+                        )?
                     }
                 },
-                GCPVertexCommand::Raw { account, env, project, base_url, access_token, location, method, path, params, headers, body, json_body, home, settings_file, json, raw, format } => {
+                GCPVertexCommand::Raw {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    location,
+                    method,
+                    path,
+                    params,
+                    headers,
+                    body,
+                    json_body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
                     let format = if json { OutputFormat::Json } else { format };
-                    run_gcp_vertex_raw(account, env, project, base_url, access_token, location, method, path, params, headers, body, json_body, home, settings_file, format, raw)?
+                    run_gcp_vertex_raw(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        location,
+                        method,
+                        path,
+                        params,
+                        headers,
+                        body,
+                        json_body,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
                 }
             },
             GCPCommand::Raw {
@@ -23984,41 +26861,124 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Channel { command } => match command {
                     GoogleYouTubeChannelCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, for_handle, for_username, mine, max_results,
-                        page_token, params, home, settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        for_handle,
+                        for_username,
+                        mine,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_channel_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, for_handle, for_username, mine, max_results,
-                            page_token, params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            for_handle,
+                            for_username,
+                            mine,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeChannelCommand::Get { command } => {
                         let format = if command.json { OutputFormat::Json } else { command.format };
                         run_google_youtube_channel_list(
-                            command.account, command.env, command.auth_mode, command.api_key,
-                            command.base_url, command.upload_base_url, command.project_id,
-                            command.language, command.region, command.client_id, command.client_secret,
-                            command.redirect_uri, command.access_token, command.refresh_token,
-                            command.part, command.ids, command.for_handle, command.for_username,
-                            false, command.max_results, command.page_token, command.params,
-                            command.home, command.settings_file, format, command.raw,
+                            command.account,
+                            command.env,
+                            command.auth_mode,
+                            command.api_key,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.project_id,
+                            command.language,
+                            command.region,
+                            command.client_id,
+                            command.client_secret,
+                            command.redirect_uri,
+                            command.access_token,
+                            command.refresh_token,
+                            command.part,
+                            command.ids,
+                            command.for_handle,
+                            command.for_username,
+                            false,
+                            command.max_results,
+                            command.page_token,
+                            command.params,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
                         )?
                     }
                     GoogleYouTubeChannelCommand::Mine { command } => {
                         let format = if command.json { OutputFormat::Json } else { command.format };
                         run_google_youtube_channel_list(
-                            command.account, command.env, command.auth_mode, command.api_key,
-                            command.base_url, command.upload_base_url, command.project_id,
-                            command.language, command.region, command.client_id, command.client_secret,
-                            command.redirect_uri, command.access_token, command.refresh_token,
-                            command.part, None, None, None, true, command.max_results,
-                            command.page_token, command.params, command.home, command.settings_file,
-                            format, command.raw,
+                            command.account,
+                            command.env,
+                            command.auth_mode,
+                            command.api_key,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.project_id,
+                            command.language,
+                            command.region,
+                            command.client_id,
+                            command.client_secret,
+                            command.redirect_uri,
+                            command.access_token,
+                            command.refresh_token,
+                            command.part,
+                            None,
+                            None,
+                            None,
+                            true,
+                            command.max_results,
+                            command.page_token,
+                            command.params,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
                         )?
                     }
                     GoogleYouTubeChannelCommand::Update { command } => {
@@ -24032,29 +26992,93 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Video { command } => match command {
                     GoogleYouTubeVideoCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, chart, my_rating, region_code, max_results,
-                        page_token, params, home, settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        chart,
+                        my_rating,
+                        region_code,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_video_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, chart, my_rating, region_code, max_results,
-                            page_token, params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            chart,
+                            my_rating,
+                            region_code,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeVideoCommand::Get { command } => {
                         let format = if command.json { OutputFormat::Json } else { command.format };
                         run_google_youtube_video_list(
-                            command.account, command.env, command.auth_mode, command.api_key,
-                            command.base_url, command.upload_base_url, command.project_id,
-                            command.language, command.region, command.client_id, command.client_secret,
-                            command.redirect_uri, command.access_token, command.refresh_token,
-                            command.part, command.ids, command.chart, command.my_rating,
-                            command.region_code, command.max_results, command.page_token, command.params,
-                            command.home, command.settings_file, format, command.raw,
+                            command.account,
+                            command.env,
+                            command.auth_mode,
+                            command.api_key,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.project_id,
+                            command.language,
+                            command.region,
+                            command.client_id,
+                            command.client_secret,
+                            command.redirect_uri,
+                            command.access_token,
+                            command.refresh_token,
+                            command.part,
+                            command.ids,
+                            command.chart,
+                            command.my_rating,
+                            command.region_code,
+                            command.max_results,
+                            command.page_token,
+                            command.params,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
                         )?
                     }
                     GoogleYouTubeVideoCommand::Upload { command } => {
@@ -24079,16 +27103,18 @@ fn main() -> Result<()> {
                         )?
                     }
                     GoogleYouTubeVideoCommand::Delete { command } => {
-                        run_google_youtube_video_delete(command.runtime, command.id, command.params)?
-                    }
-                    GoogleYouTubeVideoCommand::Rate { command } => {
-                        run_google_youtube_video_rate(
+                        run_google_youtube_video_delete(
                             command.runtime,
                             command.id,
-                            command.rating,
                             command.params,
                         )?
                     }
+                    GoogleYouTubeVideoCommand::Rate { command } => run_google_youtube_video_rate(
+                        command.runtime,
+                        command.id,
+                        command.rating,
+                        command.params,
+                    )?,
                     GoogleYouTubeVideoCommand::GetRating { command } => {
                         run_google_youtube_video_get_rating(
                             command.runtime,
@@ -24099,16 +27125,52 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Caption { command } => match command {
                     GoogleYouTubeCaptionCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, video_id, params, home, settings_file, json, raw,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        video_id,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
                         format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_caption_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, video_id, params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            video_id,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeCaptionCommand::Upload { command } => {
@@ -24124,11 +27186,18 @@ fn main() -> Result<()> {
                     }
                     GoogleYouTubeCaptionCommand::Update { command } => {
                         run_google_youtube_caption_update(
-                            command.runtime, command.part, command.body, command.params,
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
                         )?
                     }
                     GoogleYouTubeCaptionCommand::Delete { command } => {
-                        run_google_youtube_caption_delete(command.runtime, command.id, command.params)?
+                        run_google_youtube_caption_delete(
+                            command.runtime,
+                            command.id,
+                            command.params,
+                        )?
                     }
                     GoogleYouTubeCaptionCommand::Download { command } => {
                         run_google_youtube_caption_download(
@@ -24168,29 +27237,90 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Playlist { command } => match command {
                     GoogleYouTubePlaylistCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, channel_id, mine, max_results, page_token,
-                        params, home, settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        channel_id,
+                        mine,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_playlist_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, channel_id, mine, max_results, page_token,
-                            params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            channel_id,
+                            mine,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubePlaylistCommand::Get { command } => {
                         let format = if command.json { OutputFormat::Json } else { command.format };
                         run_google_youtube_playlist_list(
-                            command.account, command.env, command.auth_mode, command.api_key,
-                            command.base_url, command.upload_base_url, command.project_id,
-                            command.language, command.region, command.client_id, command.client_secret,
-                            command.redirect_uri, command.access_token, command.refresh_token,
-                            command.part, command.ids, command.channel_id, command.mine,
-                            command.max_results, command.page_token, command.params, command.home,
-                            command.settings_file, format, command.raw,
+                            command.account,
+                            command.env,
+                            command.auth_mode,
+                            command.api_key,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.project_id,
+                            command.language,
+                            command.region,
+                            command.client_id,
+                            command.client_secret,
+                            command.redirect_uri,
+                            command.access_token,
+                            command.refresh_token,
+                            command.part,
+                            command.ids,
+                            command.channel_id,
+                            command.mine,
+                            command.max_results,
+                            command.page_token,
+                            command.params,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
                         )?
                     }
                     GoogleYouTubePlaylistCommand::Create { command } => {
@@ -24213,22 +27343,67 @@ fn main() -> Result<()> {
                         )?
                     }
                     GoogleYouTubePlaylistCommand::Delete { command } => {
-                        run_google_youtube_playlist_delete(command.runtime, command.id, command.params)?
+                        run_google_youtube_playlist_delete(
+                            command.runtime,
+                            command.id,
+                            command.params,
+                        )?
                     }
                 },
                 GoogleYouTubeCommand::PlaylistItem { command } => match command {
                     GoogleYouTubePlaylistItemCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, playlist_id, max_results, page_token, params,
-                        home, settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        playlist_id,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_playlist_item_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, playlist_id, max_results, page_token, params,
-                            home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            playlist_id,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubePlaylistItemCommand::Add { command } => {
@@ -24260,17 +27435,62 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Subscription { command } => match command {
                     GoogleYouTubeSubscriptionCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, channel_id, mine, for_channel_id, max_results,
-                        page_token, params, home, settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        channel_id,
+                        mine,
+                        for_channel_id,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_subscription_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, channel_id, mine, for_channel_id, max_results,
-                            page_token, params, home, settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            channel_id,
+                            mine,
+                            for_channel_id,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeSubscriptionCommand::Create { command } => {
@@ -24292,33 +27512,119 @@ fn main() -> Result<()> {
                 },
                 GoogleYouTubeCommand::Comment { command } => match command {
                     GoogleYouTubeCommentCommand::List {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
-                        ids, max_results, order, search_terms, page_token, params, home,
-                        settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        video_id,
+                        channel_id,
+                        all_threads_related_to_channel_id,
+                        ids,
+                        max_results,
+                        order,
+                        search_terms,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_comment_thread_list(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
-                            ids, max_results, order, search_terms, page_token, params, home,
-                            settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            video_id,
+                            channel_id,
+                            all_threads_related_to_channel_id,
+                            ids,
+                            max_results,
+                            order,
+                            search_terms,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeCommentCommand::Get {
-                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                        language, region, client_id, client_secret, redirect_uri, access_token,
-                        refresh_token, part, ids, max_results, page_token, params, home,
-                        settings_file, json, raw, format,
+                        account,
+                        env,
+                        auth_mode,
+                        api_key,
+                        base_url,
+                        upload_base_url,
+                        project_id,
+                        language,
+                        region,
+                        client_id,
+                        client_secret,
+                        redirect_uri,
+                        access_token,
+                        refresh_token,
+                        part,
+                        ids,
+                        max_results,
+                        page_token,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_comment_get(
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, max_results, page_token, params, home,
-                            settings_file, format, raw,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
                         )?
                     }
                     GoogleYouTubeCommentCommand::Create { command } => {
@@ -24348,19 +27654,66 @@ fn main() -> Result<()> {
                     }
                     GoogleYouTubeCommentCommand::Thread { command } => match command {
                         GoogleYouTubeCommentThreadCommand::List {
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
-                            ids, max_results, order, search_terms, page_token, params, home,
-                            settings_file, json, raw, format,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            video_id,
+                            channel_id,
+                            all_threads_related_to_channel_id,
+                            ids,
+                            max_results,
+                            order,
+                            search_terms,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_google_youtube_comment_thread_list(
-                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                                language, region, client_id, client_secret, redirect_uri, access_token,
-                                refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
-                                ids, max_results, order, search_terms, page_token, params, home,
-                                settings_file, format, raw,
+                                account,
+                                env,
+                                auth_mode,
+                                api_key,
+                                base_url,
+                                upload_base_url,
+                                project_id,
+                                language,
+                                region,
+                                client_id,
+                                client_secret,
+                                redirect_uri,
+                                access_token,
+                                refresh_token,
+                                part,
+                                video_id,
+                                channel_id,
+                                all_threads_related_to_channel_id,
+                                ids,
+                                max_results,
+                                order,
+                                search_terms,
+                                page_token,
+                                params,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         GoogleYouTubeCommentThreadCommand::Create { command } => {
@@ -24378,99 +27731,255 @@ fn main() -> Result<()> {
                 GoogleYouTubeCommand::Live { command } => match command {
                     GoogleYouTubeLiveCommand::Broadcast { command } => match command {
                         GoogleYouTubeLiveBroadcastCommand::List {
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, status, broadcast_type, mine, max_results,
-                            page_token, params, home, settings_file, json, raw, format,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            status,
+                            broadcast_type,
+                            mine,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_google_youtube_live_broadcast_list(
-                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                                language, region, client_id, client_secret, redirect_uri, access_token,
-                                refresh_token, part, ids, status, broadcast_type, mine, max_results,
-                                page_token, params, home, settings_file, format, raw,
+                                account,
+                                env,
+                                auth_mode,
+                                api_key,
+                                base_url,
+                                upload_base_url,
+                                project_id,
+                                language,
+                                region,
+                                client_id,
+                                client_secret,
+                                redirect_uri,
+                                access_token,
+                                refresh_token,
+                                part,
+                                ids,
+                                status,
+                                broadcast_type,
+                                mine,
+                                max_results,
+                                page_token,
+                                params,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         GoogleYouTubeLiveBroadcastCommand::Create { command } => {
                             run_google_youtube_live_broadcast_create(
-                                command.runtime, command.part, command.body, command.params,
+                                command.runtime,
+                                command.part,
+                                command.body,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveBroadcastCommand::Update { command } => {
                             run_google_youtube_live_broadcast_update(
-                                command.runtime, command.part, command.body, command.params,
+                                command.runtime,
+                                command.part,
+                                command.body,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveBroadcastCommand::Delete { command } => {
                             run_google_youtube_live_broadcast_delete(
-                                command.runtime, command.id, command.params,
+                                command.runtime,
+                                command.id,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveBroadcastCommand::Bind { command } => {
                             run_google_youtube_live_broadcast_bind(
-                                command.runtime, command.id, command.stream_id, command.part, command.params,
+                                command.runtime,
+                                command.id,
+                                command.stream_id,
+                                command.part,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveBroadcastCommand::Transition { command } => {
                             run_google_youtube_live_broadcast_transition(
-                                command.runtime, command.id, command.status, command.part, command.params,
+                                command.runtime,
+                                command.id,
+                                command.status,
+                                command.part,
+                                command.params,
                             )?
                         }
                     },
                     GoogleYouTubeLiveCommand::Stream { command } => match command {
                         GoogleYouTubeLiveStreamCommand::List {
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, ids, mine, max_results, page_token, params, home,
-                            settings_file, json, raw, format,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            ids,
+                            mine,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_google_youtube_live_stream_list(
-                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                                language, region, client_id, client_secret, redirect_uri, access_token,
-                                refresh_token, part, ids, mine, max_results, page_token, params, home,
-                                settings_file, format, raw,
+                                account,
+                                env,
+                                auth_mode,
+                                api_key,
+                                base_url,
+                                upload_base_url,
+                                project_id,
+                                language,
+                                region,
+                                client_id,
+                                client_secret,
+                                redirect_uri,
+                                access_token,
+                                refresh_token,
+                                part,
+                                ids,
+                                mine,
+                                max_results,
+                                page_token,
+                                params,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         GoogleYouTubeLiveStreamCommand::Create { command } => {
                             run_google_youtube_live_stream_create(
-                                command.runtime, command.part, command.body, command.params,
+                                command.runtime,
+                                command.part,
+                                command.body,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveStreamCommand::Update { command } => {
                             run_google_youtube_live_stream_update(
-                                command.runtime, command.part, command.body, command.params,
+                                command.runtime,
+                                command.part,
+                                command.body,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveStreamCommand::Delete { command } => {
                             run_google_youtube_live_stream_delete(
-                                command.runtime, command.id, command.params,
+                                command.runtime,
+                                command.id,
+                                command.params,
                             )?
                         }
                     },
                     GoogleYouTubeLiveCommand::Chat { command } => match command {
                         GoogleYouTubeLiveChatCommand::List {
-                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                            language, region, client_id, client_secret, redirect_uri, access_token,
-                            refresh_token, part, live_chat_id, max_results, page_token, params, home,
-                            settings_file, json, raw, format,
+                            account,
+                            env,
+                            auth_mode,
+                            api_key,
+                            base_url,
+                            upload_base_url,
+                            project_id,
+                            language,
+                            region,
+                            client_id,
+                            client_secret,
+                            redirect_uri,
+                            access_token,
+                            refresh_token,
+                            part,
+                            live_chat_id,
+                            max_results,
+                            page_token,
+                            params,
+                            home,
+                            settings_file,
+                            json,
+                            raw,
+                            format,
                         } => {
                             let format = if json { OutputFormat::Json } else { format };
                             run_google_youtube_live_chat_list(
-                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
-                                language, region, client_id, client_secret, redirect_uri, access_token,
-                                refresh_token, part, live_chat_id, max_results, page_token, params, home,
-                                settings_file, format, raw,
+                                account,
+                                env,
+                                auth_mode,
+                                api_key,
+                                base_url,
+                                upload_base_url,
+                                project_id,
+                                language,
+                                region,
+                                client_id,
+                                client_secret,
+                                redirect_uri,
+                                access_token,
+                                refresh_token,
+                                part,
+                                live_chat_id,
+                                max_results,
+                                page_token,
+                                params,
+                                home,
+                                settings_file,
+                                format,
+                                raw,
                             )?
                         }
                         GoogleYouTubeLiveChatCommand::Create { command } => {
                             run_google_youtube_live_chat_create(
-                                command.runtime, command.live_chat_id, command.text, command.part, command.body, command.params,
+                                command.runtime,
+                                command.live_chat_id,
+                                command.text,
+                                command.part,
+                                command.body,
+                                command.params,
                             )?
                         }
                         GoogleYouTubeLiveChatCommand::Delete { command } => {
                             run_google_youtube_live_chat_delete(
-                                command.runtime, command.id, command.params,
+                                command.runtime,
+                                command.id,
+                                command.params,
                             )?
                         }
                     },
@@ -24616,7 +28125,8 @@ fn main() -> Result<()> {
                         if let Some(support_region) =
                             support_region.filter(|value| !value.trim().is_empty())
                         {
-                            params.insert("regionCode".to_owned(), support_region.trim().to_owned());
+                            params
+                                .insert("regionCode".to_owned(), support_region.trim().to_owned());
                         }
                         run_google_youtube_support_command(
                             account,
@@ -24655,7 +28165,13 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_youtube_report_usage(
-                            since, until, account, env, home, settings_file, format,
+                            since,
+                            until,
+                            account,
+                            env,
+                            home,
+                            settings_file,
+                            format,
                         )?
                     }
                 },
@@ -26450,14 +29966,23 @@ fn main() -> Result<()> {
             } => {
                 let format = if json { OutputFormat::Json } else { format };
                 run_workos_doctor(
-                    account, env, api_key, client_id, org_id, base_url, home, settings_file,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
                     format,
                 )?
             }
             WorkOSCommand::Organization { command } => {
                 run_workos_resource_command(workos_organization_spec(), command)?
             }
-            WorkOSCommand::User { command } => run_workos_resource_command(workos_user_spec(), command)?,
+            WorkOSCommand::User { command } => {
+                run_workos_resource_command(workos_user_spec(), command)?
+            }
             WorkOSCommand::Membership { command } => {
                 run_workos_resource_command(workos_membership_spec(), command)?
             }
@@ -26707,8 +30232,22 @@ fn main() -> Result<()> {
                 json,
                 raw,
             } => run_workos_raw(
-                method, path, body, json_body, params, headers, account, env, api_key, client_id,
-                org_id, base_url, home, settings_file, json, raw,
+                method,
+                path,
+                body,
+                json_body,
+                params,
+                headers,
+                account,
+                env,
+                api_key,
+                client_id,
+                org_id,
+                base_url,
+                home,
+                settings_file,
+                json,
+                raw,
             )?,
         },
         Command::GitHub { command } => match command {
@@ -30028,11 +33567,8 @@ fn show_apple_appstore_auth_status(
     }
 
     let auth_status = resolve_apple_appstore_auth_status(
-        &Settings::load(
-            &home.clone().unwrap_or_else(default_home_dir),
-            settings_file.as_deref(),
-        )?
-        .apple,
+        &Settings::load(&home.clone().unwrap_or_else(default_home_dir), settings_file.as_deref())?
+            .apple,
         &std::env::vars().collect(),
         &AppleAppStoreAuthOverrides {
             account: account.clone().unwrap_or_default(),
@@ -30350,9 +33886,7 @@ fn parse_apple_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     for raw in params {
         let Some((key, value)) = raw.split_once('=') else {
-            return Err(anyhow::anyhow!(
-                "invalid --param {raw:?} (expected key=value)"
-            ));
+            return Err(anyhow::anyhow!("invalid --param {raw:?} (expected key=value)"));
         };
         let key = key.trim();
         if key.is_empty() {
@@ -30397,7 +33931,9 @@ fn apple_any_string(value: &Value) -> String {
     }
 }
 
-fn apple_first_data_object(response: &AppleAppStoreAPIResponse) -> Option<serde_json::Map<String, Value>> {
+fn apple_first_data_object(
+    response: &AppleAppStoreAPIResponse,
+) -> Option<serde_json::Map<String, Value>> {
     let Value::Object(root) = response.data.as_ref()? else {
         return None;
     };
@@ -30418,16 +33954,9 @@ fn apple_find_app_by_bundle_id(
     let mut params = BTreeMap::new();
     params.insert("filter[bundleId]".to_owned(), bundle_id.trim().to_owned());
     params.insert("limit".to_owned(), "1".to_owned());
-    let response = run_apple_appstore_api_request(
-        runtime,
-        "GET",
-        "/v1/apps",
-        &params,
-        None,
-        None,
-        None,
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        run_apple_appstore_api_request(runtime, "GET", "/v1/apps", &params, None, None, None)
+            .map_err(anyhow::Error::msg)?;
     Ok(apple_first_data_object(&response))
 }
 
@@ -30438,16 +33967,9 @@ fn apple_find_bundle_id_resource(
     let mut params = BTreeMap::new();
     params.insert("filter[identifier]".to_owned(), identifier.trim().to_owned());
     params.insert("limit".to_owned(), "1".to_owned());
-    let response = run_apple_appstore_api_request(
-        runtime,
-        "GET",
-        "/v1/bundleIds",
-        &params,
-        None,
-        None,
-        None,
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        run_apple_appstore_api_request(runtime, "GET", "/v1/bundleIds", &params, None, None, None)
+            .map_err(anyhow::Error::msg)?;
     Ok(apple_first_data_object(&response))
 }
 
@@ -30467,12 +33989,7 @@ fn apple_resolve_app_info_id(runtime: &AppleAppStoreRuntime, app_id: &str) -> Re
     let Some(resource) = apple_first_data_object(&response) else {
         return Err(anyhow::anyhow!("app info not found for app {app_id}"));
     };
-    Ok(resource
-        .get("id")
-        .map(apple_any_string)
-        .unwrap_or_default()
-        .trim()
-        .to_owned())
+    Ok(resource.get("id").map(apple_any_string).unwrap_or_default().trim().to_owned())
 }
 
 fn apple_find_app_info_localization(
@@ -30528,10 +34045,7 @@ fn apple_resolve_app_store_version_id(
     params.insert("limit".to_owned(), "1".to_owned());
     params.insert("filter[platform]".to_owned(), platform.trim().to_owned());
     if !version_string.trim().is_empty() {
-        params.insert(
-            "filter[versionString]".to_owned(),
-            version_string.trim().to_owned(),
-        );
+        params.insert("filter[versionString]".to_owned(), version_string.trim().to_owned());
     }
     let response = run_apple_appstore_api_request(
         runtime,
@@ -30544,12 +34058,7 @@ fn apple_resolve_app_store_version_id(
     )
     .map_err(anyhow::Error::msg)?;
     if let Some(resource) = apple_first_data_object(&response) {
-        return Ok(resource
-            .get("id")
-            .map(apple_any_string)
-            .unwrap_or_default()
-            .trim()
-            .to_owned());
+        return Ok(resource.get("id").map(apple_any_string).unwrap_or_default().trim().to_owned());
     }
     if !create_if_missing || version_string.trim().is_empty() {
         if version_string.trim().is_empty() {
@@ -30589,12 +34098,7 @@ fn apple_resolve_app_store_version_id(
     let Some(resource) = apple_first_data_object(&created) else {
         return Err(anyhow::anyhow!("create app store version returned empty resource"));
     };
-    Ok(resource
-        .get("id")
-        .map(apple_any_string)
-        .unwrap_or_default()
-        .trim()
-        .to_owned())
+    Ok(resource.get("id").map(apple_any_string).unwrap_or_default().trim().to_owned())
 }
 
 fn apple_apply_listing_mutation(
@@ -30610,12 +34114,7 @@ fn apple_apply_listing_mutation(
     let Some(app_resource) = apple_find_app_by_bundle_id(runtime, bundle_id)? else {
         return Err(anyhow::anyhow!("app not found for bundle id {bundle_id}"));
     };
-    let app_id = app_resource
-        .get("id")
-        .map(apple_any_string)
-        .unwrap_or_default()
-        .trim()
-        .to_owned();
+    let app_id = app_resource.get("id").map(apple_any_string).unwrap_or_default().trim().to_owned();
     let mut summary = serde_json::Map::new();
     summary.insert("bundle_id".to_owned(), Value::String(bundle_id.to_owned()));
     summary.insert("app_id".to_owned(), Value::String(app_id.clone()));
@@ -30750,10 +34249,7 @@ fn load_apple_appstore_metadata_bundle(
         return Ok((app_info, version_info, None));
     }
     if !root.is_dir() {
-        return Err(anyhow::anyhow!(
-            "metadata dir is not a directory: {}",
-            root.display()
-        ));
+        return Err(anyhow::anyhow!("metadata dir is not a directory: {}", root.display()));
     }
     for (folder, target) in [("app-info", &mut app_info), ("version", &mut version_info)] {
         let dir_path = root.join(folder);
@@ -30766,7 +34262,11 @@ fn load_apple_appstore_metadata_bundle(
             if !path.is_file() {
                 continue;
             }
-            if path.extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_ascii_lowercase()
+            if path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase()
                 != "json"
             {
                 continue;
@@ -30775,10 +34275,7 @@ fn load_apple_appstore_metadata_bundle(
             let value = serde_json::from_str::<Value>(&raw)
                 .map_err(|err| anyhow::anyhow!("parse {}: {err}", path.display()))?;
             let Value::Object(mut payload) = value else {
-                return Err(anyhow::anyhow!(
-                    "parse {}: expected object payload",
-                    path.display()
-                ));
+                return Err(anyhow::anyhow!("parse {}: expected object payload", path.display()));
             };
             let locale = payload
                 .remove("locale")
@@ -30858,16 +34355,9 @@ fn run_apple_appstore_app_list(
     if !runtime.bundle_id.trim().is_empty() {
         params.insert("filter[bundleId]".to_owned(), runtime.bundle_id.clone());
     }
-    let response = run_apple_appstore_api_request(
-        &runtime,
-        "GET",
-        "/v1/apps",
-        &params,
-        None,
-        None,
-        None,
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        run_apple_appstore_api_request(&runtime, "GET", "/v1/apps", &params, None, None, None)
+            .map_err(anyhow::Error::msg)?;
     print_apple_appstore_api_response(&response, format, raw)
 }
 
@@ -31018,9 +34508,8 @@ fn run_apple_appstore_app_create(
         "app_id": "",
     });
     if let Some(resource) = &bundle_resource {
-        result["bundle_resource_id"] = Value::String(
-            resource.get("id").map(apple_any_string).unwrap_or_default(),
-        );
+        result["bundle_resource_id"] =
+            Value::String(resource.get("id").map(apple_any_string).unwrap_or_default());
     }
     let app_resource = apple_find_app_by_bundle_id(&runtime, bundle_id)?;
     if let Some(resource) = &app_resource {
@@ -31041,9 +34530,7 @@ fn run_apple_appstore_app_create(
             .unwrap_or_else(|| runtime.locale.clone());
         let bundle_resource_id = result["bundle_resource_id"].as_str().unwrap_or_default();
         if bundle_resource_id.trim().is_empty() {
-            return Err(anyhow::anyhow!(
-                "bundle resource id not resolved for {bundle_id}"
-            ));
+            return Err(anyhow::anyhow!("bundle resource id not resolved for {bundle_id}"));
         }
         let payload = serde_json::json!({
             "data": {
@@ -31122,11 +34609,8 @@ fn run_apple_appstore_listing_get(
             "bundle id is required (--bundle-id or configured default_bundle_id)"
         ));
     }
-    let locale = if runtime.locale.trim().is_empty() {
-        "en-US".to_owned()
-    } else {
-        runtime.locale.clone()
-    };
+    let locale =
+        if runtime.locale.trim().is_empty() { "en-US".to_owned() } else { runtime.locale.clone() };
     let Some(app_resource) = apple_find_app_by_bundle_id(&runtime, bundle_id)? else {
         return Err(anyhow::anyhow!("app not found for bundle id {bundle_id}"));
     };
@@ -31212,11 +34696,8 @@ fn run_apple_appstore_listing_update(
             "bundle id is required (--bundle-id or configured default_bundle_id)"
         ));
     }
-    let locale = if runtime.locale.trim().is_empty() {
-        "en-US".to_owned()
-    } else {
-        runtime.locale.clone()
-    };
+    let locale =
+        if runtime.locale.trim().is_empty() { "en-US".to_owned() } else { runtime.locale.clone() };
     let mut app_info_attrs = parse_apple_json_body_argument(app_info_body)?;
     let mut version_attrs = parse_apple_json_body_argument(version_body)?;
     if let Some(value) = name.filter(|value| !value.trim().is_empty()) {
@@ -31226,10 +34707,8 @@ fn run_apple_appstore_listing_update(
         app_info_attrs.insert("subtitle".to_owned(), Value::String(value.trim().to_owned()));
     }
     if let Some(value) = privacy_policy_url.filter(|value| !value.trim().is_empty()) {
-        app_info_attrs.insert(
-            "privacyPolicyUrl".to_owned(),
-            Value::String(value.trim().to_owned()),
-        );
+        app_info_attrs
+            .insert("privacyPolicyUrl".to_owned(), Value::String(value.trim().to_owned()));
     }
     if let Some(value) = description.filter(|value| !value.trim().is_empty()) {
         version_attrs.insert("description".to_owned(), Value::String(value.trim().to_owned()));
@@ -31238,16 +34717,10 @@ fn run_apple_appstore_listing_update(
         version_attrs.insert("keywords".to_owned(), Value::String(value.trim().to_owned()));
     }
     if let Some(value) = marketing_url.filter(|value| !value.trim().is_empty()) {
-        version_attrs.insert(
-            "marketingUrl".to_owned(),
-            Value::String(value.trim().to_owned()),
-        );
+        version_attrs.insert("marketingUrl".to_owned(), Value::String(value.trim().to_owned()));
     }
     if let Some(value) = promotional_text.filter(|value| !value.trim().is_empty()) {
-        version_attrs.insert(
-            "promotionalText".to_owned(),
-            Value::String(value.trim().to_owned()),
-        );
+        version_attrs.insert("promotionalText".to_owned(), Value::String(value.trim().to_owned()));
     }
     if let Some(value) = support_url.filter(|value| !value.trim().is_empty()) {
         version_attrs.insert("supportUrl".to_owned(), Value::String(value.trim().to_owned()));
@@ -31369,10 +34842,7 @@ fn run_apple_appstore_apply(
     let (app_info_by_locale, version_by_locale, version_meta) =
         load_apple_appstore_metadata_bundle(&metadata_dir)?;
     if app_info_by_locale.is_empty() && version_by_locale.is_empty() {
-        return Err(anyhow::anyhow!(
-            "no listing metadata found in {}",
-            metadata_dir.display()
-        ));
+        return Err(anyhow::anyhow!("no listing metadata found in {}", metadata_dir.display()));
     }
     let mut version_string = version.unwrap_or_default();
     if version_string.trim().is_empty() {
@@ -31384,10 +34854,7 @@ fn run_apple_appstore_apply(
     }
     if !create_version {
         if let Some(meta) = &version_meta {
-            create_version = meta
-                .get("create_version")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
+            create_version = meta.get("create_version").and_then(Value::as_bool).unwrap_or(false);
         }
     }
     let mut locales = BTreeMap::new();
@@ -31411,18 +34878,10 @@ fn run_apple_appstore_apply(
             app_info_by_locale.get(locale).cloned().unwrap_or_default(),
             version_by_locale.get(locale).cloned().unwrap_or_default(),
         )?;
-        if result
-            .get("app_info_updated")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
+        if result.get("app_info_updated").and_then(Value::as_bool).unwrap_or(false) {
             app_info_updated += 1;
         }
-        if result
-            .get("version_info_updated")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
+        if result.get("version_info_updated").and_then(Value::as_bool).unwrap_or(false) {
             version_info_updated += 1;
         }
         results.push(result);
@@ -31576,11 +35035,7 @@ where
 
 fn aws_default_service_endpoint(service: &str, region: &str) -> String {
     let service = service.trim().to_ascii_lowercase();
-    let region = if region.trim().is_empty() {
-        "us-east-1"
-    } else {
-        region.trim()
-    };
+    let region = if region.trim().is_empty() { "us-east-1" } else { region.trim() };
     match service.as_str() {
         "iam" => "https://iam.amazonaws.com".to_owned(),
         "sts" => {
@@ -31769,12 +35224,15 @@ fn resolve_aws_json_body_if_present(
     Ok(None)
 }
 
-fn parse_aws_key_value_pairs(params: Vec<String>, flag_name: &str) -> Result<BTreeMap<String, String>> {
+fn parse_aws_key_value_pairs(
+    params: Vec<String>,
+    flag_name: &str,
+) -> Result<BTreeMap<String, String>> {
     let mut parsed = BTreeMap::new();
     for raw in params {
-        let (key, value) = raw
-            .split_once('=')
-            .ok_or_else(|| anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")))?;
+        let (key, value) = raw.split_once('=').ok_or_else(|| {
+            anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value"))
+        })?;
         if key.trim().is_empty() {
             return Err(anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")));
         }
@@ -31783,7 +35241,11 @@ fn parse_aws_key_value_pairs(params: Vec<String>, flag_name: &str) -> Result<BTr
     Ok(parsed)
 }
 
-fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
+fn print_aws_api_response(
+    response: &AWSAPIResponse,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
         OutputFormat::Text => {
@@ -31831,7 +35293,9 @@ fn run_aws_sts_get_caller_identity(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_query(&runtime, "sts", "2011-06-15", "GetCallerIdentity", &BTreeMap::new()),
+        |runtime| {
+            execute_aws_query(&runtime, "sts", "2011-06-15", "GetCallerIdentity", &BTreeMap::new())
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -31975,15 +35439,14 @@ fn run_aws_iam_query(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let params = params.into_iter().filter_map(|entry| {
-        let (key, value) = entry.split_once('=')?;
-        let key = key.trim().to_owned();
-        if key.is_empty() {
-            None
-        } else {
-            Some((key, value.trim().to_owned()))
-        }
-    }).collect::<BTreeMap<_, _>>();
+    let params = params
+        .into_iter()
+        .filter_map(|entry| {
+            let (key, value) = entry.split_once('=')?;
+            let key = key.trim().to_owned();
+            if key.is_empty() { None } else { Some((key, value.trim().to_owned())) }
+        })
+        .collect::<BTreeMap<_, _>>();
     let response = execute_aws_service_request(
         "iam",
         account,
@@ -32055,7 +35518,9 @@ fn run_aws_s3_bucket_create(
         home,
         settings_file,
         |runtime| {
-            let (body, content_type) = if runtime.region.trim().is_empty() || runtime.region.trim() == "us-east-1" {
+            let (body, content_type) = if runtime.region.trim().is_empty()
+                || runtime.region.trim() == "us-east-1"
+            {
                 (String::new(), String::new())
             } else {
                 (
@@ -32111,15 +35576,17 @@ fn run_aws_s3_bucket_delete(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "s3",
-            "DELETE",
-            &format!("/{}", bucket.trim()),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "s3",
+                "DELETE",
+                &format!("/{}", bucket.trim()),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32260,8 +35727,17 @@ fn run_aws_s3_object_list(
     }
     let response = execute_aws_service_request(
         "s3",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "s3", "GET", &format!("/{}", bucket.trim()), &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(&runtime, "s3", "GET", &format!("/{}", bucket.trim()), &params, "", "")
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32284,8 +35760,25 @@ fn run_aws_s3_object_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "s3",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "s3", "GET", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "s3",
+                "GET",
+                &aws_s3_object_path(&bucket, &key),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     if let Some(output) = output {
         std::fs::write(&output, response.body.as_bytes())?;
@@ -32329,8 +35822,25 @@ fn run_aws_s3_object_put(
     };
     let response = execute_aws_service_request(
         "s3",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "s3", "PUT", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), &payload, &content_type),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "s3",
+                "PUT",
+                &aws_s3_object_path(&bucket, &key),
+                &BTreeMap::new(),
+                &payload,
+                &content_type,
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32356,8 +35866,25 @@ fn run_aws_s3_object_delete(
     }
     let response = execute_aws_service_request(
         "s3",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "s3", "DELETE", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "s3",
+                "DELETE",
+                &aws_s3_object_path(&bucket, &key),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32376,15 +35903,21 @@ fn run_aws_secrets_list(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let payload = if limit > 0 {
-        serde_json::json!({ "MaxResults": limit })
-    } else {
-        serde_json::json!({})
-    };
+    let payload =
+        if limit > 0 { serde_json::json!({ "MaxResults": limit }) } else { serde_json::json!({}) };
     let response = execute_aws_service_request(
         "secretsmanager",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.ListSecrets", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "secretsmanager", "secretsmanager.ListSecrets", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32406,8 +35939,17 @@ fn run_aws_secrets_get(
     let payload = serde_json::json!({ "SecretId": id.trim() });
     let response = execute_aws_service_request(
         "secretsmanager",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.GetSecretValue", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "secretsmanager", "secretsmanager.GetSecretValue", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32434,8 +35976,17 @@ fn run_aws_secrets_create(
     }
     let response = execute_aws_service_request(
         "secretsmanager",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.CreateSecret", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "secretsmanager", "secretsmanager.CreateSecret", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32458,8 +36009,17 @@ fn run_aws_secrets_put(
     let payload = serde_json::json!({ "SecretId": id.trim(), "SecretString": value });
     let response = execute_aws_service_request(
         "secretsmanager",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.PutSecretValue", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "secretsmanager", "secretsmanager.PutSecretValue", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32489,8 +36049,17 @@ fn run_aws_secrets_delete(
     });
     let response = execute_aws_service_request(
         "secretsmanager",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.DeleteSecret", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "secretsmanager", "secretsmanager.DeleteSecret", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32509,14 +36078,18 @@ fn run_aws_kms_key_list(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let payload = if limit > 0 {
-        serde_json::json!({ "Limit": limit })
-    } else {
-        serde_json::json!({})
-    };
+    let payload =
+        if limit > 0 { serde_json::json!({ "Limit": limit }) } else { serde_json::json!({}) };
     let response = execute_aws_service_request(
         "kms",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "kms", "TrentService.ListKeys", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32539,7 +36112,14 @@ fn run_aws_kms_key_describe(
     let payload = serde_json::json!({ "KeyId": id.trim() });
     let response = execute_aws_service_request(
         "kms",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "kms", "TrentService.DescribeKey", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32566,7 +36146,14 @@ fn run_aws_kms_encrypt(
     });
     let response = execute_aws_service_request(
         "kms",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "kms", "TrentService.Encrypt", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32589,7 +36176,14 @@ fn run_aws_kms_decrypt(
     let payload = serde_json::json!({ "CiphertextBlob": ciphertext.trim() });
     let response = execute_aws_service_request(
         "kms",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "kms", "TrentService.Decrypt", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32609,10 +36203,18 @@ fn run_aws_dynamodb_table_list(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let payload = if limit > 0 { serde_json::json!({ "Limit": limit }) } else { serde_json::json!({}) };
+    let payload =
+        if limit > 0 { serde_json::json!({ "Limit": limit }) } else { serde_json::json!({}) };
     let response = execute_aws_service_request(
         "dynamodb",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.ListTables", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32635,8 +36237,17 @@ fn run_aws_dynamodb_table_describe(
     let payload = serde_json::json!({ "TableName": table.trim() });
     let response = execute_aws_service_request(
         "dynamodb",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.DescribeTable", &payload),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.DescribeTable", &payload)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -32660,7 +36271,14 @@ fn run_aws_dynamodb_item_get(
     let payload = serde_json::json!({ "TableName": table.trim(), "Key": key });
     let response = execute_aws_service_request(
         "dynamodb",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.GetItem", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32685,7 +36303,14 @@ fn run_aws_dynamodb_item_put(
     let payload = serde_json::json!({ "TableName": table.trim(), "Item": item });
     let response = execute_aws_service_request(
         "dynamodb",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.PutItem", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32714,7 +36339,14 @@ fn run_aws_dynamodb_item_delete(
     let payload = serde_json::json!({ "TableName": table.trim(), "Key": key });
     let response = execute_aws_service_request(
         "dynamodb",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.DeleteItem", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32734,10 +36366,18 @@ fn run_aws_ssm_parameter_list(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let payload = if limit > 0 { serde_json::json!({ "MaxResults": limit }) } else { serde_json::json!({}) };
+    let payload =
+        if limit > 0 { serde_json::json!({ "MaxResults": limit }) } else { serde_json::json!({}) };
     let response = execute_aws_service_request(
         "ssm",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.DescribeParameters", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32761,7 +36401,14 @@ fn run_aws_ssm_parameter_get(
     let payload = serde_json::json!({ "Name": name.trim(), "WithDecryption": decrypt });
     let response = execute_aws_service_request(
         "ssm",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.GetParameter", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32792,7 +36439,14 @@ fn run_aws_ssm_parameter_put(
     });
     let response = execute_aws_service_request(
         "ssm",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.PutParameter", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32819,7 +36473,14 @@ fn run_aws_ssm_parameter_delete(
     let payload = serde_json::json!({ "Name": name.trim() });
     let response = execute_aws_service_request(
         "ssm",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.DeleteParameter", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32846,7 +36507,14 @@ fn run_aws_logs_group_list(
     }
     let response = execute_aws_service_request(
         "logs",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.DescribeLogGroups", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32870,7 +36538,14 @@ fn run_aws_logs_stream_list(
     let payload = serde_json::json!({ "logGroupName": group.trim(), "limit": limit });
     let response = execute_aws_service_request(
         "logs",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.DescribeLogStreams", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32910,7 +36585,14 @@ fn run_aws_logs_events(
     }
     let response = execute_aws_service_request(
         "logs",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.FilterLogEvents", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32940,7 +36622,14 @@ fn run_aws_cloudwatch_metric_list(
     }
     let response = execute_aws_service_request(
         "monitoring",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_query(&runtime, "monitoring", "2010-08-01", "ListMetrics", &params),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -32978,8 +36667,17 @@ fn run_aws_bedrock_foundation_model_list(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/foundation-models", &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(&runtime, "bedrock", "GET", "/foundation-models", &params, "", "")
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33000,8 +36698,25 @@ fn run_aws_bedrock_foundation_model_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/foundation-models/{}", aws_path_escape(id.trim())), &BTreeMap::new(), "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "GET",
+                &format!("/foundation-models/{}", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33030,8 +36745,17 @@ fn run_aws_bedrock_inference_profile_list(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/inference-profiles", &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(&runtime, "bedrock", "GET", "/inference-profiles", &params, "", "")
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33052,8 +36776,25 @@ fn run_aws_bedrock_inference_profile_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/inference-profiles/{}", aws_path_escape(id.trim())), &BTreeMap::new(), "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "GET",
+                &format!("/inference-profiles/{}", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33078,7 +36819,14 @@ fn run_aws_bedrock_guardrail_list(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/guardrails", &params, "", ""),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -33105,8 +36853,25 @@ fn run_aws_bedrock_guardrail_get(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/guardrails/{}", aws_path_escape(id.trim())), &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "GET",
+                &format!("/guardrails/{}", aws_path_escape(id.trim())),
+                &params,
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33136,34 +36901,51 @@ fn run_aws_bedrock_runtime_invoke(
     let payload = resolve_aws_json_body(
         body,
         body_file,
-        prompt.filter(|value| !value.trim().is_empty()).map(|value| serde_json::json!({ "inputText": value })),
+        prompt
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| serde_json::json!({ "inputText": value })),
     )?;
     let mut headers = BTreeMap::new();
     if let Some(trace) = trace.filter(|value| !value.trim().is_empty()) {
         headers.insert("x-amzn-bedrock-trace".to_owned(), trace.trim().to_owned());
     }
     if let Some(guardrail_id) = guardrail_id.filter(|value| !value.trim().is_empty()) {
-        headers.insert("x-amzn-bedrock-guardrailidentifier".to_owned(), guardrail_id.trim().to_owned());
+        headers.insert(
+            "x-amzn-bedrock-guardrailidentifier".to_owned(),
+            guardrail_id.trim().to_owned(),
+        );
     }
     if let Some(guardrail_version) = guardrail_version.filter(|value| !value.trim().is_empty()) {
-        headers.insert("x-amzn-bedrock-guardrailversion".to_owned(), guardrail_version.trim().to_owned());
+        headers.insert(
+            "x-amzn-bedrock-guardrailversion".to_owned(),
+            guardrail_version.trim().to_owned(),
+        );
     }
     let response = execute_aws_service_request(
         "bedrock-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_api_request(
-            &runtime,
-            &AWSAPIRequest {
-                method: "POST".to_owned(),
-                path: format!("/model/{}/invoke", aws_path_escape(model_id.trim())),
-                service: "bedrock-runtime".to_owned(),
-                headers,
-                body: payload,
-                content_type,
-                accept,
-                ..AWSAPIRequest::default()
-            },
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_api_request(
+                &runtime,
+                &AWSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/model/{}/invoke", aws_path_escape(model_id.trim())),
+                    service: "bedrock-runtime".to_owned(),
+                    headers,
+                    body: payload,
+                    content_type,
+                    accept,
+                    ..AWSAPIRequest::default()
+                },
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33204,20 +36986,29 @@ fn run_aws_bedrock_runtime_converse(
     }
     let response = execute_aws_service_request(
         "bedrock-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_api_request(
-            &runtime,
-            &AWSAPIRequest {
-                method: "POST".to_owned(),
-                path: format!("/model/{}/converse", aws_path_escape(model_id.trim())),
-                service: "bedrock-runtime".to_owned(),
-                headers,
-                body: payload,
-                content_type: "application/json".to_owned(),
-                accept: "application/json".to_owned(),
-                ..AWSAPIRequest::default()
-            },
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_api_request(
+                &runtime,
+                &AWSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/model/{}/converse", aws_path_escape(model_id.trim())),
+                    service: "bedrock-runtime".to_owned(),
+                    headers,
+                    body: payload,
+                    content_type: "application/json".to_owned(),
+                    accept: "application/json".to_owned(),
+                    ..AWSAPIRequest::default()
+                },
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33242,23 +37033,34 @@ fn run_aws_bedrock_runtime_count_tokens(
     let payload = resolve_aws_json_body(
         body,
         body_file,
-        prompt.filter(|value| !value.trim().is_empty()).map(|value| serde_json::json!({ "inputText": value })),
+        prompt
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| serde_json::json!({ "inputText": value })),
     )?;
     let response = execute_aws_service_request(
         "bedrock-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_api_request(
-            &runtime,
-            &AWSAPIRequest {
-                method: "POST".to_owned(),
-                path: format!("/model/{}/count-tokens", aws_path_escape(model_id.trim())),
-                service: "bedrock-runtime".to_owned(),
-                body: payload,
-                content_type: "application/json".to_owned(),
-                accept: "application/json".to_owned(),
-                ..AWSAPIRequest::default()
-            },
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_api_request(
+                &runtime,
+                &AWSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/model/{}/count-tokens", aws_path_escape(model_id.trim())),
+                    service: "bedrock-runtime".to_owned(),
+                    body: payload,
+                    content_type: "application/json".to_owned(),
+                    accept: "application/json".to_owned(),
+                    ..AWSAPIRequest::default()
+                },
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33322,12 +37124,12 @@ fn run_aws_bedrock_job_create(
             }),
         );
         if timeout_hours > 0 {
-            request.insert(
-                "timeoutDurationInHours".to_owned(),
-                Value::Number(timeout_hours.into()),
-            );
+            request
+                .insert("timeoutDurationInHours".to_owned(), Value::Number(timeout_hours.into()));
         }
-        if let Some(client_request_token) = client_request_token.filter(|value| !value.trim().is_empty()) {
+        if let Some(client_request_token) =
+            client_request_token.filter(|value| !value.trim().is_empty())
+        {
             request.insert(
                 "clientRequestToken".to_owned(),
                 Value::String(client_request_token.trim().to_owned()),
@@ -33350,8 +37152,25 @@ fn run_aws_bedrock_job_create(
 
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "POST", "/model-invocation-job", &BTreeMap::new(), &payload, "application/json"),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "POST",
+                "/model-invocation-job",
+                &BTreeMap::new(),
+                &payload,
+                "application/json",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33372,16 +37191,25 @@ fn run_aws_bedrock_job_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock",
-            "GET",
-            &format!("/model-invocation-job/{}", aws_path_escape(id.trim())),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "GET",
+                &format!("/model-invocation-job/{}", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33418,8 +37246,17 @@ fn run_aws_bedrock_job_list(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/model-invocation-jobs", &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(&runtime, "bedrock", "GET", "/model-invocation-jobs", &params, "", "")
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33444,16 +37281,25 @@ fn run_aws_bedrock_job_stop(
     }
     let response = execute_aws_service_request(
         "bedrock",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock",
-            "POST",
-            &format!("/model-invocation-job/{}/stop", aws_path_escape(id.trim())),
-            &BTreeMap::new(),
-            "{}",
-            "application/json",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock",
+                "POST",
+                &format!("/model-invocation-job/{}/stop", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "{}",
+                "application/json",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33478,7 +37324,14 @@ fn run_aws_bedrock_agent_list(
     }
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
         |runtime| execute_aws_rest(&runtime, "bedrock-agent", "GET", "/agents", &params, "", ""),
     )?;
     print_aws_api_response(&response, format, raw)
@@ -33500,16 +37353,25 @@ fn run_aws_bedrock_agent_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!("/agents/{}", aws_path_escape(id.trim())),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!("/agents/{}", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33535,16 +37397,25 @@ fn run_aws_bedrock_agent_alias_list(
     }
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!("/agents/{}/agentAliases", aws_path_escape(agent_id.trim())),
-            &params,
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!("/agents/{}/agentAliases", aws_path_escape(agent_id.trim())),
+                &params,
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33566,20 +37437,29 @@ fn run_aws_bedrock_agent_alias_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!(
-                "/agents/{}/agentAliases/{}",
-                aws_path_escape(agent_id.trim()),
-                aws_path_escape(alias_id.trim())
-            ),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!(
+                    "/agents/{}/agentAliases/{}",
+                    aws_path_escape(agent_id.trim()),
+                    aws_path_escape(alias_id.trim())
+                ),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33604,8 +37484,17 @@ fn run_aws_bedrock_knowledge_base_list(
     }
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(&runtime, "bedrock-agent", "GET", "/knowledgebases", &params, "", ""),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(&runtime, "bedrock-agent", "GET", "/knowledgebases", &params, "", "")
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33626,16 +37515,25 @@ fn run_aws_bedrock_knowledge_base_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!("/knowledgebases/{}", aws_path_escape(id.trim())),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!("/knowledgebases/{}", aws_path_escape(id.trim())),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33661,19 +37559,28 @@ fn run_aws_bedrock_knowledge_base_data_source_list(
     }
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!(
-                "/knowledgebases/{}/datasources",
-                aws_path_escape(knowledge_base_id.trim())
-            ),
-            &params,
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!(
+                    "/knowledgebases/{}/datasources",
+                    aws_path_escape(knowledge_base_id.trim())
+                ),
+                &params,
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33695,20 +37602,29 @@ fn run_aws_bedrock_knowledge_base_data_source_get(
 ) -> Result<()> {
     let response = execute_aws_service_request(
         "bedrock-agent",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent",
-            "GET",
-            &format!(
-                "/knowledgebases/{}/datasources/{}",
-                aws_path_escape(knowledge_base_id.trim()),
-                aws_path_escape(id.trim())
-            ),
-            &BTreeMap::new(),
-            "",
-            "",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent",
+                "GET",
+                &format!(
+                    "/knowledgebases/{}/datasources/{}",
+                    aws_path_escape(knowledge_base_id.trim()),
+                    aws_path_escape(id.trim())
+                ),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33745,7 +37661,9 @@ fn run_aws_bedrock_agent_runtime_invoke_agent(
         if enable_trace {
             request.insert("enableTrace".to_owned(), Value::Bool(true));
         }
-        if let Some(session_state_raw) = resolve_aws_json_body_if_present(session_state, session_state_file)? {
+        if let Some(session_state_raw) =
+            resolve_aws_json_body_if_present(session_state, session_state_file)?
+        {
             request.insert(
                 "sessionState".to_owned(),
                 parse_json_value("session-state", &session_state_raw)?,
@@ -33755,21 +37673,30 @@ fn run_aws_bedrock_agent_runtime_invoke_agent(
     };
     let response = execute_aws_service_request(
         "bedrock-agent-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent-runtime",
-            "POST",
-            &format!(
-                "/agents/{}/agentAliases/{}/sessions/{}/text",
-                aws_path_escape(agent_id.trim()),
-                aws_path_escape(agent_alias_id.trim()),
-                aws_path_escape(session_id.trim())
-            ),
-            &BTreeMap::new(),
-            &payload,
-            "application/json",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent-runtime",
+                "POST",
+                &format!(
+                    "/agents/{}/agentAliases/{}/sessions/{}/text",
+                    aws_path_escape(agent_id.trim()),
+                    aws_path_escape(agent_alias_id.trim()),
+                    aws_path_escape(session_id.trim())
+                ),
+                &BTreeMap::new(),
+                &payload,
+                "application/json",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33795,14 +37722,11 @@ fn run_aws_bedrock_agent_runtime_retrieve(
     let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
         payload
     } else {
-        let query = query.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
-            "provide --query or --body/--body-file",
-        ))?;
+        let query = query
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::Error::msg("provide --query or --body/--body-file"))?;
         let mut request = serde_json::Map::new();
-        request.insert(
-            "retrievalQuery".to_owned(),
-            serde_json::json!({ "text": query.trim() }),
-        );
+        request.insert("retrievalQuery".to_owned(), serde_json::json!({ "text": query.trim() }));
         if results > 0 {
             request.insert(
                 "retrievalConfiguration".to_owned(),
@@ -33815,19 +37739,25 @@ fn run_aws_bedrock_agent_runtime_retrieve(
     };
     let response = execute_aws_service_request(
         "bedrock-agent-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent-runtime",
-            "POST",
-            &format!(
-                "/knowledgebases/{}/retrieve",
-                aws_path_escape(knowledge_base_id.trim())
-            ),
-            &BTreeMap::new(),
-            &payload,
-            "application/json",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent-runtime",
+                "POST",
+                &format!("/knowledgebases/{}/retrieve", aws_path_escape(knowledge_base_id.trim())),
+                &BTreeMap::new(),
+                &payload,
+                "application/json",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33854,12 +37784,17 @@ fn run_aws_bedrock_agent_runtime_retrieve_and_generate(
     let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
         payload
     } else {
-        let knowledge_base_id = knowledge_base_id.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
-            "provide --knowledge-base-id and --query, or provide --body/--body-file",
-        ))?;
-        let query = query.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
-            "provide --knowledge-base-id and --query, or provide --body/--body-file",
-        ))?;
+        let knowledge_base_id =
+            knowledge_base_id.filter(|value| !value.trim().is_empty()).ok_or_else(|| {
+                anyhow::Error::msg(
+                    "provide --knowledge-base-id and --query, or provide --body/--body-file",
+                )
+            })?;
+        let query = query.filter(|value| !value.trim().is_empty()).ok_or_else(|| {
+            anyhow::Error::msg(
+                "provide --knowledge-base-id and --query, or provide --body/--body-file",
+            )
+        })?;
         let mut kb_config = serde_json::Map::new();
         kb_config.insert(
             "knowledgeBaseId".to_owned(),
@@ -33887,16 +37822,25 @@ fn run_aws_bedrock_agent_runtime_retrieve_and_generate(
     };
     let response = execute_aws_service_request(
         "bedrock-agent-runtime",
-        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
-        |runtime| execute_aws_rest(
-            &runtime,
-            "bedrock-agent-runtime",
-            "POST",
-            "/retrieveAndGenerate",
-            &BTreeMap::new(),
-            &payload,
-            "application/json",
-        ),
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "bedrock-agent-runtime",
+                "POST",
+                "/retrieveAndGenerate",
+                &BTreeMap::new(),
+                &payload,
+                "application/json",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33929,7 +37873,17 @@ fn run_aws_lambda_function_get(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_rest(&runtime, "lambda", "GET", &format!("/2015-03-31/functions/{}", id), &BTreeMap::new(), "", ""),
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "lambda",
+                "GET",
+                &format!("/2015-03-31/functions/{}", id),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33966,7 +37920,17 @@ fn run_aws_lambda_function_delete(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_rest(&runtime, "lambda", "DELETE", &format!("/2015-03-31/functions/{}", id), &BTreeMap::new(), "", ""),
+        |runtime| {
+            execute_aws_rest(
+                &runtime,
+                "lambda",
+                "DELETE",
+                &format!("/2015-03-31/functions/{}", id),
+                &BTreeMap::new(),
+                "",
+                "",
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -33996,7 +37960,14 @@ fn run_aws_ecr_repository_list(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.DescribeRepositories", &payload),
+        |runtime| {
+            execute_aws_json(
+                &runtime,
+                "ecr",
+                "AmazonEC2ContainerRegistry_V20150921.DescribeRepositories",
+                &payload,
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -34038,7 +38009,14 @@ fn run_aws_ecr_repository_create(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.CreateRepository", &payload),
+        |runtime| {
+            execute_aws_json(
+                &runtime,
+                "ecr",
+                "AmazonEC2ContainerRegistry_V20150921.CreateRepository",
+                &payload,
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -34080,7 +38058,14 @@ fn run_aws_ecr_repository_delete(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.DeleteRepository", &payload),
+        |runtime| {
+            execute_aws_json(
+                &runtime,
+                "ecr",
+                "AmazonEC2ContainerRegistry_V20150921.DeleteRepository",
+                &payload,
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -34118,7 +38103,14 @@ fn run_aws_ecr_image_list(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_json(&runtime, "ecr", "AmazonEC2ContainerRegistry_V20150921.ListImages", &payload),
+        |runtime| {
+            execute_aws_json(
+                &runtime,
+                "ecr",
+                "AmazonEC2ContainerRegistry_V20150921.ListImages",
+                &payload,
+            )
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -34199,7 +38191,9 @@ fn run_aws_doctor(
     )?;
     let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
     match format {
-        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?)
+        }
     }
     if !ok {
         anyhow::bail!("aws doctor failed");
@@ -34338,7 +38332,11 @@ fn load_gcp_runtime(
     .map_err(anyhow::Error::msg)
 }
 
-fn print_gcp_api_response(response: &GCPAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
+fn print_gcp_api_response(
+    response: &GCPAPIResponse,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
         OutputFormat::Text => {
@@ -34396,7 +38394,14 @@ fn run_gcp_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let verify = execute_gcp_api_request(
         &runtime,
@@ -34427,7 +38432,9 @@ fn run_gcp_doctor(
         ]
     });
     match format {
-        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?)
+        }
     }
     Ok(())
 }
@@ -34446,7 +38453,14 @@ fn run_gcp_service_enable(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let response = execute_gcp_api_request(
         &runtime,
@@ -34480,7 +38494,14 @@ fn run_gcp_service_disable(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let response = execute_gcp_api_request(
         &runtime,
@@ -34513,7 +38534,14 @@ fn run_gcp_service_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let response = execute_gcp_api_request(
         &runtime,
@@ -34547,7 +38575,14 @@ fn run_gcp_service_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let mut params = parse_gcp_params(params)?;
     if let Some(limit) = limit.filter(|value| *value > 0) {
@@ -34589,7 +38624,14 @@ fn run_gcp_raw(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_runtime(
-        account, environment, project, base_url, access_token, home, settings_file, true,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
     )?;
     let json_body = match json_body {
         Some(value) if !value.trim().is_empty() => Some(
@@ -34633,11 +38675,7 @@ fn normalize_gcp_apikey_name(project_id: &str, value: &str) -> Result<String> {
     if project_id.trim().is_empty() {
         anyhow::bail!("project id is required to expand key id");
     }
-    Ok(format!(
-        "projects/{}/locations/global/keys/{}",
-        project_id.trim(),
-        value.trim_matches('/'),
-    ))
+    Ok(format!("projects/{}/locations/global/keys/{}", project_id.trim(), value.trim_matches('/'),))
 }
 
 fn parse_gcp_json_value(raw: &str, flag_name: &str) -> Result<Value> {
@@ -34655,8 +38693,8 @@ fn parse_gcp_json_body_params(params: Vec<String>) -> Result<serde_json::Map<Str
             anyhow::bail!("gcp key cannot be empty");
         }
         let value = value.trim();
-        let parsed =
-            serde_json::from_str::<Value>(value).unwrap_or_else(|_| Value::String(value.to_owned()));
+        let parsed = serde_json::from_str::<Value>(value)
+            .unwrap_or_else(|_| Value::String(value.to_owned()));
         out.insert(key.to_owned(), parsed);
     }
     Ok(out)
@@ -34700,7 +38738,13 @@ fn run_gcp_apikey_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let mut params = parse_gcp_params(params)?;
     if let Some(limit) = limit.filter(|value| *value > 0) {
@@ -34736,7 +38780,13 @@ fn run_gcp_apikey_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name =
         normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
@@ -34769,7 +38819,13 @@ fn run_gcp_apikey_create(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
         GCPAPIRequest {
@@ -34784,7 +38840,8 @@ fn run_gcp_apikey_create(
         if let Some(display_name) = display_name.filter(|value| !value.trim().is_empty()) {
             payload.insert("displayName".to_owned(), Value::String(display_name.trim().to_owned()));
         }
-        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty()) {
+        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty())
+        {
             payload.insert(
                 "restrictions".to_owned(),
                 parse_gcp_json_value(&restrictions_json, "--restrictions-json")?,
@@ -34829,7 +38886,13 @@ fn run_gcp_apikey_update(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name =
         normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
@@ -34851,7 +38914,8 @@ fn run_gcp_apikey_update(
                 mask = "displayName".to_owned();
             }
         }
-        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty()) {
+        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty())
+        {
             payload.insert(
                 "restrictions".to_owned(),
                 parse_gcp_json_value(&restrictions_json, "--restrictions-json")?,
@@ -34896,7 +38960,13 @@ fn run_gcp_apikey_delete(
         anyhow::bail!("--force is required");
     }
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name =
         normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
@@ -34926,7 +38996,13 @@ fn run_gcp_apikey_lookup(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let response = execute_gcp_api_request(
         &runtime,
@@ -34959,7 +39035,13 @@ fn run_gcp_apikey_undelete(
         anyhow::bail!("--force is required");
     }
     let runtime = load_gcp_apikey_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name =
         normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
@@ -34998,11 +39080,7 @@ fn normalize_gcp_service_account_name(project_id: &str, value: &str) -> String {
         return value.trim_matches('/').to_owned();
     }
     if value.contains('@') {
-        return format!(
-            "projects/{}/serviceAccounts/{}",
-            project_id.trim(),
-            value
-        );
+        return format!("projects/{}/serviceAccounts/{}", project_id.trim(), value);
     }
     value.trim_matches('/').to_owned()
 }
@@ -35053,11 +39131,7 @@ fn load_gcp_crm_runtime(
 
 fn resolve_gcp_iam_policy_resource(runtime: &GCPRuntime, resource: Option<String>) -> String {
     let resource = resource.unwrap_or_default().trim().trim_matches('/').to_owned();
-    if resource.is_empty() {
-        format!("projects/{}", runtime.project_id.trim())
-    } else {
-        resource
-    }
+    if resource.is_empty() { format!("projects/{}", runtime.project_id.trim()) } else { resource }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -35075,7 +39149,13 @@ fn run_gcp_iam_service_account_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let mut params = parse_gcp_params(params)?;
     if let Some(limit) = limit.filter(|value| *value > 0) {
@@ -35108,7 +39188,13 @@ fn run_gcp_iam_service_account_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name = normalize_gcp_service_account_name(
         &runtime.project_id,
@@ -35147,7 +39233,13 @@ fn run_gcp_iam_service_account_create(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     if account_id.trim().is_empty() {
         anyhow::bail!("--account-id is required");
@@ -35202,7 +39294,13 @@ fn run_gcp_iam_service_account_delete(
         anyhow::bail!("--force is required");
     }
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource_name = normalize_gcp_service_account_name(
         &runtime.project_id,
@@ -35238,7 +39336,13 @@ fn run_gcp_iam_service_account_key_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let sa_name = normalize_gcp_service_account_name(&runtime.project_id, &service_account);
     let response = execute_gcp_api_request(
@@ -35272,7 +39376,13 @@ fn run_gcp_iam_service_account_key_create(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let sa_name = normalize_gcp_service_account_name(&runtime.project_id, &service_account);
     let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
@@ -35322,7 +39432,13 @@ fn run_gcp_iam_service_account_key_delete(
         anyhow::bail!("--force is required");
     }
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let key_name = if let Some(name) = name.filter(|value| !value.trim().is_empty()) {
         name.trim().to_owned()
@@ -35365,7 +39481,13 @@ fn run_gcp_iam_policy_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_crm_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
     let response = execute_gcp_api_request(
@@ -35398,7 +39520,13 @@ fn run_gcp_iam_policy_set(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_crm_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
     let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
@@ -35416,7 +39544,9 @@ fn run_gcp_iam_policy_set(
             payload.insert("policy".to_owned(), policy);
         }
         if !payload.contains_key("policy") {
-            anyhow::bail!("policy payload required: set --policy-json or --body/--param with policy");
+            anyhow::bail!(
+                "policy payload required: set --policy-json or --body/--param with policy"
+            );
         }
         GCPAPIRequest {
             method: "POST".to_owned(),
@@ -35444,7 +39574,13 @@ fn run_gcp_iam_policy_test_permissions(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_crm_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
     let permissions: Vec<String> = permissions
@@ -35484,7 +39620,13 @@ fn run_gcp_iam_role_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let mut params = parse_gcp_params(params)?;
     if let Some(limit) = limit.filter(|value| *value > 0) {
@@ -35496,12 +39638,7 @@ fn run_gcp_iam_role_list(
     };
     let response = execute_gcp_api_request(
         &runtime,
-        &GCPAPIRequest {
-            method: "GET".to_owned(),
-            path,
-            params,
-            ..GCPAPIRequest::default()
-        },
+        &GCPAPIRequest { method: "GET".to_owned(), path, params, ..GCPAPIRequest::default() },
     )
     .map_err(anyhow::Error::msg)?;
     print_gcp_api_response(&response, format, raw)
@@ -35521,7 +39658,13 @@ fn run_gcp_iam_role_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_gcp_iam_runtime(
-        account, environment, project, base_url, access_token, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
     )?;
     let name = name.unwrap_or_default().trim().trim_matches('/').to_owned();
     if name.is_empty() {
@@ -35560,11 +39703,7 @@ fn gcp_env_prefix(alias: &str, vault_prefix: Option<&str>) -> String {
         .collect::<String>()
         .trim_matches('_')
         .to_owned();
-    if alias.is_empty() {
-        String::new()
-    } else {
-        format!("GCP_{alias}_")
-    }
+    if alias.is_empty() { String::new() } else { format!("GCP_{alias}_") }
 }
 
 fn resolve_gcp_api_key_for_runtime(
@@ -35577,21 +39716,35 @@ fn resolve_gcp_api_key_for_runtime(
         return value.trim().to_owned();
     }
     if let Some(account) = settings.gcp.accounts.get(account_alias) {
-        if let Some(ref_name) = account.api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-            if let Some(value) = env_vars.get(ref_name).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(ref_name) =
+            account.api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
+        {
+            if let Some(value) = env_vars
+                .get(ref_name)
+                .map(String::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
                 return value.to_owned();
             }
         }
         let prefix = gcp_env_prefix(account_alias, account.vault_prefix.as_deref());
         if !prefix.is_empty() {
             let key = format!("{prefix}API_KEY");
-            if let Some(value) = env_vars.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+            if let Some(value) = env_vars
+                .get(&key)
+                .map(String::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
                 return value.to_owned();
             }
         }
     }
     for key in ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GCP_API_KEY"] {
-        if let Some(value) = env_vars.get(key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(value) =
+            env_vars.get(key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
             return value.to_owned();
         }
     }
@@ -35625,7 +39778,8 @@ fn load_gcp_gemini_runtime(
         false,
     )
     .map_err(anyhow::Error::msg)?;
-    let api_key = resolve_gcp_api_key_for_runtime(&settings, &env_vars, &runtime.account_alias, api_key);
+    let api_key =
+        resolve_gcp_api_key_for_runtime(&settings, &env_vars, &runtime.account_alias, api_key);
     if runtime.access_token.trim().is_empty() && api_key.trim().is_empty() {
         anyhow::bail!(
             "gemini auth requires --api-key, GCP_<ACCOUNT>_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY, or OAuth access token"
@@ -35636,11 +39790,7 @@ fn load_gcp_gemini_runtime(
 
 fn normalize_gcp_gemini_model_name(value: &str) -> String {
     let value = value.trim().trim_matches('/');
-    if value.starts_with("models/") {
-        value.to_owned()
-    } else {
-        format!("models/{value}")
-    }
+    if value.starts_with("models/") { value.to_owned() } else { format!("models/{value}") }
 }
 
 fn gcp_gemini_request(
@@ -35650,9 +39800,7 @@ fn gcp_gemini_request(
 ) -> Result<GCPAPIResponse> {
     let mut request = request;
     if !api_key.trim().is_empty() {
-        request
-            .params
-            .insert("key".to_owned(), api_key.trim().to_owned());
+        request.params.insert("key".to_owned(), api_key.trim().to_owned());
     }
     execute_gcp_api_request(runtime, &request).map_err(anyhow::Error::msg)
 }
@@ -35662,7 +39810,9 @@ fn parse_gcp_json_body_required(
     flag_name: &str,
 ) -> Result<Option<Value>> {
     match json_body {
-        Some(value) if !value.trim().is_empty() => Ok(Some(parse_gcp_json_value(&value, flag_name)?)),
+        Some(value) if !value.trim().is_empty() => {
+            Ok(Some(parse_gcp_json_value(&value, flag_name)?))
+        }
         _ => Ok(None),
     }
 }
@@ -35679,14 +39829,17 @@ fn extract_gcp_gemini_inline_image(response: &GCPAPIResponse) -> Result<(String,
         .ok_or_else(|| anyhow::anyhow!("gemini response did not contain candidates"))?;
     let mut first_text = String::new();
     for candidate in candidates {
-        let parts = candidate
-            .get("content")
-            .and_then(|value| value.get("parts"))
-            .and_then(Value::as_array);
+        let parts =
+            candidate.get("content").and_then(|value| value.get("parts")).and_then(Value::as_array);
         let Some(parts) = parts else { continue };
         for part in parts {
             if first_text.is_empty() {
-                if let Some(text) = part.get("text").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+                if let Some(text) = part
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
                     first_text = text.to_owned();
                 }
             }
@@ -35727,7 +39880,14 @@ fn run_gcp_gemini_models_list(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let response = gcp_gemini_request(
         &runtime,
@@ -35758,7 +39918,14 @@ fn run_gcp_gemini_models_get(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let model = model.unwrap_or_default();
     if model.trim().is_empty() {
@@ -35798,7 +39965,14 @@ fn run_gcp_gemini_generate(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
     let request_body = if let Some(json_body) = json_body {
@@ -35834,10 +40008,7 @@ fn run_gcp_gemini_generate(
         &api_key,
         GCPAPIRequest {
             method: "POST".to_owned(),
-            path: format!(
-                "/v1beta/{}:generateContent",
-                normalize_gcp_gemini_model_name(&model)
-            ),
+            path: format!("/v1beta/{}:generateContent", normalize_gcp_gemini_model_name(&model)),
             params: parse_gcp_params(params)?,
             json_body: Some(request_body),
             ..GCPAPIRequest::default()
@@ -35864,7 +40035,14 @@ fn run_gcp_gemini_embed(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
     let request_body = if let Some(json_body) = json_body {
@@ -35881,10 +40059,7 @@ fn run_gcp_gemini_embed(
         &api_key,
         GCPAPIRequest {
             method: "POST".to_owned(),
-            path: format!(
-                "/v1beta/{}:embedContent",
-                normalize_gcp_gemini_model_name(&model)
-            ),
+            path: format!("/v1beta/{}:embedContent", normalize_gcp_gemini_model_name(&model)),
             params: parse_gcp_params(params)?,
             json_body: Some(request_body),
             ..GCPAPIRequest::default()
@@ -35911,7 +40086,14 @@ fn run_gcp_gemini_count_tokens(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
     let request_body = if let Some(json_body) = json_body {
@@ -35928,10 +40110,7 @@ fn run_gcp_gemini_count_tokens(
         &api_key,
         GCPAPIRequest {
             method: "POST".to_owned(),
-            path: format!(
-                "/v1beta/{}:countTokens",
-                normalize_gcp_gemini_model_name(&model)
-            ),
+            path: format!("/v1beta/{}:countTokens", normalize_gcp_gemini_model_name(&model)),
             params: parse_gcp_params(params)?,
             json_body: Some(request_body),
             ..GCPAPIRequest::default()
@@ -35958,7 +40137,14 @@ fn run_gcp_gemini_batch_embed(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
     let request_body = if let Some(json_body) = json_body {
@@ -35980,10 +40166,7 @@ fn run_gcp_gemini_batch_embed(
         &api_key,
         GCPAPIRequest {
             method: "POST".to_owned(),
-            path: format!(
-                "/v1beta/{}:batchEmbedContents",
-                normalize_gcp_gemini_model_name(&model)
-            ),
+            path: format!("/v1beta/{}:batchEmbedContents", normalize_gcp_gemini_model_name(&model)),
             params: parse_gcp_params(params)?,
             json_body: Some(request_body),
             ..GCPAPIRequest::default()
@@ -36011,7 +40194,14 @@ fn run_gcp_gemini_image_generate(
     format: OutputFormat,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
     let request_body = if let Some(json_body) = json_body {
@@ -36039,10 +40229,7 @@ fn run_gcp_gemini_image_generate(
         &api_key,
         GCPAPIRequest {
             method: "POST".to_owned(),
-            path: format!(
-                "/v1beta/{}:generateContent",
-                normalize_gcp_gemini_model_name(&model)
-            ),
+            path: format!("/v1beta/{}:generateContent", normalize_gcp_gemini_model_name(&model)),
             params: parse_gcp_params(params)?,
             json_body: Some(request_body),
             ..GCPAPIRequest::default()
@@ -36093,7 +40280,14 @@ fn run_gcp_gemini_raw(
     raw: bool,
 ) -> Result<()> {
     let (runtime, api_key) = load_gcp_gemini_runtime(
-        account, environment, project, base_url, access_token, api_key, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        api_key,
+        home,
+        settings_file,
     )?;
     let response = gcp_gemini_request(
         &runtime,
@@ -36189,7 +40383,14 @@ fn run_gcp_vertex_list(
     raw: bool,
 ) -> Result<()> {
     let (runtime, location) = load_gcp_vertex_runtime(
-        account, environment, project, base_url, access_token, location, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
     )?;
     let mut params = parse_gcp_params(params)?;
     if let Some(limit) = limit.filter(|value| *value > 0) {
@@ -36198,7 +40399,12 @@ fn run_gcp_vertex_list(
     let path = if let Some(resource) = resource.filter(|value| !value.trim().is_empty()) {
         format!(
             "/v1/{}",
-            normalize_gcp_vertex_resource_name(&runtime.project_id, &location, collection, &resource)
+            normalize_gcp_vertex_resource_name(
+                &runtime.project_id,
+                &location,
+                collection,
+                &resource
+            )
         )
     } else {
         format!(
@@ -36210,12 +40416,7 @@ fn run_gcp_vertex_list(
     };
     let response = execute_gcp_api_request(
         &runtime,
-        &GCPAPIRequest {
-            method: "GET".to_owned(),
-            path,
-            params,
-            ..GCPAPIRequest::default()
-        },
+        &GCPAPIRequest { method: "GET".to_owned(), path, params, ..GCPAPIRequest::default() },
     )
     .map_err(anyhow::Error::msg)?;
     print_gcp_api_response(&response, format, raw)
@@ -36239,7 +40440,14 @@ fn run_gcp_vertex_create(
     raw: bool,
 ) -> Result<()> {
     let (runtime, location) = load_gcp_vertex_runtime(
-        account, environment, project, base_url, access_token, location, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
     )?;
     let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
         GCPAPIRequest {
@@ -36308,7 +40516,14 @@ fn run_gcp_vertex_delete_or_cancel(
         anyhow::bail!("--force is required");
     }
     let (runtime, location) = load_gcp_vertex_runtime(
-        account, environment, project, base_url, access_token, location, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
     )?;
     let resource = resource.unwrap_or_default();
     if resource.trim().is_empty() {
@@ -36353,7 +40568,14 @@ fn run_gcp_vertex_predict(
     raw: bool,
 ) -> Result<()> {
     let (runtime, location) = load_gcp_vertex_runtime(
-        account, environment, project, base_url, access_token, location, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
     )?;
     let endpoint = endpoint.unwrap_or_default();
     if endpoint.trim().is_empty() {
@@ -36421,7 +40643,14 @@ fn run_gcp_vertex_raw(
     raw: bool,
 ) -> Result<()> {
     let (runtime, _) = load_gcp_vertex_runtime(
-        account, environment, project, base_url, access_token, location, home, settings_file,
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
     )?;
     let response = execute_gcp_api_request(
         &runtime,
@@ -36673,7 +40902,11 @@ fn show_google_play_auth_status(
             println!("Google Play auth: {}", payload.status);
             println!(
                 "Context: account={} env={} project={} package={}",
-                if payload.account_alias.trim().is_empty() { "(default)" } else { payload.account_alias.as_str() },
+                if payload.account_alias.trim().is_empty() {
+                    "(default)"
+                } else {
+                    payload.account_alias.as_str()
+                },
                 payload.environment,
                 or_dash(&payload.project_id),
                 or_dash(&payload.default_package_name)
@@ -36742,11 +40975,7 @@ fn parse_google_play_body(value: Option<String>) -> Result<String> {
 
 fn parse_google_play_json_body(value: Option<String>) -> Result<Option<Value>> {
     let body = parse_google_play_body(value)?;
-    if body.trim().is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(serde_json::from_str::<Value>(&body)?))
-    }
+    if body.trim().is_empty() { Ok(None) } else { Ok(Some(serde_json::from_str::<Value>(&body)?)) }
 }
 
 fn parse_google_play_version_codes(values: Vec<String>) -> Result<Vec<i64>> {
@@ -36806,11 +41035,27 @@ fn normalize_google_play_release_status(raw: &str) -> String {
 
 fn normalize_google_play_image_type(raw: &str) -> String {
     match raw.trim().to_ascii_lowercase().as_str() {
-        "phonescreenshots" | "phone" | "phone_screenshots" | "phone-screenshots" => "phoneScreenshots".to_owned(),
-        "seveninchscreenshots" | "7inch" | "7-inch" | "seven_inch" | "seven-inch" | "seven_inch_screenshots" | "seven-inch-screenshots" => "sevenInchScreenshots".to_owned(),
-        "teninchscreenshots" | "10inch" | "10-inch" | "ten_inch" | "ten-inch" | "ten_inch_screenshots" | "ten-inch-screenshots" => "tenInchScreenshots".to_owned(),
+        "phonescreenshots" | "phone" | "phone_screenshots" | "phone-screenshots" => {
+            "phoneScreenshots".to_owned()
+        }
+        "seveninchscreenshots"
+        | "7inch"
+        | "7-inch"
+        | "seven_inch"
+        | "seven-inch"
+        | "seven_inch_screenshots"
+        | "seven-inch-screenshots" => "sevenInchScreenshots".to_owned(),
+        "teninchscreenshots"
+        | "10inch"
+        | "10-inch"
+        | "ten_inch"
+        | "ten-inch"
+        | "ten_inch_screenshots"
+        | "ten-inch-screenshots" => "tenInchScreenshots".to_owned(),
         "tvscreenshots" | "tv" | "tv_screenshots" | "tv-screenshots" => "tvScreenshots".to_owned(),
-        "wearscreenshots" | "wear" | "wear_screenshots" | "wear-screenshots" => "wearScreenshots".to_owned(),
+        "wearscreenshots" | "wear" | "wear_screenshots" | "wear-screenshots" => {
+            "wearScreenshots".to_owned()
+        }
         "icon" | "appicon" | "app_icon" | "app-icon" => "icon".to_owned(),
         "featuregraphic" | "feature_graphic" | "feature-graphic" => "featureGraphic".to_owned(),
         "tvbanner" | "tv_banner" | "tv-banner" => "tvBanner".to_owned(),
@@ -36836,7 +41081,9 @@ fn detect_google_play_media_content_type(path: &str, fallback: &str) -> String {
 fn parse_google_play_version_code_value(value: &Value) -> i64 {
     match value {
         Value::Number(number) => number.as_i64().filter(|value| *value > 0).unwrap_or_default(),
-        Value::String(text) => text.trim().parse::<i64>().ok().filter(|value| *value > 0).unwrap_or_default(),
+        Value::String(text) => {
+            text.trim().parse::<i64>().ok().filter(|value| *value > 0).unwrap_or_default()
+        }
         _ => 0,
     }
 }
@@ -36876,7 +41123,11 @@ fn extract_google_play_track_version_codes(track: &Value) -> Vec<i64> {
     unique_sorted_google_play_version_codes(codes)
 }
 
-fn collect_google_play_image_uploads(images_root: &Path) -> Result<Option<std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<String>>>>> {
+fn collect_google_play_image_uploads(
+    images_root: &Path,
+) -> Result<
+    Option<std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<String>>>>,
+> {
     if !images_root.exists() {
         return Ok(None);
     }
@@ -36898,7 +41149,8 @@ fn collect_google_play_image_uploads(images_root: &Path) -> Result<Option<std::c
             if !type_entry.file_type()?.is_dir() {
                 continue;
             }
-            let image_type = normalize_google_play_image_type(&type_entry.file_name().to_string_lossy());
+            let image_type =
+                normalize_google_play_image_type(&type_entry.file_name().to_string_lossy());
             if image_type.is_empty() {
                 continue;
             }
@@ -36982,7 +41234,9 @@ fn load_google_play_metadata_bundle(
                 .map(str::to_owned)
                 .or_else(|| path.file_stem().map(|stem| stem.to_string_lossy().trim().to_owned()))
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("listing file {} missing language", path.display()))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!("listing file {} missing language", path.display())
+                })?;
             if let Some(object) = payload.as_object_mut() {
                 object.remove("language");
             }
@@ -36991,25 +41245,30 @@ fn load_google_play_metadata_bundle(
     }
 
     let images = collect_google_play_image_uploads(&metadata_path.join("images"))?;
-    Ok((
-        details,
-        if listings.is_empty() { None } else { Some(listings) },
-        images,
-    ))
+    Ok((details, if listings.is_empty() { None } else { Some(listings) }, images))
 }
 
-fn resolve_google_play_package(runtime: &GooglePlayRuntime, package_name: Option<String>) -> Result<String> {
-    if let Some(value) = package_name.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+fn resolve_google_play_package(
+    runtime: &GooglePlayRuntime,
+    package_name: Option<String>,
+) -> Result<String> {
+    if let Some(value) =
+        package_name.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         return Ok(value);
     }
     if !runtime.default_package_name.trim().is_empty() {
         return Ok(runtime.default_package_name.clone());
     }
-    anyhow::bail!("package name is required (set --package or configure google.play.accounts.<alias>.default_package_name)")
+    anyhow::bail!(
+        "package name is required (set --package or configure google.play.accounts.<alias>.default_package_name)"
+    )
 }
 
 fn resolve_google_play_language(runtime: &GooglePlayRuntime, language: Option<String>) -> String {
-    if let Some(value) = language.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(value) =
+        language.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         return value;
     }
     if !runtime.default_language_code.trim().is_empty() {
@@ -37057,7 +41316,10 @@ where
         runtime,
         &GooglePlayAPIRequest {
             method: "POST".to_owned(),
-            path: format!("/androidpublisher/v3/applications/{}/edits", url::form_urlencoded::byte_serialize(package_name.as_bytes()).collect::<String>()),
+            path: format!(
+                "/androidpublisher/v3/applications/{}/edits",
+                url::form_urlencoded::byte_serialize(package_name.as_bytes()).collect::<String>()
+            ),
             json_body: Some(serde_json::json!({})),
             ..GooglePlayAPIRequest::default()
         },
@@ -37080,7 +41342,8 @@ where
                 method: "DELETE".to_owned(),
                 path: format!(
                     "/androidpublisher/v3/applications/{}/edits/{}",
-                    url::form_urlencoded::byte_serialize(package_name.as_bytes()).collect::<String>(),
+                    url::form_urlencoded::byte_serialize(package_name.as_bytes())
+                        .collect::<String>(),
                     url::form_urlencoded::byte_serialize(edit_id.as_bytes()).collect::<String>()
                 ),
                 ..GooglePlayAPIRequest::default()
@@ -37095,7 +41358,8 @@ where
                 method: "DELETE".to_owned(),
                 path: format!(
                     "/androidpublisher/v3/applications/{}/edits/{}",
-                    url::form_urlencoded::byte_serialize(package_name.as_bytes()).collect::<String>(),
+                    url::form_urlencoded::byte_serialize(package_name.as_bytes())
+                        .collect::<String>(),
                     url::form_urlencoded::byte_serialize(edit_id.as_bytes()).collect::<String>()
                 ),
                 ..GooglePlayAPIRequest::default()
@@ -37125,7 +41389,10 @@ where
     Ok(commit)
 }
 
-fn verify_google_play_package_access(runtime: &GooglePlayRuntime, package_name: &str) -> Result<(), String> {
+fn verify_google_play_package_access(
+    runtime: &GooglePlayRuntime,
+    package_name: &str,
+) -> Result<(), String> {
     google_play_run_edit(runtime, package_name, false, false, false, |_edit_id| {
         Ok(GooglePlayAPIResponse {
             status_code: 200,
@@ -37176,7 +41443,13 @@ fn run_google_play_doctor(
     let pkg = verify_package
         .filter(|value| !value.trim().is_empty())
         .or_else(|| package_name.filter(|value| !value.trim().is_empty()))
-        .or_else(|| if runtime.default_package_name.trim().is_empty() { None } else { Some(runtime.default_package_name.clone()) });
+        .or_else(|| {
+            if runtime.default_package_name.trim().is_empty() {
+                None
+            } else {
+                Some(runtime.default_package_name.clone())
+            }
+        });
     let verify = match pkg {
         Some(pkg) => Some((pkg.clone(), verify_google_play_package_access(&runtime, &pkg))),
         None => None,
@@ -37212,7 +41485,9 @@ fn run_google_play_doctor(
         ],
     });
     match format {
-        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?)
+        }
     }
     Ok(())
 }
@@ -37320,7 +41595,9 @@ fn run_google_play_app_create(
         settings_file,
     )?;
     let account_id = if runtime.developer_account_id.trim().is_empty() {
-        anyhow::bail!("developer account id is required (set --developer-account or configure google.play.accounts.<alias>.developer_account_id)");
+        anyhow::bail!(
+            "developer account id is required (set --developer-account or configure google.play.accounts.<alias>.developer_account_id)"
+        );
     } else {
         runtime.developer_account_id.clone()
     };
@@ -37393,7 +41670,10 @@ fn run_google_play_listing_get(
             &runtime,
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/listings/{}", package_name, edit_id, lang),
+                path: format!(
+                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
+                    package_name, edit_id, lang
+                ),
                 ..GooglePlayAPIRequest::default()
             },
         )
@@ -37441,7 +41721,10 @@ fn run_google_play_listing_list(
             &runtime,
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/listings", package_name, edit_id),
+                path: format!(
+                    "/androidpublisher/v3/applications/{}/edits/{}/listings",
+                    package_name, edit_id
+                ),
                 ..GooglePlayAPIRequest::default()
             },
         )
@@ -37519,7 +41802,10 @@ fn run_google_play_listing_update(
                 &runtime,
                 &GooglePlayAPIRequest {
                     method: "PATCH".to_owned(),
-                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/listings/{}", package_name, edit_id, lang),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
+                        package_name, edit_id, lang
+                    ),
                     json_body: Some(payload.clone()),
                     ..GooglePlayAPIRequest::default()
                 },
@@ -37569,7 +41855,10 @@ fn run_google_play_details_get(
             &runtime,
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/details", package_name, edit_id),
+                path: format!(
+                    "/androidpublisher/v3/applications/{}/edits/{}/details",
+                    package_name, edit_id
+                ),
                 ..GooglePlayAPIRequest::default()
             },
         )
@@ -37646,7 +41935,10 @@ fn run_google_play_details_update(
                 &runtime,
                 &GooglePlayAPIRequest {
                     method: "PATCH".to_owned(),
-                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/details", package_name, edit_id),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/details",
+                        package_name, edit_id
+                    ),
                     json_body: Some(payload.clone()),
                     ..GooglePlayAPIRequest::default()
                 },
@@ -37756,20 +42048,27 @@ fn run_google_play_asset_clear(
     if image_type.is_empty() {
         anyhow::bail!("invalid image type");
     }
-    let response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "DELETE".to_owned(),
-                path: format!(
-                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                    package_name, edit_id, lang, image_type
-                ),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)
-    })?;
+    let response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "DELETE".to_owned(),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                        package_name, edit_id, lang, image_type
+                    ),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)
+        },
+    )?;
     print_google_play_api_response(&response, format, raw)
 }
 
@@ -37834,46 +42133,53 @@ fn run_google_play_asset_upload(
         anyhow::bail!("at least one valid --file is required");
     }
     file_paths.sort();
-    let response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        let base_path = format!(
-            "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-            package_name, edit_id, lang, image_type
-        );
-        if clear_first {
-            execute_play_api_request(
-                &runtime,
-                &GooglePlayAPIRequest {
-                    method: "DELETE".to_owned(),
-                    path: base_path.clone(),
-                    ..GooglePlayAPIRequest::default()
-                },
-            )
-            .map_err(anyhow::Error::msg)?;
-        }
-        for file in &file_paths {
-            execute_play_api_request(
-                &runtime,
-                &GooglePlayAPIRequest {
-                    method: "POST".to_owned(),
-                    path: format!("/upload{base_path}"),
-                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                    media_path: file.clone(),
-                    content_type: detect_google_play_media_content_type(file, "image/*"),
-                    upload: true,
-                    ..GooglePlayAPIRequest::default()
-                },
-            )
-            .map_err(anyhow::Error::msg)?;
-        }
-        Ok(GooglePlayAPIResponse {
-            status_code: 200,
-            status: "OK".to_owned(),
-            request_id: String::new(),
-            content_type: "application/json".to_owned(),
-            data: None,
-            body: String::new(),
-        })
-    })?;
+    let response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            let base_path = format!(
+                "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                package_name, edit_id, lang, image_type
+            );
+            if clear_first {
+                execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "DELETE".to_owned(),
+                        path: base_path.clone(),
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+            }
+            for file in &file_paths {
+                execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "POST".to_owned(),
+                        path: format!("/upload{base_path}"),
+                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                        media_path: file.clone(),
+                        content_type: detect_google_play_media_content_type(file, "image/*"),
+                        upload: true,
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+            }
+            Ok(GooglePlayAPIResponse {
+                status_code: 200,
+                status: "OK".to_owned(),
+                request_id: String::new(),
+                content_type: "application/json".to_owned(),
+                data: None,
+                body: String::new(),
+            })
+        },
+    )?;
     print_google_play_api_response(&response, format, raw)
 }
 
@@ -37955,93 +42261,113 @@ fn run_google_play_release_upload(
         anyhow::bail!("--in-app-update-priority must be between 0 and 5");
     }
     let mut track_response: Option<GooglePlayAPIResponse> = None;
-    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        let mut codes = version_codes.clone();
-        if let Some(file) = &aab {
-            let upload = execute_play_api_request(
+    let commit_response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            let mut codes = version_codes.clone();
+            if let Some(file) = &aab {
+                let upload = execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "POST".to_owned(),
+                        path: format!(
+                            "/upload/androidpublisher/v3/applications/{}/edits/{}/bundles",
+                            package_name, edit_id
+                        ),
+                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                        media_path: file.clone(),
+                        content_type: "application/octet-stream".to_owned(),
+                        upload: true,
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+                if let Some(data) = &upload.data {
+                    let code = parse_google_play_version_code_value(&data["versionCode"]);
+                    if code > 0 {
+                        codes.push(code);
+                    }
+                }
+            }
+            if let Some(file) = &apk {
+                let upload = execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "POST".to_owned(),
+                        path: format!(
+                            "/upload/androidpublisher/v3/applications/{}/edits/{}/apks",
+                            package_name, edit_id
+                        ),
+                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                        media_path: file.clone(),
+                        content_type: "application/vnd.android.package-archive".to_owned(),
+                        upload: true,
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+                if let Some(data) = &upload.data {
+                    let code = parse_google_play_version_code_value(&data["versionCode"]);
+                    if code > 0 {
+                        codes.push(code);
+                    }
+                }
+            }
+            codes = unique_sorted_google_play_version_codes(codes);
+            if codes.is_empty() {
+                anyhow::bail!("no version codes resolved for release");
+            }
+            let mut release = serde_json::json!({
+                "status": status,
+                "versionCodes": google_play_version_codes_to_strings(&codes),
+            });
+            if user_fraction > 0.0 {
+                release["userFraction"] = serde_json::json!(user_fraction);
+            }
+            if let Some(name) =
+                release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty())
+            {
+                release["name"] = Value::String(name.to_owned());
+            }
+            if !release_notes.is_empty() {
+                release["releaseNotes"] = Value::Array(release_notes.clone());
+            }
+            if update_priority >= 0 {
+                release["inAppUpdatePriority"] = serde_json::json!(update_priority);
+            }
+            let response = execute_play_api_request(
                 &runtime,
                 &GooglePlayAPIRequest {
-                    method: "POST".to_owned(),
-                    path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/bundles", package_name, edit_id),
-                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                    media_path: file.clone(),
-                    content_type: "application/octet-stream".to_owned(),
-                    upload: true,
+                    method: "PUT".to_owned(),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                        package_name,
+                        edit_id,
+                        track.trim()
+                    ),
+                    json_body: Some(serde_json::json!({
+                        "track": track.trim(),
+                        "releases": [release],
+                    })),
                     ..GooglePlayAPIRequest::default()
                 },
             )
             .map_err(anyhow::Error::msg)?;
-            if let Some(data) = &upload.data {
-                let code = parse_google_play_version_code_value(&data["versionCode"]);
-                if code > 0 {
-                    codes.push(code);
-                }
-            }
-        }
-        if let Some(file) = &apk {
-            let upload = execute_play_api_request(
-                &runtime,
-                &GooglePlayAPIRequest {
-                    method: "POST".to_owned(),
-                    path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/apks", package_name, edit_id),
-                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                    media_path: file.clone(),
-                    content_type: "application/vnd.android.package-archive".to_owned(),
-                    upload: true,
-                    ..GooglePlayAPIRequest::default()
-                },
-            )
-            .map_err(anyhow::Error::msg)?;
-            if let Some(data) = &upload.data {
-                let code = parse_google_play_version_code_value(&data["versionCode"]);
-                if code > 0 {
-                    codes.push(code);
-                }
-            }
-        }
-        codes = unique_sorted_google_play_version_codes(codes);
-        if codes.is_empty() {
-            anyhow::bail!("no version codes resolved for release");
-        }
-        let mut release = serde_json::json!({
-            "status": status,
-            "versionCodes": google_play_version_codes_to_strings(&codes),
-        });
-        if user_fraction > 0.0 {
-            release["userFraction"] = serde_json::json!(user_fraction);
-        }
-        if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
-            release["name"] = Value::String(name.to_owned());
-        }
-        if !release_notes.is_empty() {
-            release["releaseNotes"] = Value::Array(release_notes.clone());
-        }
-        if update_priority >= 0 {
-            release["inAppUpdatePriority"] = serde_json::json!(update_priority);
-        }
-        let response = execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "PUT".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track.trim()),
-                json_body: Some(serde_json::json!({
-                    "track": track.trim(),
-                    "releases": [release],
-                })),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-        track_response = Some(response);
-        Ok(GooglePlayAPIResponse {
-            status_code: 200,
-            status: "OK".to_owned(),
-            request_id: String::new(),
-            content_type: "application/json".to_owned(),
-            data: None,
-            body: String::new(),
-        })
-    })?;
+            track_response = Some(response);
+            Ok(GooglePlayAPIResponse {
+                status_code: 200,
+                status: "OK".to_owned(),
+                request_id: String::new(),
+                content_type: "application/json".to_owned(),
+                data: None,
+                body: String::new(),
+            })
+        },
+    )?;
     if matches!(format, OutputFormat::Json) {
         println!(
             "{}",
@@ -38100,9 +42426,15 @@ fn run_google_play_release_status(
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
                 path: if let Some(track) = &track {
-                    format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track)
+                    format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                        package_name, edit_id, track
+                    )
                 } else {
-                    format!("/androidpublisher/v3/applications/{}/edits/{}/tracks", package_name, edit_id)
+                    format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/tracks",
+                        package_name, edit_id
+                    )
                 },
                 ..GooglePlayAPIRequest::default()
             },
@@ -38164,62 +42496,86 @@ fn run_google_play_release_promote(
         anyhow::bail!("--user-fraction must be between 0 and 1");
     }
     let mut track_response: Option<GooglePlayAPIResponse> = None;
-    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        let source = execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "GET".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, from_track.trim()),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-        let codes = source
-            .data
-            .as_ref()
-            .map(extract_google_play_track_version_codes)
-            .unwrap_or_default();
-        if codes.is_empty() {
-            anyhow::bail!("source track {} has no releases/version codes", from_track.trim());
-        }
-        let mut release = serde_json::json!({
-            "status": status,
-            "versionCodes": google_play_version_codes_to_strings(&codes),
-        });
-        if user_fraction > 0.0 {
-            release["userFraction"] = serde_json::json!(user_fraction);
-        }
-        if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
-            release["name"] = Value::String(name.to_owned());
-        }
-        if !release_notes.is_empty() {
-            release["releaseNotes"] = Value::Array(release_notes.clone());
-        }
-        let response = execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "PUT".to_owned(),
-                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, to_track.trim()),
-                json_body: Some(serde_json::json!({
-                    "track": to_track.trim(),
-                    "releases": [release],
-                })),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-        track_response = Some(response);
-        Ok(GooglePlayAPIResponse {
-            status_code: 200,
-            status: "OK".to_owned(),
-            request_id: String::new(),
-            content_type: "application/json".to_owned(),
-            data: None,
-            body: String::new(),
-        })
-    })?;
+    let commit_response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            let source = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "GET".to_owned(),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                        package_name,
+                        edit_id,
+                        from_track.trim()
+                    ),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            let codes = source
+                .data
+                .as_ref()
+                .map(extract_google_play_track_version_codes)
+                .unwrap_or_default();
+            if codes.is_empty() {
+                anyhow::bail!("source track {} has no releases/version codes", from_track.trim());
+            }
+            let mut release = serde_json::json!({
+                "status": status,
+                "versionCodes": google_play_version_codes_to_strings(&codes),
+            });
+            if user_fraction > 0.0 {
+                release["userFraction"] = serde_json::json!(user_fraction);
+            }
+            if let Some(name) =
+                release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty())
+            {
+                release["name"] = Value::String(name.to_owned());
+            }
+            if !release_notes.is_empty() {
+                release["releaseNotes"] = Value::Array(release_notes.clone());
+            }
+            let response = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "PUT".to_owned(),
+                    path: format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                        package_name,
+                        edit_id,
+                        to_track.trim()
+                    ),
+                    json_body: Some(serde_json::json!({
+                        "track": to_track.trim(),
+                        "releases": [release],
+                    })),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            track_response = Some(response);
+            Ok(GooglePlayAPIResponse {
+                status_code: 200,
+                status: "OK".to_owned(),
+                request_id: String::new(),
+                content_type: "application/json".to_owned(),
+                data: None,
+                body: String::new(),
+            })
+        },
+    )?;
     if matches!(format, OutputFormat::Json) {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"track_update": track_response, "edit_result": commit_response}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &serde_json::json!({"track_update": track_response, "edit_result": commit_response})
+            )?
+        );
         return Ok(());
     }
     if let Some(track_response) = track_response.as_ref() {
@@ -38281,62 +42637,79 @@ fn run_google_play_release_set_status(
         anyhow::bail!("--user-fraction must be between 0 and 1");
     }
     let mut track_response: Option<GooglePlayAPIResponse> = None;
-    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        let path = format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track.trim());
-        let current = execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "GET".to_owned(),
-                path: path.clone(),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-        let mut releases = current
-            .data
-            .as_ref()
-            .and_then(|data| data.get("releases"))
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        if releases.is_empty() {
-            anyhow::bail!("track {} has no releases", track.trim());
-        }
-        for release in &mut releases {
-            if let Some(object) = release.as_object_mut() {
-                object.insert("status".to_owned(), Value::String(status.clone()));
-                if status == "inProgress" && user_fraction > 0.0 {
-                    object.insert("userFraction".to_owned(), serde_json::json!(user_fraction));
-                } else {
-                    object.remove("userFraction");
+    let commit_response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            let path = format!(
+                "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                package_name,
+                edit_id,
+                track.trim()
+            );
+            let current = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "GET".to_owned(),
+                    path: path.clone(),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            let mut releases = current
+                .data
+                .as_ref()
+                .and_then(|data| data.get("releases"))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if releases.is_empty() {
+                anyhow::bail!("track {} has no releases", track.trim());
+            }
+            for release in &mut releases {
+                if let Some(object) = release.as_object_mut() {
+                    object.insert("status".to_owned(), Value::String(status.clone()));
+                    if status == "inProgress" && user_fraction > 0.0 {
+                        object.insert("userFraction".to_owned(), serde_json::json!(user_fraction));
+                    } else {
+                        object.remove("userFraction");
+                    }
                 }
             }
-        }
-        let response = execute_play_api_request(
-            &runtime,
-            &GooglePlayAPIRequest {
-                method: "PUT".to_owned(),
-                path,
-                json_body: Some(serde_json::json!({
-                    "track": track.trim(),
-                    "releases": releases,
-                })),
-                ..GooglePlayAPIRequest::default()
-            },
-        )
-        .map_err(anyhow::Error::msg)?;
-        track_response = Some(response);
-        Ok(GooglePlayAPIResponse {
-            status_code: 200,
-            status: "OK".to_owned(),
-            request_id: String::new(),
-            content_type: "application/json".to_owned(),
-            data: None,
-            body: String::new(),
-        })
-    })?;
+            let response = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "PUT".to_owned(),
+                    path,
+                    json_body: Some(serde_json::json!({
+                        "track": track.trim(),
+                        "releases": releases,
+                    })),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            track_response = Some(response);
+            Ok(GooglePlayAPIResponse {
+                status_code: 200,
+                status: "OK".to_owned(),
+                request_id: String::new(),
+                content_type: "application/json".to_owned(),
+                data: None,
+                body: String::new(),
+            })
+        },
+    )?;
     if matches!(format, OutputFormat::Json) {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"track_update": track_response, "edit_result": commit_response}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &serde_json::json!({"track_update": track_response, "edit_result": commit_response})
+            )?
+        );
         return Ok(());
     }
     if let Some(track_response) = track_response.as_ref() {
@@ -38392,13 +42765,14 @@ fn run_google_play_apply(
     let package_name = resolve_google_play_package(&runtime, package_name)?;
     let mut version_codes = parse_google_play_version_codes(version_codes)?;
     let release_notes = parse_google_play_release_notes(release_notes)?;
-    let (details_payload, listing_payloads, image_uploads) = load_google_play_metadata_bundle(&metadata_dir)?;
+    let (details_payload, listing_payloads, image_uploads) =
+        load_google_play_metadata_bundle(&metadata_dir)?;
     let aab = aab.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
     let apk = apk.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
-    let artifact_track = track
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or_else(|| if aab.is_some() || apk.is_some() { Some("internal".to_owned()) } else { None });
+    let artifact_track =
+        track.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()).or_else(
+            || if aab.is_some() || apk.is_some() { Some("internal".to_owned()) } else { None },
+        );
     let user_fraction = user_fraction.unwrap_or_default();
     if !(0.0..=1.0).contains(&user_fraction) {
         anyhow::bail!("--user-fraction must be between 0 and 1");
@@ -38413,167 +42787,204 @@ fn run_google_play_apply(
         "images_uploaded": 0,
         "track_updated": false,
     });
-    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
-        if let Some(details_payload) = details_payload.as_ref() {
-            execute_play_api_request(
-                &runtime,
-                &GooglePlayAPIRequest {
-                    method: "PATCH".to_owned(),
-                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/details", package_name, edit_id),
-                    json_body: Some(details_payload.clone()),
-                    ..GooglePlayAPIRequest::default()
-                },
-            )
-            .map_err(anyhow::Error::msg)?;
-            summary["details_updated"] = Value::Bool(true);
-        }
-        if let Some(listing_payloads) = listing_payloads.as_ref() {
-            for (lang, payload) in listing_payloads {
+    let commit_response = google_play_run_edit(
+        &runtime,
+        &package_name,
+        validate,
+        changes_not_sent_for_review,
+        true,
+        |edit_id| {
+            if let Some(details_payload) = details_payload.as_ref() {
                 execute_play_api_request(
                     &runtime,
                     &GooglePlayAPIRequest {
                         method: "PATCH".to_owned(),
-                        path: format!("/androidpublisher/v3/applications/{}/edits/{}/listings/{}", package_name, edit_id, lang),
-                        json_body: Some(payload.clone()),
+                        path: format!(
+                            "/androidpublisher/v3/applications/{}/edits/{}/details",
+                            package_name, edit_id
+                        ),
+                        json_body: Some(details_payload.clone()),
                         ..GooglePlayAPIRequest::default()
                     },
                 )
                 .map_err(anyhow::Error::msg)?;
+                summary["details_updated"] = Value::Bool(true);
             }
-            summary["listings_updated"] = serde_json::json!(listing_payloads.len());
-        }
-        if let Some(image_uploads) = image_uploads.as_ref() {
-            let mut uploaded = 0;
-            for (lang, image_types) in image_uploads {
-                for (image_type, files) in image_types {
-                    let base_path = format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                        package_name, edit_id, lang, image_type
-                    );
+            if let Some(listing_payloads) = listing_payloads.as_ref() {
+                for (lang, payload) in listing_payloads {
                     execute_play_api_request(
                         &runtime,
                         &GooglePlayAPIRequest {
-                            method: "DELETE".to_owned(),
-                            path: base_path.clone(),
+                            method: "PATCH".to_owned(),
+                            path: format!(
+                                "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
+                                package_name, edit_id, lang
+                            ),
+                            json_body: Some(payload.clone()),
                             ..GooglePlayAPIRequest::default()
                         },
                     )
                     .map_err(anyhow::Error::msg)?;
-                    for file in files {
+                }
+                summary["listings_updated"] = serde_json::json!(listing_payloads.len());
+            }
+            if let Some(image_uploads) = image_uploads.as_ref() {
+                let mut uploaded = 0;
+                for (lang, image_types) in image_uploads {
+                    for (image_type, files) in image_types {
+                        let base_path = format!(
+                            "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                            package_name, edit_id, lang, image_type
+                        );
                         execute_play_api_request(
                             &runtime,
                             &GooglePlayAPIRequest {
-                                method: "POST".to_owned(),
-                                path: format!("/upload{base_path}"),
-                                params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                                media_path: file.clone(),
-                                content_type: detect_google_play_media_content_type(file, "image/*"),
-                                upload: true,
+                                method: "DELETE".to_owned(),
+                                path: base_path.clone(),
                                 ..GooglePlayAPIRequest::default()
                             },
                         )
                         .map_err(anyhow::Error::msg)?;
-                        uploaded += 1;
+                        for file in files {
+                            execute_play_api_request(
+                                &runtime,
+                                &GooglePlayAPIRequest {
+                                    method: "POST".to_owned(),
+                                    path: format!("/upload{base_path}"),
+                                    params: BTreeMap::from([(
+                                        "uploadType".to_owned(),
+                                        "media".to_owned(),
+                                    )]),
+                                    media_path: file.clone(),
+                                    content_type: detect_google_play_media_content_type(
+                                        file, "image/*",
+                                    ),
+                                    upload: true,
+                                    ..GooglePlayAPIRequest::default()
+                                },
+                            )
+                            .map_err(anyhow::Error::msg)?;
+                            uploaded += 1;
+                        }
                     }
                 }
+                summary["images_uploaded"] = serde_json::json!(uploaded);
             }
-            summary["images_uploaded"] = serde_json::json!(uploaded);
-        }
-        if let Some(track) = artifact_track.as_ref() {
-            if let Some(file) = &aab {
-                let upload = execute_play_api_request(
+            if let Some(track) = artifact_track.as_ref() {
+                if let Some(file) = &aab {
+                    let upload = execute_play_api_request(
+                        &runtime,
+                        &GooglePlayAPIRequest {
+                            method: "POST".to_owned(),
+                            path: format!(
+                                "/upload/androidpublisher/v3/applications/{}/edits/{}/bundles",
+                                package_name, edit_id
+                            ),
+                            params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                            media_path: file.clone(),
+                            content_type: "application/octet-stream".to_owned(),
+                            upload: true,
+                            ..GooglePlayAPIRequest::default()
+                        },
+                    )
+                    .map_err(anyhow::Error::msg)?;
+                    if let Some(data) = &upload.data {
+                        let code = parse_google_play_version_code_value(&data["versionCode"]);
+                        if code > 0 {
+                            version_codes.push(code);
+                        }
+                    }
+                }
+                if let Some(file) = &apk {
+                    let upload = execute_play_api_request(
+                        &runtime,
+                        &GooglePlayAPIRequest {
+                            method: "POST".to_owned(),
+                            path: format!(
+                                "/upload/androidpublisher/v3/applications/{}/edits/{}/apks",
+                                package_name, edit_id
+                            ),
+                            params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                            media_path: file.clone(),
+                            content_type: "application/vnd.android.package-archive".to_owned(),
+                            upload: true,
+                            ..GooglePlayAPIRequest::default()
+                        },
+                    )
+                    .map_err(anyhow::Error::msg)?;
+                    if let Some(data) = &upload.data {
+                        let code = parse_google_play_version_code_value(&data["versionCode"]);
+                        if code > 0 {
+                            version_codes.push(code);
+                        }
+                    }
+                }
+                version_codes = unique_sorted_google_play_version_codes(version_codes.clone());
+                if version_codes.is_empty() {
+                    anyhow::bail!("artifact track requested but no version codes resolved");
+                }
+                let mut release = serde_json::json!({
+                    "status": if status.is_empty() { "completed" } else { status.as_str() },
+                    "versionCodes": google_play_version_codes_to_strings(&version_codes),
+                });
+                if user_fraction > 0.0 {
+                    release["userFraction"] = serde_json::json!(user_fraction);
+                }
+                if let Some(name) = release_name
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                {
+                    release["name"] = Value::String(name.to_owned());
+                }
+                if !release_notes.is_empty() {
+                    release["releaseNotes"] = Value::Array(release_notes.clone());
+                }
+                execute_play_api_request(
                     &runtime,
                     &GooglePlayAPIRequest {
-                        method: "POST".to_owned(),
-                        path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/bundles", package_name, edit_id),
-                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                        media_path: file.clone(),
-                        content_type: "application/octet-stream".to_owned(),
-                        upload: true,
+                        method: "PUT".to_owned(),
+                        path: format!(
+                            "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
+                            package_name, edit_id, track
+                        ),
+                        json_body: Some(serde_json::json!({
+                            "track": track,
+                            "releases": [release],
+                        })),
                         ..GooglePlayAPIRequest::default()
                     },
                 )
                 .map_err(anyhow::Error::msg)?;
-                if let Some(data) = &upload.data {
-                    let code = parse_google_play_version_code_value(&data["versionCode"]);
-                    if code > 0 {
-                        version_codes.push(code);
-                    }
-                }
+                summary["track_updated"] = Value::Bool(true);
+                summary["track"] = Value::String(track.clone());
+                summary["version_codes"] =
+                    serde_json::json!(google_play_version_codes_to_strings(&version_codes));
             }
-            if let Some(file) = &apk {
-                let upload = execute_play_api_request(
-                    &runtime,
-                    &GooglePlayAPIRequest {
-                        method: "POST".to_owned(),
-                        path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/apks", package_name, edit_id),
-                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
-                        media_path: file.clone(),
-                        content_type: "application/vnd.android.package-archive".to_owned(),
-                        upload: true,
-                        ..GooglePlayAPIRequest::default()
-                    },
-                )
-                .map_err(anyhow::Error::msg)?;
-                if let Some(data) = &upload.data {
-                    let code = parse_google_play_version_code_value(&data["versionCode"]);
-                    if code > 0 {
-                        version_codes.push(code);
-                    }
-                }
+            let no_changes = !summary["details_updated"].as_bool().unwrap_or(false)
+                && summary["listings_updated"].as_i64().unwrap_or_default() == 0
+                && summary["images_uploaded"].as_i64().unwrap_or_default() == 0
+                && !summary["track_updated"].as_bool().unwrap_or(false);
+            if no_changes {
+                anyhow::bail!("no changes detected in metadata/apply inputs");
             }
-            version_codes = unique_sorted_google_play_version_codes(version_codes.clone());
-            if version_codes.is_empty() {
-                anyhow::bail!("artifact track requested but no version codes resolved");
-            }
-            let mut release = serde_json::json!({
-                "status": if status.is_empty() { "completed" } else { status.as_str() },
-                "versionCodes": google_play_version_codes_to_strings(&version_codes),
-            });
-            if user_fraction > 0.0 {
-                release["userFraction"] = serde_json::json!(user_fraction);
-            }
-            if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
-                release["name"] = Value::String(name.to_owned());
-            }
-            if !release_notes.is_empty() {
-                release["releaseNotes"] = Value::Array(release_notes.clone());
-            }
-            execute_play_api_request(
-                &runtime,
-                &GooglePlayAPIRequest {
-                    method: "PUT".to_owned(),
-                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track),
-                    json_body: Some(serde_json::json!({
-                        "track": track,
-                        "releases": [release],
-                    })),
-                    ..GooglePlayAPIRequest::default()
-                },
-            )
-            .map_err(anyhow::Error::msg)?;
-            summary["track_updated"] = Value::Bool(true);
-            summary["track"] = Value::String(track.clone());
-            summary["version_codes"] = serde_json::json!(google_play_version_codes_to_strings(&version_codes));
-        }
-        let no_changes = !summary["details_updated"].as_bool().unwrap_or(false)
-            && summary["listings_updated"].as_i64().unwrap_or_default() == 0
-            && summary["images_uploaded"].as_i64().unwrap_or_default() == 0
-            && !summary["track_updated"].as_bool().unwrap_or(false);
-        if no_changes {
-            anyhow::bail!("no changes detected in metadata/apply inputs");
-        }
-        Ok(GooglePlayAPIResponse {
-            status_code: 200,
-            status: "OK".to_owned(),
-            request_id: String::new(),
-            content_type: "application/json".to_owned(),
-            data: None,
-            body: String::new(),
-        })
-    })?;
+            Ok(GooglePlayAPIResponse {
+                status_code: 200,
+                status: "OK".to_owned(),
+                request_id: String::new(),
+                content_type: "application/json".to_owned(),
+                data: None,
+                body: String::new(),
+            })
+        },
+    )?;
     if matches!(format, OutputFormat::Json) {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"summary": summary, "edit_result": commit_response}))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &serde_json::json!({"summary": summary, "edit_result": commit_response})
+            )?
+        );
         return Ok(());
     }
     println!(
@@ -39054,11 +43465,7 @@ fn parse_google_youtube_ids_csv(raw: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
         .collect();
-    if ids.is_empty() {
-        None
-    } else {
-        Some(ids.join(","))
-    }
+    if ids.is_empty() { None } else { Some(ids.join(",")) }
 }
 
 fn parse_google_youtube_body(value: Option<String>) -> Result<String> {
@@ -39089,11 +43496,7 @@ fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str)
 fn load_google_youtube_runtime_from_command(
     command: GoogleYouTubeMutationRuntimeArgs,
 ) -> Result<(GoogleYouTubeRuntime, OutputFormat, bool)> {
-    let format = if command.json {
-        OutputFormat::Json
-    } else {
-        command.format
-    };
+    let format = if command.json { OutputFormat::Json } else { command.format };
     let raw = command.raw;
     let runtime = load_google_youtube_runtime(
         command.account,
@@ -39203,9 +43606,22 @@ fn run_google_youtube_channel_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     if mine {
         require_google_youtube_oauth(&runtime, "channel list --mine")?;
@@ -39218,7 +43634,8 @@ fn run_google_youtube_channel_list(
     if let Some(for_handle) = for_handle.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("forHandle".to_owned(), for_handle);
     }
-    if let Some(for_username) = for_username.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+    if let Some(for_username) = for_username.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+    {
         params.insert("forUsername".to_owned(), for_username);
     }
     if mine {
@@ -39271,9 +43688,22 @@ fn run_google_youtube_video_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     if my_rating.as_ref().map(|v| !v.trim().is_empty()).unwrap_or(false) {
         require_google_youtube_oauth(&runtime, "video list --my-rating")?;
@@ -39289,10 +43719,14 @@ fn run_google_youtube_video_list(
     if let Some(my_rating) = my_rating.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("myRating".to_owned(), my_rating);
     }
-    if let Some(region_code) = region_code
-        .map(|v| v.trim().to_owned())
-        .filter(|v| !v.is_empty())
-        .or_else(|| if runtime.region_code.trim().is_empty() { None } else { Some(runtime.region_code.clone()) })
+    if let Some(region_code) =
+        region_code.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()).or_else(|| {
+            if runtime.region_code.trim().is_empty() {
+                None
+            } else {
+                Some(runtime.region_code.clone())
+            }
+        })
     {
         params.insert("regionCode".to_owned(), region_code);
     }
@@ -39342,9 +43776,22 @@ fn run_google_youtube_playlist_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     if mine {
         require_google_youtube_oauth(&runtime, "playlist list --mine")?;
@@ -39405,9 +43852,22 @@ fn run_google_youtube_playlist_item_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
@@ -39509,9 +43969,8 @@ fn run_google_youtube_video_rate(
     params: Vec<String>,
 ) -> Result<()> {
     let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
-    let rating = rating
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty());
+    let rating =
+        rating.map(|value| value.trim().to_ascii_lowercase()).filter(|value| !value.is_empty());
     let (Some(id), Some(rating)) = (id, rating) else {
         anyhow::bail!("video rate requires --id <video-id> --rating <like|dislike|none>");
     };
@@ -39607,7 +44066,8 @@ fn run_google_youtube_playlist_create(
     let body = {
         let raw = parse_google_youtube_body(body)?;
         if raw.trim().is_empty() {
-            let title = title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+            let title =
+                title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let Some(title) = title else {
                 anyhow::bail!("playlist create requires --title <title> or --body <json|@file>");
             };
@@ -39691,12 +44151,10 @@ fn run_google_youtube_playlist_item_add(
     let body = {
         let raw = parse_google_youtube_body(body)?;
         if raw.trim().is_empty() {
-            let playlist_id = playlist_id
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
-            let video_id = video_id
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
+            let playlist_id =
+                playlist_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+            let video_id =
+                video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let (Some(playlist_id), Some(video_id)) = (playlist_id, video_id) else {
                 anyhow::bail!(
                     "playlist-item add requires --playlist-id <id> --video-id <id> or --body <json|@file>"
@@ -39804,9 +44262,22 @@ fn run_google_youtube_subscription_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "subscription list")?;
     let mut params = parse_google_youtube_params(params)?;
@@ -39817,9 +44288,8 @@ fn run_google_youtube_subscription_list(
     if let Some(channel_id) = channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("channelId".to_owned(), channel_id);
     }
-    if let Some(for_channel_id) = for_channel_id
-        .map(|v| v.trim().to_owned())
-        .filter(|v| !v.is_empty())
+    if let Some(for_channel_id) =
+        for_channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
     {
         params.insert("forChannelId".to_owned(), for_channel_id);
     }
@@ -39853,11 +44323,12 @@ fn run_google_youtube_subscription_create(
     let body = {
         let raw = parse_google_youtube_body(body)?;
         if raw.trim().is_empty() {
-            let channel_id = channel_id
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
+            let channel_id =
+                channel_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let Some(channel_id) = channel_id else {
-                anyhow::bail!("subscription create requires --channel-id <id> or --body <json|@file>");
+                anyhow::bail!(
+                    "subscription create requires --channel-id <id> or --body <json|@file>"
+                );
             };
             serde_json::to_string(&serde_json::json!({
                 "snippet": {
@@ -39936,9 +44407,22 @@ fn run_google_youtube_comment_thread_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
@@ -39948,9 +44432,8 @@ fn run_google_youtube_comment_thread_list(
     if let Some(channel_id) = channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("channelId".to_owned(), channel_id);
     }
-    if let Some(channel_id) = all_threads_related_to_channel_id
-        .map(|v| v.trim().to_owned())
-        .filter(|v| !v.is_empty())
+    if let Some(channel_id) =
+        all_threads_related_to_channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
     {
         params.insert("allThreadsRelatedToChannelId".to_owned(), channel_id);
     }
@@ -39969,9 +44452,7 @@ fn run_google_youtube_comment_thread_list(
     if let Some(order) = order.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("order".to_owned(), order);
     }
-    if let Some(search_terms) = search_terms
-        .map(|v| v.trim().to_owned())
-        .filter(|v| !v.is_empty())
+    if let Some(search_terms) = search_terms.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
     {
         params.insert("searchTerms".to_owned(), search_terms);
     }
@@ -40019,9 +44500,22 @@ fn run_google_youtube_comment_get(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     let Some(ids) = parse_google_youtube_ids_csv(ids) else {
         anyhow::bail!("comment get requires --id <comment-id[,comment-id]>");
@@ -40057,12 +44551,9 @@ fn run_google_youtube_comment_thread_create(
     let body = {
         let raw = parse_google_youtube_body(body)?;
         if raw.trim().is_empty() {
-            let video_id = video_id
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
-            let text = text
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
+            let video_id =
+                video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+            let text = text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let (Some(video_id), Some(text)) = (video_id, text) else {
                 anyhow::bail!(
                     "comment thread create requires --video-id <id> --text <message> or --body <json|@file>"
@@ -40162,9 +44653,22 @@ fn run_google_youtube_caption_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "caption list")?;
     let video_id = video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
@@ -40211,13 +44715,9 @@ fn run_google_youtube_caption_upload(
             "isDraft": draft,
         }
     });
-    let response = upload_youtube_caption(
-        &runtime,
-        file.to_string_lossy().as_ref(),
-        &metadata,
-        part.trim(),
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        upload_youtube_caption(&runtime, file.to_string_lossy().as_ref(), &metadata, part.trim())
+            .map_err(anyhow::Error::msg)?;
     print_google_youtube_api_response(&response, format, raw)
 }
 
@@ -40233,7 +44733,14 @@ fn run_google_youtube_caption_update(
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "caption update", "PUT", "/youtube/v3/captions", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "caption update",
+        "PUT",
+        "/youtube/v3/captions",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_caption_delete(
@@ -40247,7 +44754,14 @@ fn run_google_youtube_caption_delete(
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), id);
-    run_google_youtube_oauth_request(command, "caption delete", "DELETE", "/youtube/v3/captions", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "caption delete",
+        "DELETE",
+        "/youtube/v3/captions",
+        params,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -40278,11 +44792,25 @@ fn run_google_youtube_caption_download(
     let Some(id) = id else {
         anyhow::bail!("caption download requires --id <caption-id>");
     };
-    let output = output.ok_or_else(|| anyhow::anyhow!("caption download requires --output <path>"))?;
+    let output =
+        output.ok_or_else(|| anyhow::anyhow!("caption download requires --output <path>"))?;
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "caption download")?;
     let (bytes_written, content_type) = download_youtube_caption(
@@ -40299,7 +44827,9 @@ fn run_google_youtube_caption_download(
         "content_type": content_type,
     });
     match format {
-        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?)
+        }
     }
     Ok(())
 }
@@ -40363,7 +44893,8 @@ fn run_google_youtube_report_usage(
     let mut duration_count = 0i64;
     let mut status_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut top_endpoints: BTreeMap<String, usize> = BTreeMap::new();
-    let mut unique_request_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut unique_request_ids: std::collections::BTreeSet<String> =
+        std::collections::BTreeSet::new();
     if log_path.exists() {
         let file = std::fs::File::open(&log_path)?;
         let reader = std::io::BufReader::new(file);
@@ -40387,11 +44918,7 @@ fn run_google_youtube_report_usage(
                 continue;
             }
             if !account.is_empty()
-                && entry
-                    .get("ctx_account_alias")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .trim()
+                && entry.get("ctx_account_alias").and_then(Value::as_str).unwrap_or_default().trim()
                     != account
             {
                 continue;
@@ -40408,8 +44935,14 @@ fn run_google_youtube_report_usage(
                 continue;
             }
             let event = entry.get("event").and_then(Value::as_str).unwrap_or_default();
-            let method = entry.get("method").and_then(Value::as_str).unwrap_or_default().trim().to_uppercase();
-            let path = entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+            let method = entry
+                .get("method")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_uppercase();
+            let path =
+                entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
             let endpoint = format!("{method} {}", if path.is_empty() { "-" } else { &path });
             match event {
                 "request" => {
@@ -40454,7 +44987,12 @@ fn run_google_youtube_report_usage(
             .as_u64()
             .unwrap_or_default()
             .cmp(&left["count"].as_u64().unwrap_or_default())
-            .then_with(|| left["endpoint"].as_str().unwrap_or_default().cmp(right["endpoint"].as_str().unwrap_or_default()))
+            .then_with(|| {
+                left["endpoint"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .cmp(right["endpoint"].as_str().unwrap_or_default())
+            })
     });
     endpoints.truncate(10);
     let payload = serde_json::json!({
@@ -40508,9 +45046,22 @@ fn run_google_youtube_live_broadcast_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "live broadcast list")?;
     let mut params = parse_google_youtube_params(params)?;
@@ -40524,7 +45075,9 @@ fn run_google_youtube_live_broadcast_list(
     if let Some(status) = status.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
         params.insert("broadcastStatus".to_owned(), status);
     }
-    if let Some(broadcast_type) = broadcast_type.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+    if let Some(broadcast_type) =
+        broadcast_type.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+    {
         params.insert("broadcastType".to_owned(), broadcast_type);
     }
     params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
@@ -40556,7 +45109,14 @@ fn run_google_youtube_live_broadcast_create(
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live broadcast create", "POST", "/youtube/v3/liveBroadcasts", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "live broadcast create",
+        "POST",
+        "/youtube/v3/liveBroadcasts",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_live_broadcast_update(
@@ -40571,7 +45131,14 @@ fn run_google_youtube_live_broadcast_update(
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live broadcast update", "PUT", "/youtube/v3/liveBroadcasts", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "live broadcast update",
+        "PUT",
+        "/youtube/v3/liveBroadcasts",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_live_broadcast_delete(
@@ -40585,7 +45152,14 @@ fn run_google_youtube_live_broadcast_delete(
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), id);
-    run_google_youtube_oauth_request(command, "live broadcast delete", "DELETE", "/youtube/v3/liveBroadcasts", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "live broadcast delete",
+        "DELETE",
+        "/youtube/v3/liveBroadcasts",
+        params,
+        None,
+    )
 }
 
 fn run_google_youtube_live_broadcast_bind(
@@ -40596,7 +45170,8 @@ fn run_google_youtube_live_broadcast_bind(
     params: Vec<String>,
 ) -> Result<()> {
     let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
-    let stream_id = stream_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let stream_id =
+        stream_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
     let (Some(id), Some(stream_id)) = (id, stream_id) else {
         anyhow::bail!("live broadcast bind requires --id <broadcast-id> --stream-id <stream-id>");
     };
@@ -40604,7 +45179,14 @@ fn run_google_youtube_live_broadcast_bind(
     params.insert("id".to_owned(), id);
     params.insert("streamId".to_owned(), stream_id);
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live broadcast bind", "POST", "/youtube/v3/liveBroadcasts/bind", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "live broadcast bind",
+        "POST",
+        "/youtube/v3/liveBroadcasts/bind",
+        params,
+        None,
+    )
 }
 
 fn run_google_youtube_live_broadcast_transition(
@@ -40622,7 +45204,14 @@ fn run_google_youtube_live_broadcast_transition(
     params.insert("id".to_owned(), id);
     params.insert("broadcastStatus".to_owned(), status.trim().to_owned());
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live broadcast transition", "POST", "/youtube/v3/liveBroadcasts/transition", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "live broadcast transition",
+        "POST",
+        "/youtube/v3/liveBroadcasts/transition",
+        params,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -40653,9 +45242,22 @@ fn run_google_youtube_live_stream_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "live stream list")?;
     let mut params = parse_google_youtube_params(params)?;
@@ -40695,7 +45297,14 @@ fn run_google_youtube_live_stream_create(
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live stream create", "POST", "/youtube/v3/liveStreams", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "live stream create",
+        "POST",
+        "/youtube/v3/liveStreams",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_live_stream_update(
@@ -40710,7 +45319,14 @@ fn run_google_youtube_live_stream_update(
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live stream update", "PUT", "/youtube/v3/liveStreams", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "live stream update",
+        "PUT",
+        "/youtube/v3/liveStreams",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_live_stream_delete(
@@ -40724,7 +45340,14 @@ fn run_google_youtube_live_stream_delete(
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), id);
-    run_google_youtube_oauth_request(command, "live stream delete", "DELETE", "/youtube/v3/liveStreams", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "live stream delete",
+        "DELETE",
+        "/youtube/v3/liveStreams",
+        params,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -40754,12 +45377,26 @@ fn run_google_youtube_live_chat_list(
     raw: bool,
 ) -> Result<()> {
     let runtime = load_google_youtube_runtime(
-        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
-        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
-        home, settings_file,
+        account,
+        environment,
+        auth_mode,
+        api_key,
+        base_url,
+        upload_base_url,
+        project_id,
+        language,
+        region,
+        client_id,
+        client_secret,
+        redirect_uri,
+        access_token,
+        refresh_token,
+        home,
+        settings_file,
     )?;
     require_google_youtube_oauth(&runtime, "live chat list")?;
-    let live_chat_id = live_chat_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let live_chat_id =
+        live_chat_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
     let Some(live_chat_id) = live_chat_id else {
         anyhow::bail!("live chat list requires --live-chat-id <id>");
     };
@@ -40794,14 +45431,13 @@ fn run_google_youtube_live_chat_create(
     let body = {
         let raw = parse_google_youtube_body(body)?;
         if raw.trim().is_empty() {
-            let live_chat_id = live_chat_id
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
-            let text = text
-                .map(|value| value.trim().to_owned())
-                .filter(|value| !value.is_empty());
+            let live_chat_id =
+                live_chat_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+            let text = text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let (Some(live_chat_id), Some(text)) = (live_chat_id, text) else {
-                anyhow::bail!("live chat create requires --live-chat-id <id> --text <message> or --body <json|@file>");
+                anyhow::bail!(
+                    "live chat create requires --live-chat-id <id> --text <message> or --body <json|@file>"
+                );
             };
             serde_json::to_string(&serde_json::json!({
                 "snippet": {
@@ -40818,7 +45454,14 @@ fn run_google_youtube_live_chat_create(
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
-    run_google_youtube_oauth_request(command, "live chat create", "POST", "/youtube/v3/liveChat/messages", params, Some(body))
+    run_google_youtube_oauth_request(
+        command,
+        "live chat create",
+        "POST",
+        "/youtube/v3/liveChat/messages",
+        params,
+        Some(body),
+    )
 }
 
 fn run_google_youtube_live_chat_delete(
@@ -40832,7 +45475,14 @@ fn run_google_youtube_live_chat_delete(
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), id);
-    run_google_youtube_oauth_request(command, "live chat delete", "DELETE", "/youtube/v3/liveChat/messages", params, None)
+    run_google_youtube_oauth_request(
+        command,
+        "live chat delete",
+        "DELETE",
+        "/youtube/v3/liveChat/messages",
+        params,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -40889,16 +45539,21 @@ fn run_google_youtube_search_list(
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
     params.insert("q".to_owned(), query.trim().to_owned());
-    if let Some(kind) = kind.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(kind) = kind.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         params.insert("type".to_owned(), kind);
     }
     if let Some(max_results) = max_results {
         params.insert("maxResults".to_owned(), max_results.to_string());
     }
-    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(page_token) =
+        page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         params.insert("pageToken".to_owned(), page_token);
     }
-    if let Some(order) = order.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(order) =
+        order.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         params.insert("order".to_owned(), order);
     }
     if let Some(channel_id) =
@@ -40923,8 +45578,12 @@ fn run_google_youtube_search_list(
         params.insert("regionCode".to_owned(), runtime.region_code.clone());
     }
     if all {
-        let payload =
-            execute_google_youtube_list_all(&runtime, "/youtube/v3/search".to_owned(), params, max_pages)?;
+        let payload = execute_google_youtube_list_all(
+            &runtime,
+            "/youtube/v3/search".to_owned(),
+            params,
+            max_pages,
+        )?;
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
     }
@@ -41184,9 +45843,10 @@ fn run_google_youtube_raw(
         settings_file,
     )?;
     let json_body = match json_body {
-        Some(value) if !value.trim().is_empty() => {
-            Some(serde_json::from_str::<Value>(&value).map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?)
-        }
+        Some(value) if !value.trim().is_empty() => Some(
+            serde_json::from_str::<Value>(&value)
+                .map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?,
+        ),
         _ => None,
     };
     let response = execute_youtube_api_request(
@@ -41411,11 +46071,12 @@ fn parse_google_places_headers(headers: Vec<String>) -> Result<BTreeMap<String, 
 }
 
 fn parse_google_places_json_object(raw: Option<String>, name: &str) -> Result<Option<Value>> {
-    let Some(raw) = raw.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) else {
+    let Some(raw) = raw.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    else {
         return Ok(None);
     };
-    let value: Value = serde_json::from_str(&raw)
-        .map_err(|err| anyhow::anyhow!("invalid {name} JSON: {err}"))?;
+    let value: Value =
+        serde_json::from_str(&raw).map_err(|err| anyhow::anyhow!("invalid {name} JSON: {err}"))?;
     if !value.is_object() {
         anyhow::bail!("{name} must be a JSON object");
     }
@@ -41423,11 +46084,11 @@ fn parse_google_places_json_object(raw: Option<String>, name: &str) -> Result<Op
 }
 
 fn parse_google_places_lat_lng(raw: &str) -> Result<Value> {
-    let (lat, lng) = raw
-        .split_once(',')
-        .ok_or_else(|| anyhow::anyhow!("expected lat,lng"))?;
-    let latitude: f64 = lat.trim().parse().map_err(|err| anyhow::anyhow!("invalid latitude: {err}"))?;
-    let longitude: f64 = lng.trim().parse().map_err(|err| anyhow::anyhow!("invalid longitude: {err}"))?;
+    let (lat, lng) = raw.split_once(',').ok_or_else(|| anyhow::anyhow!("expected lat,lng"))?;
+    let latitude: f64 =
+        lat.trim().parse().map_err(|err| anyhow::anyhow!("invalid latitude: {err}"))?;
+    let longitude: f64 =
+        lng.trim().parse().map_err(|err| anyhow::anyhow!("invalid longitude: {err}"))?;
     Ok(serde_json::json!({"latitude": latitude, "longitude": longitude}))
 }
 
@@ -41438,7 +46099,9 @@ fn resolve_google_places_field_mask(
     required: bool,
     allow_wildcard_mask: bool,
 ) -> Result<String> {
-    if let Some(mask) = field_mask.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(mask) =
+        field_mask.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         if mask == "*" && !allow_wildcard_mask {
             anyhow::bail!("wildcard field masks require --allow-wildcard-mask");
         }
@@ -41452,9 +46115,7 @@ fn resolve_google_places_field_mask(
         ("search-text", "" | "search-basic") | ("search-nearby", "" | "search-basic") => {
             "places.id,places.displayName.text,places.formattedAddress,nextPageToken"
         }
-        ("details", "" | "details-basic") => {
-            "id,displayName.text,formattedAddress,googleMapsUri"
-        }
+        ("details", "" | "details-basic") => "id,displayName.text,formattedAddress,googleMapsUri",
         _ if !preset.is_empty() => preset,
         _ if required => anyhow::bail!("field mask is required for google places {operation}"),
         _ => "",
@@ -41619,8 +46280,11 @@ fn run_google_places_autocomplete(
         home,
         settings_file,
     )?;
-    let mut body = serde_json::Map::from_iter([("input".to_owned(), Value::String(input.trim().to_owned()))]);
-    if let Some(session) = session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    let mut body =
+        serde_json::Map::from_iter([("input".to_owned(), Value::String(input.trim().to_owned()))]);
+    if let Some(session) =
+        session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         body.insert("sessionToken".to_owned(), Value::String(session));
     }
     if include_query_predictions {
@@ -41635,7 +46299,9 @@ fn run_google_places_autocomplete(
     if !runtime.region_code.trim().is_empty() {
         body.insert("regionCode".to_owned(), Value::String(runtime.region_code.clone()));
     }
-    if let Some(origin) = origin.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(origin) =
+        origin.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         body.insert("origin".to_owned(), parse_google_places_lat_lng(&origin)?);
     }
     if let Some(location_bias) = parse_google_places_json_object(location_bias, "location-bias")? {
@@ -41709,12 +46375,16 @@ fn run_google_places_search_text(
         home,
         settings_file,
     )?;
-    let mut body =
-        serde_json::Map::from_iter([("textQuery".to_owned(), Value::String(query.trim().to_owned()))]);
+    let mut body = serde_json::Map::from_iter([(
+        "textQuery".to_owned(),
+        Value::String(query.trim().to_owned()),
+    )]);
     if let Some(page_size) = page_size {
         body.insert("maxResultCount".to_owned(), Value::Number((page_size as u64).into()));
     }
-    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(page_token) =
+        page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         body.insert("pageToken".to_owned(), Value::String(page_token));
     }
     if let Some(included_type) =
@@ -41862,7 +46532,9 @@ fn run_google_places_search_nearby(
     if let Some(page_size) = page_size {
         body.insert("maxResultCount".to_owned(), Value::Number((page_size as u64).into()));
     }
-    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(page_token) =
+        page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         body.insert("pageToken".to_owned(), Value::String(page_token));
     }
     if open_now {
@@ -41951,7 +46623,9 @@ fn run_google_places_details(
     if !runtime.region_code.trim().is_empty() {
         params.insert("regionCode".to_owned(), runtime.region_code.clone());
     }
-    if let Some(session) = session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(session) =
+        session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         params.insert("sessionToken".to_owned(), session);
     }
     let response = execute_places_api_request(
@@ -42080,11 +46754,7 @@ fn run_google_places_photo_download(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
         OutputFormat::Text => {
-            println!(
-                "Downloaded photo to {} ({} bytes)",
-                output.display(),
-                response.bytes.len()
-            );
+            println!("Downloaded photo to {} ({} bytes)", output.display(), response.bytes.len());
         }
     }
     Ok(())
@@ -42224,9 +46894,10 @@ fn run_google_places_raw(
         settings_file,
     )?;
     let json_body = match json_body {
-        Some(value) if !value.trim().is_empty() => {
-            Some(serde_json::from_str::<Value>(&value).map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?)
-        }
+        Some(value) if !value.trim().is_empty() => Some(
+            serde_json::from_str::<Value>(&value)
+                .map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?,
+        ),
         _ => None,
     };
     let response = execute_places_api_request(
@@ -42271,7 +46942,9 @@ fn google_places_session_store_path(home: &std::path::Path) -> PathBuf {
     home.join(".si").join("google").join("places").join("sessions.json")
 }
 
-fn load_google_places_session_store(home: &std::path::Path) -> Result<GooglePlacesSessionStoreView> {
+fn load_google_places_session_store(
+    home: &std::path::Path,
+) -> Result<GooglePlacesSessionStoreView> {
     let path = google_places_session_store_path(home);
     if !path.exists() {
         return Ok(GooglePlacesSessionStoreView::default());
@@ -42309,14 +46982,7 @@ fn generate_google_places_session_token() -> Result<String> {
     buf[6] = (buf[6] & 0x0f) | 0x40;
     buf[8] = (buf[8] & 0x3f) | 0x80;
     let hex = buf.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
-    Ok(format!(
-        "{}-{}-{}-{}-{}",
-        &hex[..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..]
-    ))
+    Ok(format!("{}-{}-{}-{}-{}", &hex[..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..]))
 }
 
 fn google_places_now_rfc3339() -> String {
@@ -42353,8 +47019,9 @@ fn run_google_places_session_new(
 ) -> Result<()> {
     let (home, settings) = load_google_places_settings(home, settings_file)?;
     let mut store = load_google_places_session_store(&home)?;
-    let token =
-        token.filter(|value| !value.trim().is_empty()).unwrap_or(generate_google_places_session_token()?);
+    let token = token
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(generate_google_places_session_token()?);
     if store.sessions.contains_key(&token) {
         anyhow::bail!("session token already exists: {token}");
     }
@@ -42443,18 +47110,173 @@ fn run_google_places_session_list(
 
 fn google_places_type_catalog() -> BTreeMap<&'static str, Vec<&'static str>> {
     BTreeMap::from([
-        ("business", vec!["accounting", "atm", "bank", "city_hall", "courthouse", "embassy", "fire_station", "insurance_agency", "lawyer", "local_government_office", "moving_company", "post_office", "real_estate_agency", "storage", "travel_agency"]),
-        ("culture", vec!["art_gallery", "library", "museum", "performing_arts_theater", "tourist_attraction", "zoo"]),
+        (
+            "business",
+            vec![
+                "accounting",
+                "atm",
+                "bank",
+                "city_hall",
+                "courthouse",
+                "embassy",
+                "fire_station",
+                "insurance_agency",
+                "lawyer",
+                "local_government_office",
+                "moving_company",
+                "post_office",
+                "real_estate_agency",
+                "storage",
+                "travel_agency",
+            ],
+        ),
+        (
+            "culture",
+            vec![
+                "art_gallery",
+                "library",
+                "museum",
+                "performing_arts_theater",
+                "tourist_attraction",
+                "zoo",
+            ],
+        ),
         ("education", vec!["primary_school", "school", "secondary_school", "university"]),
-        ("food", vec!["bakery", "bar", "cafe", "coffee_shop", "fast_food_restaurant", "meal_delivery", "meal_takeaway", "restaurant", "sandwich_shop", "steak_house"]),
-        ("government", vec!["city_hall", "courthouse", "fire_station", "police", "post_office", "local_government_office"]),
-        ("health", vec!["dentist", "doctor", "drugstore", "hospital", "medical_lab", "pharmacy", "physiotherapist", "veterinary_care"]),
-        ("lodging", vec!["campground", "extended_stay_hotel", "hostel", "hotel", "lodging", "motel", "resort_hotel"]),
-        ("outdoor", vec!["amusement_park", "beach", "campground", "dog_park", "hiking_area", "national_park", "park", "playground", "state_park"]),
-        ("services", vec!["beauty_salon", "car_rental", "car_repair", "car_wash", "electrician", "florist", "funeral_home", "gym", "hair_care", "laundry", "locksmith", "painter", "pet_store", "plumber", "roofing_contractor", "spa"]),
-        ("shopping", vec!["book_store", "clothing_store", "convenience_store", "department_store", "electronics_store", "furniture_store", "grocery_store", "hardware_store", "home_goods_store", "jewelry_store", "liquor_store", "market", "shopping_mall", "store", "supermarket"]),
-        ("sports", vec!["athletic_field", "fitness_center", "golf_course", "gym", "ice_skating_rink", "sports_complex", "stadium", "swimming_pool"]),
-        ("transport", vec!["airport", "bus_station", "bus_stop", "electric_vehicle_charging_station", "gas_station", "light_rail_station", "parking", "subway_station", "taxi_stand", "train_station", "transit_station"]),
+        (
+            "food",
+            vec![
+                "bakery",
+                "bar",
+                "cafe",
+                "coffee_shop",
+                "fast_food_restaurant",
+                "meal_delivery",
+                "meal_takeaway",
+                "restaurant",
+                "sandwich_shop",
+                "steak_house",
+            ],
+        ),
+        (
+            "government",
+            vec![
+                "city_hall",
+                "courthouse",
+                "fire_station",
+                "police",
+                "post_office",
+                "local_government_office",
+            ],
+        ),
+        (
+            "health",
+            vec![
+                "dentist",
+                "doctor",
+                "drugstore",
+                "hospital",
+                "medical_lab",
+                "pharmacy",
+                "physiotherapist",
+                "veterinary_care",
+            ],
+        ),
+        (
+            "lodging",
+            vec![
+                "campground",
+                "extended_stay_hotel",
+                "hostel",
+                "hotel",
+                "lodging",
+                "motel",
+                "resort_hotel",
+            ],
+        ),
+        (
+            "outdoor",
+            vec![
+                "amusement_park",
+                "beach",
+                "campground",
+                "dog_park",
+                "hiking_area",
+                "national_park",
+                "park",
+                "playground",
+                "state_park",
+            ],
+        ),
+        (
+            "services",
+            vec![
+                "beauty_salon",
+                "car_rental",
+                "car_repair",
+                "car_wash",
+                "electrician",
+                "florist",
+                "funeral_home",
+                "gym",
+                "hair_care",
+                "laundry",
+                "locksmith",
+                "painter",
+                "pet_store",
+                "plumber",
+                "roofing_contractor",
+                "spa",
+            ],
+        ),
+        (
+            "shopping",
+            vec![
+                "book_store",
+                "clothing_store",
+                "convenience_store",
+                "department_store",
+                "electronics_store",
+                "furniture_store",
+                "grocery_store",
+                "hardware_store",
+                "home_goods_store",
+                "jewelry_store",
+                "liquor_store",
+                "market",
+                "shopping_mall",
+                "store",
+                "supermarket",
+            ],
+        ),
+        (
+            "sports",
+            vec![
+                "athletic_field",
+                "fitness_center",
+                "golf_course",
+                "gym",
+                "ice_skating_rink",
+                "sports_complex",
+                "stadium",
+                "swimming_pool",
+            ],
+        ),
+        (
+            "transport",
+            vec![
+                "airport",
+                "bus_station",
+                "bus_stop",
+                "electric_vehicle_charging_station",
+                "gas_station",
+                "light_rail_station",
+                "parking",
+                "subway_station",
+                "taxi_stand",
+                "train_station",
+                "transit_station",
+            ],
+        ),
     ])
 }
 
@@ -42598,7 +47420,8 @@ fn run_google_places_report_usage(
     let mut duration_count = 0i64;
     let mut status_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut top_endpoints: BTreeMap<String, usize> = BTreeMap::new();
-    let mut unique_request_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut unique_request_ids: std::collections::BTreeSet<String> =
+        std::collections::BTreeSet::new();
     if log_path.exists() {
         let file = std::fs::File::open(&log_path)?;
         let reader = std::io::BufReader::new(file);
@@ -42622,11 +47445,7 @@ fn run_google_places_report_usage(
                 continue;
             }
             if !account.is_empty()
-                && entry
-                    .get("ctx_account_alias")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .trim()
+                && entry.get("ctx_account_alias").and_then(Value::as_str).unwrap_or_default().trim()
                     != account
             {
                 continue;
@@ -42643,8 +47462,14 @@ fn run_google_places_report_usage(
                 continue;
             }
             let event = entry.get("event").and_then(Value::as_str).unwrap_or_default();
-            let method = entry.get("method").and_then(Value::as_str).unwrap_or_default().trim().to_uppercase();
-            let path = entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+            let method = entry
+                .get("method")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_uppercase();
+            let path =
+                entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
             let endpoint = format!("{method} {}", if path.is_empty() { "-" } else { &path });
             match event {
                 "request" => {
@@ -42689,7 +47514,12 @@ fn run_google_places_report_usage(
             .as_u64()
             .unwrap_or_default()
             .cmp(&left["count"].as_u64().unwrap_or_default())
-            .then_with(|| left["endpoint"].as_str().unwrap_or_default().cmp(right["endpoint"].as_str().unwrap_or_default()))
+            .then_with(|| {
+                left["endpoint"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .cmp(right["endpoint"].as_str().unwrap_or_default())
+            })
     });
     endpoints.truncate(10);
     let payload = serde_json::json!({
@@ -42732,7 +47562,9 @@ fn run_google_places_report_sessions(
         if !account.is_empty() && entry.account_alias.trim() != account {
             continue;
         }
-        let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(entry.created_at.trim()) else { continue };
+        let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(entry.created_at.trim()) else {
+            continue;
+        };
         let created_at = created_at.with_timezone(&chrono::Utc);
         if !in_google_report_range(created_at, &since, &until) {
             continue;
@@ -43210,11 +48042,7 @@ fn run_openai_codex_usage(
     json: bool,
     raw: bool,
 ) -> Result<()> {
-    let models = if models.is_empty() {
-        vec!["gpt-5-codex".to_owned()]
-    } else {
-        models
-    };
+    let models = if models.is_empty() { vec!["gpt-5-codex".to_owned()] } else { models };
     run_openai_usage(
         OpenAIUsageMetric::Completions,
         account,
@@ -43494,10 +48322,7 @@ fn run_openai_project_create(
             let mut payload = serde_json::Map::new();
             payload.insert("name".to_owned(), Value::String(name.trim().to_owned()));
             if let Some(geography) = geography.filter(|value| !value.trim().is_empty()) {
-                payload.insert(
-                    "geography".to_owned(),
-                    Value::String(geography.trim().to_owned()),
-                );
+                payload.insert("geography".to_owned(), Value::String(geography.trim().to_owned()));
             }
             Some(Value::Object(payload))
         } else {
@@ -43943,7 +48768,11 @@ fn run_openai_project_rate_limit_update(
         anyhow::bail!("rate limit id is required");
     }
     let mut payload_map = serde_json::Map::new();
-    insert_openai_limit_value(&mut payload_map, "max_requests_per_1_minute", max_requests_per_1_minute);
+    insert_openai_limit_value(
+        &mut payload_map,
+        "max_requests_per_1_minute",
+        max_requests_per_1_minute,
+    );
     insert_openai_limit_value(&mut payload_map, "max_requests_per_1_day", max_requests_per_1_day);
     insert_openai_limit_value(&mut payload_map, "max_tokens_per_1_minute", max_tokens_per_1_minute);
     insert_openai_limit_value(&mut payload_map, "max_images_per_1_minute", max_images_per_1_minute);
@@ -44043,9 +48872,9 @@ fn parse_openai_key_value_pairs(
 ) -> Result<Vec<(String, String)>> {
     let mut parsed = Vec::with_capacity(values.len());
     for value in values {
-        let (key, item) = value
-            .split_once('=')
-            .ok_or_else(|| anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")))?;
+        let (key, item) = value.split_once('=').ok_or_else(|| {
+            anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value"))
+        })?;
         let key = key.trim();
         if key.is_empty() {
             anyhow::bail!("invalid --{flag_name}: key must not be empty");
@@ -44062,9 +48891,7 @@ fn resolve_openai_raw_body(
 ) -> Result<Option<Vec<u8>>> {
     if let Some(raw_json) = json_body.filter(|value| !value.trim().is_empty()) {
         let payload: Value = serde_json::from_str(raw_json.trim()).map_err(anyhow::Error::msg)?;
-        return serde_json::to_vec(&payload)
-            .map(Some)
-            .map_err(anyhow::Error::msg);
+        return serde_json::to_vec(&payload).map(Some).map_err(anyhow::Error::msg);
     }
     let raw = if let Some(path) = body_file {
         std::fs::read_to_string(path)?
@@ -44072,11 +48899,7 @@ fn resolve_openai_raw_body(
         body.unwrap_or_default()
     };
     let raw = raw.trim().to_owned();
-    if raw.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(raw.into_bytes()))
-    }
+    if raw.is_empty() { Ok(None) } else { Ok(Some(raw.into_bytes())) }
 }
 
 fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool) -> Result<()> {
@@ -44319,7 +49142,10 @@ fn show_oci_doctor(
             auth_style: auth_value,
         },
         &OCIAPIRequest {
-            path: maybe_absolute_oci_identity_path(&Some(base_url_value), "/20160918/availabilityDomains"),
+            path: maybe_absolute_oci_identity_path(
+                &Some(base_url_value),
+                "/20160918/availabilityDomains",
+            ),
             params: std::collections::BTreeMap::from([(
                 "compartmentId".to_owned(),
                 auth_status.tenancy_ocid.clone(),
@@ -44442,7 +49268,8 @@ fn show_oci_oracular_tenancy(
 }
 
 fn show_oci_oracular_cloud_init(ssh_port: u16, format: OutputFormat) -> Result<()> {
-    let user_data_b64 = build_oci_oracular_cloud_init_user_data(ssh_port).map_err(anyhow::Error::msg)?;
+    let user_data_b64 =
+        build_oci_oracular_cloud_init_user_data(ssh_port).map_err(anyhow::Error::msg)?;
     let payload = OCIOracularCloudInitPayload { ssh_port, user_data_b64 };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
@@ -44696,7 +49523,10 @@ fn run_oci_identity_availability_domains_list(
         settings_file,
         OCIAPIRequest {
             path: maybe_absolute_oci_identity_path(&base_url, "/20160918/availabilityDomains"),
-            params: std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment_id)]),
+            params: std::collections::BTreeMap::from([(
+                "compartmentId".to_owned(),
+                compartment_id,
+            )]),
             service: OCIAPIService::Identity,
             ..OCIAPIRequest::default()
         },
@@ -45000,7 +49830,8 @@ fn run_oci_network_subnet_create(
 ) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
     let vcn_id = vcn_id.ok_or_else(|| anyhow::anyhow!("vcn id is required"))?;
-    let route_table_id = route_table_id.ok_or_else(|| anyhow::anyhow!("route table id is required"))?;
+    let route_table_id =
+        route_table_id.ok_or_else(|| anyhow::anyhow!("route table id is required"))?;
     let security_list_id =
         security_list_id.ok_or_else(|| anyhow::anyhow!("security list id is required"))?;
     let dhcp_options_id =
@@ -45247,7 +50078,8 @@ fn execute_stripe_request(
     settings_file: Option<PathBuf>,
     request: StripeAPIRequest,
 ) -> Result<StripeAPIResponse> {
-    let runtime = load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
+    let runtime =
+        load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
     execute_stripe_api_request(&runtime, &request).map_err(anyhow::Error::msg)
 }
 
@@ -45357,23 +50189,161 @@ struct StripeObjectSpec {
 fn resolve_stripe_object_spec(name: &str) -> Result<StripeObjectSpec> {
     let normalized = name.trim().to_ascii_lowercase().replace('-', "_");
     let spec = match normalized.as_str() {
-        "product" | "products" => StripeObjectSpec { name: "product", list_path: "/v1/products", resource_path: "/v1/products/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
-        "price" | "prices" => StripeObjectSpec { name: "price", list_path: "/v1/prices", resource_path: "/v1/prices/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: Some("Stripe prices are archived by updating `active=false`.") },
-        "coupon" | "coupons" => StripeObjectSpec { name: "coupon", list_path: "/v1/coupons", resource_path: "/v1/coupons/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
-        "promotion_code" | "promotion_codes" | "promotion-codes" => StripeObjectSpec { name: "promotion_code", list_path: "/v1/promotion_codes", resource_path: "/v1/promotion_codes/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "tax_rate" | "tax_rates" | "tax-rates" => StripeObjectSpec { name: "tax_rate", list_path: "/v1/tax_rates", resource_path: "/v1/tax_rates/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "shipping_rate" | "shipping_rates" | "shipping-rates" => StripeObjectSpec { name: "shipping_rate", list_path: "/v1/shipping_rates", resource_path: "/v1/shipping_rates/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "customer" | "customers" => StripeObjectSpec { name: "customer", list_path: "/v1/customers", resource_path: "/v1/customers/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
-        "payment_intent" | "payment_intents" | "payment-intents" => StripeObjectSpec { name: "payment_intent", list_path: "/v1/payment_intents", resource_path: "/v1/payment_intents/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "subscription" | "subscriptions" => StripeObjectSpec { name: "subscription", list_path: "/v1/subscriptions", resource_path: "/v1/subscriptions/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
-        "invoice" | "invoices" => StripeObjectSpec { name: "invoice", list_path: "/v1/invoices", resource_path: "/v1/invoices/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
-        "refund" | "refunds" => StripeObjectSpec { name: "refund", list_path: "/v1/refunds", resource_path: "/v1/refunds/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "charge" | "charges" => StripeObjectSpec { name: "charge", list_path: "/v1/charges", resource_path: "/v1/charges/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "account" | "accounts" => StripeObjectSpec { name: "account", list_path: "/v1/accounts", resource_path: "/v1/accounts/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "organization" | "organizations" => StripeObjectSpec { name: "organization", list_path: "/v1/organizations", resource_path: "/v1/organizations/%s", supports_create: false, supports_update: false, supports_delete: false, delete_hint: None },
-        "balance_transaction" | "balance_transactions" | "balance-transactions" => StripeObjectSpec { name: "balance_transaction", list_path: "/v1/balance_transactions", resource_path: "/v1/balance_transactions/%s", supports_create: false, supports_update: false, supports_delete: false, delete_hint: None },
-        "payout" | "payouts" => StripeObjectSpec { name: "payout", list_path: "/v1/payouts", resource_path: "/v1/payouts/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
-        "payment_method" | "payment_methods" | "payment-methods" => StripeObjectSpec { name: "payment_method", list_path: "/v1/payment_methods", resource_path: "/v1/payment_methods/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "product" | "products" => StripeObjectSpec {
+            name: "product",
+            list_path: "/v1/products",
+            resource_path: "/v1/products/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: true,
+            delete_hint: None,
+        },
+        "price" | "prices" => StripeObjectSpec {
+            name: "price",
+            list_path: "/v1/prices",
+            resource_path: "/v1/prices/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: Some("Stripe prices are archived by updating `active=false`."),
+        },
+        "coupon" | "coupons" => StripeObjectSpec {
+            name: "coupon",
+            list_path: "/v1/coupons",
+            resource_path: "/v1/coupons/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: true,
+            delete_hint: None,
+        },
+        "promotion_code" | "promotion_codes" | "promotion-codes" => StripeObjectSpec {
+            name: "promotion_code",
+            list_path: "/v1/promotion_codes",
+            resource_path: "/v1/promotion_codes/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "tax_rate" | "tax_rates" | "tax-rates" => StripeObjectSpec {
+            name: "tax_rate",
+            list_path: "/v1/tax_rates",
+            resource_path: "/v1/tax_rates/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "shipping_rate" | "shipping_rates" | "shipping-rates" => StripeObjectSpec {
+            name: "shipping_rate",
+            list_path: "/v1/shipping_rates",
+            resource_path: "/v1/shipping_rates/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "customer" | "customers" => StripeObjectSpec {
+            name: "customer",
+            list_path: "/v1/customers",
+            resource_path: "/v1/customers/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: true,
+            delete_hint: None,
+        },
+        "payment_intent" | "payment_intents" | "payment-intents" => StripeObjectSpec {
+            name: "payment_intent",
+            list_path: "/v1/payment_intents",
+            resource_path: "/v1/payment_intents/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "subscription" | "subscriptions" => StripeObjectSpec {
+            name: "subscription",
+            list_path: "/v1/subscriptions",
+            resource_path: "/v1/subscriptions/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: true,
+            delete_hint: None,
+        },
+        "invoice" | "invoices" => StripeObjectSpec {
+            name: "invoice",
+            list_path: "/v1/invoices",
+            resource_path: "/v1/invoices/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: true,
+            delete_hint: None,
+        },
+        "refund" | "refunds" => StripeObjectSpec {
+            name: "refund",
+            list_path: "/v1/refunds",
+            resource_path: "/v1/refunds/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "charge" | "charges" => StripeObjectSpec {
+            name: "charge",
+            list_path: "/v1/charges",
+            resource_path: "/v1/charges/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "account" | "accounts" => StripeObjectSpec {
+            name: "account",
+            list_path: "/v1/accounts",
+            resource_path: "/v1/accounts/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "organization" | "organizations" => StripeObjectSpec {
+            name: "organization",
+            list_path: "/v1/organizations",
+            resource_path: "/v1/organizations/%s",
+            supports_create: false,
+            supports_update: false,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "balance_transaction" | "balance_transactions" | "balance-transactions" => {
+            StripeObjectSpec {
+                name: "balance_transaction",
+                list_path: "/v1/balance_transactions",
+                resource_path: "/v1/balance_transactions/%s",
+                supports_create: false,
+                supports_update: false,
+                supports_delete: false,
+                delete_hint: None,
+            }
+        }
+        "payout" | "payouts" => StripeObjectSpec {
+            name: "payout",
+            list_path: "/v1/payouts",
+            resource_path: "/v1/payouts/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
+        "payment_method" | "payment_methods" | "payment-methods" => StripeObjectSpec {
+            name: "payment_method",
+            list_path: "/v1/payment_methods",
+            resource_path: "/v1/payment_methods/%s",
+            supports_create: true,
+            supports_update: true,
+            supports_delete: false,
+            delete_hint: None,
+        },
         _ => anyhow::bail!("unknown object {name:?}"),
     };
     Ok(spec)
@@ -45530,10 +50500,7 @@ fn stripe_sync_list_path(
         StripeSyncFamily::TaxRates => "/v1/tax_rates",
         StripeSyncFamily::ShippingRates => "/v1/shipping_rates",
     };
-    (
-        path,
-        std::collections::BTreeMap::from([(String::from("limit"), String::from("100"))]),
-    )
+    (path, std::collections::BTreeMap::from([(String::from("limit"), String::from("100"))]))
 }
 
 fn stripe_value_string(item: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
@@ -45557,11 +50524,8 @@ fn stripe_copy_string_fields(
     keys: &[&str],
 ) {
     for key in keys {
-        if let Some(value) = src
-            .get(*key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        if let Some(value) =
+            src.get(*key).and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty())
         {
             dst.insert((*key).to_owned(), Value::String(value.to_owned()));
         }
@@ -45616,11 +50580,8 @@ fn stripe_copy_string_field_mapped(
     key: &str,
     mappings: &std::collections::BTreeMap<String, String>,
 ) {
-    if let Some(value) = src
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(value) =
+        src.get(key).and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(mapped) = mappings.get(value).map(String::as_str).map(str::trim) {
             if !mapped.is_empty() {
@@ -45636,11 +50597,7 @@ fn stripe_copy_metadata_with_live_id(
     dst: &mut serde_json::Map<String, Value>,
     src: &serde_json::Map<String, Value>,
 ) {
-    let mut metadata = src
-        .get("metadata")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let mut metadata = src.get("metadata").and_then(Value::as_object).cloned().unwrap_or_default();
     if let Some(live_id) = stripe_value_string(src, "id") {
         metadata.insert("si_live_id".to_owned(), Value::String(live_id));
     }
@@ -45692,14 +50649,7 @@ fn stripe_payload_for_sync_family(
             stripe_copy_string_fields(
                 &mut out,
                 item,
-                &[
-                    "display_name",
-                    "description",
-                    "jurisdiction",
-                    "country",
-                    "state",
-                    "tax_type",
-                ],
+                &["display_name", "description", "jurisdiction", "country", "state", "tax_type"],
             );
             stripe_copy_bool_field(&mut out, item, "inclusive");
             stripe_copy_bool_field(&mut out, item, "active");
@@ -45768,11 +50718,8 @@ fn plan_stripe_sync_family(
             mappings.insert(live_id.clone(), sandbox_id.clone());
         }
         let expected = stripe_payload_for_sync_family(family, live_item, &mappings);
-        let current = stripe_payload_for_sync_family(
-            family,
-            matched,
-            &std::collections::BTreeMap::new(),
-        );
+        let current =
+            stripe_payload_for_sync_family(family, matched, &std::collections::BTreeMap::new());
         if expected != current {
             actions.push(StripeSyncAction {
                 family,
@@ -45851,9 +50798,7 @@ fn build_stripe_sync_plan(
         actions.extend(family_actions);
     }
     for action in &actions {
-        *summary
-            .entry(stripe_sync_action_name(action.action).to_owned())
-            .or_insert(0) += 1;
+        *summary.entry(stripe_sync_action_name(action.action).to_owned()).or_insert(0) += 1;
     }
     Ok((
         StripeSyncPlan {
@@ -45952,10 +50897,7 @@ fn apply_stripe_sync_action(
             let target = if !action.sandbox_id.trim().is_empty() {
                 action.sandbox_id.trim().to_owned()
             } else {
-                mappings
-                    .get(action.live_id.trim())
-                    .map(String::to_owned)
-                    .unwrap_or_default()
+                mappings.get(action.live_id.trim()).map(String::to_owned).unwrap_or_default()
             };
             if target.trim().is_empty() {
                 anyhow::bail!("missing sandbox id for update");
@@ -45998,11 +50940,8 @@ fn apply_stripe_sync_action(
 
 fn infer_stripe_object_label(item: &serde_json::Map<String, Value>) -> String {
     for key in ["name", "description", "email", "code", "nickname"] {
-        if let Some(value) = item
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        if let Some(value) =
+            item.get(key).and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty())
         {
             return value.to_owned();
         }
@@ -46035,22 +50974,18 @@ fn run_stripe_report(
     settings_file: Option<PathBuf>,
     json: bool,
 ) -> Result<()> {
-    let runtime = load_stripe_runtime(
-        account,
-        environment,
-        api_key,
-        base_url,
-        home,
-        settings_file,
-    )?;
+    let runtime =
+        load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
     let from = parse_stripe_report_time(from)?;
     let to = parse_stripe_report_time(to)?;
     let report = match preset {
         StripeReportPreset::RevenueSummary => {
-            let mut params = std::collections::BTreeMap::from([("type".to_owned(), "charge".to_owned())]);
+            let mut params =
+                std::collections::BTreeMap::from([("type".to_owned(), "charge".to_owned())]);
             add_stripe_created_range(&mut params, from, to);
-            let items = list_all_stripe_objects(&runtime, "/v1/balance_transactions", &params, limit)
-                .map_err(anyhow::Error::msg)?;
+            let items =
+                list_all_stripe_objects(&runtime, "/v1/balance_transactions", &params, limit)
+                    .map_err(anyhow::Error::msg)?;
             let mut amount = 0i64;
             let mut fee = 0i64;
             let mut currency = String::new();
@@ -46094,7 +51029,9 @@ fn run_stripe_report(
                     .unwrap_or("unknown")
                     .trim()
                     .to_owned();
-                *counts.entry(if status.is_empty() { "unknown".to_owned() } else { status }).or_insert(0usize) += 1;
+                *counts
+                    .entry(if status.is_empty() { "unknown".to_owned() } else { status })
+                    .or_insert(0usize) += 1;
             }
             serde_json::json!({
                 "total": items.len(),
@@ -46125,11 +51062,7 @@ fn run_stripe_report(
                 }
             }
             let total = items.len();
-            let churn_pct = if total == 0 {
-                0.0
-            } else {
-                (canceled as f64 / total as f64) * 100.0
-            };
+            let churn_pct = if total == 0 { 0.0 } else { (canceled as f64 / total as f64) * 100.0 };
             serde_json::json!({
                 "total": total,
                 "canceled": canceled,
@@ -46202,9 +51135,11 @@ fn run_stripe_object_list(
     raw: bool,
 ) -> Result<()> {
     let spec = resolve_stripe_object_spec(&object)?;
-    let runtime = load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
-    let items = list_all_stripe_objects(&runtime, spec.list_path, &parse_stripe_key_values(params), limit)
-        .map_err(anyhow::Error::msg)?;
+    let runtime =
+        load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
+    let items =
+        list_all_stripe_objects(&runtime, spec.list_path, &parse_stripe_key_values(params), limit)
+            .map_err(anyhow::Error::msg)?;
     if json {
         println!(
             "{}",
@@ -46414,16 +51349,8 @@ fn run_stripe_sync_plan(
                 "  {} {} live={} sandbox={} {}",
                 stripe_sync_family_name(action.family),
                 stripe_sync_action_name(action.action),
-                if action.live_id.is_empty() {
-                    "-"
-                } else {
-                    action.live_id.as_str()
-                },
-                if action.sandbox_id.is_empty() {
-                    "-"
-                } else {
-                    action.sandbox_id.as_str()
-                },
+                if action.live_id.is_empty() { "-" } else { action.live_id.as_str() },
+                if action.sandbox_id.is_empty() { "-" } else { action.sandbox_id.as_str() },
                 action.reason
             );
         }
@@ -46500,10 +51427,7 @@ fn run_stripe_sync_apply(
     } else if dry_run {
         println!("dry-run complete: skipped={}", result.skipped);
     } else {
-        println!(
-            "sync apply complete: applied={} skipped={}",
-            result.applied, result.skipped
-        );
+        println!("sync apply complete: applied={} skipped={}", result.applied, result.skipped);
     }
 
     if result.failures > 0 {
@@ -46586,7 +51510,11 @@ fn resolve_cloudflare_path_template(path: &str, runtime: &CloudflareAuthRuntime)
     Ok(resolved)
 }
 
-fn print_cloudflare_api_response(response: &CloudflareAPIResponse, json: bool, raw: bool) -> Result<()> {
+fn print_cloudflare_api_response(
+    response: &CloudflareAPIResponse,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(response)?);
     } else {
@@ -46696,13 +51624,18 @@ fn run_cloudflare_report(
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     let (label, path) = match preset {
-        CloudflareReportPreset::TrafficSummary => ("traffic-summary", "/zones/{zone_id}/analytics/dashboard"),
-        CloudflareReportPreset::SecurityEvents => ("security-events", "/zones/{zone_id}/firewall/events"),
-        CloudflareReportPreset::CacheSummary => ("cache-summary", "/zones/{zone_id}/analytics/colos"),
-        CloudflareReportPreset::BillingSummary => (
-            "billing-summary",
-            "/accounts/{account_id}/billing/subscriptions",
-        ),
+        CloudflareReportPreset::TrafficSummary => {
+            ("traffic-summary", "/zones/{zone_id}/analytics/dashboard")
+        }
+        CloudflareReportPreset::SecurityEvents => {
+            ("security-events", "/zones/{zone_id}/firewall/events")
+        }
+        CloudflareReportPreset::CacheSummary => {
+            ("cache-summary", "/zones/{zone_id}/analytics/colos")
+        }
+        CloudflareReportPreset::BillingSummary => {
+            ("billing-summary", "/accounts/{account_id}/billing/subscriptions")
+        }
     };
     let mut params = std::collections::BTreeMap::new();
     if let Some(value) = from.filter(|value| !value.trim().is_empty()) {
@@ -46761,25 +51694,96 @@ struct CloudflareSmokeCheckView {
 }
 
 fn cloudflare_smoke_specs(runtime: &CloudflareAuthRuntime) -> Vec<CloudflareSmokeSpec> {
-    let mut zones_params = std::collections::BTreeMap::from([("per_page".to_owned(), "1".to_owned())]);
+    let mut zones_params =
+        std::collections::BTreeMap::from([("per_page".to_owned(), "1".to_owned())]);
     if !runtime.account_id.trim().is_empty() {
         zones_params.insert("account.id".to_owned(), runtime.account_id.trim().to_owned());
     }
     vec![
-        CloudflareSmokeSpec { name: "token_verify", path: "/user/tokens/verify", requires_account: false, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "accounts", path: "/accounts", requires_account: false, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "zones_by_account", path: "/zones", requires_account: false, params: zones_params },
-        CloudflareSmokeSpec { name: "account_details", path: "/accounts/{account_id}", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "workers_scripts", path: "/accounts/{account_id}/workers/scripts", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "pages_projects", path: "/accounts/{account_id}/pages/projects", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "r2_buckets", path: "/accounts/{account_id}/r2/buckets", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "d1_databases", path: "/accounts/{account_id}/d1/database", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "kv_namespaces", path: "/accounts/{account_id}/storage/kv/namespaces", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "queues", path: "/accounts/{account_id}/queues", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "access_apps", path: "/accounts/{account_id}/access/apps", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "tunnels", path: "/accounts/{account_id}/cfd_tunnel", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "lb_pools", path: "/accounts/{account_id}/load_balancers/pools", requires_account: true, params: std::collections::BTreeMap::new() },
-        CloudflareSmokeSpec { name: "email_addresses", path: "/accounts/{account_id}/email/routing/addresses", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec {
+            name: "token_verify",
+            path: "/user/tokens/verify",
+            requires_account: false,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "accounts",
+            path: "/accounts",
+            requires_account: false,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "zones_by_account",
+            path: "/zones",
+            requires_account: false,
+            params: zones_params,
+        },
+        CloudflareSmokeSpec {
+            name: "account_details",
+            path: "/accounts/{account_id}",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "workers_scripts",
+            path: "/accounts/{account_id}/workers/scripts",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "pages_projects",
+            path: "/accounts/{account_id}/pages/projects",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "r2_buckets",
+            path: "/accounts/{account_id}/r2/buckets",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "d1_databases",
+            path: "/accounts/{account_id}/d1/database",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "kv_namespaces",
+            path: "/accounts/{account_id}/storage/kv/namespaces",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "queues",
+            path: "/accounts/{account_id}/queues",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "access_apps",
+            path: "/accounts/{account_id}/access/apps",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "tunnels",
+            path: "/accounts/{account_id}/cfd_tunnel",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "lb_pools",
+            path: "/accounts/{account_id}/load_balancers/pools",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
+        CloudflareSmokeSpec {
+            name: "email_addresses",
+            path: "/accounts/{account_id}/email/routing/addresses",
+            requires_account: true,
+            params: std::collections::BTreeMap::new(),
+        },
     ]
 }
 
@@ -46867,7 +51871,8 @@ fn run_cloudflare_smoke(
                     skipped: false,
                     status_code: Some(response.status_code),
                     error_code: None,
-                    request_id: (!response.request_id.trim().is_empty()).then_some(response.request_id.clone()),
+                    request_id: (!response.request_id.trim().is_empty())
+                        .then_some(response.request_id.clone()),
                     detail: Some(summarize_cloudflare_response(&response)),
                 });
             }
@@ -46914,7 +51919,11 @@ fn run_cloudflare_smoke(
         println!("Cloudflare smoke: {status}");
         println!(
             "Context: account={} account_id={} env={} zone_id={} zone_name={} base={}",
-            if runtime.account_alias.trim().is_empty() { "(default)" } else { runtime.account_alias.trim() },
+            if runtime.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                runtime.account_alias.trim()
+            },
             if runtime.account_id.trim().is_empty() { "-" } else { runtime.account_id.trim() },
             runtime.environment.trim(),
             if runtime.zone_id.trim().is_empty() { "-" } else { runtime.zone_id.trim() },
@@ -46923,14 +51932,17 @@ fn run_cloudflare_smoke(
         );
         println!("Summary: pass={pass_count} fail={fail_count} skip={skip_count}");
         for result in results {
-            let status = if result.skipped { "SKIP" } else if result.ok { "PASS" } else { "FAIL" };
+            let status = if result.skipped {
+                "SKIP"
+            } else if result.ok {
+                "PASS"
+            } else {
+                "FAIL"
+            };
             println!(
                 "{status} {} {} {}",
                 result.name,
-                result
-                    .status_code
-                    .map(|value| value.to_string())
-                    .unwrap_or_else(|| "-".to_owned()),
+                result.status_code.map(|value| value.to_string()).unwrap_or_else(|| "-".to_owned()),
                 result.detail.unwrap_or_else(|| "-".to_owned())
             );
         }
@@ -47003,10 +52015,7 @@ fn parse_cloudflare_body_values(values: Vec<String>) -> Value {
 fn summarize_cloudflare_item(item: &serde_json::Map<String, Value>) -> String {
     let mut id = "-".to_owned();
     for key in ["id", "zone_id", "name", "tag"] {
-        let value = item
-            .get(key)
-            .map(stringify_cloudflare_value)
-            .unwrap_or_else(|| "-".to_owned());
+        let value = item.get(key).map(stringify_cloudflare_value).unwrap_or_else(|| "-".to_owned());
         if value.trim() != "-" && !value.trim().is_empty() {
             id = value;
             break;
@@ -47014,10 +52023,7 @@ fn summarize_cloudflare_item(item: &serde_json::Map<String, Value>) -> String {
     }
     let mut title = "-".to_owned();
     for key in ["name", "hostname", "email", "status", "content", "value", "type"] {
-        let value = item
-            .get(key)
-            .map(stringify_cloudflare_value)
-            .unwrap_or_else(|| "-".to_owned());
+        let value = item.get(key).map(stringify_cloudflare_value).unwrap_or_else(|| "-".to_owned());
         if value.trim() != "-" && !value.trim().is_empty() {
             title = value;
             break;
@@ -47123,7 +52129,14 @@ const fn cloudflare_email_address_spec() -> CloudflareResourceSpec {
 }
 
 const fn cloudflare_token_spec() -> CloudflareResourceSpec {
-    cloudflare_resource_spec("token", "/user/tokens", "/user/tokens/{id}", "POST", "PATCH", "DELETE")
+    cloudflare_resource_spec(
+        "token",
+        "/user/tokens",
+        "/user/tokens/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
 }
 
 const fn cloudflare_ruleset_spec() -> CloudflareResourceSpec {
@@ -47632,8 +52645,21 @@ fn run_cloudflare_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_list(
-            spec, max_pages, limit, json, raw, params, account, env, zone_id, zone, api_token,
-            base_url, account_id, home, settings_file,
+            spec,
+            max_pages,
+            limit,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
         CloudflareResourceCommand::Get {
             id,
@@ -47650,8 +52676,20 @@ fn run_cloudflare_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_get(
-            spec, id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            id,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
         CloudflareResourceCommand::Create {
             json,
@@ -47668,8 +52706,20 @@ fn run_cloudflare_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_create(
-            spec, json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            json,
+            raw,
+            body,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
         CloudflareResourceCommand::Update {
             id,
@@ -47687,8 +52737,21 @@ fn run_cloudflare_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_update(
-            spec, id, json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            id,
+            json,
+            raw,
+            body,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
         CloudflareResourceCommand::Delete {
             id,
@@ -47706,8 +52769,21 @@ fn run_cloudflare_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_delete(
-            spec, id, json, raw, force, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            id,
+            json,
+            raw,
+            force,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
     }
 }
@@ -47764,8 +52840,20 @@ fn run_cloudflare_read_update_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_get(
-            spec, id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            id,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
         CloudflareReadUpdateResourceCommand::Update {
             id,
@@ -47783,8 +52871,21 @@ fn run_cloudflare_read_update_resource_command(
             home,
             settings_file,
         } => run_cloudflare_resource_update(
-            spec, id, json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
-            account_id, home, settings_file,
+            spec,
+            id,
+            json,
+            raw,
+            body,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
         ),
     }
 }
@@ -48096,7 +53197,16 @@ fn run_cloudflare_token_verify(
             path: "/user/tokens/verify".to_owned(),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48121,7 +53231,16 @@ fn run_cloudflare_token_permission_groups(
             path: "/user/tokens/permission_groups".to_owned(),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48147,10 +53266,21 @@ fn run_cloudflare_workers_secret_set(
         CloudflareAPIRequest {
             method: "PUT".to_owned(),
             path: format!("/accounts/{{account_id}}/workers/scripts/{}/secrets", script.trim()),
-            json_body: Some(serde_json::json!({ "name": name.trim(), "text": text, "type": "secret_text" })),
+            json_body: Some(
+                serde_json::json!({ "name": name.trim(), "text": text, "type": "secret_text" }),
+            ),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48178,10 +53308,23 @@ fn run_cloudflare_workers_secret_delete(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "DELETE".to_owned(),
-            path: format!("/accounts/{{account_id}}/workers/scripts/{}/secrets/{}", script.trim(), name.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/workers/scripts/{}/secrets/{}",
+                script.trim(),
+                name.trim()
+            ),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48207,7 +53350,16 @@ fn run_cloudflare_pages_deploy_list(
             path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments", project.trim()),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48245,7 +53397,16 @@ fn run_cloudflare_pages_deploy_trigger(
     };
     run_cloudflare_custom_request(
         request,
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48273,10 +53434,23 @@ fn run_cloudflare_pages_deploy_rollback(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "POST".to_owned(),
-            path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments/{}/rollback", project.trim(), deployment.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/pages/projects/{}/deployments/{}/rollback",
+                project.trim(),
+                deployment.trim()
+            ),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48304,7 +53478,16 @@ fn run_cloudflare_pages_domain_list(
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48329,11 +53512,24 @@ fn run_cloudflare_pages_domain_get(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "GET".to_owned(),
-            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains/{}", project.trim(), domain.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/pages/projects/{}/domains/{}",
+                project.trim(),
+                domain.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48380,7 +53576,16 @@ fn run_cloudflare_pages_domain_create(
     };
     run_cloudflare_custom_request(
         request,
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48408,10 +53613,23 @@ fn run_cloudflare_pages_domain_delete(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "DELETE".to_owned(),
-            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains/{}", project.trim(), domain.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/pages/projects/{}/domains/{}",
+                project.trim(),
+                domain.trim()
+            ),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48439,7 +53657,16 @@ fn run_cloudflare_r2_object_list(
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48464,11 +53691,24 @@ fn run_cloudflare_r2_object_get(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "GET".to_owned(),
-            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/r2/buckets/{}/objects/{}",
+                bucket.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48494,12 +53734,25 @@ fn run_cloudflare_r2_object_put(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "PUT".to_owned(),
-            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/r2/buckets/{}/objects/{}",
+                bucket.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             raw_body: body,
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48528,11 +53781,24 @@ fn run_cloudflare_r2_object_delete(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "DELETE".to_owned(),
-            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/r2/buckets/{}/objects/{}",
+                bucket.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48560,7 +53826,16 @@ fn run_cloudflare_d1_query(
             json_body: Some(serde_json::json!({ "sql": sql.trim() })),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48586,7 +53861,16 @@ fn run_cloudflare_d1_migration_list(
             path: format!("/accounts/{{account_id}}/d1/database/{}/migrations", db.trim()),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48628,7 +53912,16 @@ fn run_cloudflare_d1_migration_apply(
     };
     run_cloudflare_custom_request(
         request,
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48652,11 +53945,23 @@ fn run_cloudflare_kv_key_list(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "GET".to_owned(),
-            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/keys", namespace.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/storage/kv/namespaces/{}/keys",
+                namespace.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48681,11 +53986,24 @@ fn run_cloudflare_kv_key_get(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "GET".to_owned(),
-            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}",
+                namespace.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48712,12 +54030,25 @@ fn run_cloudflare_kv_key_put(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "PUT".to_owned(),
-            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}",
+                namespace.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             raw_body: body.unwrap_or(value),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48742,12 +54073,24 @@ fn run_cloudflare_kv_key_bulk(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "PUT".to_owned(),
-            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/bulk", namespace.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/storage/kv/namespaces/{}/bulk",
+                namespace.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             raw_body: body,
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48776,11 +54119,24 @@ fn run_cloudflare_kv_key_delete(
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "DELETE".to_owned(),
-            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            path: format!(
+                "/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}",
+                namespace.trim(),
+                key.trim()
+            ),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48806,7 +54162,16 @@ fn run_cloudflare_tunnel_token(
             path: format!("/accounts/{{account_id}}/cfd_tunnel/{}/token", tunnel.trim()),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48832,7 +54197,16 @@ fn run_cloudflare_tls_setting_get(
             path: format!("/zones/{{zone_id}}/settings/{}", setting.trim()),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48860,7 +54234,16 @@ fn run_cloudflare_tls_setting_set(
             json_body: Some(serde_json::json!({ "value": value.trim() })),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48887,7 +54270,16 @@ fn run_cloudflare_email_settings_get(
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48919,7 +54311,16 @@ fn run_cloudflare_email_settings_toggle(
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48946,7 +54347,16 @@ fn run_cloudflare_origin_cert_list(
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -48984,7 +54394,16 @@ fn run_cloudflare_origin_cert_create(
     };
     run_cloudflare_custom_request(
         request,
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -49014,7 +54433,16 @@ fn run_cloudflare_origin_cert_revoke(
             path: format!("/certificates/{}", id.trim()),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -49052,10 +54480,16 @@ fn run_cloudflare_cache_purge(
         body.insert("tags".to_owned(), Value::Array(tags.into_iter().map(Value::String).collect()));
     }
     if !hosts.is_empty() {
-        body.insert("hosts".to_owned(), Value::Array(hosts.into_iter().map(Value::String).collect()));
+        body.insert(
+            "hosts".to_owned(),
+            Value::Array(hosts.into_iter().map(Value::String).collect()),
+        );
     }
     if !prefixes.is_empty() {
-        body.insert("prefixes".to_owned(), Value::Array(prefixes.into_iter().map(Value::String).collect()));
+        body.insert(
+            "prefixes".to_owned(),
+            Value::Array(prefixes.into_iter().map(Value::String).collect()),
+        );
     }
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
@@ -49064,7 +54498,16 @@ fn run_cloudflare_cache_purge(
             json_body: Some(Value::Object(body)),
             ..CloudflareAPIRequest::default()
         },
-        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
         settings_file,
     )
 }
@@ -49085,8 +54528,18 @@ fn run_cloudflare_cache_setting_get(
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     run_cloudflare_tls_setting_get(
-        setting, json, raw, account, environment, zone_id, zone, api_token, base_url,
-        account_id, home, settings_file,
+        setting,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
     )
 }
 
@@ -49107,8 +54560,19 @@ fn run_cloudflare_cache_setting_set(
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     run_cloudflare_tls_setting_set(
-        setting, value, json, raw, account, environment, zone_id, zone, api_token, base_url,
-        account_id, home, settings_file,
+        setting,
+        value,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
     )
 }
 
@@ -49116,9 +54580,9 @@ fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {
     match value.trim().to_lowercase().as_str() {
         "" | "core" => Ok(OCIAPIService::Core),
         "identity" | "iam" => Ok(OCIAPIService::Identity),
-        other => Err(anyhow::anyhow!(
-            "unsupported oci raw service {other:?} (expected core|identity)"
-        )),
+        other => {
+            Err(anyhow::anyhow!("unsupported oci raw service {other:?} (expected core|identity)"))
+        }
     }
 }
 
@@ -49446,17 +54910,11 @@ fn workos_organization_spec() -> WorkOSResourceSpec {
 }
 
 fn workos_user_spec() -> WorkOSResourceSpec {
-    WorkOSResourceSpec {
-        collection_path: "/user_management/users",
-        uses_organization_id: true,
-    }
+    WorkOSResourceSpec { collection_path: "/user_management/users", uses_organization_id: true }
 }
 
 fn workos_membership_spec() -> WorkOSResourceSpec {
-    WorkOSResourceSpec {
-        collection_path: "/organization_memberships",
-        uses_organization_id: true,
-    }
+    WorkOSResourceSpec { collection_path: "/organization_memberships", uses_organization_id: true }
 }
 
 fn workos_invitation_spec() -> WorkOSResourceSpec {
@@ -49522,14 +54980,17 @@ fn parse_workos_pairs(values: Vec<String>) -> Result<std::collections::BTreeMap<
     Ok(out)
 }
 
-fn parse_workos_json_value(value: Option<String>, params: Vec<String>, empty_error: &str) -> Result<Value> {
+fn parse_workos_json_value(
+    value: Option<String>,
+    params: Vec<String>,
+    empty_error: &str,
+) -> Result<Value> {
     if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
         return serde_json::from_str(value.trim()).map_err(anyhow::Error::msg);
     }
     let mut map = serde_json::Map::new();
     for (key, value) in parse_workos_pairs(params)? {
-        let parsed =
-            serde_json::from_str(value.trim()).unwrap_or_else(|_| Value::String(value));
+        let parsed = serde_json::from_str(value.trim()).unwrap_or_else(|_| Value::String(value));
         map.insert(key, parsed);
     }
     if map.is_empty() {
@@ -49560,9 +55021,9 @@ fn inject_workos_organization_body(
         return;
     }
     if let Some(object) = body.as_object_mut() {
-        object.entry("organization_id".to_owned()).or_insert_with(|| {
-            Value::String(runtime.organization_id.clone())
-        });
+        object
+            .entry("organization_id".to_owned())
+            .or_insert_with(|| Value::String(runtime.organization_id.clone()));
     }
 }
 
@@ -49592,7 +55053,10 @@ fn print_workos_api_response(response: WorkOSAPIResponse, json: bool, raw: bool)
     Ok(())
 }
 
-fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResourceCommand) -> Result<()> {
+fn run_workos_resource_command(
+    spec: WorkOSResourceSpec,
+    command: WorkOSResourceCommand,
+) -> Result<()> {
     match command {
         WorkOSResourceCommand::List {
             limit,
@@ -49608,8 +55072,19 @@ fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResource
             json,
             raw,
         } => run_workos_resource_list(
-            spec, limit, params, account, env, api_key, client_id, org_id, base_url, home,
-            settings_file, json, raw,
+            spec,
+            limit,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
         ),
         WorkOSResourceCommand::Get {
             id,
@@ -49625,8 +55100,19 @@ fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResource
             json,
             raw,
         } => run_workos_resource_get(
-            spec, id, params, account, env, api_key, client_id, org_id, base_url, home,
-            settings_file, json, raw,
+            spec,
+            id,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
         ),
         WorkOSResourceCommand::Create {
             json_body,
@@ -49642,8 +55128,19 @@ fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResource
             json,
             raw,
         } => run_workos_resource_create(
-            spec, json_body, params, account, env, api_key, client_id, org_id, base_url, home,
-            settings_file, json, raw,
+            spec,
+            json_body,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
         ),
         WorkOSResourceCommand::Update {
             id,
@@ -49660,8 +55157,20 @@ fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResource
             json,
             raw,
         } => run_workos_resource_update(
-            spec, id, json_body, params, account, env, api_key, client_id, org_id, base_url,
-            home, settings_file, json, raw,
+            spec,
+            id,
+            json_body,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
         ),
         WorkOSResourceCommand::Delete {
             id,
@@ -49677,8 +55186,19 @@ fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResource
             json,
             raw,
         } => run_workos_resource_delete(
-            spec, id, force, account, env, api_key, client_id, org_id, base_url, home,
-            settings_file, json, raw,
+            spec,
+            id,
+            force,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
         ),
     }
 }
@@ -49710,7 +55230,10 @@ fn run_workos_doctor(
                 &WorkOSAPIRequest {
                     method: "GET".to_owned(),
                     path: "/organizations".to_owned(),
-                    params: std::collections::BTreeMap::from([("limit".to_owned(), "1".to_owned())]),
+                    params: std::collections::BTreeMap::from([(
+                        "limit".to_owned(),
+                        "1".to_owned(),
+                    )]),
                     ..WorkOSAPIRequest::default()
                 },
             );
@@ -49735,7 +55258,9 @@ fn run_workos_doctor(
     )?;
     let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
     match format {
-        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(&payload)?)
+        }
     }
     if !ok {
         anyhow::bail!("workos doctor failed");
@@ -49993,7 +55518,11 @@ fn run_workos_invitation_revoke(
                 &runtime,
                 &WorkOSAPIRequest {
                     method: "POST".to_owned(),
-                    path: format!("{}/{}/revoke", workos_invitation_spec().collection_path, invitation_id.trim()),
+                    path: format!(
+                        "{}/{}/revoke",
+                        workos_invitation_spec().collection_path,
+                        invitation_id.trim()
+                    ),
                     json_body: Some(serde_json::json!({})),
                     ..WorkOSAPIRequest::default()
                 },
@@ -50077,7 +55606,11 @@ fn run_workos_directory_sync(
                 &runtime,
                 &WorkOSAPIRequest {
                     method: "POST".to_owned(),
-                    path: format!("{}/{}/sync", workos_directory_spec().collection_path, directory_id.trim()),
+                    path: format!(
+                        "{}/{}/sync",
+                        workos_directory_spec().collection_path,
+                        directory_id.trim()
+                    ),
                     json_body: Some(serde_json::json!({})),
                     ..WorkOSAPIRequest::default()
                 },
@@ -50257,7 +55790,9 @@ fn parse_github_owner_repo(repo_ref: &str, default_owner: &str) -> Result<(Strin
     }
     let owner = default_owner.trim();
     if owner.is_empty() {
-        return Err(anyhow::Error::msg("github owner is required when repo is not fully qualified"));
+        return Err(anyhow::Error::msg(
+            "github owner is required when repo is not fully qualified",
+        ));
     }
     Ok((owner.to_owned(), trimmed.to_owned()))
 }
@@ -50407,8 +55942,11 @@ fn read_github_git_credential_request(mut input: impl Read) -> Result<GitHubGitC
         host: payload.get("host").cloned().unwrap_or_default(),
         path: payload.get("path").cloned().unwrap_or_default(),
     };
-    if let Some(raw_url) = payload.get("url").map(String::as_str).filter(|value| !value.trim().is_empty()) {
-        let parsed = url::Url::parse(raw_url).map_err(|err| anyhow::Error::msg(format!("parse credential url: {err}")))?;
+    if let Some(raw_url) =
+        payload.get("url").map(String::as_str).filter(|value| !value.trim().is_empty())
+    {
+        let parsed = url::Url::parse(raw_url)
+            .map_err(|err| anyhow::Error::msg(format!("parse credential url: {err}")))?;
         if request.protocol.trim().is_empty() {
             request.protocol = parsed.scheme().trim().to_owned();
         }
@@ -50453,11 +55991,7 @@ fn git_owner_repo_from_credential_path(path: &str) -> (String, String) {
     }
     let mut parts = path.split('/');
     let owner = parts.next().unwrap_or_default().trim();
-    let repo = parts
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .trim_end_matches(".git");
+    let repo = parts.next().unwrap_or_default().trim().trim_end_matches(".git");
     if owner.is_empty() || repo.is_empty() {
         return (String::new(), String::new());
     }
@@ -50500,7 +56034,9 @@ fn parse_github_params(params: Vec<String>) -> Result<BTreeMap<String, String>> 
     Ok(out)
 }
 
-fn parse_github_body_params(params: Vec<String>) -> Result<serde_json::Map<String, serde_json::Value>> {
+fn parse_github_body_params(
+    params: Vec<String>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
     let mut out = serde_json::Map::new();
     for raw in params {
         let Some((key, value)) = raw.split_once('=') else {
@@ -50520,13 +56056,13 @@ fn parse_github_body_params(params: Vec<String>) -> Result<serde_json::Map<Strin
     Ok(out)
 }
 
-fn parse_github_graphql_vars(params: Vec<String>) -> Result<serde_json::Map<String, serde_json::Value>> {
+fn parse_github_graphql_vars(
+    params: Vec<String>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
     let mut out = serde_json::Map::new();
     for raw in params {
         let Some((key, value)) = raw.split_once('=') else {
-            return Err(anyhow::Error::msg(format!(
-                "invalid --var {raw:?} (expected key=value)"
-            )));
+            return Err(anyhow::Error::msg(format!("invalid --var {raw:?} (expected key=value)")));
         };
         let key = key.trim();
         if key.is_empty() {
@@ -50644,9 +56180,8 @@ fn run_github_release_list(
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let params = parse_github_params(params)?;
-    let response =
-        github_list_releases(&runtime, &repo_owner, &repo_name, &params, max_pages)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_list_releases(&runtime, &repo_owner, &repo_name, &params, max_pages)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -50745,10 +56280,7 @@ fn run_github_release_create(
         payload.insert("body".to_owned(), Value::String(notes_text));
     }
     if let Some(target) = target.filter(|value| !value.trim().is_empty()) {
-        payload.insert(
-            "target_commitish".to_owned(),
-            Value::String(target.trim().to_owned()),
-        );
+        payload.insert("target_commitish".to_owned(), Value::String(target.trim().to_owned()));
     }
     if draft {
         payload.insert("draft".to_owned(), Value::Bool(true));
@@ -50756,13 +56288,8 @@ fn run_github_release_create(
     if prerelease {
         payload.insert("prerelease".to_owned(), Value::Bool(true));
     }
-    let response = github_create_release(
-        &runtime,
-        &repo_owner,
-        &repo_name,
-        Value::Object(payload),
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response = github_create_release(&runtime, &repo_owner, &repo_name, Value::Object(payload))
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -50805,12 +56332,8 @@ fn run_github_release_upload(
         .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;
     let asset = asset.ok_or_else(|| anyhow::Error::msg("--asset is required"))?;
     let asset_bytes = std::fs::read(&asset)?;
-    let asset_name = asset
-        .file_name()
-        .and_then(|item| item.to_str())
-        .unwrap_or_default()
-        .trim()
-        .to_owned();
+    let asset_name =
+        asset.file_name().and_then(|item| item.to_str()).unwrap_or_default().trim().to_owned();
     if asset_name.is_empty() {
         return Err(anyhow::Error::msg("--asset is required"));
     }
@@ -50901,21 +56424,33 @@ fn run_github_secret_repo_set(
     json: bool,
     raw: bool,
 ) -> Result<()> {
-    let value = value.filter(|item| !item.trim().is_empty())
+    let value = value
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     github_set_secret(
         &runtime,
         &GitHubSecretScope::Repo { owner: repo_owner.clone(), repo: repo_name.clone() },
         &name,
         &value,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(
         &github_secret_created_response(serde_json::json!({
             "scope": "repo",
@@ -50950,17 +56485,28 @@ fn run_github_secret_repo_delete(
         return Err(anyhow::Error::msg("delete repo secret requires --force"));
     }
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     let response = github_delete_secret(
         &runtime,
         &GitHubSecretScope::Repo { owner: repo_owner, repo: repo_name },
         &name,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -50983,16 +56529,28 @@ fn run_github_secret_env_set(
     json: bool,
     raw: bool,
 ) -> Result<()> {
-    let value = value.filter(|item| !item.trim().is_empty())
+    let value = value
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
-    let environment = environment.filter(|item| !item.trim().is_empty())
+    let environment = environment
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("environment is required"))?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     github_set_secret(
         &runtime,
@@ -51003,7 +56561,8 @@ fn run_github_secret_env_set(
         },
         &name,
         &value,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(
         &github_secret_created_response(serde_json::json!({
             "scope": "env",
@@ -51040,19 +56599,31 @@ fn run_github_secret_env_delete(
         return Err(anyhow::Error::msg("delete environment secret requires --force"));
     }
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
-    let environment = environment.filter(|item| !item.trim().is_empty())
+    let environment = environment
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("environment is required"))?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     let response = github_delete_secret(
         &runtime,
         &GitHubSecretScope::Env { owner: repo_owner, repo: repo_name, env: environment },
         &name,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -51076,15 +56647,29 @@ fn run_github_secret_org_set(
     json: bool,
     raw: bool,
 ) -> Result<()> {
-    let value = value.filter(|item| !item.trim().is_empty())
+    let value = value
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
-    let org = org.or_else(|| if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) })
+    let org = org
+        .or_else(
+            || if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) },
+        )
         .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("org is required"))?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     github_set_secret(
         &runtime,
@@ -51095,7 +56680,8 @@ fn run_github_secret_org_set(
         },
         &name,
         &value,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(
         &github_secret_created_response(serde_json::json!({
             "scope": "org",
@@ -51129,18 +56715,32 @@ fn run_github_secret_org_delete(
         return Err(anyhow::Error::msg("delete org secret requires --force"));
     }
     let runtime = load_github_runtime(
-        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
     )?;
-    let org = org.or_else(|| if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) })
+    let org = org
+        .or_else(
+            || if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) },
+        )
         .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("org is required"))?;
-    let name = name.filter(|item| !item.trim().is_empty())
+    let name = name
+        .filter(|item| !item.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
     let response = github_delete_secret(
         &runtime,
         &GitHubSecretScope::Org { org, visibility: "private".to_owned(), repo_ids: Vec::new() },
         &name,
-    ).map_err(anyhow::Error::msg)?;
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -51182,9 +56782,7 @@ fn parse_github_project_ref(raw: &str) -> Result<GitHubProjectRef> {
                 });
             }
         }
-        return Err(anyhow::Error::msg(format!(
-            "unsupported project url format: {value}"
-        )));
+        return Err(anyhow::Error::msg(format!("unsupported project url format: {value}")));
     }
     if let Ok(number) = value.parse::<i64>() {
         return Ok(GitHubProjectRef {
@@ -51205,11 +56803,7 @@ fn parse_github_project_ref(raw: &str) -> Result<GitHubProjectRef> {
             }
         }
     }
-    Ok(GitHubProjectRef {
-        project_id: value.to_owned(),
-        organization: String::new(),
-        number: 0,
-    })
+    Ok(GitHubProjectRef { project_id: value.to_owned(), organization: String::new(), number: 0 })
 }
 
 fn summarize_github_project(project: &Value) -> String {
@@ -51236,7 +56830,9 @@ fn summarize_github_project(project: &Value) -> String {
     } else {
         "open"
     };
-    if let Some(url) = project.get("url").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(url) =
+        project.get("url").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty())
+    {
         return format!("#{number} {title} [{public_text}, {closed_text}] {project_id} ({url})");
     }
     format!("#{number} {title} [{public_text}, {closed_text}] {project_id}")
@@ -51445,10 +57041,7 @@ fn find_github_project_field_descriptor(
     name: &str,
 ) -> Option<GitHubProjectFieldDescriptor> {
     let target = name.trim();
-    fields
-        .iter()
-        .find(|field| field.name.trim().eq_ignore_ascii_case(target))
-        .cloned()
+    fields.iter().find(|field| field.name.trim().eq_ignore_ascii_case(target)).cloned()
 }
 
 fn find_github_project_field_descriptor_by_id(
@@ -51492,10 +57085,7 @@ fn resolve_github_project_iteration_id(
     iteration: &str,
 ) -> Result<String> {
     if field.iterations.is_empty() {
-        return Err(anyhow::Error::msg(format!(
-            "field {:?} has no iterations",
-            field.name
-        )));
+        return Err(anyhow::Error::msg(format!("field {:?} has no iterations", field.name)));
     }
     let target = iteration.trim();
     if target.is_empty() {
@@ -51513,20 +57103,16 @@ fn resolve_github_project_iteration_id(
             if start > today {
                 continue;
             }
-            if chosen
-                .as_ref()
-                .map(|(current, _)| start > *current)
-                .unwrap_or(true)
-            {
+            if chosen.as_ref().map(|(current, _)| start > *current).unwrap_or(true) {
                 chosen = Some((start, candidate.id.clone()));
             }
         }
-        return chosen
-            .map(|(_, id)| id)
-            .ok_or_else(|| anyhow::Error::msg(format!(
+        return chosen.map(|(_, id)| id).ok_or_else(|| {
+            anyhow::Error::msg(format!(
                 "unable to resolve @current iteration for field {:?}",
                 field.name
-            )));
+            ))
+        });
     }
     field
         .iterations
@@ -51649,12 +57235,8 @@ fn run_github_project_get(
     )?;
     let (project_id, organization) = resolve_github_project_identity(&runtime, owner, project_ref)?;
     let response = github_get_project(&runtime, &project_id).map_err(anyhow::Error::msg)?;
-    let project = response
-        .data
-        .as_ref()
-        .and_then(|data| data.get("node"))
-        .cloned()
-        .unwrap_or(Value::Null);
+    let project =
+        response.data.as_ref().and_then(|data| data.get("node")).cloned().unwrap_or(Value::Null);
     if project.is_null() {
         return Err(anyhow::Error::msg("project not found"));
     }
@@ -51959,13 +57541,15 @@ fn run_github_project_item_add(
         let repo = repo
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| anyhow::Error::msg("either --content-id or --repo + --issue is required"))?;
-        let issue = issue
-            .filter(|value| *value > 0)
-            .ok_or_else(|| anyhow::Error::msg("either --content-id or --repo + --issue is required"))?;
+            .ok_or_else(|| {
+                anyhow::Error::msg("either --content-id or --repo + --issue is required")
+            })?;
+        let issue = issue.filter(|value| *value > 0).ok_or_else(|| {
+            anyhow::Error::msg("either --content-id or --repo + --issue is required")
+        })?;
         let (repo_owner, repo_name) = parse_github_owner_repo(&repo, &runtime.owner)?;
-        let issue_response =
-            github_get_issue(&runtime, &repo_owner, &repo_name, issue).map_err(anyhow::Error::msg)?;
+        let issue_response = github_get_issue(&runtime, &repo_owner, &repo_name, issue)
+            .map_err(anyhow::Error::msg)?;
         selected_content_id = issue_response
             .data
             .as_ref()
@@ -52097,11 +57681,14 @@ fn run_github_project_item_set(
 
     let mut value = serde_json::Map::new();
     let mut value_count = 0;
-    if let Some(text) = text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(text) = text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         value.insert("text".to_owned(), Value::String(text));
         value_count += 1;
     }
-    if let Some(number) = number.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(number) =
+        number.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         let parsed = number
             .parse::<f64>()
             .map_err(|err| anyhow::Error::msg(format!("invalid --number value: {err}")))?;
@@ -52110,16 +57697,19 @@ fn run_github_project_item_set(
         value.insert("number".to_owned(), Value::Number(parsed));
         value_count += 1;
     }
-    if let Some(date) = date.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
-        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
-            .map_err(|_| anyhow::Error::msg(format!("invalid --date value {:?} (expected YYYY-MM-DD)", date)))?;
+    if let Some(date) = date.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|_| {
+            anyhow::Error::msg(format!("invalid --date value {:?} (expected YYYY-MM-DD)", date))
+        })?;
         value.insert("date".to_owned(), Value::String(date));
         value_count += 1;
     }
     if selected_single_select_option_id.is_none() {
         if let Some(name) = selected_single_select_name {
-            selected_single_select_option_id =
-                Some(resolve_github_project_single_select_option_id(&selected_field_descriptor, &name)?);
+            selected_single_select_option_id = Some(
+                resolve_github_project_single_select_option_id(&selected_field_descriptor, &name)?,
+            );
         }
     }
     if let Some(option_id) = selected_single_select_option_id {
@@ -52128,8 +57718,10 @@ fn run_github_project_item_set(
     }
     if selected_iteration_id.is_none() {
         if let Some(iteration_name) = selected_iteration_name {
-            selected_iteration_id =
-                Some(resolve_github_project_iteration_id(&selected_field_descriptor, &iteration_name)?);
+            selected_iteration_id = Some(resolve_github_project_iteration_id(
+                &selected_field_descriptor,
+                &iteration_name,
+            )?);
         }
     }
     if let Some(iteration_id) = selected_iteration_id {
@@ -52229,13 +57821,9 @@ fn run_github_project_item_clear(
             .map(|descriptor| descriptor.id)
             .ok_or_else(|| anyhow::Error::msg(format!("project field not found: {field_name}")))?
     };
-    let response = github_clear_project_item_field_value(
-        &runtime,
-        &project_id,
-        &item_id,
-        &selected_field_id,
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        github_clear_project_item_field_value(&runtime, &project_id, &item_id, &selected_field_id)
+            .map_err(anyhow::Error::msg)?;
     let project_item = response
         .data
         .as_ref()
@@ -52458,11 +58046,7 @@ fn run_github_project_item_delete(
     }
     println!(
         "Deleted project item: {}",
-        if deleted_item_id.is_empty() {
-            "-"
-        } else {
-            &deleted_item_id
-        }
+        if deleted_item_id.is_empty() { "-" } else { &deleted_item_id }
     );
     Ok(())
 }
@@ -52630,9 +58214,8 @@ fn run_github_workflow_run_get(
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
-    let response =
-        github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -52710,9 +58293,8 @@ fn run_github_workflow_logs(
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
-    let response =
-        github_get_workflow_logs(&runtime, &repo_owner, &repo_name, run_id)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_get_workflow_logs(&runtime, &repo_owner, &repo_name, run_id)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -52906,9 +58488,8 @@ fn run_github_branch_list(
         }
         params.insert("protected".to_owned(), value);
     }
-    let response =
-        github_list_branches(&runtime, &repo_owner, &repo_name, &params, max_pages)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_list_branches(&runtime, &repo_owner, &repo_name, &params, max_pages)
+        .map_err(anyhow::Error::msg)?;
     if json {
         println!(
             "{}",
@@ -52965,9 +58546,8 @@ fn run_github_branch_get(
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("branch is required"))?;
     let params = parse_github_params(params)?;
-    let response =
-        github_get_branch(&runtime, &repo_owner, &repo_name, &branch, &params)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_get_branch(&runtime, &repo_owner, &repo_name, &branch, &params)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -53005,13 +58585,9 @@ fn run_github_branch_create(
     )?;
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
-    let branch_name = normalize_github_branch_name(
-        name.or(branch).as_deref().unwrap_or_default(),
-    );
+    let branch_name = normalize_github_branch_name(name.or(branch).as_deref().unwrap_or_default());
     if branch_name.trim().is_empty() {
-        return Err(anyhow::Error::msg(
-            "branch name is required (use [branch] or --name)",
-        ));
+        return Err(anyhow::Error::msg("branch name is required (use [branch] or --name)"));
     }
     let sha = sha.unwrap_or_default();
     let from_branch = from_branch.unwrap_or_default();
@@ -53022,11 +58598,7 @@ fn run_github_branch_create(
         &runtime,
         &repo_owner,
         &repo_name,
-        &GitHubBranchCreateOptions {
-            name: branch_name,
-            from_branch,
-            sha,
-        },
+        &GitHubBranchCreateOptions { name: branch_name, from_branch, sha },
     )
     .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
@@ -53071,8 +58643,8 @@ fn run_github_branch_delete(
     if branch.trim().is_empty() {
         return Err(anyhow::Error::msg("branch is required"));
     }
-    let response =
-        github_delete_branch(&runtime, &repo_owner, &repo_name, &branch).map_err(anyhow::Error::msg)?;
+    let response = github_delete_branch(&runtime, &repo_owner, &repo_name, &branch)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -53222,13 +58794,8 @@ fn run_github_git_credential_get(
 ) -> Result<()> {
     let request = read_github_git_credential_request(io::stdin())?;
     let (parsed_owner, parsed_repo) = git_owner_repo_from_credential_path(&request.path);
-    let owner = owner.or_else(|| {
-        if parsed_owner.trim().is_empty() {
-            None
-        } else {
-            Some(parsed_owner.clone())
-        }
-    });
+    let owner = owner
+        .or_else(|| if parsed_owner.trim().is_empty() { None } else { Some(parsed_owner.clone()) });
     let runtime = load_github_runtime(
         account,
         owner,
@@ -53380,8 +58947,8 @@ fn run_github_git_setup(
         Some(home.clone()),
         settings_file.clone(),
     )?;
-    let probe_token =
-        github_resolve_access_token(&runtime, &probe_owner, first_repo.trim()).map_err(anyhow::Error::msg)?;
+    let probe_token = github_resolve_access_token(&runtime, &probe_owner, first_repo.trim())
+        .map_err(anyhow::Error::msg)?;
     if probe_token.trim().is_empty() {
         return Err(anyhow::Error::msg("github auth probe returned empty token"));
     }
@@ -53516,8 +59083,7 @@ fn run_github_git_remote_auth(
             }
         };
         change.after = redact_github_remote_pat_url(&auth_url);
-        change.changed =
-            fetch_url.trim() != auth_url.trim() || push_url.trim() != auth_url.trim();
+        change.changed = fetch_url.trim() != auth_url.trim() || push_url.trim() != auth_url.trim();
 
         if change.changed && !dry_run {
             if let Err(err) = git_remote_set_url(repo_path, &remote, &auth_url, false) {
@@ -53613,8 +59179,7 @@ fn run_github_git_clone_auth(
         return Err(anyhow::Error::msg("--remote is required"));
     }
 
-    let normalized =
-        parse_github_clone_source(&repo_source).map_err(anyhow::Error::msg)?;
+    let normalized = parse_github_clone_source(&repo_source).map_err(anyhow::Error::msg)?;
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let cwd = std::env::current_dir()?;
@@ -53622,7 +59187,8 @@ fn run_github_git_clone_auth(
     let destination = plan_github_clone_destination(&root_path, &normalized.repo, dest.as_deref());
     ensure_clone_destination_available(&destination)?;
     let pat = resolve_github_git_vault_key_value(&settings, key.trim(), &cwd)?;
-    let auth_url = build_github_remote_url_with_pat(&normalized.url, &pat).map_err(anyhow::Error::msg)?;
+    let auth_url =
+        build_github_remote_url_with_pat(&normalized.url, &pat).map_err(anyhow::Error::msg)?;
 
     let mut result = GitHubGitCloneAuthResult {
         repo_source: repo_source.trim().to_owned(),
@@ -53752,8 +59318,9 @@ fn resolve_github_git_repos_root(root: Option<PathBuf>, settings: &Settings) -> 
     for candidate in candidates.into_iter().flatten() {
         return Ok(resolve_relative_path(&cwd, &candidate));
     }
-    let repo_root = git_repo_root_from(&cwd)
-        .map_err(|_| anyhow::Error::msg(format!("unable to infer workspace root from {}", cwd.display())))?;
+    let repo_root = git_repo_root_from(&cwd).map_err(|_| {
+        anyhow::Error::msg(format!("unable to infer workspace root from {}", cwd.display()))
+    })?;
     let parent = repo_root.parent().ok_or_else(|| {
         anyhow::Error::msg(format!("unable to infer workspace root from {}", repo_root.display()))
     })?;
@@ -53761,19 +59328,11 @@ fn resolve_github_git_repos_root(root: Option<PathBuf>, settings: &Settings) -> 
 }
 
 fn non_empty_path(path: &PathBuf) -> Option<PathBuf> {
-    if path.as_os_str().is_empty() {
-        None
-    } else {
-        Some(path.clone())
-    }
+    if path.as_os_str().is_empty() { None } else { Some(path.clone()) }
 }
 
 fn resolve_relative_path(base: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        base.join(path)
-    }
+    if path.is_absolute() { path.to_path_buf() } else { base.join(path) }
 }
 
 fn list_github_git_repos(root: &Path) -> Result<Vec<PathBuf>> {
@@ -53860,11 +59419,7 @@ fn git_set_branch_config(repo_path: &Path, branch: &str, key: &str, value: &str)
 fn ensure_git_branch_tracking(repo_path: &Path, remote: &str, dry_run: bool) -> Result<String> {
     let branch = git_current_branch(repo_path)?;
     if branch.trim().is_empty() {
-        return Ok(if dry_run {
-            "would-skip-detached".to_owned()
-        } else {
-            "detached".to_owned()
-        });
+        return Ok(if dry_run { "would-skip-detached".to_owned() } else { "detached".to_owned() });
     }
     if dry_run {
         return Ok("would-set".to_owned());
@@ -53910,11 +59465,7 @@ fn run_git_output(args: &[String]) -> Result<String> {
         return Err(anyhow::Error::msg(format!(
             "git {} failed{}",
             args.join(" "),
-            if detail.is_empty() {
-                String::new()
-            } else {
-                format!(": {detail}")
-            }
+            if detail.is_empty() { String::new() } else { format!(": {detail}") }
         )));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
@@ -53947,13 +59498,13 @@ fn ensure_clone_destination_available(destination: &Path) -> Result<()> {
             return Err(anyhow::Error::msg(format!(
                 "destination already exists: {}",
                 destination.display()
-            )))
+            )));
         }
         Ok(_) => {
             return Err(anyhow::Error::msg(format!(
                 "destination path exists and is not a directory: {}",
                 destination.display()
-            )))
+            )));
         }
         Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err.into()),
         Err(_) => {}
@@ -54018,7 +59569,10 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn build_github_remote_url_with_pat(raw_canonical_url: &str, pat: &str) -> std::result::Result<String, String> {
+fn build_github_remote_url_with_pat(
+    raw_canonical_url: &str,
+    pat: &str,
+) -> std::result::Result<String, String> {
     let raw_canonical_url = raw_canonical_url.trim();
     if raw_canonical_url.is_empty() {
         return Err("github remote url is required".to_owned());
@@ -54027,8 +59581,8 @@ fn build_github_remote_url_with_pat(raw_canonical_url: &str, pat: &str) -> std::
     if pat.is_empty() {
         return Err("github PAT is required".to_owned());
     }
-    let mut parsed =
-        url::Url::parse(raw_canonical_url).map_err(|err| format!("parse github remote url: {err}"))?;
+    let mut parsed = url::Url::parse(raw_canonical_url)
+        .map_err(|err| format!("parse github remote url: {err}"))?;
     if !parsed.scheme().eq_ignore_ascii_case("https") {
         return Err("github remote url must use https".to_owned());
     }
@@ -54076,9 +59630,7 @@ fn resolve_github_git_vault_key_value(
         if !value.is_empty() {
             return Ok(value);
         }
-        return Err(anyhow::Error::msg(format!(
-            "vault key {key:?} resolved to an empty value"
-        )));
+        return Err(anyhow::Error::msg(format!("vault key {key:?} resolved to an empty value")));
     }
 
     let mut candidates = Vec::new();
@@ -54113,9 +59665,7 @@ fn resolve_github_git_vault_key_value(
             return Ok(value);
         }
     }
-    Err(anyhow::Error::msg(format!(
-        "vault key {key:?} is missing or unreadable"
-    )))
+    Err(anyhow::Error::msg(format!("vault key {key:?} is missing or unreadable")))
 }
 
 fn parse_simple_dotenv_file(path: &Path) -> Result<BTreeMap<String, String>> {
@@ -54162,10 +59712,7 @@ fn count_setup_skipped(items: &[GitHubGitSetupRepoChange]) -> usize {
 }
 
 fn count_remote_auth_changed(items: &[GitHubGitRemoteAuthRepoChange]) -> usize {
-    items
-        .iter()
-        .filter(|item| item.changed && item.error.trim().is_empty())
-        .count()
+    items.iter().filter(|item| item.changed && item.error.trim().is_empty()).count()
 }
 
 fn count_remote_auth_skipped(items: &[GitHubGitRemoteAuthRepoChange]) -> usize {
@@ -54195,9 +59742,7 @@ fn run_github_raw(
     raw: bool,
 ) -> Result<()> {
     if !method.trim().eq_ignore_ascii_case("GET") {
-        return Err(anyhow::Error::msg(
-            "github raw Rust path only supports GET",
-        ));
+        return Err(anyhow::Error::msg("github raw Rust path only supports GET"));
     }
     let path = path
         .filter(|value| !value.trim().is_empty())
@@ -54240,9 +59785,7 @@ fn run_github_graphql(
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("github graphql requires --query"))?;
     if !github_graphql_query_is_read_only(&query) {
-        return Err(anyhow::Error::msg(
-            "github graphql Rust path only supports queries",
-        ));
+        return Err(anyhow::Error::msg("github graphql Rust path only supports queries"));
     }
     let runtime = load_github_runtime(
         account,
@@ -54257,8 +59800,7 @@ fn run_github_graphql(
         settings_file,
     )?;
     let variables = serde_json::Value::Object(parse_github_graphql_vars(vars)?);
-    let response =
-        github_graphql_query(&runtime, &query, variables).map_err(anyhow::Error::msg)?;
+    let response = github_graphql_query(&runtime, &query, variables).map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54376,17 +59918,15 @@ fn run_github_issue_create(
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let mut payload = parse_github_params(params)?;
     payload.insert("title".to_owned(), title);
-    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         payload.insert("body".to_owned(), body);
     }
     let payload = Value::Object(
-        payload
-            .into_iter()
-            .map(|(key, value)| (key, Value::String(value)))
-            .collect(),
+        payload.into_iter().map(|(key, value)| (key, Value::String(value))).collect(),
     );
-    let response =
-        github_create_issue(&runtime, &repo_owner, &repo_name, payload).map_err(anyhow::Error::msg)?;
+    let response = github_create_issue(&runtime, &repo_owner, &repo_name, payload)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54503,9 +60043,8 @@ fn run_github_pr_list(
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let params = parse_github_params(params)?;
-    let response =
-        github_list_pull_requests(&runtime, &repo_owner, &repo_name, &params, max_pages)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_list_pull_requests(&runtime, &repo_owner, &repo_name, &params, max_pages)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54598,21 +60137,19 @@ fn run_github_pr_create(
     payload.insert("head".to_owned(), head);
     payload.insert("base".to_owned(), base);
     payload.insert("title".to_owned(), title);
-    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         payload.insert("body".to_owned(), body);
     }
-    let mut payload_json =
-        serde_json::Map::from_iter(payload.into_iter().map(|(key, value)| (key, Value::String(value))));
+    let mut payload_json = serde_json::Map::from_iter(
+        payload.into_iter().map(|(key, value)| (key, Value::String(value))),
+    );
     if draft {
         payload_json.insert("draft".to_owned(), Value::Bool(true));
     }
-    let response = github_create_pull_request(
-        &runtime,
-        &repo_owner,
-        &repo_name,
-        Value::Object(payload_json),
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        github_create_pull_request(&runtime, &repo_owner, &repo_name, Value::Object(payload_json))
+            .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54653,9 +60190,8 @@ fn run_github_pr_comment(
     let (repo_owner, repo_name) =
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let number = number.ok_or_else(|| anyhow::Error::msg("pull request number is required"))?;
-    let response =
-        github_comment_pull_request(&runtime, &repo_owner, &repo_name, number, &body)
-            .map_err(anyhow::Error::msg)?;
+    let response = github_comment_pull_request(&runtime, &repo_owner, &repo_name, number, &body)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54703,10 +60239,14 @@ fn run_github_pr_merge(
     let number = number.ok_or_else(|| anyhow::Error::msg("pull request number is required"))?;
     let mut payload = serde_json::Map::new();
     payload.insert("merge_method".to_owned(), Value::String(merge_method));
-    if let Some(title) = title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(title) =
+        title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         payload.insert("commit_title".to_owned(), Value::String(title));
     }
-    if let Some(message) = message.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+    if let Some(message) =
+        message.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
         payload.insert("commit_message".to_owned(), Value::String(message));
     }
     let response = github_merge_pull_request(
@@ -54849,22 +60389,19 @@ fn run_github_repo_create(
         home,
         settings_file,
     )?;
-    let repo_name = name
-        .or(repo_name)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow::Error::msg("repo name is required (use positional name or --name)"))?;
+    let repo_name =
+        name.or(repo_name).filter(|value| !value.trim().is_empty()).ok_or_else(|| {
+            anyhow::Error::msg("repo name is required (use positional name or --name)")
+        })?;
     let selected_owner = owner.unwrap_or_else(|| runtime.owner.clone());
     if selected_owner.trim().is_empty() {
         return Err(anyhow::Error::msg("owner is required (use --owner or context owner)"));
     }
     let mut payload = parse_github_body_params(params)?;
     payload.insert("name".to_owned(), serde_json::Value::String(repo_name.trim().to_owned()));
-    let response = github_create_repo(
-        &runtime,
-        selected_owner.trim(),
-        serde_json::Value::Object(payload),
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        github_create_repo(&runtime, selected_owner.trim(), serde_json::Value::Object(payload))
+            .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -54903,13 +60440,9 @@ fn run_github_repo_update(
     if payload.is_empty() {
         return Err(anyhow::Error::msg("at least one --param key=value is required"));
     }
-    let response = github_update_repo(
-        &runtime,
-        &repo_owner,
-        &repo_name,
-        serde_json::Value::Object(payload),
-    )
-    .map_err(anyhow::Error::msg)?;
+    let response =
+        github_update_repo(&runtime, &repo_owner, &repo_name, serde_json::Value::Object(payload))
+            .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
