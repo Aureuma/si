@@ -775,6 +775,9 @@ Status: in_progress
   - Added prechecks in the matrix for `npm` and `docker` before smoke-lane invocation to convert missing prerequisites into SKIP reasons.
   - Added automatic `release-assets` retry/re-verify on checksum mismatch when `SKIP_RELEASE_BUILD` is not set.
   - Kept `SI_INSTALL_SMOKE_SKIP_NONROOT=1` wrapper flow for installer smoke commands while leaving smoke lanes non-blocking.
+  - Added matrix output log capture to `tickets/phase9-10-realhost-matrix-latest.log` for repeatable replay/audit.
+  - Increased default `RELEASE_ASSET_TIMEOUT_SECS` to `3600` to avoid false timeout on slow full target matrix runs.
+- `si-rs` release-assets now logs per-platform progress so long cross-platform packaging runs are visible.
 - Current local matrix state:
   - `homebrew render-core-formula`, `render-tap-formula`, and `update-tap-repo` execute successfully in current environment.
   - `verify-release-assets` now attempts one targeted retry when checksum verification fails in a non-SKIP mode, then reports final status.
@@ -808,3 +811,9 @@ Status: in_progress
 
 1. Run the release-asset matrix lanes (`release-assets`, `build-cli-release-asset`, and `build-cli-release-assets`) in CI or a longer-lived host where full compile times can complete.
 2. Re-run all installer smoke lanes on a host with deterministic npm + Docker behavior to convert timeout lanes to stable outcomes.
+
+### Execution update (2026-03-18 continuation)
+
+- `./.artifacts/cargo-target/release/si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64 --out-dir /tmp/si-e2e-check-single`: PASS.
+- `./.artifacts/cargo-target/release/si-rs build self release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS (~17m), produced full 5-platform archive set + `checksums.txt`.
+- `tickets/phase9-10-realhost-matrix.sh` with `SKIP_RELEASE_BUILD=1` and `SMOKE_TIMEOUT_SECS=600`: PASS for all non-smoke lanes that can run in this host; `smoke-npm` and `smoke-docker` still timeout at 600s.

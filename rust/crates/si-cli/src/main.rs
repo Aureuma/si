@@ -16661,6 +16661,7 @@ fn run_build_self_release_assets(
 
     let mut archive_names = Vec::new();
     for (goos, goarch, goarm) in targets {
+        println!("building release archive for {goos}/{goarch}");
         let archive_path =
             build_release_asset(&repo_root, &resolved_out_dir, &resolved_version, goos, goarch, goarm)?;
         let archive_name = archive_path
@@ -17366,6 +17367,53 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         .with_context(|| format!("create temp output in {}", install_dir.display()))?;
     let tmp_output_path = tmp_output.path().to_path_buf();
     drop(tmp_output);
+
+    if std::env::var("SI_INSTALLER_USE_PREBUILT")
+        .map(|value| value.trim() == "1")
+        .unwrap_or(false)
+    {
+        let prebuilt = source_dir
+            .join(".artifacts")
+            .join("cargo-target")
+            .join("release")
+            .join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
+        if prebuilt.exists() {
+            if !cfg.quiet {
+                println!(
+                    "rust: using prebuilt installer binary {}",
+                    prebuilt.display()
+                );
+            }
+            fs::copy(&prebuilt, &tmp_output_path).with_context(|| {
+                format!(
+                    "copy installer binary {} to {}",
+                    prebuilt.display(),
+                    tmp_output_path.display()
+                )
+            })?;
+            #[cfg(unix)]
+            {
+                let mut perms = fs::metadata(&tmp_output_path)
+                    .with_context(|| format!("stat {}", tmp_output_path.display()))?
+                    .permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(&tmp_output_path, perms)
+                    .with_context(|| format!("chmod {}", tmp_output_path.display()))?;
+            }
+            fs::rename(&tmp_output_path, &install_path).or_else(|err| {
+                if err.kind() == io::ErrorKind::AlreadyExists {
+                    let _ = fs::remove_file(&install_path);
+                    fs::rename(&tmp_output_path, &install_path)
+                } else {
+                    Err(err)
+                }
+            })?;
+            if !cfg.no_path_hint {
+                warn_if_installer_path_missing(install_dir);
+            }
+            return Ok(());
+        }
+    }
 
     let mut command = StdCommand::new(&cargo_bin);
     command

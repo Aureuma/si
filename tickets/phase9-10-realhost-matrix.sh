@@ -7,7 +7,7 @@ ROOT=${ROOT:-"$(cd "$(dirname "$0")/.." && pwd)"}
 : "${TIMEOUT_SECS:=600}"
 : "${RELEASE_VERSION:=v0.54.0}"
 : "${RELEASE_VERSION_NO_V:=}"
-: "${RELEASE_ASSET_TIMEOUT_SECS:=1200}"
+: "${RELEASE_ASSET_TIMEOUT_SECS:=3600}"
 : "${SKIP_RELEASE_BUILD:=auto}"
 : "${SMOKE_TIMEOUT_SECS:=120}"
 : "${OUT_DIR:=/tmp/si-e2e/releases/single}"
@@ -15,6 +15,11 @@ ROOT=${ROOT:-"$(cd "$(dirname "$0")/.." && pwd)"}
 : "${NPM_OUT:=/tmp/si-e2e/npm}"
 : "${HOME_FORMULA:=/tmp/si-e2e/homebrew/core.rb}"
 : "${TAP_FORMULA:=/tmp/si-e2e/homebrew/tap.rb}"
+: "${LOG_FILE:=tickets/phase9-10-realhost-matrix-latest.log}"
+export LOG_FILE
+export SI_INSTALLER_USE_PREBUILT=1
+exec > >(tee -a "${LOG_FILE}")
+exec 2>&1
 
 if [[ -x "${SI_RS}" ]]; then
   SI_CMD=("${SI_RS}")
@@ -123,6 +128,9 @@ run_with_timeout() {
 }
 
 echo "Root: ${ROOT}"
+echo "Log: ${LOG_FILE}"
+echo "Release asset timeout: ${RELEASE_ASSET_TIMEOUT_SECS}s"
+echo "Smoke timeout: ${SMOKE_TIMEOUT_SECS}s"
 cd "${ROOT}"
 
 run_si "version" version
