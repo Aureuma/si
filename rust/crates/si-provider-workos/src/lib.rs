@@ -171,14 +171,8 @@ pub fn execute_api_request(
     runtime: &WorkOSRuntimeContext,
     request: &WorkOSAPIRequest,
 ) -> Result<WorkOSAPIResponse, String> {
-    let method = reqwest::Method::from_bytes(
-        request
-            .method
-            .trim()
-            .to_ascii_uppercase()
-            .as_bytes(),
-    )
-    .map_err(|err| format!("invalid WorkOS method: {err}"))?;
+    let method = reqwest::Method::from_bytes(request.method.trim().to_ascii_uppercase().as_bytes())
+        .map_err(|err| format!("invalid WorkOS method: {err}"))?;
     let url = if request.path.trim().starts_with("http://")
         || request.path.trim().starts_with("https://")
     {
@@ -209,9 +203,7 @@ pub fn execute_api_request(
     let response = builder.send().map_err(|err| format!("workos request failed: {err}"))?;
     let status = response.status();
     let request_id = first_header(response.headers(), &["x-request-id"]);
-    let body = response
-        .text()
-        .map_err(|err| format!("read WorkOS response body: {err}"))?;
+    let body = response.text().map_err(|err| format!("read WorkOS response body: {err}"))?;
     let data = if body.trim().is_empty() {
         Value::Null
     } else {
