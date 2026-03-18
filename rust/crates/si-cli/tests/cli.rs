@@ -2517,8 +2517,7 @@ fn google_play_context_current_json_reads_settings() {
     );
     fs::write(
         &settings_path,
-        format!(
-            r#"
+        r#"
 [google]
 default_account = "test"
 
@@ -2527,8 +2526,7 @@ project_id = "acme-project"
 developer_account_id = "dev-123"
 default_package_name = "com.acme.app"
 default_language_code = "en-US"
-"#
-        ),
+"#,
     )
     .expect("write settings");
 
@@ -5471,7 +5469,7 @@ fn github_branch_get_json_fetches_from_api_with_oauth() {
 
 #[test]
 fn github_branch_create_json_mutates_via_api_with_oauth() {
-    let server = start_http_server(5, |request| {
+    let server = start_http_server(3, |request| {
         if request.starts_with("GET /repos/Aureuma/si HTTP/1.1\r\n") {
             return http_json_response(
                 "200 OK",
@@ -10802,7 +10800,7 @@ fn google_places_session_json_round_trip_uses_home_store() {
         .clone();
     let ended: Value = serde_json::from_slice(&ended).expect("json output");
     assert_eq!(ended["token"], token);
-    assert!(ended["ended_at"].as_str().expect("ended_at").len() > 0);
+    assert!(!ended["ended_at"].as_str().expect("ended_at").is_empty());
 }
 
 #[test]
