@@ -797,6 +797,7 @@ pub fn delete_project_service_account(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute_api_request(
     runtime: &OpenAIRuntime,
     method: &str,
@@ -984,6 +985,7 @@ fn openai_request(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn openai_request_with_headers(
     runtime: &OpenAIRuntime,
     method: &str,
