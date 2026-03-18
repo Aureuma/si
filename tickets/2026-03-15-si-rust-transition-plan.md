@@ -723,3 +723,21 @@ Status: in_progress
 2. Re-run installer smoke lanes from repo root with a prepared install directory and explicit expected runtime prerequisites (`docker` + network + non-root policy) before final green on phase 9.
 3. Keep `update-tap-repo` dry-run expectation aligned in docs/tests (no `--dry-run` flag exists).
 4. Add a small, documented matrix entrypoint script under `tickets/` so this command matrix can be replayed deterministically.
+
+## Execution update (2026-03-18)
+
+### Verification executed
+
+- `./tools/test.sh` (Go toolchain lanes): PASS
+- `cargo fmt --check`: PASS
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS
+- `cargo test --workspace`: PASS (374+ tests)
+
+### Fixes landed
+
+- Fixed hanging `si-rs-cli` integration test `github_branch_create_json_mutates_via_api_with_oauth` by aligning local fixture request count to the actual 3-call flow (`start_http_server(3)`), preventing `server.join()` deadlock in full-suite runs.
+- Commit: `cd4b61a`
+
+### Remaining/known blockers to close matrix
+
+- Host execution blockers in the real-host matrix (`smoke-docker`, `smoke-npm`, and release asset multi-target compile paths) remain environment-dependent and may still require a non-time-constrained environment or prepared tool prerequisites.
