@@ -665,6 +665,9 @@ Status: in_progress
 - `/tmp/si-hosttest-final2.log` (verify/smoke follow-up attempts)
 - `/tmp/si-phase9-10-final-matrix.log` (latest partial matrix run with corrected root/context)
 - `/tmp/si-phase9-10-clean-matrix{2,3}.log` (full command matrix attempts with command-context cleanup)
+- `/tmp/si-phase9-10-realhost-matrix-latest.log` (replay after matrix hardening, SKIP_RELEASE_BUILD=1, SMOKE_TIMEOUT_SECS=120)
+- `/tmp/si-phase9-10-realhost-matrix-fresh.log` (fresh artifact replay with SKIP_RELEASE_BUILD=0, release-assets timeout hit)
+- `/home/shawn/Development/si/tickets/phase9-10-realhost-matrix-followup.log` (timeout/blocked-command follow-up run with explicit exit capture)
 
 ### Execution plan and expected behavior
 
@@ -717,13 +720,37 @@ Status: in_progress
 | `tools/release/verify-cli-release-assets.sh` | forwards to `build self verify-release-assets` with `--out-dir` | PASS / FAIL | requires a complete artifact directory; fails with checksums missing in `/tmp/.../wrapper-multi2` |
 | `tools/release/*.sh` | execute release-mode helper via release CLI | PASS | updated to prefer `${ROOT}/.artifacts/cargo-target/release/si-rs` when present, fallback to `cargo run --locked --release` |
 
+### Latest matrix replay (2026-03-18)
+
+| Command lane | Expected result | Actual (2026-03-18 replay) | Notes |
+| --- | --- | --- | --- |
+| `verify-release-assets` | validation succeeds against matched checksum artifact set | FAIL (expected/retry path) | stale checksum mismatch observed in `/tmp/si-e2e/releases/multi/checksums.txt`; matrix attempted regeneration but `SKIP_RELEASE_BUILD=1` prevented rebuild |
+| `homebrew tap formula/update` | render/update using release checksums | PASS | both succeeded with pre-existing checksum file |
+| `installer smoke-host` | non-root smoke host workflow passes | WARN timeout in this host | command timed out at 120s with no output after test bootstrap in this environment |
+| `installer smoke-npm` | npm install smoke path runs | WARN timeout in this host | command timed out at 120s (`npm install` path likely blocked by network/tooling in this environment) |
+| `installer smoke-docker` | docker root/non-root smoke runs | WARN timeout in this host | command timed out at 120s waiting for docker image build/run |
+| `installer smoke-homebrew` | real homebrew smoke when available | PASS (`SKIP` on host) | brew unavailable in this host, explicit skip message |
+
+### Fresh artifact matrix attempt (manual split run, 2026-03-18)
+
+| Command | Expected result | Actual | Notes |
+| --- | --- | --- | --- |
+| `build self release-asset` (fresh dirs) | pass with `/tmp/si-e2e/releases/fresh-single/si_0.54.0_linux_amd64.tar.gz` | PASS | generated successfully |
+| `build self release-assets` (fresh dirs) | generate all target archives + `checksums.txt` | BLOCKED | timed out repeatedly in host build environment before completion (`/tmp/si-e2e/releases/fresh-multi` had partial `.tar.gz` outputs, no `checksums.txt`) |
+| `build self verify-release-assets` | pass with matching checksums | BLOCKED | blocked by missing `checksums.txt` from timeouted `release-assets` run |
+| `build homebrew render-tap-formula` / `update-tap-repo` | pass with checksums | BLOCKED | failed until `checksums.txt` is complete |
+| `build installer smoke-host` | pass | BLOCKED | timeout after 120s in host runtime test window |
+| `build installer smoke-npm` | pass | BLOCKED | timeout after 120s |
+| `build installer smoke-docker` | pass | BLOCKED | timeout after 120s while building/running docker smoke container |
+| `tools/release/build-cli-release-asset` | pass (`--goos/--goarch` required) | BLOCKED | invocation timed out under this host/target constraints |
+| `tools/release/build-cli-release-assets` | pass | BLOCKED | invocation timed out under this host/target constraints |
+
 ### Next actions from this plan run
 
-1. Re-run `self release-asset` and `self release-assets` with a warm `target` cache on CI or a non-time-constrained host to remove current timeout blocker and confirm full end-to-end artifact parity.
-2. Re-run installer smoke lanes from repo root with a prepared install directory and explicit expected runtime prerequisites (`docker` + network + non-root policy) before final green on phase 9.
+1. Re-run `self release-asset` and `self release-assets` with a warm `target` cache on CI or a non-time-constrained host to confirm full end-to-end artifact parity.
+2. Re-run installer smoke lanes from repo root with prepared runtime prerequisites (`npm` + network + `docker` + non-root policy) before final green on phase 9.
 3. Keep `update-tap-repo` dry-run expectation aligned in docs/tests (no `--dry-run` flag exists).
-4. Add a small, documented matrix entrypoint script under `tickets/` so this command matrix can be replayed deterministically.
-   - Added `tickets/phase9-10-realhost-matrix.sh` with bounded command execution.
+4. Keep `tickets/phase9-10-realhost-matrix.sh` updated as the deterministic replay entrypoint and keep its output matrix current.
 
 ## Execution update (2026-03-18)
 
@@ -737,8 +764,47 @@ Status: in_progress
 ### Fixes landed
 
 - Fixed hanging `si-rs-cli` integration test `github_branch_create_json_mutates_via_api_with_oauth` by aligning local fixture request count to the actual 3-call flow (`start_http_server(3)`), preventing `server.join()` deadlock in full-suite runs.
+- Updated `tickets/phase9-10-realhost-matrix.sh` to surface command timeout/failure status for every timeout-wrapped command, and to precheck `npm`/`docker` availability before smoke runs.
 - Commit: `cd4b61a`
 
 ### Remaining/known blockers to close matrix
 
 - Host execution blockers in the real-host matrix (`smoke-docker`, `smoke-npm`, and release asset multi-target compile paths) remain environment-dependent and may still require a non-time-constrained environment or prepared tool prerequisites.
+- Script/runtime hardening now tracked in `tickets/phase9-10-realhost-matrix.sh`:
+  - Added timeout/failure status logging to `run`, `run_with_timeout`, and `run_smoke_with_env`, so matrix output now explicitly distinguishes timeout and failure exits.
+  - Added prechecks in the matrix for `npm` and `docker` before smoke-lane invocation to convert missing prerequisites into SKIP reasons.
+  - Added automatic `release-assets` retry/re-verify on checksum mismatch when `SKIP_RELEASE_BUILD` is not set.
+  - Kept `SI_INSTALL_SMOKE_SKIP_NONROOT=1` wrapper flow for installer smoke commands while leaving smoke lanes non-blocking.
+- Current local matrix state:
+  - `homebrew render-core-formula`, `render-tap-formula`, and `update-tap-repo` execute successfully in current environment.
+  - `verify-release-assets` now attempts one targeted retry when checksum verification fails in a non-SKIP mode, then reports final status.
+  - `installer smoke-homebrew` is skipped when brew is unavailable on the host.
+  - `installer smoke-*` commands still frequently require local prerequisites and may timeout in this host despite corrected invocation and timeouts.
+
+### Execution update (follow-up, 2026-03-18)
+
+- `./tools/test.sh`: PASS
+- `cargo fmt --check`: PASS
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS
+- `cargo test --workspace`: PASS (all crates/tests)
+- `tools/release/validate-release-version.sh --tag v0.54.0`: PASS
+- `tools/release/validate-release-version.sh --tag 0.54.0`: PASS (expected validation error)
+- `tools/release/build-cli-release-asset.sh --version v0.54.0 --goos linux --goarch amd64 --out-dir ...` (timeout 60s): FAIL (`exit 124` timeout)
+- `tools/release/build-cli-release-assets.sh --version v0.54.0 --out-dir ...` (timeout 60s): FAIL (`exit 124` timeout)
+- `tools/release/verify-cli-release-assets.sh --version v0.54.0 --out-dir /tmp/si-e2e/manual-verify`: FAIL (expected missing release file/checksums)
+- `si-rs build homebrew render-core-formula`: PASS
+- `si-rs build homebrew render-tap-formula` with valid checksums: PASS
+- `si-rs build homebrew update-tap-repo` with valid checksums and tap dir: PASS
+- `si-rs build npm build-package --repo-root . --version v0.54.0 --out-dir ...`: PASS
+- `si-rs build npm publish-package --repo-root . --version v0.54.0 --dry-run`: PASS
+- `si-rs build npm publish-from-vault --repo-root . --version v0.54.0 --dry-run`: PASS (expected `vault list failed`)
+- `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-host` (45s): FAIL (`exit 124` timeout)
+- `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-npm` (45s): FAIL (`exit 124` timeout)
+- `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-docker` (45s): FAIL (`exit 124` timeout)
+- `si-rs build installer smoke-homebrew`: PASS (`SKIP: brew is not available`)
+- `si-rs build installer settings-helper --print`: PASS
+
+### Next actions from this follow-up
+
+1. Run the release-asset matrix lanes (`release-assets`, `build-cli-release-asset`, and `build-cli-release-assets`) in CI or a longer-lived host where full compile times can complete.
+2. Re-run all installer smoke lanes on a host with deterministic npm + Docker behavior to convert timeout lanes to stable outcomes.
