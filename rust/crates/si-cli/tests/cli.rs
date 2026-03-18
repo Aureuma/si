@@ -1,5 +1,5 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use assert_cmd::Command;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use chrono::Local;
 use serde_json::Value;
 use std::fs;
@@ -7,8 +7,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
-use tar::Archive;
 use std::thread;
+use tar::Archive;
 use tempfile::tempdir;
 
 fn cargo_bin() -> Command {
@@ -28,9 +28,7 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
             "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
-        stream
-            .write_all(response.as_bytes())
-            .expect("write test response");
+        stream.write_all(response.as_bytes()).expect("write test response");
     });
     format!("http://{}", addr)
 }
@@ -40,11 +38,8 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("go.mod"),
-        "module example.com/si\n\ngo 1.22.0\n",
-    )
-    .expect("write go.mod");
+    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n")
+        .expect("write go.mod");
     fs::write(repo.path().join("README.md"), "readme\n").expect("write readme");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
@@ -52,11 +47,8 @@ fn build_self_release_assets_writes_archives_and_checksums() {
         "package main\n\nconst siVersion = \"v1.2.3\"\n",
     )
     .expect("write version");
-    fs::write(
-        repo.path().join("tools/si/main.go"),
-        "package main\n\nfunc main() {}\n",
-    )
-    .expect("write main");
+    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
+        .expect("write main");
 
     let go_dir = tempdir().expect("go tempdir");
     let cargo_path = go_dir.path().join("cargo");
@@ -65,11 +57,8 @@ fn build_self_release_assets_writes_archives_and_checksums() {
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
     let out_dir = repo.path().join("out");
-    let path_env = format!(
-        "{}:{}",
-        go_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .args([
@@ -129,11 +118,8 @@ fn build_self_build_no_upgrade_writes_binary() {
         perms.set_mode(0o755);
         fs::set_permissions(&bin_cargo, perms).expect("chmod cargo");
     }
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     let out = repo.path().join("out/si");
     cargo_bin()
         .args([
@@ -166,19 +152,10 @@ fn build_self_default_writes_path_binary() {
     );
     let si_path = bin_dir.path().join("si");
     write_executable_shell_script(&si_path, "#!/bin/sh\necho old\n");
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
-        .args([
-            "build",
-            "self",
-            "--repo",
-            repo.path().to_str().expect("repo"),
-            "--quiet",
-        ])
+        .args(["build", "self", "--repo", repo.path().to_str().expect("repo"), "--quiet"])
         .env("PATH", &path_env)
         .assert()
         .success();
@@ -197,11 +174,8 @@ fn build_self_flag_first_no_upgrade_writes_binary() {
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho flagfirst\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     let out = repo.path().join("custom/si");
     cargo_bin()
         .args([
@@ -245,11 +219,8 @@ fn build_self_run_forwards_args_to_cargo() {
         perms.set_mode(0o755);
         fs::set_permissions(&bin_cargo, perms).expect("chmod cargo");
     }
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .args([
             "build",
@@ -314,11 +285,8 @@ fn build_npm_build_package_creates_tarball() {
     }
 
     let out_dir = repo.path().join("out");
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .args([
@@ -380,11 +348,8 @@ fn build_npm_publish_package_dry_run_uses_generated_tarball() {
     }
 
     let out_dir = repo.path().join("out");
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .args([
@@ -448,11 +413,8 @@ fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
         fs::set_permissions(&si_path, perms).expect("chmod si");
     }
 
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .args([
@@ -490,10 +452,7 @@ fn build_homebrew_render_core_formula_writes_formula() {
         let request = String::from_utf8_lossy(&buffer[..read]);
         assert!(request.contains("GET /Aureuma/si/archive/refs/tags/v1.2.3.tar.gz"));
         let body = b"archive";
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
-            body.len()
-        );
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len());
         stream.write_all(response.as_bytes()).expect("write head");
         stream.write_all(body).expect("write body");
     });
@@ -559,11 +518,8 @@ fn build_self_verify_release_assets_checks_archives() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("go.mod"),
-        "module example.com/si\n\ngo 1.22.0\n",
-    )
-    .expect("write go.mod");
+    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n")
+        .expect("write go.mod");
     fs::write(repo.path().join("README.md"), "readme\n").expect("write readme");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
@@ -571,11 +527,8 @@ fn build_self_verify_release_assets_checks_archives() {
         "package main\n\nconst siVersion = \"v1.2.3\"\n",
     )
     .expect("write version");
-    fs::write(
-        repo.path().join("tools/si/main.go"),
-        "package main\n\nfunc main() {}\n",
-    )
-    .expect("write main");
+    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
+        .expect("write main");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
@@ -584,11 +537,8 @@ fn build_self_verify_release_assets_checks_archives() {
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
     let out_dir = repo.path().join("out");
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .current_dir(repo.path())
@@ -655,18 +605,16 @@ fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
 fn build_installer_run_dry_run_reports_rust_usage() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
+    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n")
+        .expect("write go.mod");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.86.0\n");
     let go_path = bin_dir.path().join("go");
     write_executable_shell_script(&go_path, "#!/bin/sh\necho go version go1.22.0 linux/amd64\n");
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     let output = cargo_bin()
         .args([
@@ -693,7 +641,8 @@ fn build_installer_run_dry_run_reports_rust_usage() {
 fn build_installer_run_installs_fake_binary() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
+    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n")
+        .expect("write go.mod");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
@@ -701,11 +650,8 @@ fn build_installer_run_installs_fake_binary() {
         &cargo_path,
         "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.86.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     let install_dir = repo.path().join("bin");
 
     cargo_bin()
@@ -767,7 +713,8 @@ fn build_installer_smoke_host_runs_wrapped_scripts() {
         perms.set_mode(0o755);
         fs::set_permissions(&git_path, perms).expect("chmod git");
     }
-    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-host"])
@@ -780,9 +727,17 @@ fn build_installer_smoke_host_runs_wrapped_scripts() {
 fn build_installer_smoke_npm_runs_release_scripts() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/release/npm")).expect("mkdir npm scripts");
-    fs::write(repo.path().join("tools/si/version.go"), "package main\n\nconst siVersion = \"v1.2.3\"\n").unwrap_or(());
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .unwrap_or(());
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("tools/si/version.go"), "package main\n\nconst siVersion = \"v1.2.3\"\n").expect("write version");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
     let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
     let build_npm = repo.path().join("tools/release/npm/build-npm-package.sh");
     fs::create_dir_all(build_assets.parent().expect("assets parent")).expect("mkdir assets parent");
@@ -807,7 +762,8 @@ fn build_installer_smoke_npm_runs_release_scripts() {
         perms.set_mode(0o755);
         fs::set_permissions(&npm_path, perms).expect("chmod npm");
     }
-    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-npm"])
@@ -822,7 +778,8 @@ fn build_installer_smoke_docker_runs_fake_docker() {
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-nonroot")).expect("mkdir nonroot");
     fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
-    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n").expect("write installer");
+    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n")
+        .expect("write installer");
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("docker-args.txt");
     let docker = bin_dir.path().join("docker");
@@ -841,7 +798,8 @@ fn build_installer_smoke_docker_runs_fake_docker() {
         perms.set_mode(0o755);
         fs::set_permissions(&docker, perms).expect("chmod docker");
     }
-    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-docker"])
@@ -859,7 +817,8 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
     fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
-    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n").expect("write installer");
+    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n")
+        .expect("write installer");
     let bin_dir = tempdir().expect("bin tempdir");
     let docker = bin_dir.path().join("docker");
     fs::write(
@@ -874,7 +833,8 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
         perms.set_mode(0o755);
         fs::set_permissions(&docker, perms).expect("chmod docker");
     }
-    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     let stderr = cargo_bin()
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-docker"])
@@ -933,11 +893,8 @@ fn build_installer_smoke_homebrew_runs_fake_brew() {
         fs::set_permissions(&brew, perms).expect("chmod brew");
     }
 
-    let path_env = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-homebrew"])
@@ -1011,13 +968,7 @@ fn build_self_validate_release_version_accepts_matching_tag() {
 
     cargo_bin()
         .current_dir(repo.path())
-        .args([
-            "build",
-            "self",
-            "validate-release-version",
-            "--tag",
-            "v1.2.3",
-        ])
+        .args(["build", "self", "validate-release-version", "--tag", "v1.2.3"])
         .assert()
         .success();
 }
@@ -1034,13 +985,7 @@ fn build_self_validate_release_version_rejects_mismatch() {
 
     cargo_bin()
         .current_dir(repo.path())
-        .args([
-            "build",
-            "self",
-            "validate-release-version",
-            "--tag",
-            "v1.2.4",
-        ])
+        .args(["build", "self", "validate-release-version", "--tag", "v1.2.4"])
         .assert()
         .failure();
 }
@@ -1058,7 +1003,8 @@ fn build_self_release_asset_creates_single_archive() {
         "package main\n\nconst siVersion = \"v1.2.3\"\n",
     )
     .expect("write version");
-    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n").expect("write main");
+    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
+        .expect("write main");
     let go_dir = tempdir().expect("go tempdir");
     let cargo_path = go_dir.path().join("cargo");
     write_executable_shell_script(
@@ -1073,15 +1019,23 @@ fn build_self_release_asset_creates_single_archive() {
         fs::set_permissions(&cargo_path, perms).expect("chmod tool");
     }
     let out_dir = repo.path().join("out");
-    let path_env = format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let path_env =
+        format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .args([
-            "build", "self", "release-asset",
-            "--repo-root", repo.path().to_str().expect("repo"),
-            "--version", "v1.2.3",
-            "--goos", "linux",
-            "--goarch", "amd64",
-            "--out-dir", out_dir.to_str().expect("out"),
+            "build",
+            "self",
+            "release-asset",
+            "--repo-root",
+            repo.path().to_str().expect("repo"),
+            "--version",
+            "v1.2.3",
+            "--goos",
+            "linux",
+            "--goarch",
+            "amd64",
+            "--out-dir",
+            out_dir.to_str().expect("out"),
         ])
         .env("PATH", path_env)
         .assert()
@@ -1120,21 +1074,15 @@ fn build_installer_settings_helper_prints_expected_doc() {
         .get_output()
         .stdout
         .clone();
-    assert_eq!(
-        String::from_utf8_lossy(&output),
-        "[codex.login]\ndefault_browser = \"safari\"\n"
-    );
+    assert_eq!(String::from_utf8_lossy(&output), "[codex.login]\ndefault_browser = \"safari\"\n");
 }
 
 #[test]
 fn build_installer_settings_helper_rewrites_existing_login_block() {
     let dir = tempdir().expect("tempdir");
     let settings = dir.path().join("settings.toml");
-    fs::write(
-        &settings,
-        "[codex.login]\ndefault_browser = \"chrome\"\nother = true\n",
-    )
-    .expect("write settings");
+    fs::write(&settings, "[codex.login]\ndefault_browser = \"chrome\"\nother = true\n")
+        .expect("write settings");
     cargo_bin()
         .args([
             "build",
@@ -1316,16 +1264,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "search",
-            "list",
-            "--query",
-            "music",
-            "--all",
-            "--home",
-        ])
+        .args(["google", "youtube", "search", "list", "--query", "music", "--all", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -1620,15 +1559,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "channel",
-            "update",
-            "--body",
-            "{\"id\":\"c1\"}",
-            "--home",
-        ])
+        .args(["google", "youtube", "channel", "update", "--body", "{\"id\":\"c1\"}", "--home"])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -1686,17 +1617,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "video",
-            "rate",
-            "--id",
-            "v1",
-            "--rating",
-            "like",
-            "--home",
-        ])
+        .args(["google", "youtube", "video", "rate", "--id", "v1", "--rating", "like", "--home"])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -1895,15 +1816,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "subscription",
-            "create",
-            "--channel-id",
-            "chan9",
-            "--home",
-        ])
+        .args(["google", "youtube", "subscription", "create", "--channel-id", "chan9", "--home"])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -2207,9 +2120,7 @@ project_id = "yt-core"
             "HTTP/1.1 200 OK\r\nConnection: close\r\nLocation: http://{}/upload-session\r\nContent-Length: 0\r\n\r\n",
             addr
         );
-        init_stream
-            .write_all(init_response.as_bytes())
-            .expect("write init response");
+        init_stream.write_all(init_response.as_bytes()).expect("write init response");
 
         let (mut upload_stream, _) = listener.accept().expect("accept upload");
         let mut upload_buffer = [0_u8; 8192];
@@ -2223,19 +2134,11 @@ project_id = "yt-core"
             body.len(),
             body
         );
-        upload_stream
-            .write_all(upload_response.as_bytes())
-            .expect("write upload response");
+        upload_stream.write_all(upload_response.as_bytes()).expect("write upload response");
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "video",
-            "upload",
-            "--file",
-        ])
+        .args(["google", "youtube", "video", "upload", "--file"])
         .arg(&upload_path)
         .args(["--title", "Launch", "--home"])
         .arg(home.path())
@@ -2295,15 +2198,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "caption",
-            "download",
-            "--id",
-            "cap1",
-            "--output",
-        ])
+        .args(["google", "youtube", "caption", "download", "--id", "cap1", "--output"])
         .arg(&output_path)
         .args(["--format", "vtt", "--home"])
         .arg(home.path())
@@ -2316,7 +2211,10 @@ project_id = "yt-core"
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert!(parsed["bytes_written"].as_i64().unwrap_or_default() > 0);
-    assert_eq!(fs::read_to_string(&output_path).expect("caption output"), "WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n");
+    assert_eq!(
+        fs::read_to_string(&output_path).expect("caption output"),
+        "WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n"
+    );
 }
 
 #[test]
@@ -2368,15 +2266,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args([
-            "google",
-            "youtube",
-            "thumbnail",
-            "set",
-            "--video-id",
-            "vthumb",
-            "--file",
-        ])
+        .args(["google", "youtube", "thumbnail", "set", "--video-id", "vthumb", "--file"])
         .arg(&file_path)
         .args(["--home"])
         .arg(home.path())
@@ -2557,7 +2447,11 @@ fn google_play_auth_status_json_verifies_package() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2581,7 +2475,8 @@ default_package_name = "com.acme.app"
             let (mut stream, _) = token_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let _ = stream.read(&mut buffer).expect("read request");
-            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let body =
+                r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -2597,11 +2492,15 @@ default_package_name = "com.acme.app"
             let read = stream.read(&mut buffer).expect("read request");
             let request = String::from_utf8_lossy(&buffer[..read]);
             if body.is_empty() {
-                assert!(request.contains("DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-1"));
+                assert!(request.contains(
+                    "DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-1"
+                ));
                 let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
                 stream.write_all(response.as_bytes()).expect("write response");
             } else {
-                assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits"));
+                assert!(
+                    request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits")
+                );
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                     body.len(),
@@ -2638,7 +2537,11 @@ fn google_play_listing_get_json_reads_listing() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2661,7 +2564,8 @@ default_language_code = "en-US"
             let (mut stream, _) = token_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let _ = stream.read(&mut buffer).expect("read request");
-            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let body =
+                r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -2678,11 +2582,17 @@ default_language_code = "en-US"
             let read = stream.read(&mut buffer).expect("read request");
             let request = String::from_utf8_lossy(&buffer[..read]);
             if body == r#"{"id":"edit-9"}"# {
-                assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits"));
+                assert!(
+                    request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits")
+                );
             } else if body.is_empty() {
-                assert!(request.contains("DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-9"));
+                assert!(request.contains(
+                    "DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-9"
+                ));
             } else {
-                assert!(request.contains("GET /androidpublisher/v3/applications/com.acme.app/edits/edit-9/listings/en-US"));
+                assert!(request.contains(
+                    "GET /androidpublisher/v3/applications/com.acme.app/edits/edit-9/listings/en-US"
+                ));
             }
             let response = if body.is_empty() {
                 "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string()
@@ -2721,7 +2631,11 @@ fn google_play_app_create_json_hits_custom_app_api() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2791,7 +2705,11 @@ fn google_play_asset_upload_json_uploads_image() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2815,7 +2733,8 @@ default_language_code = "en-US"
             let (mut stream, _) = token_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let _ = stream.read(&mut buffer).expect("read request");
-            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let body =
+                r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -2825,17 +2744,23 @@ default_language_code = "en-US"
         }
     });
     thread::spawn(move || {
-        for (idx, body) in [r#"{"id":"edit-1"}"#, r#"{"id":"asset-1"}"#, r#"{"id":"edit-1"}"#].iter().enumerate() {
+        for (idx, body) in
+            [r#"{"id":"edit-1"}"#, r#"{"id":"asset-1"}"#, r#"{"id":"edit-1"}"#].iter().enumerate()
+        {
             let (mut stream, _) = api_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let read = stream.read(&mut buffer).expect("read request");
             let request = String::from_utf8_lossy(&buffer[..read]);
             match idx {
-                0 => assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits")),
+                0 => assert!(
+                    request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits")
+                ),
                 1 => {
                     assert!(request.contains("POST /upload/androidpublisher/v3/applications/com.acme.app/edits/edit-1/listings/en-US/phoneScreenshots?uploadType=media"));
                 }
-                _ => assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits/edit-1:commit")),
+                _ => assert!(request.contains(
+                    "POST /androidpublisher/v3/applications/com.acme.app/edits/edit-1:commit"
+                )),
             }
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
@@ -2872,7 +2797,11 @@ fn google_play_release_status_json_reads_track() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2894,7 +2823,8 @@ default_package_name = "com.acme.app"
             let (mut stream, _) = token_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let _ = stream.read(&mut buffer).expect("read request");
-            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let body =
+                r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -2955,11 +2885,8 @@ fn google_play_apply_json_applies_metadata_bundle() {
     let settings_path = settings_dir.join("settings.toml");
     let metadata_dir = home.path().join("play-store");
     fs::create_dir_all(metadata_dir.join("listings")).expect("mkdir listings");
-    fs::write(
-        metadata_dir.join("details.json"),
-        r#"{"contactEmail":"dev@acme.test"}"#,
-    )
-    .expect("write details");
+    fs::write(metadata_dir.join("details.json"), r#"{"contactEmail":"dev@acme.test"}"#)
+        .expect("write details");
     fs::write(
         metadata_dir.join("listings").join("en-US.json"),
         r#"{"language":"en-US","title":"Acme App"}"#,
@@ -2969,7 +2896,11 @@ fn google_play_apply_json_applies_metadata_bundle() {
     let token_addr = token_listener.local_addr().expect("local addr");
     let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let api_addr = api_listener.local_addr().expect("local addr");
-    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n"),
+        token_addr
+    );
     fs::write(
         &settings_path,
         format!(
@@ -2991,7 +2922,8 @@ default_package_name = "com.acme.app"
             let (mut stream, _) = token_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
             let _ = stream.read(&mut buffer).expect("read request");
-            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let body =
+                r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -3001,7 +2933,8 @@ default_package_name = "com.acme.app"
         }
     });
     thread::spawn(move || {
-        let bodies = [r#"{"id":"edit-3"}"#, r#"{"ok":true}"#, r#"{"ok":true}"#, r#"{"id":"edit-3"}"#];
+        let bodies =
+            [r#"{"id":"edit-3"}"#, r#"{"ok":true}"#, r#"{"ok":true}"#, r#"{"id":"edit-3"}"#];
         for (idx, body) in bodies.iter().enumerate() {
             let (mut stream, _) = api_listener.accept().expect("accept");
             let mut buffer = [0_u8; 4096];
@@ -3525,7 +3458,9 @@ owner = "Aureuma"
 #[test]
 fn github_release_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /repos/Aureuma/si/releases?page=1&per_page=100 HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("GET /repos/Aureuma/si/releases?page=1&per_page=100 HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response(
             "200 OK",
@@ -3580,9 +3515,7 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
             }
             1 => {
                 assert!(
-                    request.starts_with(
-                        "GET /repos/Aureuma/si/releases/tags/v1.2.3 HTTP/1.1\r\n"
-                    )
+                    request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.3 HTTP/1.1\r\n")
                 );
                 assert!(request.contains("authorization: Bearer ghs_install_token\r\n"));
                 http_json_response(
@@ -3685,7 +3618,9 @@ fn github_release_upload_json_mutates_via_api_with_oauth() {
         let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match call {
             0 => {
-                assert!(request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n"));
+                assert!(
+                    request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n")
+                );
                 let base_url = upload_base_for_server.lock().expect("lock upload base").clone();
                 http_json_response(
                     "200 OK",
@@ -3697,7 +3632,9 @@ fn github_release_upload_json_mutates_via_api_with_oauth() {
                 )
             }
             1 => {
-                assert!(request.starts_with("POST /uploads/repos/Aureuma/si/releases/102/assets?name="));
+                assert!(
+                    request.starts_with("POST /uploads/repos/Aureuma/si/releases/102/assets?name=")
+                );
                 assert!(request.contains("content-type: application/octet-stream\r\n"));
                 http_json_response(
                     "201 Created",
@@ -3747,7 +3684,9 @@ fn github_release_delete_json_mutates_via_api_with_oauth() {
         let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match call {
             0 => {
-                assert!(request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n"));
+                assert!(
+                    request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n")
+                );
                 http_json_response(
                     "200 OK",
                     &[("x-github-request-id", "req_gh_release_meta_delete")],
@@ -3798,34 +3737,54 @@ fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
     let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let seen = calls.clone();
-    let server = start_http_server(2, move |request| {
-        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match call {
-            0 => {
-                assert!(request.starts_with("GET /repos/Aureuma/si/actions/secrets/public-key HTTP/1.1\r\n"));
-                http_json_response(
-                    "200 OK",
-                    &[("x-github-request-id", "req_gh_secret_key")],
-                    &format!(r#"{{"key_id":"kid-1","key":"{}"}}"#, key),
-                )
+    let server =
+        start_http_server(2, move |request| {
+            let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match call {
+                0 => {
+                    assert!(request.starts_with(
+                        "GET /repos/Aureuma/si/actions/secrets/public-key HTTP/1.1\r\n"
+                    ));
+                    http_json_response(
+                        "200 OK",
+                        &[("x-github-request-id", "req_gh_secret_key")],
+                        &format!(r#"{{"key_id":"kid-1","key":"{}"}}"#, key),
+                    )
+                }
+                1 => {
+                    assert!(request.starts_with(
+                        "PUT /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n"
+                    ));
+                    assert!(request.contains("\"key_id\":\"kid-1\""));
+                    assert!(request.contains("\"encrypted_value\":\""));
+                    assert!(!request.contains("super-secret"));
+                    http_json_response("201 Created", &[], "")
+                }
+                _ => panic!("unexpected request"),
             }
-            1 => {
-                assert!(request.starts_with("PUT /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
-                assert!(request.contains("\"key_id\":\"kid-1\""));
-                assert!(request.contains("\"encrypted_value\":\""));
-                assert!(!request.contains("super-secret"));
-                http_json_response("201 Created", &[], "")
-            }
-            _ => panic!("unexpected request"),
-        }
-    });
+        });
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","repo","set","Aureuma/si","MY_SECRET",
-            "--value","super-secret","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "repo",
+            "set",
+            "Aureuma/si",
+            "MY_SECRET",
+            "--value",
+            "super-secret",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success().get_output().stdout.clone();
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["status_code"], 201);
     assert_eq!(parsed["data"]["scope"], "repo");
@@ -3835,16 +3794,36 @@ fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
 #[test]
 fn github_secret_repo_delete_json_mutates_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("DELETE /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
-        http_json_response("204 No Content", &[("x-github-request-id","req_gh_secret_repo_delete")], "")
+        assert!(
+            request.starts_with("DELETE /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n")
+        );
+        http_json_response(
+            "204 No Content",
+            &[("x-github-request-id", "req_gh_secret_repo_delete")],
+            "",
+        )
     });
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","repo","delete","Aureuma/si","MY_SECRET",
-            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "repo",
+            "delete",
+            "Aureuma/si",
+            "MY_SECRET",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success().get_output().stdout.clone();
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["status_code"], 204);
     server.join();
@@ -3859,11 +3838,19 @@ fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
         let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match call {
             0 => {
-                assert!(request.starts_with("GET /repos/Aureuma/si/environments/prod/secrets/public-key HTTP/1.1\r\n"));
-                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-2","key":"{}"}}"#, key))
+                assert!(request.starts_with(
+                    "GET /repos/Aureuma/si/environments/prod/secrets/public-key HTTP/1.1\r\n"
+                ));
+                http_json_response(
+                    "200 OK",
+                    &[],
+                    &format!(r#"{{"key_id":"kid-2","key":"{}"}}"#, key),
+                )
             }
             1 => {
-                assert!(request.starts_with("PUT /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"));
+                assert!(request.starts_with(
+                    "PUT /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"
+                ));
                 assert!(!request.contains("super-secret"));
                 http_json_response("201 Created", &[], "")
             }
@@ -3873,10 +3860,26 @@ fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","env","set","Aureuma/si","prod","MY_SECRET",
-            "--value","super-secret","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "env",
+            "set",
+            "Aureuma/si",
+            "prod",
+            "MY_SECRET",
+            "--value",
+            "super-secret",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success().get_output().stdout.clone();
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["data"]["scope"], "env");
     assert_eq!(parsed["data"]["environment"], "prod");
@@ -3886,16 +3889,30 @@ fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
 #[test]
 fn github_secret_env_delete_json_mutates_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("DELETE /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "DELETE /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"
+        ));
         http_json_response("204 No Content", &[], "")
     });
     cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","env","delete","Aureuma/si","prod","MY_SECRET",
-            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "env",
+            "delete",
+            "Aureuma/si",
+            "prod",
+            "MY_SECRET",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success();
+        .assert()
+        .success();
     server.join();
 }
 
@@ -3908,11 +3925,20 @@ fn github_secret_org_set_json_encrypts_and_mutates_with_oauth() {
         let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match call {
             0 => {
-                assert!(request.starts_with("GET /orgs/Aureuma/actions/secrets/public-key HTTP/1.1\r\n"));
-                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-3","key":"{}"}}"#, key))
+                assert!(
+                    request
+                        .starts_with("GET /orgs/Aureuma/actions/secrets/public-key HTTP/1.1\r\n")
+                );
+                http_json_response(
+                    "200 OK",
+                    &[],
+                    &format!(r#"{{"key_id":"kid-3","key":"{}"}}"#, key),
+                )
             }
             1 => {
-                assert!(request.starts_with("PUT /orgs/Aureuma/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
+                assert!(
+                    request.starts_with("PUT /orgs/Aureuma/actions/secrets/MY_SECRET HTTP/1.1\r\n")
+                );
                 assert!(request.contains("\"visibility\":\"selected\""));
                 assert!(request.contains("\"selected_repository_ids\":[1,2]"));
                 assert!(!request.contains("super-secret"));
@@ -3924,11 +3950,29 @@ fn github_secret_org_set_json_encrypts_and_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","org","set","Aureuma","MY_SECRET",
-            "--value","super-secret","--visibility","selected","--repos","1,2",
-            "--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "org",
+            "set",
+            "Aureuma",
+            "MY_SECRET",
+            "--value",
+            "super-secret",
+            "--visibility",
+            "selected",
+            "--repos",
+            "1,2",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success().get_output().stdout.clone();
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["data"]["scope"], "org");
     assert_eq!(parsed["data"]["org"], "Aureuma");
@@ -3944,10 +3988,21 @@ fn github_secret_org_delete_json_mutates_with_oauth() {
     cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
-            "github","secret","org","delete","Aureuma","MY_SECRET",
-            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+            "github",
+            "secret",
+            "org",
+            "delete",
+            "Aureuma",
+            "MY_SECRET",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
         ])
-        .assert().success();
+        .assert()
+        .success();
     server.join();
 }
 
@@ -4156,11 +4211,7 @@ fn github_repo_archive_json_mutates_via_api_with_oauth() {
 fn github_repo_delete_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("DELETE /repos/Aureuma/si HTTP/1.1\r\n"));
-        http_json_response(
-            "204 No Content",
-            &[("x-github-request-id", "req_gh_repo_delete")],
-            "",
-        )
+        http_json_response("204 No Content", &[("x-github-request-id", "req_gh_repo_delete")], "")
     });
 
     let output = cargo_bin()
@@ -4815,14 +4866,8 @@ fn github_workflow_dispatch_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_workflow_run_cancel_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "POST /repos/Aureuma/si/actions/runs/21/cancel HTTP/1.1\r\n"
-        ));
-        http_json_response(
-            "202 Accepted",
-            &[("x-github-request-id", "req_gh_workflow_cancel")],
-            "",
-        )
+        assert!(request.starts_with("POST /repos/Aureuma/si/actions/runs/21/cancel HTTP/1.1\r\n"));
+        http_json_response("202 Accepted", &[("x-github-request-id", "req_gh_workflow_cancel")], "")
     });
 
     let output = cargo_bin()
@@ -4855,14 +4900,8 @@ fn github_workflow_run_cancel_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_workflow_run_rerun_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "POST /repos/Aureuma/si/actions/runs/21/rerun HTTP/1.1\r\n"
-        ));
-        http_json_response(
-            "201 Created",
-            &[("x-github-request-id", "req_gh_workflow_rerun")],
-            "",
-        )
+        assert!(request.starts_with("POST /repos/Aureuma/si/actions/runs/21/rerun HTTP/1.1\r\n"));
+        http_json_response("201 Created", &[("x-github-request-id", "req_gh_workflow_rerun")], "")
     });
 
     let output = cargo_bin()
@@ -4947,7 +4986,9 @@ fn github_workflow_watch_json_waits_until_completed_with_oauth() {
 #[test]
 fn github_issue_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /repos/Aureuma/si/issues?page=1&per_page=100&state=open HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /repos/Aureuma/si/issues?page=1&per_page=100&state=open HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response(
             "200 OK",
@@ -5186,7 +5227,9 @@ fn github_issue_reopen_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_pr_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /repos/Aureuma/si/pulls?page=1&per_page=100&state=open HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /repos/Aureuma/si/pulls?page=1&per_page=100&state=open HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response(
             "200 OK",
@@ -5391,7 +5434,9 @@ fn github_pr_merge_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_branch_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /repos/Aureuma/si/branches?page=1&per_page=100&protected=true HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /repos/Aureuma/si/branches?page=1&per_page=100&protected=true HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response(
             "200 OK",
@@ -5524,9 +5569,10 @@ fn github_branch_create_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_branch_delete_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "DELETE /repos/Aureuma/si/git/refs/heads/feature%2Frust HTTP/1.1\r\n"
-        ));
+        assert!(
+            request
+                .starts_with("DELETE /repos/Aureuma/si/git/refs/heads/feature%2Frust HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response("204 No Content", &[("x-github-request-id", "req_gh_branch_delete")], "")
     });
@@ -5561,9 +5607,7 @@ fn github_branch_delete_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_branch_protect_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "PUT /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n"
-        ));
+        assert!(request.starts_with("PUT /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n"));
         assert!(request.contains("\"strict\":true"));
         assert!(request.contains("\"checks\":[\"ci\",\"lint\"]"));
         assert!(request.contains("\"required_approving_review_count\":2"));
@@ -5615,9 +5659,9 @@ fn github_branch_protect_json_mutates_via_api_with_oauth() {
 #[test]
 fn github_branch_unprotect_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "DELETE /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n"
-        ));
+        assert!(
+            request.starts_with("DELETE /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
         http_json_response(
             "204 No Content",
@@ -5657,14 +5701,7 @@ fn github_branch_unprotect_json_mutates_via_api_with_oauth() {
 fn github_git_credential_get_reads_stdin_and_prints_token() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
-        .args([
-            "github",
-            "git",
-            "credential",
-            "get",
-            "--auth-mode",
-            "oauth",
-        ])
+        .args(["github", "git", "credential", "get", "--auth-mode", "oauth"])
         .write_stdin("protocol=https\nhost=github.com\npath=Aureuma/si.git\n\n")
         .assert()
         .success()
@@ -6052,13 +6089,7 @@ fn stripe_object_get_json_fetches_single_object() {
 
     let output = cargo_bin()
         .args(["stripe", "object", "get", "product", "prod_123"])
-        .args([
-            "--api-key",
-            "sk_test_core",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .args(["--api-key", "sk_test_core", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
         .get_output()
@@ -6528,9 +6559,9 @@ fn workos_organization_list_json_fetches_from_api() {
 #[test]
 fn workos_invitation_revoke_json_posts_empty_body() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "POST /user_management/invitations/inv_123/revoke HTTP/1.1\r\n"
-        ));
+        assert!(
+            request.starts_with("POST /user_management/invitations/inv_123/revoke HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: Bearer sk_workos_prod\r\n"));
         assert!(request.contains("content-type: application/json\r\n"));
         assert!(request.contains("\r\n\r\n{}"));
@@ -6763,15 +6794,18 @@ fn cloudflare_raw_text_prints_body_for_raw_mode() {
 
 #[test]
 fn cloudflare_analytics_http_json_fetches_zone_dashboard() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /zones/zone_123/analytics/dashboard?since=2026-03-01 HTTP/1.1\r\n"));
-        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
-        http_json_response(
-            "200 OK",
-            &[("cf-ray", "req_cloudflare_analytics")],
-            r#"{"success":true,"result":{"totals":{"requests":{"all":123}}}}"#,
-        )
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with(
+                "GET /zones/zone_123/analytics/dashboard?since=2026-03-01 HTTP/1.1\r\n"
+            ));
+            assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+            http_json_response(
+                "200 OK",
+                &[("cf-ray", "req_cloudflare_analytics")],
+                r#"{"success":true,"result":{"totals":{"requests":{"all":123}}}}"#,
+            )
+        });
 
     let output = cargo_bin()
         .args(["cloudflare", "analytics", "http"])
@@ -6879,13 +6913,7 @@ fn cloudflare_smoke_json_runs_public_checks_and_skips_account_scoped_ones() {
 
     let output = cargo_bin()
         .args(["cloudflare", "smoke"])
-        .args([
-            "--api-token",
-            "cf-test-token",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
         .get_output()
@@ -7144,13 +7172,7 @@ fn cloudflare_zone_list_json_fetches_global_endpoint() {
 
     let output = cargo_bin()
         .args(["cloudflare", "zone", "list"])
-        .args([
-            "--api-token",
-            "cf-test-token",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
         .get_output()
@@ -7206,15 +7228,18 @@ fn cloudflare_dns_create_json_posts_zone_body() {
 
 #[test]
 fn cloudflare_email_address_get_json_fetches_account_endpoint() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /accounts/acct_123/email/routing/addresses/addr_123 HTTP/1.1\r\n"));
-        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
-        http_json_response(
-            "200 OK",
-            &[("cf-ray", "req_cloudflare_email_address_get")],
-            r#"{"success":true,"result":{"id":"addr_123","email":"ops@example.com"}}"#,
-        )
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with(
+                "GET /accounts/acct_123/email/routing/addresses/addr_123 HTTP/1.1\r\n"
+            ));
+            assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+            http_json_response(
+                "200 OK",
+                &[("cf-ray", "req_cloudflare_email_address_get")],
+                r#"{"success":true,"result":{"id":"addr_123","email":"ops@example.com"}}"#,
+            )
+        });
 
     let output = cargo_bin()
         .args(["cloudflare", "email", "address", "get", "addr_123"])
@@ -7253,14 +7278,7 @@ fn cloudflare_token_delete_json_deletes_global_resource() {
 
     let output = cargo_bin()
         .args(["cloudflare", "token", "delete", "tok_123"])
-        .args([
-            "--api-token",
-            "cf-test-token",
-            "--base-url",
-            &server.base_url,
-            "--force",
-            "--json",
-        ])
+        .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--force", "--json"])
         .assert()
         .success()
         .get_output()
@@ -7314,7 +7332,9 @@ fn cloudflare_ruleset_update_json_patches_zone_resource() {
 #[test]
 fn cloudflare_workers_script_update_json_puts_account_resource() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("PUT /accounts/acct_123/workers/scripts/script_123 HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("PUT /accounts/acct_123/workers/scripts/script_123 HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
         assert!(request.contains("\"name\":\"core-worker\""));
         http_json_response(
@@ -7425,7 +7445,9 @@ fn cloudflare_queue_list_json_fetches_account_endpoint() {
 #[test]
 fn cloudflare_waf_update_json_patches_zone_resource() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("PATCH /zones/zone_123/firewall/waf/packages/waf_123 HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("PATCH /zones/zone_123/firewall/waf/packages/waf_123 HTTP/1.1\r\n")
+        );
         assert!(request.contains("\"mode\":\"on\""));
         http_json_response(
             "200 OK",
@@ -7437,10 +7459,14 @@ fn cloudflare_waf_update_json_patches_zone_resource() {
     let output = cargo_bin()
         .args(["cloudflare", "waf", "update", "waf_123"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--zone-id", "zone_123",
-            "--param", "mode=on",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "mode=on",
             "--json",
         ])
         .assert()
@@ -7467,9 +7493,12 @@ fn cloudflare_r2_bucket_get_json_fetches_account_endpoint() {
     let output = cargo_bin()
         .args(["cloudflare", "r2", "bucket", "get", "bucket_123"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--json",
         ])
         .assert()
@@ -7497,10 +7526,14 @@ fn cloudflare_d1_db_create_json_posts_account_resource() {
     let output = cargo_bin()
         .args(["cloudflare", "d1", "db", "create"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
-            "--param", "name=core",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
+            "--param",
+            "name=core",
             "--json",
         ])
         .assert()
@@ -7517,7 +7550,10 @@ fn cloudflare_d1_db_create_json_posts_account_resource() {
 #[test]
 fn cloudflare_kv_namespace_delete_json_deletes_account_resource() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("DELETE /accounts/acct_123/storage/kv/namespaces/ns_123 HTTP/1.1\r\n"));
+        assert!(
+            request
+                .starts_with("DELETE /accounts/acct_123/storage/kv/namespaces/ns_123 HTTP/1.1\r\n")
+        );
         http_json_response(
             "200 OK",
             &[("cf-ray", "req_cloudflare_kv_namespace_delete")],
@@ -7527,9 +7563,12 @@ fn cloudflare_kv_namespace_delete_json_deletes_account_resource() {
     let output = cargo_bin()
         .args(["cloudflare", "kv", "namespace", "delete", "ns_123"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--force",
             "--json",
         ])
@@ -7557,9 +7596,12 @@ fn cloudflare_access_app_list_json_fetches_account_endpoint() {
     let output = cargo_bin()
         .args(["cloudflare", "access", "app", "list"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--json",
         ])
         .assert()
@@ -7576,7 +7618,9 @@ fn cloudflare_access_app_list_json_fetches_account_endpoint() {
 #[test]
 fn cloudflare_access_policy_update_json_patches_account_resource() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("PATCH /accounts/acct_123/access/policies/pol_123 HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("PATCH /accounts/acct_123/access/policies/pol_123 HTTP/1.1\r\n")
+        );
         assert!(request.contains("\"name\":\"core-policy\""));
         http_json_response(
             "200 OK",
@@ -7587,10 +7631,14 @@ fn cloudflare_access_policy_update_json_patches_account_resource() {
     let output = cargo_bin()
         .args(["cloudflare", "access", "policy", "update", "pol_123"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
-            "--param", "name=core-policy",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
+            "--param",
+            "name=core-policy",
             "--json",
         ])
         .assert()
@@ -7617,9 +7665,12 @@ fn cloudflare_tunnel_get_json_fetches_account_endpoint() {
     let output = cargo_bin()
         .args(["cloudflare", "tunnel", "get", "tun_123"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--json",
         ])
         .assert()
@@ -7647,10 +7698,14 @@ fn cloudflare_tls_cert_create_json_posts_zone_resource() {
     let output = cargo_bin()
         .args(["cloudflare", "tls", "cert", "create"])
         .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--zone-id", "zone_123",
-            "--param", "hostname=example.com",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "hostname=example.com",
             "--json",
         ])
         .assert()
@@ -7677,11 +7732,7 @@ fn cloudflare_token_verify_json_fetches_global_endpoint() {
 
     let output = cargo_bin()
         .args(["cloudflare", "token", "verify"])
-        .args([
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--json",
-        ])
+        .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
         .get_output()
@@ -7696,7 +7747,9 @@ fn cloudflare_token_verify_json_fetches_global_endpoint() {
 #[test]
 fn cloudflare_workers_secret_set_json_puts_account_endpoint() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("PUT /accounts/acct_123/workers/scripts/core-worker/secrets HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "PUT /accounts/acct_123/workers/scripts/core-worker/secrets HTTP/1.1\r\n"
+        ));
         assert!(request.contains("\"name\":\"API_TOKEN\""));
         assert!(request.contains("\"text\":\"secret-value\""));
         http_json_response(
@@ -7709,12 +7762,18 @@ fn cloudflare_workers_secret_set_json_puts_account_endpoint() {
     let output = cargo_bin()
         .args(["cloudflare", "workers", "secret", "set"])
         .args([
-            "--script", "core-worker",
-            "--name", "API_TOKEN",
-            "--text", "secret-value",
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--script",
+            "core-worker",
+            "--name",
+            "API_TOKEN",
+            "--text",
+            "secret-value",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--json",
         ])
         .assert()
@@ -7731,7 +7790,9 @@ fn cloudflare_workers_secret_set_json_puts_account_endpoint() {
 #[test]
 fn cloudflare_tunnel_token_json_fetches_account_endpoint() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /accounts/acct_123/cfd_tunnel/tun_123/token HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("GET /accounts/acct_123/cfd_tunnel/tun_123/token HTTP/1.1\r\n")
+        );
         http_json_response(
             "200 OK",
             &[("cf-ray", "req_cloudflare_tunnel_token")],
@@ -7742,10 +7803,14 @@ fn cloudflare_tunnel_token_json_fetches_account_endpoint() {
     let output = cargo_bin()
         .args(["cloudflare", "tunnel", "token"])
         .args([
-            "--tunnel", "tun_123",
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--account-id", "acct_123",
+            "--tunnel",
+            "tun_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
             "--json",
         ])
         .assert()
@@ -7776,9 +7841,12 @@ fn cloudflare_cache_purge_json_posts_zone_endpoint() {
         .args([
             "--everything",
             "--force",
-            "--api-token", "cf-test-token",
-            "--base-url", &server.base_url,
-            "--zone-id", "zone_123",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
             "--json",
         ])
         .assert()
@@ -7975,10 +8043,16 @@ secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
 fn aws_auth_status_json_verifies_signed_get_user_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST / HTTP/1.1\r\n"));
-        assert!(request.contains("content-type: application/x-www-form-urlencoded; charset=utf-8\r\n"));
+        assert!(
+            request.contains("content-type: application/x-www-form-urlencoded; charset=utf-8\r\n")
+        );
         assert!(request.contains("x-amz-date: "));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        assert!(request.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token"));
+        assert!(
+            request.contains(
+                "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token"
+            )
+        );
         assert!(request.contains("\r\n\r\nAction=GetUser&Version=2010-05-08"));
         http_xml_response(
             "200 OK",
@@ -8456,18 +8530,31 @@ fn aws_lambda_function_list_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /2015-03-31/functions/?MaxItems=50 HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_lambda_list")], r#"{"Functions":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_lambda_list")],
+            r#"{"Functions":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "lambda", "function", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "lambda",
+            "function",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8487,18 +8574,32 @@ fn aws_lambda_function_get_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /2015-03-31/functions/demo-fn HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_lambda_get")], r#"{"FunctionName":"demo-fn"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_lambda_get")],
+            r#"{"FunctionName":"demo-fn"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "lambda", "function", "get", "demo-fn",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "lambda",
+            "function",
+            "get",
+            "demo-fn",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8517,21 +8618,38 @@ fn aws_lambda_function_get_json_executes_signed_rest_request() {
 fn aws_ecr_repository_list_json_executes_signed_json_target_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST / HTTP/1.1\r\n"));
-        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.DescribeRepositories\r\n"));
+        assert!(request.contains(
+            "x-amz-target: AmazonEC2ContainerRegistry_V20150921.DescribeRepositories\r\n"
+        ));
         assert!(request.contains("content-type: application/x-amz-json-1.1\r\n"));
-        assert!(request.contains(r#"{\"maxResults\":50}"#) || request.contains(r#"{"maxResults":50}"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_repo_list")], r#"{"repositories":[]}"#)
+        assert!(
+            request.contains(r#"{\"maxResults\":50}"#) || request.contains(r#"{"maxResults":50}"#)
+        );
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_ecr_repo_list")],
+            r#"{"repositories":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "ecr", "repository", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "ecr",
+            "repository",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8548,22 +8666,39 @@ fn aws_ecr_repository_list_json_executes_signed_json_target_request() {
 
 #[test]
 fn aws_ecr_repository_create_json_executes_signed_json_target_request() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
-        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.CreateRepository\r\n"));
-        assert!(request.contains(r#""repositoryName":"demo-repo""#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_repo_create")], r#"{"repository":{"repositoryName":"demo-repo"}}"#)
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+            assert!(request.contains(
+                "x-amz-target: AmazonEC2ContainerRegistry_V20150921.CreateRepository\r\n"
+            ));
+            assert!(request.contains(r#""repositoryName":"demo-repo""#));
+            http_json_response(
+                "200 OK",
+                &[("x-amzn-requestid", "req_aws_ecr_repo_create")],
+                r#"{"repository":{"repositoryName":"demo-repo"}}"#,
+            )
+        });
 
     let output = cargo_bin()
         .args([
-            "aws", "ecr", "repository", "create", "demo-repo",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "ecr",
+            "repository",
+            "create",
+            "demo-repo",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8582,21 +8717,37 @@ fn aws_ecr_repository_create_json_executes_signed_json_target_request() {
 fn aws_ecr_image_list_json_executes_signed_json_target_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST / HTTP/1.1\r\n"));
-        assert!(request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.ListImages\r\n"));
+        assert!(
+            request.contains("x-amz-target: AmazonEC2ContainerRegistry_V20150921.ListImages\r\n")
+        );
         assert!(request.contains(r#""repositoryName":"demo-repo""#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ecr_image_list")], r#"{"imageIds":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_ecr_image_list")],
+            r#"{"imageIds":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "ecr", "image", "list",
-            "--repository", "demo-repo",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "ecr",
+            "image",
+            "list",
+            "--repository",
+            "demo-repo",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8625,14 +8776,24 @@ fn aws_s3_object_list_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
-            "aws", "s3", "object", "list",
-            "--bucket", "demo-bucket",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "s3",
+            "object",
+            "list",
+            "--bucket",
+            "demo-bucket",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8651,26 +8812,41 @@ fn aws_s3_object_list_json_executes_signed_rest_request() {
 fn aws_s3_object_get_output_writes_file() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /demo-bucket/nested/key.txt HTTP/1.1\r\n"));
-        http_xml_response("200 OK", &[("x-amz-request-id", "req_aws_s3_object_get")], "hello object")
+        http_xml_response(
+            "200 OK",
+            &[("x-amz-request-id", "req_aws_s3_object_get")],
+            "hello object",
+        )
     });
     let dir = tempdir().expect("tempdir");
     let output_path = dir.path().join("object.txt");
 
     let output = cargo_bin()
         .args([
-            "aws", "s3", "object", "get",
-            "--bucket", "demo-bucket",
-            "--key", "nested/key.txt",
+            "aws",
+            "s3",
+            "object",
+            "get",
+            "--bucket",
+            "demo-bucket",
+            "--key",
+            "nested/key.txt",
             "--output",
         ])
         .arg(&output_path)
         .args([
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8691,18 +8867,30 @@ fn aws_secrets_list_json_executes_signed_json_target_request() {
         assert!(request.starts_with("POST / HTTP/1.1\r\n"));
         assert!(request.contains("x-amz-target: secretsmanager.ListSecrets\r\n"));
         assert!(request.contains(r#""MaxResults":100"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_secrets_list")], r#"{"SecretList":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_secrets_list")],
+            r#"{"SecretList":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "secrets", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "secrets",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8723,20 +8911,34 @@ fn aws_secrets_create_json_executes_signed_json_target_request() {
         assert!(request.contains("x-amz-target: secretsmanager.CreateSecret\r\n"));
         assert!(request.contains(r#""Name":"demo-secret""#));
         assert!(request.contains(r#""SecretString":"super-secret""#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_secrets_create")], r#"{"ARN":"arn:aws:secretsmanager:demo"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_secrets_create")],
+            r#"{"ARN":"arn:aws:secretsmanager:demo"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "secrets", "create",
-            "--name", "demo-secret",
-            "--value", "super-secret",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "secrets",
+            "create",
+            "--name",
+            "demo-secret",
+            "--value",
+            "super-secret",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8761,13 +8963,22 @@ fn aws_kms_key_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
-            "aws", "kms", "key", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "kms",
+            "key",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8788,20 +8999,34 @@ fn aws_kms_encrypt_json_executes_signed_json_target_request() {
         assert!(request.contains("x-amz-target: TrentService.Encrypt\r\n"));
         assert!(request.contains(r#""KeyId":"key-123""#));
         assert!(request.contains(r#""Plaintext":"aGVsbG8=""#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_kms_encrypt")], r#"{"CiphertextBlob":"cipher"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_kms_encrypt")],
+            r#"{"CiphertextBlob":"cipher"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "kms", "encrypt",
-            "--key-id", "key-123",
-            "--plaintext", "hello",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "kms",
+            "encrypt",
+            "--key-id",
+            "key-123",
+            "--plaintext",
+            "hello",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8821,18 +9046,31 @@ fn aws_dynamodb_table_list_json_executes_signed_json_target_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.contains("x-amz-target: DynamoDB_20120810.ListTables\r\n"));
         assert!(request.contains(r#""Limit":100"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_dynamodb_list")], r#"{"TableNames":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_dynamodb_list")],
+            r#"{"TableNames":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "dynamodb", "table", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "dynamodb",
+            "table",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8853,20 +9091,35 @@ fn aws_dynamodb_item_get_json_executes_signed_json_target_request() {
         assert!(request.contains("x-amz-target: DynamoDB_20120810.GetItem\r\n"));
         assert!(request.contains(r#""TableName":"demo-table""#));
         assert!(request.contains(r#""Key":{"id":{"S":"123"}}"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_dynamodb_get")], r#"{"Item":{"id":{"S":"123"}}}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_dynamodb_get")],
+            r#"{"Item":{"id":{"S":"123"}}}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "dynamodb", "item", "get",
-            "--table", "demo-table",
-            "--key-json", r#"{"id":{"S":"123"}}"#,
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "dynamodb",
+            "item",
+            "get",
+            "--table",
+            "demo-table",
+            "--key-json",
+            r#"{"id":{"S":"123"}}"#,
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8887,19 +9140,33 @@ fn aws_ssm_parameter_get_json_executes_signed_json_target_request() {
         assert!(request.contains("x-amz-target: AmazonSSM.GetParameter\r\n"));
         assert!(request.contains(r#""Name":"demo-param""#));
         assert!(request.contains(r#""WithDecryption":true"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ssm_get")], r#"{"Parameter":{"Name":"demo-param"}}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_ssm_get")],
+            r#"{"Parameter":{"Name":"demo-param"}}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "ssm", "parameter", "get", "demo-param",
+            "aws",
+            "ssm",
+            "parameter",
+            "get",
+            "demo-param",
             "--decrypt",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8919,18 +9186,31 @@ fn aws_logs_group_list_json_executes_signed_json_target_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.contains("x-amz-target: Logs_20140328.DescribeLogGroups\r\n"));
         assert!(request.contains(r#""limit":50"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_logs_group")], r#"{"logGroups":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_logs_group")],
+            r#"{"logGroups":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "logs", "group", "list",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "logs",
+            "group",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8951,20 +9231,34 @@ fn aws_logs_events_json_executes_signed_json_target_request() {
         assert!(request.contains("x-amz-target: Logs_20140328.FilterLogEvents\r\n"));
         assert!(request.contains(r#""logGroupName":"demo-group""#));
         assert!(request.contains(r#""logStreamNames":["demo-stream"]"#));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_logs_events")], r#"{"events":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_logs_events")],
+            r#"{"events":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "logs", "events",
-            "--group", "demo-group",
-            "--stream", "demo-stream",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "logs",
+            "events",
+            "--group",
+            "demo-group",
+            "--stream",
+            "demo-stream",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -8997,15 +9291,25 @@ fn aws_cloudwatch_metric_list_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
-            "aws", "cloudwatch", "metric",
-            "--namespace", "AWS/EC2",
-            "--name", "CPUUtilization",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "cloudwatch",
+            "metric",
+            "--namespace",
+            "AWS/EC2",
+            "--name",
+            "CPUUtilization",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9025,19 +9329,33 @@ fn aws_bedrock_foundation_model_list_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /foundation-models?byProvider=anthropic HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_models")], r#"{"modelSummaries":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_models")],
+            r#"{"modelSummaries":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "foundation-model", "list",
-            "--provider", "anthropic",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "foundation-model",
+            "list",
+            "--provider",
+            "anthropic",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9057,19 +9375,34 @@ fn aws_bedrock_guardrail_get_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /guardrails/gr-123?guardrailVersion=1 HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_guardrail")], r#"{"guardrailId":"gr-123"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_guardrail")],
+            r#"{"guardrailId":"gr-123"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "guardrail", "get", "gr-123",
-            "--version", "1",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "guardrail",
+            "get",
+            "gr-123",
+            "--version",
+            "1",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9091,21 +9424,37 @@ fn aws_bedrock_runtime_invoke_json_executes_signed_rest_request() {
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
         assert!(request.contains("x-amzn-bedrock-trace: ENABLED\r\n"));
         assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_invoke")], r#"{"outputText":"ok"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_invoke")],
+            r#"{"outputText":"ok"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "runtime", "invoke",
-            "--model-id", "m-1",
-            "--prompt", "hello",
-            "--trace", "ENABLED",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "runtime",
+            "invoke",
+            "--model-id",
+            "m-1",
+            "--prompt",
+            "hello",
+            "--trace",
+            "ENABLED",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9126,20 +9475,35 @@ fn aws_bedrock_runtime_count_tokens_json_executes_signed_rest_request() {
         assert!(request.starts_with("POST /model/m-1/count-tokens HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
         assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_count")], r#"{"inputTextTokenCount":5}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_count")],
+            r#"{"inputTextTokenCount":5}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "runtime", "count-tokens",
-            "--model-id", "m-1",
-            "--prompt", "hello",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "runtime",
+            "count-tokens",
+            "--model-id",
+            "m-1",
+            "--prompt",
+            "hello",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9162,26 +9526,47 @@ fn aws_bedrock_job_create_json_executes_signed_rest_request() {
         assert!(request.contains("\"jobName\":\"nightly-batch\""));
         assert!(request.contains("\"timeoutDurationInHours\":2"));
         assert!(request.contains("\"tags\":[{\"key\":\"env\",\"value\":\"prod\"},{\"key\":\"team\",\"value\":\"platform\"}]"));
-        http_json_response("201 Created", &[("x-amzn-requestid", "req_aws_bedrock_job_create")], r#"{"jobArn":"arn:aws:bedrock:job/nightly-batch"}"#)
+        http_json_response(
+            "201 Created",
+            &[("x-amzn-requestid", "req_aws_bedrock_job_create")],
+            r#"{"jobArn":"arn:aws:bedrock:job/nightly-batch"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "job", "create",
-            "--name", "nightly-batch",
-            "--role-arn", "arn:aws:iam::123456789012:role/bedrock-batch",
-            "--model-id", "anthropic.claude-v2",
-            "--input-s3-uri", "s3://bucket/input.jsonl",
-            "--output-s3-uri", "s3://bucket/output/",
-            "--timeout-hours", "2",
-            "--tag", "team=platform",
-            "--tag", "env=prod",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "job",
+            "create",
+            "--name",
+            "nightly-batch",
+            "--role-arn",
+            "arn:aws:iam::123456789012:role/bedrock-batch",
+            "--model-id",
+            "anthropic.claude-v2",
+            "--input-s3-uri",
+            "s3://bucket/input.jsonl",
+            "--output-s3-uri",
+            "s3://bucket/output/",
+            "--timeout-hours",
+            "2",
+            "--tag",
+            "team=platform",
+            "--tag",
+            "env=prod",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9201,20 +9586,36 @@ fn aws_bedrock_agent_alias_get_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /agents/agent-1/agentAliases/alias-1 HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_agent_alias")], r#"{"agentAlias":{"agentAliasId":"alias-1"}}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_agent_alias")],
+            r#"{"agentAlias":{"agentAliasId":"alias-1"}}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "agent", "alias", "get",
-            "--agent-id", "agent-1",
-            "--alias-id", "alias-1",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "agent",
+            "alias",
+            "get",
+            "--agent-id",
+            "agent-1",
+            "--alias-id",
+            "alias-1",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9232,22 +9633,40 @@ fn aws_bedrock_agent_alias_get_json_executes_signed_rest_request() {
 #[test]
 fn aws_bedrock_knowledge_base_data_source_list_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /knowledgebases/kb-1/datasources?maxResults=5 HTTP/1.1\r\n"));
+        assert!(
+            request.starts_with("GET /knowledgebases/kb-1/datasources?maxResults=5 HTTP/1.1\r\n")
+        );
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_datasources")], r#"{"dataSourceSummaries":[]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_datasources")],
+            r#"{"dataSourceSummaries":[]}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "knowledge-base", "data-source", "list",
-            "--knowledge-base-id", "kb-1",
-            "--limit", "5",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "knowledge-base",
+            "data-source",
+            "list",
+            "--knowledge-base-id",
+            "kb-1",
+            "--limit",
+            "5",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9266,33 +9685,55 @@ fn aws_bedrock_knowledge_base_data_source_list_json_executes_signed_rest_request
 fn aws_bedrock_agent_runtime_invoke_agent_json_executes_signed_rest_request() {
     let home = tempdir().expect("tempdir");
     let session_state_path = home.path().join("session-state.json");
-    fs::write(&session_state_path, r#"{"promptSessionAttributes":{"mode":"debug"}}"#).expect("write session state");
+    fs::write(&session_state_path, r#"{"promptSessionAttributes":{"mode":"debug"}}"#)
+        .expect("write session state");
 
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST /agents/agent-1/agentAliases/alias-1/sessions/sess-1/text HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "POST /agents/agent-1/agentAliases/alias-1/sessions/sess-1/text HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
         assert!(request.contains("\"inputText\":\"hello\""));
         assert!(request.contains("\"enableTrace\":true"));
-        assert!(request.contains("\"sessionState\":{\"promptSessionAttributes\":{\"mode\":\"debug\"}}"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_agent_runtime")], r#"{"completion":"ok"}"#)
+        assert!(
+            request.contains("\"sessionState\":{\"promptSessionAttributes\":{\"mode\":\"debug\"}}")
+        );
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_agent_runtime")],
+            r#"{"completion":"ok"}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "agent-runtime", "invoke-agent",
-            "--agent-id", "agent-1",
-            "--agent-alias-id", "alias-1",
-            "--session-id", "sess-1",
-            "--input-text", "hello",
+            "aws",
+            "bedrock",
+            "agent-runtime",
+            "invoke-agent",
+            "--agent-id",
+            "agent-1",
+            "--agent-alias-id",
+            "alias-1",
+            "--session-id",
+            "sess-1",
+            "--input-text",
+            "hello",
             "--enable-trace",
             "--session-state-file",
             session_state_path.to_str().expect("session state path"),
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9315,21 +9756,37 @@ fn aws_bedrock_agent_runtime_retrieve_and_generate_json_executes_signed_rest_req
         assert!(request.contains("\"knowledgeBaseId\":\"kb-1\""));
         assert!(request.contains("\"text\":\"hello\""));
         assert!(request.contains("\"numberOfResults\":3"));
-        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_rag")], r#"{"output":{"text":"answer"}}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_rag")],
+            r#"{"output":{"text":"answer"}}"#,
+        )
     });
 
     let output = cargo_bin()
         .args([
-            "aws", "bedrock", "agent-runtime", "retrieve-and-generate",
-            "--knowledge-base-id", "kb-1",
-            "--query", "hello",
-            "--results", "3",
-            "--base-url", &server.base_url,
-            "--access-key", "AKIA1234567890ABCD",
-            "--secret-key", "secret",
-            "--session-token", "session",
-            "--region", "us-west-2",
-            "--format", "json",
+            "aws",
+            "bedrock",
+            "agent-runtime",
+            "retrieve-and-generate",
+            "--knowledge-base-id",
+            "kb-1",
+            "--query",
+            "hello",
+            "--results",
+            "3",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -9479,9 +9936,15 @@ fn gcp_doctor_json_verifies_request() {
     )
     .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /v1/projects/proj_core/services/serviceusage.googleapis.com HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /v1/projects/proj_core/services/serviceusage.googleapis.com HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer ya29.token-core-xyz\r\n"));
-        http_json_response("200 OK", &[("x-request-id", "req_gcp_doctor")], r#"{"state":"ENABLED"}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_doctor")],
+            r#"{"state":"ENABLED"}"#,
+        )
     });
 
     let output = cargo_bin()
@@ -9524,7 +9987,16 @@ fn gcp_service_list_json_fetches_services() {
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "service", "list", "--home"])
         .arg(home.path())
-        .args(["--base-url", &server.base_url, "--limit", "2", "--filter", "state:ENABLED", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--limit",
+            "2",
+            "--filter",
+            "state:ENABLED",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -9547,7 +10019,9 @@ fn gcp_service_enable_json_posts_operation() {
     )
     .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST /v1/projects/proj_core/services/aiplatform.googleapis.com:enable HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "POST /v1/projects/proj_core/services/aiplatform.googleapis.com:enable HTTP/1.1\r\n"
+        ));
         assert!(request.contains("\r\n\r\n{}"));
         http_json_response("200 OK", &[], r#"{"name":"operations/op_123"}"#)
     });
@@ -9556,7 +10030,14 @@ fn gcp_service_enable_json_posts_operation() {
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "service", "enable", "--home"])
         .arg(home.path())
-        .args(["--base-url", &server.base_url, "--name", "aiplatform.googleapis.com", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--name",
+            "aiplatform.googleapis.com",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -9578,7 +10059,9 @@ fn gcp_raw_json_fetches_with_headers_and_query_params() {
     )
     .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /v1/projects/proj_core/services/serviceusage.googleapis.com?view=full HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /v1/projects/proj_core/services/serviceusage.googleapis.com?view=full HTTP/1.1\r\n"
+        ));
         assert!(request.contains("x-custom: yes\r\n"));
         http_json_response("200 OK", &[("x-request-id", "req_gcp_raw")], r#"{"state":"ENABLED"}"#)
     });
@@ -9653,10 +10136,7 @@ fn gcp_apikey_list_json_fetches_keys() {
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["request_id"], "req_gcp_apikey_list");
-    assert_eq!(
-        parsed["data"]["keys"][0]["name"],
-        "projects/proj_core/locations/global/keys/key1"
-    );
+    assert_eq!(parsed["data"]["keys"][0]["name"], "projects/proj_core/locations/global/keys/key1");
     server.join();
 }
 
@@ -9671,9 +10151,10 @@ fn gcp_apikey_get_json_expands_key_id() {
     )
     .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "GET /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n"
-        ));
+        assert!(
+            request
+                .starts_with("GET /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n")
+        );
         http_json_response(
             "200 OK",
             &[("x-request-id", "req_gcp_apikey_get")],
@@ -9692,10 +10173,7 @@ fn gcp_apikey_get_json_expands_key_id() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(
-        parsed["data"]["name"],
-        "projects/proj_core/locations/global/keys/key1"
-    );
+    assert_eq!(parsed["data"]["name"], "projects/proj_core/locations/global/keys/key1");
     server.join();
 }
 
@@ -9710,9 +10188,9 @@ fn gcp_apikey_create_json_posts_payload() {
     )
     .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "POST /v2/projects/proj_core/locations/global/keys HTTP/1.1\r\n"
-        ));
+        assert!(
+            request.starts_with("POST /v2/projects/proj_core/locations/global/keys HTTP/1.1\r\n")
+        );
         assert!(request.contains("\"displayName\":\"Primary key\""));
         assert!(request.contains("\"apiTargets\""));
         http_json_response(
@@ -9770,24 +10248,14 @@ fn gcp_apikey_lookup_json_queries_key_string() {
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "apikey", "lookup", "--home"])
         .arg(home.path())
-        .args([
-            "--base-url",
-            &server.base_url,
-            "--key-string",
-            "AIzaLookup",
-            "--format",
-            "json",
-        ])
+        .args(["--base-url", &server.base_url, "--key-string", "AIzaLookup", "--format", "json"])
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(
-        parsed["data"]["parent"],
-        "projects/proj_core/locations/global/keys/key1"
-    );
+    assert_eq!(parsed["data"]["parent"], "projects/proj_core/locations/global/keys/key1");
     server.join();
 }
 
@@ -9801,16 +10269,17 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
         "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
     )
     .expect("write settings");
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "DELETE /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n"
-        ));
-        http_json_response(
-            "200 OK",
-            &[("x-request-id", "req_gcp_apikey_delete")],
-            r#"{"done":true}"#,
-        )
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with(
+                "DELETE /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n"
+            ));
+            http_json_response(
+                "200 OK",
+                &[("x-request-id", "req_gcp_apikey_delete")],
+                r#"{"done":true}"#,
+            )
+        });
 
     cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
@@ -9884,7 +10353,11 @@ fn gcp_iam_service_account_create_json_posts_payload() {
         assert!(request.starts_with("POST /v1/projects/proj_core/serviceAccounts HTTP/1.1\r\n"));
         assert!(request.contains("\"accountId\":\"svc-core\""));
         assert!(request.contains("\"displayName\":\"Core service\""));
-        http_json_response("200 OK", &[], r#"{"email":"svc-core@proj_core.iam.gserviceaccount.com"}"#)
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"email":"svc-core@proj_core.iam.gserviceaccount.com"}"#,
+        )
     });
 
     let output = cargo_bin()
@@ -9907,10 +10380,7 @@ fn gcp_iam_service_account_create_json_posts_payload() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(
-        parsed["data"]["email"],
-        "svc-core@proj_core.iam.gserviceaccount.com"
-    );
+    assert_eq!(parsed["data"]["email"], "svc-core@proj_core.iam.gserviceaccount.com");
     server.join();
 }
 
@@ -9928,7 +10398,11 @@ fn gcp_iam_service_account_key_create_json_posts_defaults() {
         assert!(request.starts_with("POST /v1/projects/proj_core/serviceAccounts/svc@proj_core.iam.gserviceaccount.com/keys HTTP/1.1\r\n"));
         assert!(request.contains("\"privateKeyType\":\"TYPE_GOOGLE_CREDENTIALS_FILE\""));
         assert!(request.contains("\"keyAlgorithm\":\"KEY_ALG_RSA_2048\""));
-        http_json_response("200 OK", &[], r#"{"name":"projects/proj_core/serviceAccounts/svc@proj_core.iam.gserviceaccount.com/keys/key1"}"#)
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"name":"projects/proj_core/serviceAccounts/svc@proj_core.iam.gserviceaccount.com/keys/key1"}"#,
+        )
     });
 
     let output = cargo_bin()
@@ -10020,7 +10494,11 @@ fn gcp_gemini_models_list_json_fetches_models() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1beta/models?"));
         assert!(request.contains("key=AIzaGemini"));
@@ -10047,12 +10525,20 @@ fn gcp_gemini_generate_json_posts_prompt_body() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /v1beta/models/gemini-2.0-flash:generateContent?"));
         assert!(request.contains("\"text\":\"hello world\""));
         assert!(request.contains("\"temperature\":0.4"));
-        http_json_response("200 OK", &[], r#"{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"#)
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"#,
+        )
     });
 
     let output = cargo_bin()
@@ -10084,7 +10570,11 @@ fn gcp_gemini_embed_json_posts_text() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /v1beta/models/text-embedding-004:embedContent?"));
         assert!(request.contains("\"text\":\"embed me\""));
@@ -10111,7 +10601,11 @@ fn gcp_gemini_raw_json_passes_headers() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1beta/models?key=AIzaGemini HTTP/1.1\r\n"));
         assert!(request.contains("x-extra: yes\r\n"));
@@ -10149,7 +10643,11 @@ fn gcp_gemini_image_generate_writes_png_and_reports_json() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
     let png_bytes = b"png-data";
     let png_b64 = BASE64_STANDARD.encode(png_bytes);
     let output_path = home.path().join("image.png");
@@ -10196,7 +10694,11 @@ fn gcp_vertex_model_list_json_fetches_models() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/projects/proj_core/locations/us-central1/models?"));
         assert!(request.contains("pageSize=2"));
-        http_json_response("200 OK", &[], r#"{"models":[{"name":"projects/proj_core/locations/us-central1/models/m1"}]}"#)
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"models":[{"name":"projects/proj_core/locations/us-central1/models/m1"}]}"#,
+        )
     });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
@@ -10209,7 +10711,9 @@ fn gcp_vertex_model_list_json_fetches_models() {
         .stdout
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert!(parsed["data"]["models"][0]["name"].as_str().unwrap_or_default().ends_with("/models/m1"));
+    assert!(
+        parsed["data"]["models"][0]["name"].as_str().unwrap_or_default().ends_with("/models/m1")
+    );
     server.join();
 }
 
@@ -10220,7 +10724,9 @@ fn gcp_vertex_endpoint_create_json_posts_body() {
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
     fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST /v1/projects/proj_core/locations/us-central1/endpoints HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "POST /v1/projects/proj_core/locations/us-central1/endpoints HTTP/1.1\r\n"
+        ));
         assert!(request.contains("\"displayName\":\"endpoint-a\""));
         http_json_response("200 OK", &[], r#"{"name":"operations/create-endpoint"}"#)
     });
@@ -10228,7 +10734,14 @@ fn gcp_vertex_endpoint_create_json_posts_body() {
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "vertex", "endpoint", "create", "--home"])
         .arg(home.path())
-        .args(["--base-url", &server.base_url, "--param", "displayName=endpoint-a", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--param",
+            "displayName=endpoint-a",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -10246,7 +10759,9 @@ fn gcp_vertex_endpoint_predict_json_posts_instances() {
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
     fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST /v1/projects/proj_core/locations/us-central1/endpoints/ep1:predict HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "POST /v1/projects/proj_core/locations/us-central1/endpoints/ep1:predict HTTP/1.1\r\n"
+        ));
         assert!(request.contains("\"instances\":[{\"prompt\":\"hi\"}]"));
         http_json_response("200 OK", &[], r#"{"predictions":[{"text":"ok"}]}"#)
     });
@@ -10254,7 +10769,15 @@ fn gcp_vertex_endpoint_predict_json_posts_instances() {
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "vertex", "endpoint", "predict", "--home"])
         .arg(home.path())
-        .args(["--base-url", &server.base_url, "ep1", "--instances-json", "[{\"prompt\":\"hi\"}]", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "ep1",
+            "--instances-json",
+            "[{\"prompt\":\"hi\"}]",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -10271,16 +10794,28 @@ fn gcp_vertex_raw_json_fetches_with_header() {
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
     fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /v1/projects/proj_core/locations/us-central1/models HTTP/1.1\r\n"));
-        assert!(request.contains("x-extra: yes\r\n"));
-        http_json_response("200 OK", &[], r#"{"models":[]}"#)
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with(
+                "GET /v1/projects/proj_core/locations/us-central1/models HTTP/1.1\r\n"
+            ));
+            assert!(request.contains("x-extra: yes\r\n"));
+            http_json_response("200 OK", &[], r#"{"models":[]}"#)
+        });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
         .args(["gcp", "vertex", "raw", "--home"])
         .arg(home.path())
-        .args(["--base-url", &server.base_url, "--path", "/v1/projects/proj_core/locations/us-central1/models", "--header", "x-extra=yes", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--path",
+            "/v1/projects/proj_core/locations/us-central1/models",
+            "--header",
+            "x-extra=yes",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -10436,7 +10971,8 @@ default_region_code = "GB"
 fn google_places_autocomplete_json_posts_request() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /v1/places:autocomplete HTTP/1.1\r\n"));
         assert!(request.contains("x-goog-api-key: google-test-key\r\n"));
@@ -10486,7 +11022,8 @@ fn google_places_autocomplete_json_posts_request() {
 fn google_places_search_text_json_fetches_all_pages() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_http_server(2, |request| {
         if request.contains("\"pageToken\":\"token_2\"") {
             assert!(request.starts_with("POST /v1/places:searchText HTTP/1.1\r\n"));
@@ -10535,7 +11072,8 @@ fn google_places_search_text_json_fetches_all_pages() {
 fn google_places_search_nearby_json_posts_location_body() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /v1/places:searchNearby HTTP/1.1\r\n"));
         assert!(request.contains("\"latitude\":37.78"));
@@ -10576,7 +11114,8 @@ fn google_places_search_nearby_json_posts_location_body() {
 fn google_places_details_json_gets_place() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/places/place_123?"));
         assert!(request.contains("sessionToken=sess_123"));
@@ -10625,9 +11164,12 @@ fn google_places_photo_download_json_writes_output() {
     let output_dir = tempdir().expect("tempdir");
     let output_path = output_dir.path().join("photo.jpg");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /v1/places/place_123/photos/photo_123/media?maxWidthPx=400 HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /v1/places/place_123/photos/photo_123/media?maxWidthPx=400 HTTP/1.1\r\n"
+        ));
         "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: 10\r\nx-goog-request-id: req_google_photo\r\n\r\njpeg-bytes".to_owned()
     });
 
@@ -10664,7 +11206,8 @@ fn google_places_photo_download_json_writes_output() {
 fn google_places_doctor_json_verifies_requests() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_http_server(2, |request| {
         if request.starts_with("POST /v1/places:autocomplete HTTP/1.1\r\n") {
             assert!(request.contains("\"input\":\"cafe\""));
@@ -10713,7 +11256,8 @@ fn google_places_doctor_json_verifies_requests() {
 fn google_places_raw_json_fetches_with_headers_and_query_params() {
     let home = tempdir().expect("tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/places/place_123?regionCode=US HTTP/1.1\r\n"));
         assert!(request.contains("x-goog-api-key: google-test-key\r\n"));
@@ -10769,7 +11313,14 @@ fn google_places_session_json_round_trip_uses_home_store() {
 
     let created = cargo_bin()
         .args(["google", "places", "session", "new"])
-        .args(["--home", home.path().to_str().expect("home str"), "--note", "demo", "--format", "json"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home str"),
+            "--note",
+            "demo",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -10823,7 +11374,8 @@ fn google_places_report_usage_json_reads_log_file() {
     let log_dir = tempdir().expect("tempdir");
     let log_path = log_dir.path().join("google-places.log");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     fs::write(
         &log_path,
         concat!(
@@ -10853,7 +11405,8 @@ fn google_places_report_sessions_json_reads_store() {
     let home = tempdir().expect("tempdir");
     let store_dir = home.path().join(".si/google/places");
     fs::create_dir_all(&store_dir).expect("mkdir store dir");
-    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
     fs::write(
         store_dir.join("sessions.json"),
         concat!(
@@ -10867,7 +11420,14 @@ fn google_places_report_sessions_json_reads_store() {
 
     let output = cargo_bin()
         .args(["google", "places", "report", "sessions"])
-        .args(["--home", home.path().to_str().expect("home str"), "--account", "core", "--format", "json"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home str"),
+            "--account",
+            "core",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -11017,7 +11577,9 @@ IiirJwd3+qH5BaD2H1FSA45SwJBmSifpUAaqEFjt5zEvDmqpRReOsvvY
 #[test]
 fn apple_appstore_app_list_json_fetches_apps() {
     let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=5 HTTP/1.1\r\n"));
+        assert!(request.starts_with(
+            "GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=5 HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer "));
         http_json_response(
             "200 OK",
@@ -11032,14 +11594,24 @@ fn apple_appstore_app_list_json_fetches_apps() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "app", "list",
-            "--base-url", &server.base_url,
-            "--bundle-id", "com.example.mobile",
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--limit", "5",
-            "--format", "json",
+            "apple",
+            "appstore",
+            "app",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--bundle-id",
+            "com.example.mobile",
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--limit",
+            "5",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11057,15 +11629,28 @@ fn apple_appstore_app_list_json_fetches_apps() {
 #[test]
 fn apple_appstore_app_create_json_creates_bundle_and_app() {
     let server = start_http_server_with_body(4, |request| {
-        if request.starts_with("GET /v1/bundleIds?filter%5Bidentifier%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+        if request.starts_with(
+            "GET /v1/bundleIds?filter%5Bidentifier%5D=com.example.mobile&limit=1 HTTP/1.1\r\n",
+        ) {
             return http_json_response("200 OK", &[], r#"{"data":[]}"#);
         }
         if request.starts_with("POST /v1/bundleIds HTTP/1.1\r\n") {
             assert!(request.contains("\"identifier\":\"com.example.mobile\""));
-            return http_json_response("201 Created", &[], r#"{"data":{"id":"bundle_123","type":"bundleIds"}}"#);
+            return http_json_response(
+                "201 Created",
+                &[],
+                r#"{"data":{"id":"bundle_123","type":"bundleIds"}}"#,
+            );
         }
-        assert!(request.starts_with("POST /v1/apps HTTP/1.1\r\n") || request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n"));
-        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+        assert!(
+            request.starts_with("POST /v1/apps HTTP/1.1\r\n")
+                || request.starts_with(
+                    "GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n"
+                )
+        );
+        if request.starts_with(
+            "GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n",
+        ) {
             return http_json_response("200 OK", &[], r#"{"data":[]}"#);
         }
         assert!(request.contains("\"sku\":\"mobile-sku\""));
@@ -11078,15 +11663,26 @@ fn apple_appstore_app_create_json_creates_bundle_and_app() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "app", "create",
-            "--base-url", &server.base_url,
-            "--bundle-id", "com.example.mobile",
-            "--app-name", "Mobile",
-            "--sku", "mobile-sku",
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--format", "json",
+            "apple",
+            "appstore",
+            "app",
+            "create",
+            "--base-url",
+            &server.base_url,
+            "--bundle-id",
+            "com.example.mobile",
+            "--app-name",
+            "Mobile",
+            "--sku",
+            "mobile-sku",
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11104,7 +11700,9 @@ fn apple_appstore_app_create_json_creates_bundle_and_app() {
 #[test]
 fn apple_appstore_listing_update_json_updates_localized_metadata() {
     let server = start_http_server(4, |request| {
-        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+        if request.starts_with(
+            "GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n",
+        ) {
             return http_json_response("200 OK", &[], r#"{"data":[{"id":"app_123"}]}"#);
         }
         if request.starts_with("GET /v1/apps/app_123/appInfos?limit=1 HTTP/1.1\r\n") {
@@ -11124,14 +11722,24 @@ fn apple_appstore_listing_update_json_updates_localized_metadata() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "listing", "update",
-            "--base-url", &server.base_url,
-            "--bundle-id", "com.example.mobile",
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--name", "New Name",
-            "--format", "json",
+            "apple",
+            "appstore",
+            "listing",
+            "update",
+            "--base-url",
+            &server.base_url,
+            "--bundle-id",
+            "com.example.mobile",
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--name",
+            "New Name",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11149,7 +11757,11 @@ fn apple_appstore_listing_update_json_updates_localized_metadata() {
 fn apple_appstore_raw_json_fetches_api_path() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/apps?limit=1 HTTP/1.1\r\n"));
-        http_json_response("200 OK", &[("x-request-id", "req_apple_raw")], r#"{"data":[{"id":"app_123"}]}"#)
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_apple_raw")],
+            r#"{"data":[{"id":"app_123"}]}"#,
+        )
     });
 
     let key_dir = tempdir().expect("tempdir");
@@ -11158,14 +11770,23 @@ fn apple_appstore_raw_json_fetches_api_path() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "raw",
-            "--base-url", &server.base_url,
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--path", "/v1/apps",
-            "--param", "limit=1",
-            "--format", "json",
+            "apple",
+            "appstore",
+            "raw",
+            "--base-url",
+            &server.base_url,
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--path",
+            "/v1/apps",
+            "--param",
+            "limit=1",
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11183,14 +11804,13 @@ fn apple_appstore_raw_json_fetches_api_path() {
 fn apple_appstore_apply_json_applies_metadata_bundle() {
     let metadata_dir = tempdir().expect("tempdir");
     fs::create_dir_all(metadata_dir.path().join("app-info")).expect("mkdir app-info");
-    fs::write(
-        metadata_dir.path().join("app-info").join("en-US.json"),
-        r#"{"name":"Bundle Name"}"#,
-    )
-    .expect("write app-info");
+    fs::write(metadata_dir.path().join("app-info").join("en-US.json"), r#"{"name":"Bundle Name"}"#)
+        .expect("write app-info");
 
     let server = start_http_server(4, |request| {
-        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+        if request.starts_with(
+            "GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n",
+        ) {
             return http_json_response("200 OK", &[], r#"{"data":[{"id":"app_123"}]}"#);
         }
         if request.starts_with("GET /v1/apps/app_123/appInfos?limit=1 HTTP/1.1\r\n") {
@@ -11210,14 +11830,23 @@ fn apple_appstore_apply_json_applies_metadata_bundle() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "apply",
-            "--base-url", &server.base_url,
-            "--bundle-id", "com.example.mobile",
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--metadata-dir", metadata_dir.path().to_str().expect("utf8"),
-            "--format", "json",
+            "apple",
+            "appstore",
+            "apply",
+            "--base-url",
+            &server.base_url,
+            "--bundle-id",
+            "com.example.mobile",
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--metadata-dir",
+            metadata_dir.path().to_str().expect("utf8"),
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11250,12 +11879,20 @@ fn apple_appstore_auth_status_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "auth", "status",
-            "--base-url", &server.base_url,
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--format", "json",
+            "apple",
+            "appstore",
+            "auth",
+            "status",
+            "--base-url",
+            &server.base_url,
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11289,12 +11926,19 @@ fn apple_appstore_doctor_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
-            "apple", "appstore", "doctor",
-            "--base-url", &server.base_url,
-            "--issuer-id", "issuer_123",
-            "--key-id", "key_123",
-            "--private-key-file", key_path.to_str().expect("utf8"),
-            "--format", "json",
+            "apple",
+            "appstore",
+            "doctor",
+            "--base-url",
+            &server.base_url,
+            "--issuer-id",
+            "issuer_123",
+            "--key-id",
+            "key_123",
+            "--private-key-file",
+            key_path.to_str().expect("utf8"),
+            "--format",
+            "json",
         ])
         .assert()
         .success()
@@ -11560,8 +12204,20 @@ fn openai_project_create_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
-            "openai", "project", "create", "--base-url", &server.base_url, "--api-key", "sk-test",
-            "--admin-api-key", "sk-admin", "--name", "Core", "--geography", "eu", "--json",
+            "openai",
+            "project",
+            "create",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--name",
+            "Core",
+            "--geography",
+            "eu",
+            "--json",
         ])
         .assert()
         .success()
@@ -11579,8 +12235,16 @@ fn openai_project_create_json_posts_payload() {
 fn openai_project_archive_requires_force() {
     let stderr = cargo_bin()
         .args([
-            "openai", "project", "archive", "proj_123", "--base-url", "https://api.example.test",
-            "--api-key", "sk-test", "--admin-api-key", "sk-admin",
+            "openai",
+            "project",
+            "archive",
+            "proj_123",
+            "--base-url",
+            "https://api.example.test",
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
         ])
         .assert()
         .failure()
@@ -11683,11 +12347,9 @@ fn openai_project_api_key_get_text_formats_response() {
 #[test]
 fn openai_project_api_key_delete_json_deletes_with_force() {
     let server = start_one_shot_http_server(|request| {
-        assert!(
-            request.starts_with(
-                "DELETE /v1/organization/projects/proj_123/api_keys/key_123 HTTP/1.1\r\n"
-            )
-        );
+        assert!(request.starts_with(
+            "DELETE /v1/organization/projects/proj_123/api_keys/key_123 HTTP/1.1\r\n"
+        ));
         assert!(request.contains("authorization: Bearer sk-admin\r\n"));
         http_json_response(
             "200 OK",
@@ -11698,9 +12360,21 @@ fn openai_project_api_key_delete_json_deletes_with_force() {
 
     let output = cargo_bin()
         .args([
-            "openai", "project", "api-key", "delete", "key_123", "--base-url", &server.base_url,
-            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
-            "--force", "--json",
+            "openai",
+            "project",
+            "api-key",
+            "delete",
+            "key_123",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--project-id",
+            "proj_123",
+            "--force",
+            "--json",
         ])
         .assert()
         .success()
@@ -11804,23 +12478,36 @@ fn openai_project_service_account_get_text_formats_response() {
 
 #[test]
 fn openai_project_service_account_create_json_posts_payload() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with(
-            "POST /v1/organization/projects/proj_123/service_accounts HTTP/1.1\r\n"
-        ));
-        assert!(request.contains(r#"{"name":"Deploy"}"#));
-        http_json_response(
-            "200 OK",
-            &[("x-request-id", "req_service_account_create")],
-            r#"{"id":"sa_123","name":"Deploy"}"#,
-        )
-    });
+    let server =
+        start_one_shot_http_server(|request| {
+            assert!(request.starts_with(
+                "POST /v1/organization/projects/proj_123/service_accounts HTTP/1.1\r\n"
+            ));
+            assert!(request.contains(r#"{"name":"Deploy"}"#));
+            http_json_response(
+                "200 OK",
+                &[("x-request-id", "req_service_account_create")],
+                r#"{"id":"sa_123","name":"Deploy"}"#,
+            )
+        });
 
     let output = cargo_bin()
         .args([
-            "openai", "project", "service-account", "create", "--base-url", &server.base_url,
-            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
-            "--name", "Deploy", "--json",
+            "openai",
+            "project",
+            "service-account",
+            "create",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--project-id",
+            "proj_123",
+            "--name",
+            "Deploy",
+            "--json",
         ])
         .assert()
         .success()
@@ -11897,9 +12584,23 @@ fn openai_project_rate_limit_update_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
-            "openai", "project", "rate-limit", "update", "--base-url", &server.base_url,
-            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
-            "--rate-limit-id", "rl_123", "--max-requests-per-1-minute", "42", "--json",
+            "openai",
+            "project",
+            "rate-limit",
+            "update",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--project-id",
+            "proj_123",
+            "--rate-limit-id",
+            "rl_123",
+            "--max-requests-per-1-minute",
+            "42",
+            "--json",
         ])
         .assert()
         .success()
@@ -12012,8 +12713,18 @@ fn openai_key_create_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
-            "openai", "key", "create", "--base-url", &server.base_url, "--api-key", "sk-test",
-            "--admin-api-key", "sk-admin", "--name", "Core", "--json",
+            "openai",
+            "key",
+            "create",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--name",
+            "Core",
+            "--json",
         ])
         .assert()
         .success()
@@ -12031,8 +12742,16 @@ fn openai_key_create_json_posts_payload() {
 fn openai_key_delete_requires_force() {
     let stderr = cargo_bin()
         .args([
-            "openai", "key", "delete", "adminkey_123", "--base-url", "https://api.example.test",
-            "--api-key", "sk-test", "--admin-api-key", "sk-admin",
+            "openai",
+            "key",
+            "delete",
+            "adminkey_123",
+            "--base-url",
+            "https://api.example.test",
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
         ])
         .assert()
         .failure()
@@ -12487,11 +13206,8 @@ fn oci_doctor_json_verifies_runtime_probe() {
 fn oci_oracular_tenancy_json_reads_profile_config() {
     let config_dir = tempdir().expect("tempdir");
     let config_file = config_dir.path().join("config");
-    fs::write(
-        &config_file,
-        "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nregion=us-phoenix-1\n",
-    )
-    .expect("write config");
+    fs::write(&config_file, "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nregion=us-phoenix-1\n")
+        .expect("write config");
 
     let output = cargo_bin()
         .args(["oci", "oracular", "tenancy"])
@@ -12616,7 +13332,16 @@ fn oci_identity_compartment_create_json_posts_payload() {
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
-        .args(["--base-url", &server.base_url, "--parent", "ocid1.compartment.oc1..root", "--name", "prod", "--format", "json"])
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--parent",
+            "ocid1.compartment.oc1..root",
+            "--name",
+            "prod",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -12667,7 +13392,11 @@ fn oci_network_vcn_create_json_posts_payload() {
         assert!(request.starts_with("POST /20160918/vcns HTTP/1.1\r\n"));
         assert!(request.contains("\"cidrBlocks\":[\"10.0.0.0/16\"]"));
         assert!(request.contains("\"displayName\":\"oracular-vcn\""));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_vcn")], r#"{"id":"ocid1.vcn.oc1..vcn"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_vcn")],
+            r#"{"id":"ocid1.vcn.oc1..vcn"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -12676,7 +13405,14 @@ fn oci_network_vcn_create_json_posts_payload() {
         .args(["oci", "network", "vcn", "create"])
         .args(["--home"])
         .arg(home.path())
-        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--format", "json"])
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -12694,7 +13430,11 @@ fn oci_network_internet_gateway_create_json_posts_payload() {
         assert!(request.starts_with("POST /20160918/internetGateways HTTP/1.1\r\n"));
         assert!(request.contains("\"vcnId\":\"ocid1.vcn.oc1..vcn\""));
         assert!(request.contains("\"isEnabled\":true"));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_igw")], r#"{"id":"ocid1.internetgateway.oc1..igw"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_igw")],
+            r#"{"id":"ocid1.internetgateway.oc1..igw"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -12703,7 +13443,16 @@ fn oci_network_internet_gateway_create_json_posts_payload() {
         .args(["oci", "network", "internet-gateway", "create"])
         .args(["--home"])
         .arg(home.path())
-        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--format", "json"])
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--vcn-id",
+            "ocid1.vcn.oc1..vcn",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -12720,7 +13469,11 @@ fn oci_network_route_table_create_json_posts_payload() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /20160918/routeTables HTTP/1.1\r\n"));
         assert!(request.contains("\"networkEntityId\":\"ocid1.internetgateway.oc1..igw\""));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_rt")], r#"{"id":"ocid1.routetable.oc1..rt"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_rt")],
+            r#"{"id":"ocid1.routetable.oc1..rt"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -12729,7 +13482,18 @@ fn oci_network_route_table_create_json_posts_payload() {
         .args(["oci", "network", "route-table", "create"])
         .args(["--home"])
         .arg(home.path())
-        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--target", "ocid1.internetgateway.oc1..igw", "--format", "json"])
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--vcn-id",
+            "ocid1.vcn.oc1..vcn",
+            "--target",
+            "ocid1.internetgateway.oc1..igw",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -12747,7 +13511,11 @@ fn oci_network_security_list_create_json_posts_payload() {
         assert!(request.starts_with("POST /20160918/securityLists HTTP/1.1\r\n"));
         assert!(request.contains("\"displayName\":\"oracular-sec\""));
         assert!(request.contains("\"min\":7129"));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_sec")], r#"{"id":"ocid1.securitylist.oc1..sec"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_sec")],
+            r#"{"id":"ocid1.securitylist.oc1..sec"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -12756,7 +13524,18 @@ fn oci_network_security_list_create_json_posts_payload() {
         .args(["oci", "network", "security-list", "create"])
         .args(["--home"])
         .arg(home.path())
-        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--ssh-port", "7129", "--format", "json"])
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--vcn-id",
+            "ocid1.vcn.oc1..vcn",
+            "--ssh-port",
+            "7129",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -12775,7 +13554,11 @@ fn oci_network_subnet_create_json_posts_payload() {
         assert!(request.contains("\"routeTableId\":\"ocid1.routetable.oc1..rt\""));
         assert!(request.contains("\"securityListIds\":[\"ocid1.securitylist.oc1..sec\"]"));
         assert!(request.contains("\"dhcpOptionsId\":\"ocid1.dhcpoptions.oc1..dhcp\""));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_subnet")], r#"{"id":"ocid1.subnet.oc1..sub"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_subnet")],
+            r#"{"id":"ocid1.subnet.oc1..sub"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -12819,7 +13602,11 @@ fn oci_compute_instance_create_json_posts_payload() {
         assert!(request.contains("\"sourceId\":\"ocid1.image.oc1..img\""));
         assert!(request.contains("\"ssh_authorized_keys\":\"ssh-rsa AAA-test\""));
         assert!(request.contains("\"user_data\":\"dGVzdA==\""));
-        http_json_response("200 OK", &[("opc-request-id", "req_oci_instance")], r#"{"id":"ocid1.instance.oc1..inst"}"#)
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_instance")],
+            r#"{"id":"ocid1.instance.oc1..inst"}"#,
+        )
     });
     let home = tempdir().expect("tempdir");
     let config_file = write_oci_test_config(&home, &server.base_url);
@@ -15005,7 +15792,8 @@ where
                 if header_end.is_none() {
                     if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
                         header_end = Some(pos + 4);
-                        let headers = String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
+                        let headers =
+                            String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
                         for line in headers.lines() {
                             if let Some(value) = line.strip_prefix("content-length:") {
                                 content_length = value.trim().parse::<usize>().unwrap_or(0);
@@ -15190,22 +15978,15 @@ fn github_git_clone_auth_json_dry_run_reads_pat_from_env() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["owner"], "Aureuma");
     assert_eq!(parsed["name"], "demo");
-    assert_eq!(
-        parsed["destination"],
-        root.path().join("demo").to_str().expect("destination str")
-    );
+    assert_eq!(parsed["destination"], root.path().join("demo").to_str().expect("destination str"));
     let clone_url = parsed["clone_url"].as_str().expect("clone url string");
     assert!(!clone_url.contains("github_pat_example123"));
     assert!(clone_url.contains("github.com/Aureuma/demo.git"));
 }
 
 fn run_git(repo: &Path, args: &[&str]) -> String {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .expect("run git");
+    let output =
+        std::process::Command::new("git").arg("-C").arg(repo).args(args).output().expect("run git");
     if !output.status.success() {
         panic!(
             "git {} failed: {}{}",

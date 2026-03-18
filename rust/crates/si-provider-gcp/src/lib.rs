@@ -1,5 +1,5 @@
-use reqwest::blocking::Client;
 use reqwest::Method;
+use reqwest::blocking::Client;
 use serde::Serialize;
 use serde_json::Value;
 use si_rs_config::settings::{GCPAccountEntry, GCPSettings};
@@ -223,7 +223,9 @@ pub fn execute_api_request(
         } else {
             request.content_type.trim()
         };
-        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+        builder = builder
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(request.raw_body.clone());
     }
     let response = builder.send().map_err(|err| format!("gcp request failed: {err}"))?;
     normalize_api_response(response)
@@ -258,11 +260,12 @@ fn normalize_api_response(response: reqwest::blocking::Response) -> Result<GCPAP
         .to_owned();
     let response_headers = headers
         .iter()
-        .filter_map(|(key, value)| Some((key.as_str().to_owned(), value.to_str().ok()?.trim().to_owned())))
+        .filter_map(|(key, value)| {
+            Some((key.as_str().to_owned(), value.to_str().ok()?.trim().to_owned()))
+        })
         .collect::<BTreeMap<_, _>>();
-    let bytes = response
-        .bytes()
-        .map_err(|err| format!("failed to read gcp response body: {err}"))?;
+    let bytes =
+        response.bytes().map_err(|err| format!("failed to read gcp response body: {err}"))?;
     let body = String::from_utf8_lossy(&bytes).into_owned();
     if !status.is_success() {
         let mut message = format!(

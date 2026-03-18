@@ -1,6 +1,12 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use blake2::{Blake2bVar, digest::{Update, VariableOutput}};
-use crypto_box::{PublicKey as CryptoBoxPublicKey, SalsaBox, SecretKey as CryptoBoxSecretKey, aead::{Aead, generic_array::GenericArray, rand_core::OsRng}};
+use blake2::{
+    Blake2bVar,
+    digest::{Update, VariableOutput},
+};
+use crypto_box::{
+    PublicKey as CryptoBoxPublicKey, SalsaBox, SecretKey as CryptoBoxSecretKey,
+    aead::{Aead, generic_array::GenericArray, rand_core::OsRng},
+};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::blocking::{Client, Response};
 use reqwest::header::{
@@ -66,14 +72,8 @@ pub struct GitHubRuntime {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum GitHubCredentials {
-    OAuth {
-        access_token: String,
-    },
-    App {
-        app_id: i64,
-        app_key: String,
-        installation_id: i64,
-    },
+    OAuth { access_token: String },
+    App { app_id: i64, app_key: String, installation_id: i64 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,20 +120,9 @@ pub struct GitHubBranchProtectionOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitHubSecretScope {
-    Repo {
-        owner: String,
-        repo: String,
-    },
-    Env {
-        owner: String,
-        repo: String,
-        env: String,
-    },
-    Org {
-        org: String,
-        visibility: String,
-        repo_ids: Vec<i64>,
-    },
+    Repo { owner: String, repo: String },
+    Env { owner: String, repo: String, env: String },
+    Org { org: String, visibility: String, repo_ids: Vec<i64> },
 }
 
 impl Serialize for GitHubAPIResponse {
@@ -357,16 +346,14 @@ pub fn resolve_runtime(
     }
     if !overrides.owner.trim().is_empty() {
         source.push("flag:--owner".to_owned());
-    } else if entry.and_then(|item| item.owner.as_deref()).is_some_and(|value| value.trim() == owner)
+    } else if entry
+        .and_then(|item| item.owner.as_deref())
+        .is_some_and(|value| value.trim() == owner)
     {
         source.push("settings.owner".to_owned());
     } else if settings.default_owner.as_deref().is_some_and(|value| value.trim() == owner) {
         source.push("settings.default_owner".to_owned());
-    } else if env
-        .get("GITHUB_DEFAULT_OWNER")
-        .map(|value| value.trim() == owner)
-        .unwrap_or(false)
-    {
+    } else if env.get("GITHUB_DEFAULT_OWNER").map(|value| value.trim() == owner).unwrap_or(false) {
         source.push("env:GITHUB_DEFAULT_OWNER".to_owned());
     }
     if !overrides.base_url.trim().is_empty() {
@@ -374,16 +361,10 @@ pub fn resolve_runtime(
     } else if entry
         .and_then(|item| item.api_base_url.as_deref())
         .is_some_and(|value| value.trim() == base_url)
-        || settings
-            .api_base_url
-            .as_deref()
-            .is_some_and(|value| value.trim() == base_url)
+        || settings.api_base_url.as_deref().is_some_and(|value| value.trim() == base_url)
     {
         source.push("settings.api_base_url".to_owned());
-    } else if env
-        .get("GITHUB_API_BASE_URL")
-        .map(|value| value.trim() == base_url)
-        .unwrap_or(false)
+    } else if env.get("GITHUB_API_BASE_URL").map(|value| value.trim() == base_url).unwrap_or(false)
     {
         source.push("env:GITHUB_API_BASE_URL".to_owned());
     }
@@ -413,11 +394,7 @@ pub fn resolve_runtime(
         if !installation_source.trim().is_empty() {
             source.push(installation_source);
         }
-        GitHubCredentials::App {
-            app_id,
-            app_key: normalize_private_key(&app_key),
-            installation_id,
-        }
+        GitHubCredentials::App { app_id, app_key: normalize_private_key(&app_key), installation_id }
     };
 
     Ok(GitHubRuntime {
@@ -866,10 +843,7 @@ query($id:ID!,$first:Int!,$includeArchived:Boolean!){
     )
 }
 
-pub fn update_project(
-    runtime: &GitHubRuntime,
-    input: Value,
-) -> Result<GitHubAPIResponse, String> {
+pub fn update_project(runtime: &GitHubRuntime, input: Value) -> Result<GitHubAPIResponse, String> {
     let query = r#"
 mutation($input:UpdateProjectV2Input!){
   updateProjectV2(input:$input) {
@@ -1062,8 +1036,13 @@ pub fn list_workflows(
     let client = build_http_client()?;
     let token = github_access_token(&client, runtime, owner, repo)?;
     let path = format!("/repos/{owner}/{repo}/actions/workflows");
-    let mut response =
-        normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)?;
+    let mut response = normalize_response(github_get(
+        &client,
+        &runtime.base_url,
+        &path,
+        &BTreeMap::new(),
+        &token,
+    )?)?;
     response.list = response
         .data
         .as_ref()
@@ -1133,8 +1112,8 @@ pub fn dispatch_workflow(
         "ref": git_ref.trim(),
     });
     if !inputs.is_empty() {
-        payload["inputs"] = serde_json::to_value(inputs)
-            .map_err(|err| format!("encode workflow inputs: {err}"))?;
+        payload["inputs"] =
+            serde_json::to_value(inputs).map_err(|err| format!("encode workflow inputs: {err}"))?;
     }
     normalize_response(github_send_json(
         &client,
@@ -1155,13 +1134,7 @@ pub fn cancel_workflow_run(
     let client = build_http_client()?;
     let token = github_access_token(&client, runtime, owner, repo)?;
     let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}/cancel");
-    normalize_response(github_send_without_body(
-        &client,
-        "POST",
-        &runtime.base_url,
-        &path,
-        &token,
-    )?)
+    normalize_response(github_send_without_body(&client, "POST", &runtime.base_url, &path, &token)?)
 }
 
 pub fn rerun_workflow_run(
@@ -1173,13 +1146,7 @@ pub fn rerun_workflow_run(
     let client = build_http_client()?;
     let token = github_access_token(&client, runtime, owner, repo)?;
     let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}/rerun");
-    normalize_response(github_send_without_body(
-        &client,
-        "POST",
-        &runtime.base_url,
-        &path,
-        &token,
-    )?)
+    normalize_response(github_send_without_body(&client, "POST", &runtime.base_url, &path, &token)?)
 }
 
 pub fn get_workflow_logs(
@@ -1452,10 +1419,8 @@ pub fn get_branch(
 ) -> Result<GitHubAPIResponse, String> {
     let client = build_http_client()?;
     let token = github_access_token(&client, runtime, owner, repo)?;
-    let path = format!(
-        "/repos/{owner}/{repo}/branches/{}",
-        percent_encode_path_segment(branch.trim())
-    );
+    let path =
+        format!("/repos/{owner}/{repo}/branches/{}", percent_encode_path_segment(branch.trim()));
     normalize_response(github_get(&client, &runtime.base_url, &path, params, &token)?)
 }
 
@@ -1497,8 +1462,7 @@ pub fn create_branch(
         response.data = Some(serde_json::json!({}));
     }
     if let Some(data) = response.data.as_mut().and_then(Value::as_object_mut) {
-        data.entry("base_sha_source".to_owned())
-            .or_insert_with(|| Value::String(base_sha_source));
+        data.entry("base_sha_source".to_owned()).or_insert_with(|| Value::String(base_sha_source));
     }
     Ok(response)
 }
@@ -1690,13 +1654,7 @@ pub fn upload_release_asset(
         return Err("release upload url not found".to_owned());
     }
     let upload_url = expand_release_upload_url(&upload_url, asset_name, label)?;
-    normalize_response(github_send_bytes(
-        &client,
-        &upload_url,
-        &token,
-        content_type,
-        asset_bytes,
-    )?)
+    normalize_response(github_send_bytes(&client, &upload_url, &token, content_type, asset_bytes)?)
 }
 
 pub fn delete_release(
@@ -2185,12 +2143,7 @@ fn github_access_token(
             } else {
                 lookup_installation_id(client, &runtime.base_url, owner, repo, &jwt)?
             };
-            exchange_installation_token(
-                client,
-                &runtime.base_url,
-                resolved_installation_id,
-                &jwt,
-            )
+            exchange_installation_token(client, &runtime.base_url, resolved_installation_id, &jwt)
         }
     }
 }
@@ -2207,11 +2160,7 @@ fn github_app_jwt(app_id: i64, app_key: &str) -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|err| format!("github jwt clock error: {err}"))?
         .as_secs() as i64;
-    let claims = GitHubAppClaims {
-        iat: now - 60,
-        exp: now + 9 * 60,
-        iss: app_id.to_string(),
-    };
+    let claims = GitHubAppClaims { iat: now - 60, exp: now + 9 * 60, iss: app_id.to_string() };
     encode(
         &Header::new(Algorithm::RS256),
         &claims,
@@ -2244,9 +2193,8 @@ fn exchange_installation_token(
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_owned();
-    let body = response
-        .text()
-        .map_err(|err| format!("read github installation token response: {err}"))?;
+    let body =
+        response.text().map_err(|err| format!("read github installation token response: {err}"))?;
     if !status.is_success() {
         return Err(format!(
             "github installation token request failed: status={} request_id={} body={}",
@@ -2257,12 +2205,7 @@ fn exchange_installation_token(
     }
     let payload: Value = serde_json::from_str(&body)
         .map_err(|err| format!("decode github installation token response: {err}"))?;
-    let token = payload
-        .get("token")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim()
-        .to_owned();
+    let token = payload.get("token").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
     if token.is_empty() {
         return Err("github installation token response missing token".to_owned());
     }
@@ -2423,10 +2366,8 @@ fn github_graphql(
         }
         return Err(format!("graphql returned errors: {}", messages.join("; ")));
     }
-    let data = root
-        .get("data")
-        .cloned()
-        .ok_or_else(|| "graphql response missing data".to_owned())?;
+    let data =
+        root.get("data").cloned().ok_or_else(|| "graphql response missing data".to_owned())?;
     payload.data = Some(data);
     Ok(payload)
 }
@@ -2452,9 +2393,7 @@ fn normalize_response(response: Response) -> Result<GitHubAPIResponse, String> {
     let status = response.status().to_string();
     let headers = response.headers().clone();
     let request_id = first_header(&headers, "x-github-request-id");
-    let body = response
-        .text()
-        .map_err(|err| format!("read github response body: {err}"))?;
+    let body = response.text().map_err(|err| format!("read github response body: {err}"))?;
     if !(200..300).contains(&status_code) {
         return Err(format!(
             "github request failed: status={} request_id={} body={}",
@@ -2517,12 +2456,7 @@ fn resolve_url(
 }
 
 fn first_header(headers: &HeaderMap, name: &str) -> String {
-    headers
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default()
-        .trim()
-        .to_owned()
+    headers.get(name).and_then(|value| value.to_str().ok()).unwrap_or_default().trim().to_owned()
 }
 
 fn parse_next_link(headers: &HeaderMap) -> Option<String> {
@@ -2553,7 +2487,11 @@ fn percent_encode_path_segment(value: &str) -> String {
     out
 }
 
-fn expand_release_upload_url(upload_url: &str, asset_name: &str, label: &str) -> Result<String, String> {
+fn expand_release_upload_url(
+    upload_url: &str,
+    asset_name: &str,
+    label: &str,
+) -> Result<String, String> {
     let template = upload_url.trim();
     if template.is_empty() {
         return Err("release upload url not found".to_owned());
@@ -2611,10 +2549,7 @@ fn secret_scope_upsert_path(scope: &GitHubSecretScope, name: &str) -> String {
             format!("/repos/{owner}/{repo}/actions/secrets/{}", name.trim())
         }
         GitHubSecretScope::Env { owner, repo, env } => {
-            format!(
-                "/repos/{owner}/{repo}/environments/{env}/secrets/{}",
-                name.trim()
-            )
+            format!("/repos/{owner}/{repo}/environments/{env}/secrets/{}", name.trim())
         }
         GitHubSecretScope::Org { org, .. } => {
             format!("/orgs/{org}/actions/secrets/{}", name.trim())
@@ -2630,15 +2565,13 @@ fn secret_scope_owner_repo(scope: &GitHubSecretScope) -> (&str, &str) {
     }
 }
 
-fn secret_scope_payload_base(scope: &GitHubSecretScope, key_id: &str) -> serde_json::Map<String, Value> {
+fn secret_scope_payload_base(
+    scope: &GitHubSecretScope,
+    key_id: &str,
+) -> serde_json::Map<String, Value> {
     let mut out = serde_json::Map::new();
     out.insert("key_id".to_owned(), Value::String(key_id.trim().to_owned()));
-    if let GitHubSecretScope::Org {
-        visibility,
-        repo_ids,
-        ..
-    } = scope
-    {
+    if let GitHubSecretScope::Org { visibility, repo_ids, .. } = scope {
         let normalized = match visibility.trim().to_ascii_lowercase().as_str() {
             "all" | "private" | "selected" => visibility.trim().to_ascii_lowercase(),
             _ => "private".to_owned(),
@@ -2667,8 +2600,7 @@ fn encrypt_github_secret_value(base64_public_key: &str, plaintext: &str) -> Resu
     );
     let ephemeral_secret = CryptoBoxSecretKey::generate(&mut OsRng);
     let ephemeral_pub_bytes = ephemeral_secret.public_key().as_bytes().to_owned();
-    let mut nonce_hash =
-        Blake2bVar::new(24).map_err(|err| format!("init nonce hash: {err}"))?;
+    let mut nonce_hash = Blake2bVar::new(24).map_err(|err| format!("init nonce hash: {err}"))?;
     nonce_hash.update(&ephemeral_pub_bytes);
     nonce_hash.update(recipient_pub.as_bytes());
     let mut nonce_bytes = [0_u8; 24];
@@ -2716,10 +2648,7 @@ fn resolve_branch_create_sha(
     let branch_response = normalize_response(github_get(
         client,
         &runtime.base_url,
-        &format!(
-            "/repos/{owner}/{repo}/branches/{}",
-            percent_encode_path_segment(&selected_from)
-        ),
+        &format!("/repos/{owner}/{repo}/branches/{}", percent_encode_path_segment(&selected_from)),
         &BTreeMap::new(),
         token,
     )?)?;

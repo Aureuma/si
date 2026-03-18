@@ -1,7 +1,7 @@
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use reqwest::blocking::Client;
 use reqwest::Method;
+use reqwest::blocking::Client;
 use rsa::RsaPrivateKey;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::SigningKey;
@@ -9,8 +9,8 @@ use rsa::pkcs8::DecodePrivateKey;
 use rsa::rand_core::OsRng;
 use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use serde_json::Value;
+use sha2::Sha256;
 use si_rs_config::settings::{
     GoogleAccountEntry, GooglePlayAccountEntry, GoogleSettings, GoogleYouTubeAccountEntry,
 };
@@ -498,11 +498,11 @@ pub fn execute_places_api_request(
         } else {
             request.content_type.trim()
         };
-        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+        builder = builder
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(request.raw_body.clone());
     }
-    let response = builder
-        .send()
-        .map_err(|err| format!("google places request failed: {err}"))?;
+    let response = builder.send().map_err(|err| format!("google places request failed: {err}"))?;
     normalize_places_api_response(response)
 }
 
@@ -523,9 +523,8 @@ pub fn download_places_media(
     if !params.is_empty() {
         builder = builder.query(params);
     }
-    let response = builder
-        .send()
-        .map_err(|err| format!("google places media request failed: {err}"))?;
+    let response =
+        builder.send().map_err(|err| format!("google places media request failed: {err}"))?;
     normalize_places_media_response(response)
 }
 
@@ -572,16 +571,8 @@ pub fn render_youtube_context_list_text(rows: &[GoogleYouTubeContextListEntry]) 
     if rows.is_empty() {
         return "no google youtube accounts configured in settings\n".to_owned();
     }
-    let headers = [
-        "ALIAS",
-        "DEFAULT",
-        "PROJECT",
-        "AUTH",
-        "LANGUAGE",
-        "REGION",
-        "VAULT_PREFIX",
-        "NAME",
-    ];
+    let headers =
+        ["ALIAS", "DEFAULT", "PROJECT", "AUTH", "LANGUAGE", "REGION", "VAULT_PREFIX", "NAME"];
     let mut widths = headers.map(str::len);
     for row in rows {
         widths[0] = widths[0].max(row.alias.len());
@@ -704,13 +695,15 @@ fn resolve_youtube_runtime_context(
         resolve_youtube_redirect_uri(&alias, &account, env, &overrides.redirect_uri);
     let (mut access_token, mut access_source) =
         resolve_youtube_access_token(&alias, &account, env, &overrides.access_token);
-    let (mut refresh_token, mut refresh_source) =
-        resolve_youtube_refresh_token(&alias, &account, env, &environment, &overrides.refresh_token);
+    let (mut refresh_token, mut refresh_source) = resolve_youtube_refresh_token(
+        &alias,
+        &account,
+        env,
+        &environment,
+        &overrides.refresh_token,
+    );
     let mut session_source = String::new();
-    if auth_mode == "oauth"
-        && access_token.trim().is_empty()
-        && refresh_token.trim().is_empty()
-    {
+    if auth_mode == "oauth" && access_token.trim().is_empty() && refresh_token.trim().is_empty() {
         if let Some(entry) = load_youtube_oauth_token_entry(env, &alias, &environment) {
             access_token = entry.access_token;
             refresh_token = entry.refresh_token;
@@ -730,10 +723,7 @@ fn resolve_youtube_runtime_context(
             "youtube api key not found (set --api-key, {hint}YOUTUBE_API_KEY, or GOOGLE_YOUTUBE_API_KEY)"
         ));
     }
-    if auth_mode == "oauth"
-        && access_token.trim().is_empty()
-        && refresh_token.trim().is_empty()
-    {
+    if auth_mode == "oauth" && access_token.trim().is_empty() && refresh_token.trim().is_empty() {
         return Err("youtube oauth token not found (set --access-token, --refresh-token, or login via the Go path)".to_owned());
     }
     let (language_code, language_source) =
@@ -789,8 +779,10 @@ pub fn execute_youtube_api_request(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|err| format!("failed to build google youtube client: {err}"))?;
-    let url = format!("{}{}", runtime.base_url.trim_end_matches('/'), normalize_path(&request.path));
-    let mut builder = client.request(method, &url).header("User-Agent", "si-rs-provider-google/1.0");
+    let url =
+        format!("{}{}", runtime.base_url.trim_end_matches('/'), normalize_path(&request.path));
+    let mut builder =
+        client.request(method, &url).header("User-Agent", "si-rs-provider-google/1.0");
     let mut params = request.params.clone();
     if runtime.auth_mode == "api-key" && !params.contains_key("key") {
         params.insert("key".to_owned(), runtime.api_key.trim().to_owned());
@@ -816,11 +808,11 @@ pub fn execute_youtube_api_request(
         } else {
             request.content_type.trim()
         };
-        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+        builder = builder
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(request.raw_body.clone());
     }
-    let response = builder
-        .send()
-        .map_err(|err| format!("google youtube request failed: {err}"))?;
+    let response = builder.send().map_err(|err| format!("google youtube request failed: {err}"))?;
     normalize_youtube_api_response(response)
 }
 
@@ -846,8 +838,8 @@ pub fn upload_youtube_video(
     }
     let file_bytes = std::fs::read(file_path)
         .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
-    let metadata_raw =
-        serde_json::to_vec(metadata).map_err(|err| format!("invalid youtube video metadata: {err}"))?;
+    let metadata_raw = serde_json::to_vec(metadata)
+        .map_err(|err| format!("invalid youtube video metadata: {err}"))?;
     let token = resolve_youtube_bearer_token(runtime)?;
     let client = Client::builder()
         .timeout(Duration::from_secs(90))
@@ -864,7 +856,10 @@ pub fn upload_youtube_video(
         .header("User-Agent", "si-rs-provider-google/1.0")
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .header("X-Upload-Content-Length", file_bytes.len().to_string())
-        .header("X-Upload-Content-Type", detect_youtube_content_type(file_path, "application/octet-stream"))
+        .header(
+            "X-Upload-Content-Type",
+            detect_youtube_content_type(file_path, "application/octet-stream"),
+        )
         .query(&[("uploadType", "resumable"), ("part", part.trim())])
         .body(metadata_raw)
         .send()
@@ -996,8 +991,9 @@ pub fn download_youtube_caption(
     }
     if let Some(parent) = output.parent() {
         if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)
-                .map_err(|err| format!("failed to create caption output directory {:?}: {err}", parent))?;
+            std::fs::create_dir_all(parent).map_err(|err| {
+                format!("failed to create caption output directory {:?}: {err}", parent)
+            })?;
         }
     }
     std::fs::write(output, &bytes)
@@ -1248,11 +1244,11 @@ pub fn execute_play_api_request(
         } else {
             request.content_type.trim()
         };
-        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+        builder = builder
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .body(request.raw_body.clone());
     }
-    let response = builder
-        .send()
-        .map_err(|err| format!("google play request failed: {err}"))?;
+    let response = builder.send().map_err(|err| format!("google play request failed: {err}"))?;
     normalize_play_api_response(response)
 }
 
@@ -1423,8 +1419,8 @@ fn upload_youtube_multipart(
     let token = resolve_youtube_bearer_token(runtime)?;
     let file_bytes = std::fs::read(file_path)
         .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
-    let metadata_raw =
-        serde_json::to_vec(metadata).map_err(|err| format!("invalid youtube upload metadata: {err}"))?;
+    let metadata_raw = serde_json::to_vec(metadata)
+        .map_err(|err| format!("invalid youtube upload metadata: {err}"))?;
     let boundary = format!("si-rs-youtube-{}", std::process::id());
     let mut body = Vec::new();
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
@@ -1433,11 +1429,8 @@ fn upload_youtube_multipart(
     body.extend_from_slice(b"\r\n");
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
     body.extend_from_slice(
-        format!(
-            "Content-Type: {}\r\n\r\n",
-            detect_youtube_content_type(file_path, content_type)
-        )
-        .as_bytes(),
+        format!("Content-Type: {}\r\n\r\n", detect_youtube_content_type(file_path, content_type))
+            .as_bytes(),
     );
     body.extend_from_slice(&file_bytes);
     body.extend_from_slice(b"\r\n");
@@ -1446,19 +1439,12 @@ fn upload_youtube_multipart(
         .timeout(Duration::from_secs(10 * 60))
         .build()
         .map_err(|err| format!("failed to build google youtube multipart client: {err}"))?;
-    let url = format!(
-        "{}{}",
-        runtime.upload_base_url.trim_end_matches('/'),
-        normalize_path(path)
-    );
+    let url = format!("{}{}", runtime.upload_base_url.trim_end_matches('/'), normalize_path(path));
     let response = client
         .post(url)
         .bearer_auth(token)
         .header("User-Agent", "si-rs-provider-google/1.0")
-        .header(
-            reqwest::header::CONTENT_TYPE,
-            format!("multipart/related; boundary={boundary}"),
-        )
+        .header(reqwest::header::CONTENT_TYPE, format!("multipart/related; boundary={boundary}"))
         .query(&params)
         .body(body)
         .send()
@@ -1474,25 +1460,19 @@ fn upload_youtube_media(
     content_type: &str,
 ) -> Result<GoogleYouTubeAPIResponse, String> {
     let token = resolve_youtube_bearer_token(runtime)?;
-    let file_bytes = std::fs::read(file_path)
-        .map_err(|err| format!("failed to read youtube media upload file {:?}: {err}", file_path))?;
+    let file_bytes = std::fs::read(file_path).map_err(|err| {
+        format!("failed to read youtube media upload file {:?}: {err}", file_path)
+    })?;
     let client = Client::builder()
         .timeout(Duration::from_secs(5 * 60))
         .build()
         .map_err(|err| format!("failed to build google youtube media client: {err}"))?;
-    let url = format!(
-        "{}{}",
-        runtime.upload_base_url.trim_end_matches('/'),
-        normalize_path(path)
-    );
+    let url = format!("{}{}", runtime.upload_base_url.trim_end_matches('/'), normalize_path(path));
     let response = client
         .post(url)
         .bearer_auth(token)
         .header("User-Agent", "si-rs-provider-google/1.0")
-        .header(
-            reqwest::header::CONTENT_TYPE,
-            detect_youtube_content_type(file_path, content_type),
-        )
+        .header(reqwest::header::CONTENT_TYPE, detect_youtube_content_type(file_path, content_type))
         .header(reqwest::header::CONTENT_LENGTH, file_bytes.len().to_string())
         .query(&params)
         .body(file_bytes)
@@ -1762,11 +1742,8 @@ fn resolve_play_project_id(
     {
         return (value.to_owned(), "settings.project_id".to_owned());
     }
-    if let Some(reference) = generic_account
-        .project_id_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        generic_account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -1891,11 +1868,8 @@ fn resolve_youtube_api_key(
             }
         }
     }
-    if let Some(reference) = account
-        .youtube_api_key_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        account.youtube_api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -1971,11 +1945,8 @@ fn resolve_play_service_account_json(
             }
         }
     }
-    if let Some(reference) = account
-        .service_account_json_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        account.service_account_json_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -1991,22 +1962,16 @@ fn resolve_play_service_account_json(
             return Ok((resolve_play_json_input(value)?, format!("env:{key}")));
         }
     }
-    if let Some(value) = account
-        .service_account_file
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(value) =
+        account.service_account_file.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         return Ok((
             resolve_play_json_file(value)?,
             "settings.play.service_account_file".to_owned(),
         ));
     }
-    if let Some(reference) = account
-        .service_account_file_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        account.service_account_file_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -2124,11 +2089,8 @@ fn resolve_play_default_language_code(
     if !override_value.trim().is_empty() {
         return (override_value.trim().to_owned(), "flag:--language".to_owned());
     }
-    if let Some(value) = account
-        .default_language_code
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(value) =
+        account.default_language_code.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         return (value.to_owned(), "settings.play.default_language_code".to_owned());
     }
@@ -2221,11 +2183,8 @@ fn resolve_play_developer_account_id(
     if !override_value.trim().is_empty() {
         return (override_value.trim().to_owned(), "flag:--developer-account".to_owned());
     }
-    if let Some(value) = account
-        .developer_account_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(value) =
+        account.developer_account_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         return (value.to_owned(), "settings.play.developer_account_id".to_owned());
     }
@@ -2250,11 +2209,8 @@ fn resolve_play_default_package_name(
     if !override_value.trim().is_empty() {
         return (override_value.trim().to_owned(), "flag:--package".to_owned());
     }
-    if let Some(value) = account
-        .default_package_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(value) =
+        account.default_package_name.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         return (value.to_owned(), "settings.play.default_package_name".to_owned());
     }
@@ -2304,11 +2260,8 @@ fn account_env_prefix(alias: &str, account: &GoogleAccountEntry) -> String {
 }
 
 fn youtube_account_env_prefix(alias: &str, account: &GoogleYouTubeAccountEntry) -> String {
-    if let Some(prefix) = account
-        .vault_prefix
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(prefix) =
+        account.vault_prefix.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         let mut candidate = prefix.replace('-', "_").to_uppercase();
         if !candidate.ends_with('_') {
@@ -2321,11 +2274,8 @@ fn youtube_account_env_prefix(alias: &str, account: &GoogleYouTubeAccountEntry) 
 }
 
 fn play_account_env_prefix(alias: &str, account: &GooglePlayAccountEntry) -> String {
-    if let Some(prefix) = account
-        .vault_prefix
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(prefix) =
+        account.vault_prefix.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         let mut candidate = prefix.replace('-', "_").to_uppercase();
         if !candidate.ends_with('_') {
@@ -2346,11 +2296,8 @@ fn resolve_youtube_client_id(
     if !override_value.trim().is_empty() {
         return (override_value.trim().to_owned(), "flag:--client-id".to_owned());
     }
-    if let Some(reference) = account
-        .youtube_client_id_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        account.youtube_client_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -2428,11 +2375,8 @@ fn resolve_youtube_redirect_uri(
     if !override_value.trim().is_empty() {
         return (override_value.trim().to_owned(), "flag:--redirect-uri".to_owned());
     }
-    if let Some(reference) = account
-        .youtube_redirect_uri_env
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
+    if let Some(reference) =
+        account.youtube_redirect_uri_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         if let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
@@ -2612,9 +2556,9 @@ fn resolve_play_json_input(value: &str) -> Result<String, String> {
 }
 
 fn resolve_play_json_file(path: &str) -> Result<String, String> {
-    std::fs::read_to_string(path.trim())
-        .map(|raw| raw.trim().to_owned())
-        .map_err(|err| format!("failed to read google play service account file {:?}: {err}", path.trim()))
+    std::fs::read_to_string(path.trim()).map(|raw| raw.trim().to_owned()).map_err(|err| {
+        format!("failed to read google play service account file {:?}: {err}", path.trim())
+    })
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2631,9 +2575,11 @@ struct GoogleServiceAccountCredentials {
     token_uri: String,
 }
 
-fn parse_google_service_account_credentials(raw: &str) -> Result<GoogleServiceAccountCredentials, String> {
-    let mut creds: GoogleServiceAccountCredentials =
-        serde_json::from_str(raw.trim()).map_err(|err| format!("invalid service account json: {err}"))?;
+fn parse_google_service_account_credentials(
+    raw: &str,
+) -> Result<GoogleServiceAccountCredentials, String> {
+    let mut creds: GoogleServiceAccountCredentials = serde_json::from_str(raw.trim())
+        .map_err(|err| format!("invalid service account json: {err}"))?;
     creds.private_key = creds.private_key.trim().replace("\\n", "\n");
     if creds.client_email.trim().is_empty() {
         return Err("service account json missing client_email".to_owned());
@@ -2660,7 +2606,9 @@ struct GooglePlayAccessToken {
     expires_at: String,
 }
 
-fn exchange_google_play_access_token(runtime: &GooglePlayRuntime) -> Result<GooglePlayAccessToken, String> {
+fn exchange_google_play_access_token(
+    runtime: &GooglePlayRuntime,
+) -> Result<GooglePlayAccessToken, String> {
     let creds = parse_google_service_account_credentials(&runtime.service_account_json)?;
     let assertion = sign_google_service_account_jwt(&creds)?;
     let client = Client::builder()
@@ -2696,8 +2644,8 @@ fn exchange_google_play_access_token(runtime: &GooglePlayRuntime) -> Result<Goog
         #[serde(default)]
         expires_in: i64,
     }
-    let payload: TokenResponse =
-        serde_json::from_str(&body).map_err(|err| format!("invalid google oauth token response: {err}"))?;
+    let payload: TokenResponse = serde_json::from_str(&body)
+        .map_err(|err| format!("invalid google oauth token response: {err}"))?;
     if payload.access_token.trim().is_empty() {
         return Err("google oauth token response missing access_token".to_owned());
     }
@@ -2712,7 +2660,9 @@ fn exchange_google_play_access_token(runtime: &GooglePlayRuntime) -> Result<Goog
     })
 }
 
-fn sign_google_service_account_jwt(creds: &GoogleServiceAccountCredentials) -> Result<String, String> {
+fn sign_google_service_account_jwt(
+    creds: &GoogleServiceAccountCredentials,
+) -> Result<String, String> {
     let key = parse_google_rsa_private_key(&creds.private_key)?;
     let now = chrono::Utc::now();
     let header = if creds.private_key_id.trim().is_empty() {
@@ -2734,11 +2684,7 @@ fn sign_google_service_account_jwt(creds: &GoogleServiceAccountCredentials) -> R
     );
     let signing_key = SigningKey::<Sha256>::new(key);
     let signature = signing_key.sign_with_rng(&mut OsRng, signing_input.as_bytes());
-    Ok(format!(
-        "{}.{}",
-        signing_input,
-        URL_SAFE_NO_PAD.encode(signature.to_vec())
-    ))
+    Ok(format!("{}.{}", signing_input, URL_SAFE_NO_PAD.encode(signature.to_vec())))
 }
 
 #[derive(Debug, Deserialize)]
@@ -2767,10 +2713,7 @@ fn resolve_youtube_bearer_token(runtime: &GoogleYouTubeRuntime) -> Result<String
         ("client_id", runtime.oauth.client_id.trim().to_owned()),
     ];
     if !runtime.oauth.client_secret.trim().is_empty() {
-        form.push((
-            "client_secret",
-            runtime.oauth.client_secret.trim().to_owned(),
-        ));
+        form.push(("client_secret", runtime.oauth.client_secret.trim().to_owned()));
     }
     let response = client
         .post("https://oauth2.googleapis.com/token")
@@ -2789,8 +2732,8 @@ fn resolve_youtube_bearer_token(runtime: &GoogleYouTubeRuntime) -> Result<String
             body.trim()
         ));
     }
-    let payload: GoogleRefreshTokenResponse =
-        serde_json::from_str(&body).map_err(|err| format!("invalid google oauth refresh response: {err}"))?;
+    let payload: GoogleRefreshTokenResponse = serde_json::from_str(&body)
+        .map_err(|err| format!("invalid google oauth refresh response: {err}"))?;
     if payload.access_token.trim().is_empty() {
         return Err("google oauth refresh response missing access_token".to_owned());
     }
@@ -2888,10 +2831,7 @@ mod tests {
     #[test]
     fn youtube_api_key_uses_environment_specific_env() {
         let mut env = BTreeMap::new();
-        env.insert(
-            "GOOGLE_CORE_STAGING_YOUTUBE_API_KEY".to_owned(),
-            "yt-stage-key".to_owned(),
-        );
+        env.insert("GOOGLE_CORE_STAGING_YOUTUBE_API_KEY".to_owned(), "yt-stage-key".to_owned());
         let (value, source) = resolve_youtube_api_key(
             "core",
             &GoogleYouTubeAccountEntry::default(),
