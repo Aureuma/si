@@ -787,9 +787,8 @@ fn load_rsa_private_key(path: &str, passphrase: &str) -> Result<RsaPrivateKey, S
         );
     }
     Err(
-        format!(
-            "parse oci private key: passphrase was provided but the key is not a supported encrypted PKCS#8 PEM"
-        ),
+        "parse oci private key: passphrase was provided but the key is not a supported encrypted PKCS#8 PEM"
+            .to_owned(),
     )
 }
 
@@ -1065,8 +1064,10 @@ mod tests {
         )
         .expect("write key");
 
-        let mut settings = OCISettings::default();
-        settings.default_account = Some("team".to_owned());
+        let settings = OCISettings {
+            default_account: Some("team".to_owned()),
+            ..OCISettings::default()
+        };
 
         let status = resolve_auth_status(
             &settings,

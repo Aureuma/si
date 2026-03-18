@@ -275,7 +275,28 @@ func TestFortRuntimeAgentStepPersistsRustRevocationOnUnauthorized(t *testing.T) 
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"rfs_existing\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"classify\" ]; then\n  printf '%s\\n' '\"Resumable\"'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"revoked\",\"reason\":\"RefreshUnauthorized\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
+	script := "#!/bin/sh\nprintf '%s\n' \"$@\" >>" + shellSingleQuote(argsPath) + `
+if [ "$1" = "fort" ] && [ "$2" = "session-state" ] && [ "$3" = "show" ]; then
+  printf '%s\n' '{"profile_id":"alpha","agent_id":"si-codex-alpha","session_id":"rfs_existing","host":"` + srv.URL + `","container_host":"` + srv.URL + `","access_token_path":"` + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + `","refresh_token_path":"` + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + `","refresh_expires_at":"2030-02-01T00:00:00Z"}'
+  exit 0
+fi
+if [ "$1" = "fort" ] && [ "$2" = "session-state" ] && [ "$3" = "classify" ]; then
+  printf '%s\n' '"Resumable"'
+  exit 0
+fi
+if [ "$1" = "fort" ] && [ "$2" = "session-state" ] && [ "$3" = "bootstrap-view" ]; then
+  printf '%s\n' '{"profile_id":"alpha","agent_id":"si-codex-alpha","session_id":"rfs_existing","host_url":"` + srv.URL + `","container_host_url":"` + srv.URL + `","access_token_path":"` + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + `","refresh_token_path":"` + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + `","access_token_container_path":"` + strings.ReplaceAll(paths.AccessTokenContainerPath, "\\", "\\\\") + `","refresh_token_container_path":"` + strings.ReplaceAll(paths.RefreshTokenContainerPath, "\\", "\\\\") + `"}'
+  exit 0
+fi
+if [ "$1" = "fort" ] && [ "$2" = "session-state" ] && [ "$3" = "refresh-outcome" ]; then
+  printf '%s\n' '{"state":{"profile_id":"alpha","agent_id":"si-codex-alpha","session_id":"","host":"` + srv.URL + `","container_host":"` + srv.URL + `","access_token_path":"` + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + `","refresh_token_path":"` + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + `","refresh_expires_at":"2030-02-01T00:00:00Z"},"classification":{"state":"revoked","reason":"RefreshUnauthorized"}}'
+  exit 0
+fi
+if [ "$1" = "fort" ] && [ "$2" = "session-state" ] && [ "$3" = "write" ]; then
+  exit 0
+fi
+exit 1
+`
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}

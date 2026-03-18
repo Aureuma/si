@@ -1,3 +1,17 @@
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::upper_case_acronyms)]
+#![allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::manual_ignore_case_cmp,
+    clippy::redundant_locals,
+    clippy::manual_map,
+    clippy::unnecessary_lazy_evaluations,
+    clippy::never_loop,
+    clippy::ptr_arg,
+    clippy::collapsible_if,
+)]
+
 use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -462,6 +476,7 @@ enum BuildSelfCommand {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum BuildInstallerCommand {
     #[command(name = "settings-helper")]
     SettingsHelper {
@@ -760,7 +775,7 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
-    DNS {
+    Dns {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
@@ -796,7 +811,7 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
-    WAF {
+    Waf {
         #[command(subcommand)]
         command: CloudflareReadUpdateResourceCommand,
     },
@@ -820,7 +835,7 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareTunnelCommand,
     },
-    TLS {
+    Tls {
         #[command(subcommand)]
         command: CloudflareTLSCommand,
     },
@@ -3205,6 +3220,7 @@ enum AppleAppStoreAppCommand {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum AppleAppStoreListingCommand {
     Get {
         #[arg(long)]
@@ -7203,6 +7219,7 @@ enum GooglePlayAuthCommand {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum GooglePlayContextCommand {
     List {
         #[arg(long)]
@@ -19170,7 +19187,7 @@ fn main() -> Result<()> {
                 cloudflare_zone_spec(),
                 command,
             )?,
-            CloudflareCommand::DNS { command } => run_cloudflare_resource_command(
+            CloudflareCommand::Dns { command } => run_cloudflare_resource_command(
                 cloudflare_dns_spec(),
                 command,
             )?,
@@ -19522,7 +19539,7 @@ fn main() -> Result<()> {
                 cloudflare_queue_spec(),
                 command,
             )?,
-            CloudflareCommand::WAF { command } => {
+            CloudflareCommand::Waf { command } => {
                 run_cloudflare_read_update_resource_command(cloudflare_waf_spec(), command)?
             }
             CloudflareCommand::R2 { command } => match command {
@@ -19750,7 +19767,7 @@ fn main() -> Result<()> {
                     account_id, home, settings_file,
                 )?,
             },
-            CloudflareCommand::TLS { command } => match command {
+            CloudflareCommand::Tls { command } => match command {
                 CloudflareTLSCommand::Get {
                     setting, json, raw, account, env, zone_id, zone, api_token, base_url,
                     account_id, home, settings_file,

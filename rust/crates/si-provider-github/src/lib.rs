@@ -374,9 +374,11 @@ pub fn resolve_runtime(
     } else if entry
         .and_then(|item| item.api_base_url.as_deref())
         .is_some_and(|value| value.trim() == base_url)
+        || settings
+            .api_base_url
+            .as_deref()
+            .is_some_and(|value| value.trim() == base_url)
     {
-        source.push("settings.api_base_url".to_owned());
-    } else if settings.api_base_url.as_deref().is_some_and(|value| value.trim() == base_url) {
         source.push("settings.api_base_url".to_owned());
     } else if env
         .get("GITHUB_API_BASE_URL")
@@ -1662,6 +1664,7 @@ pub fn create_release(
     )?)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn upload_release_asset(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2452,7 +2455,7 @@ fn normalize_response(response: Response) -> Result<GitHubAPIResponse, String> {
     let body = response
         .text()
         .map_err(|err| format!("read github response body: {err}"))?;
-    if status_code < 200 || status_code >= 300 {
+    if !(200..300).contains(&status_code) {
         return Err(format!(
             "github request failed: status={} request_id={} body={}",
             status_code,
