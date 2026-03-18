@@ -320,6 +320,16 @@ func resolveMintlifyRepoRoot(raw string) (string, error) {
 	return cwd, nil
 }
 
+func resolveSelfRepoRoot(raw string) (string, error) {
+	if root, err := resolveDirectoryPath(strings.TrimSpace(raw), "repo root"); err == nil {
+		return root, nil
+	}
+	if root, err := repoRoot(); err == nil {
+		return root, nil
+	}
+	return repoRootFromExecutable()
+}
+
 func printMintlifyJSON(payload map[string]any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
