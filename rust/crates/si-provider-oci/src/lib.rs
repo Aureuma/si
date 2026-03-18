@@ -5,10 +5,10 @@ use reqwest::header::{
     ACCEPT, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, DATE, HOST, HeaderMap, HeaderName,
     HeaderValue, USER_AGENT,
 };
+use rsa::RsaPrivateKey;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::Pkcs1v15Sign;
 use rsa::pkcs8::DecodePrivateKey;
-use rsa::RsaPrivateKey;
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -376,16 +376,12 @@ pub fn execute_api_request_with_auth(
     if runtime.auth_style == "signature" {
         sign_request(&mut req, &runtime, &body)?;
     }
-    let resp = client
-        .execute(req)
-        .map_err(|err| format!("oci request failed: {err}"))?;
+    let resp = client.execute(req).map_err(|err| format!("oci request failed: {err}"))?;
     let status_code = resp.status().as_u16();
     let status = resp.status().to_string();
     let headers = headers_to_map(resp.headers());
     let request_id = first_header(resp.headers(), &["opc-request-id", "opc-client-request-id"]);
-    let body = resp
-        .text()
-        .map_err(|err| format!("read oci response body: {err}"))?;
+    let body = resp.text().map_err(|err| format!("read oci response body: {err}"))?;
     if (200..300).contains(&status_code) {
         let mut out = OCIAPIResponse {
             status_code,
@@ -534,8 +530,11 @@ fn resolve_runtime(
         account.tenancy_ocid_env.as_deref(),
         env_map,
     );
-    let (mut user_ocid, user_source) =
-        resolve_account_value(account.user_ocid.as_deref(), account.user_ocid_env.as_deref(), env_map);
+    let (mut user_ocid, user_source) = resolve_account_value(
+        account.user_ocid.as_deref(),
+        account.user_ocid_env.as_deref(),
+        env_map,
+    );
     let (mut fingerprint, fingerprint_source) = resolve_account_value(
         account.fingerprint.as_deref(),
         account.fingerprint_env.as_deref(),
@@ -546,11 +545,10 @@ fn resolve_runtime(
         account.private_key_path_env.as_deref(),
         env_map,
     );
-    let mut passphrase = resolve_env_reference(account.passphrase_env.as_deref(), env_map).unwrap_or_default();
+    let mut passphrase =
+        resolve_env_reference(account.passphrase_env.as_deref(), env_map).unwrap_or_default();
     source.extend(
-        [tenancy_source, user_source, fingerprint_source, private_key_source]
-            .into_iter()
-            .flatten(),
+        [tenancy_source, user_source, fingerprint_source, private_key_source].into_iter().flatten(),
     );
     if auth_style == "signature" {
         let profile_values = parse_config_profile(&config_file, &profile)?;
@@ -586,7 +584,9 @@ fn resolve_runtime(
     .trim_end_matches('/')
     .to_owned();
     if require_auth && auth_style != "signature" {
-        return Err("oci signature auth is required for this command (set --auth signature)".to_owned());
+        return Err(
+            "oci signature auth is required for this command (set --auth signature)".to_owned()
+        );
     }
     let private_key = if auth_style == "signature" {
         Some(load_rsa_private_key(&private_key_path, &passphrase)?)
@@ -651,7 +651,10 @@ fn normalize_auth_style(value: &str) -> Result<String, String> {
     }
 }
 
-fn parse_config_profile(config_file: &str, profile: &str) -> Result<BTreeMap<String, String>, String> {
+fn parse_config_profile(
+    config_file: &str,
+    profile: &str,
+) -> Result<BTreeMap<String, String>, String> {
     if config_file.trim().is_empty() {
         return Err("oci config file path is required".to_owned());
     }
@@ -679,10 +682,7 @@ fn parse_config_profile(config_file: &str, profile: &str) -> Result<BTreeMap<Str
         }
         let key = line[..split_idx].trim();
         let value = line[split_idx + 1..].trim().trim_matches('"').trim_matches('\'');
-        profiles
-            .entry(current.clone())
-            .or_default()
-            .insert(key.to_owned(), value.to_owned());
+        profiles.entry(current.clone()).or_default().insert(key.to_owned(), value.to_owned());
     }
     profiles
         .remove(profile)
@@ -771,7 +771,8 @@ fn load_rsa_private_key(path: &str, passphrase: &str) -> Result<RsaPrivateKey, S
     if path.trim().is_empty() {
         return Err("oci private key path is required".to_owned());
     }
-    let raw = fs::read_to_string(path).map_err(|err| format!("read oci private key {:?}: {err}", path))?;
+    let raw = fs::read_to_string(path)
+        .map_err(|err| format!("read oci private key {:?}: {err}", path))?;
     if passphrase.trim().is_empty() {
         if private_key_needs_passphrase(&raw) {
             return Err("encrypted oci private key requires passphrase".to_owned());
@@ -799,7 +800,11 @@ fn private_key_needs_passphrase(raw: &str) -> bool {
         || upper.contains("DEK-INFO:")
 }
 
-fn resolve_url(base_url: &str, path: &str, params: &BTreeMap<String, String>) -> Result<String, String> {
+fn resolve_url(
+    base_url: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<String, String> {
     let path = path.trim();
     if path.starts_with("http://") || path.starts_with("https://") {
         let mut url = Url::parse(path).map_err(|err| format!("parse oci url {:?}: {err}", path))?;
@@ -815,7 +820,8 @@ fn resolve_url(base_url: &str, path: &str, params: &BTreeMap<String, String>) ->
         }
         return Ok(url.to_string());
     }
-    let mut url = Url::parse(base_url).map_err(|err| format!("parse oci base url {:?}: {err}", base_url))?;
+    let mut url =
+        Url::parse(base_url).map_err(|err| format!("parse oci base url {:?}: {err}", base_url))?;
     if !path.starts_with('/') {
         url.set_path(&format!("/{path}"));
     } else {
@@ -852,10 +858,9 @@ fn sign_request(
     if key_id.contains("//") {
         return Err("oci signature auth requires tenancy/user/fingerprint values".to_owned());
     }
-    request.headers_mut().insert(
-        DATE,
-        HeaderValue::from_str(&fmt_http_date(std::time::SystemTime::now())).unwrap(),
-    );
+    request
+        .headers_mut()
+        .insert(DATE, HeaderValue::from_str(&fmt_http_date(std::time::SystemTime::now())).unwrap());
     let host = request
         .url()
         .host_str()
@@ -866,7 +871,8 @@ fn sign_request(
         HeaderValue::from_str(&host).map_err(|err| format!("oci request host: {err}"))?,
     );
     let method = request.method().as_str().to_lowercase();
-    let mut headers_to_sign = vec!["date".to_owned(), "(request-target)".to_owned(), "host".to_owned()];
+    let mut headers_to_sign =
+        vec!["date".to_owned(), "(request-target)".to_owned(), "host".to_owned()];
     if matches!(method.as_str(), "post" | "put" | "patch") {
         if !request.headers().contains_key(CONTENT_TYPE) {
             request
@@ -1064,10 +1070,8 @@ mod tests {
         )
         .expect("write key");
 
-        let settings = OCISettings {
-            default_account: Some("team".to_owned()),
-            ..OCISettings::default()
-        };
+        let settings =
+            OCISettings { default_account: Some("team".to_owned()), ..OCISettings::default() };
 
         let status = resolve_auth_status(
             &settings,
@@ -1093,24 +1097,15 @@ mod tests {
         let err = resolve_auth_status(
             &OCISettings::default(),
             &BTreeMap::new(),
-            &OCIAuthOverrides {
-                auth_style: "none".to_owned(),
-                ..OCIAuthOverrides::default()
-            },
+            &OCIAuthOverrides { auth_style: "none".to_owned(), ..OCIAuthOverrides::default() },
         )
         .expect_err("expected signature auth error");
-        assert_eq!(
-            err,
-            "oci signature auth is required for this command (set --auth signature)"
-        );
+        assert_eq!(err, "oci signature auth is required for this command (set --auth signature)");
     }
 
     #[test]
     fn build_cloud_init_rejects_port_22() {
         let err = build_oracular_cloud_init_user_data(22).expect_err("expected port-22 rejection");
-        assert_eq!(
-            err,
-            "refusing to configure OCI SSH port to 22; use a non-22 port"
-        );
+        assert_eq!(err, "refusing to configure OCI SSH port to 22; use a non-22 port");
     }
 }
