@@ -371,11 +371,7 @@ pub fn execute_api_request(
     runtime: &StripeRuntimeContext,
     request: &StripeAPIRequest,
 ) -> Result<StripeAPIResponse, String> {
-    let method = if request.method.trim().is_empty() {
-        "GET"
-    } else {
-        request.method.trim()
-    };
+    let method = if request.method.trim().is_empty() { "GET" } else { request.method.trim() };
     let (endpoint, body) = build_request_target(
         &runtime.base_url,
         &request.path,
@@ -417,9 +413,7 @@ pub fn execute_api_request(
             .header(CONTENT_TYPE, detect_stripe_content_type(&request.path, &request.raw_body))
             .body(body);
     }
-    let response = request_builder
-        .send()
-        .map_err(|err| format!("stripe request failed: {err}"))?;
+    let response = request_builder.send().map_err(|err| format!("stripe request failed: {err}"))?;
     normalize_response(response)
 }
 
@@ -439,9 +433,7 @@ pub fn list_all(
         }
         let mut page_params = params.clone();
         let page_size = remaining.min(100);
-        page_params
-            .entry("limit".to_owned())
-            .or_insert_with(|| page_size.to_string());
+        page_params.entry("limit".to_owned()).or_insert_with(|| page_size.to_string());
         if !cursor.trim().is_empty() {
             page_params.insert("starting_after".to_owned(), cursor.clone());
         }
@@ -459,11 +451,7 @@ pub fn list_all(
             .as_ref()
             .and_then(Value::as_object)
             .ok_or_else(|| "stripe list response missing json body".to_owned())?;
-        let items = object
-            .get("data")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let items = object.get("data").and_then(Value::as_array).cloned().unwrap_or_default();
         if items.is_empty() {
             break;
         }
@@ -476,10 +464,7 @@ pub fn list_all(
             .trim()
             .to_owned();
         out.extend(items);
-        let has_more = object
-            .get("has_more")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let has_more = object.get("has_more").and_then(Value::as_bool).unwrap_or(false);
         if !has_more || cursor.is_empty() {
             break;
         }
@@ -502,10 +487,7 @@ pub fn render_api_response_text(response: &StripeAPIResponse, raw: bool) -> Stri
         out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
     }
     if !response.idempotency_key.trim().is_empty() {
-        out.push_str(&format!(
-            "Idempotency Key: {}\n",
-            response.idempotency_key.trim()
-        ));
+        out.push_str(&format!("Idempotency Key: {}\n", response.idempotency_key.trim()));
     }
     if let Some(data) = &response.data {
         if let Ok(pretty) = serde_json::to_string_pretty(data) {
@@ -566,15 +548,11 @@ fn resolve_url(base_url: &str, path: &str) -> Result<Url, String> {
     }
     let base = Url::parse(base_url)
         .map_err(|err| format!("parse stripe base url {:?}: {err}", base_url))?;
-    base.join(path)
-        .map_err(|err| format!("resolve stripe path {:?}: {err}", path))
+    base.join(path).map_err(|err| format!("resolve stripe path {:?}: {err}", path))
 }
 
 fn append_query(url: &mut Url, params: &BTreeMap<String, String>) {
-    if params
-        .iter()
-        .any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty())
-    {
+    if params.iter().any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty()) {
         let mut pairs = url.query_pairs_mut();
         for (key, value) in params {
             let key = key.trim();
@@ -614,18 +592,12 @@ fn normalize_response(response: reqwest::blocking::Response) -> Result<StripeAPI
         .unwrap_or_default()
         .trim()
         .to_owned();
-    let body = response
-        .text()
-        .map_err(|err| format!("read stripe response body: {err}"))?;
+    let body = response.text().map_err(|err| format!("read stripe response body: {err}"))?;
     if !status.is_success() {
         return Err(format!(
             "stripe request failed: status={} request_id={} body={}",
             status.as_u16(),
-            if request_id.is_empty() {
-                "-"
-            } else {
-                request_id.as_str()
-            },
+            if request_id.is_empty() { "-" } else { request_id.as_str() },
             body.trim()
         ));
     }
@@ -643,10 +615,7 @@ fn normalize_response(response: reqwest::blocking::Response) -> Result<StripeAPI
 fn normalize_headers(headers: &HeaderMap) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for (key, value) in headers {
-        out.insert(
-            key.as_str().to_owned(),
-            value.to_str().unwrap_or_default().trim().to_owned(),
-        );
+        out.insert(key.as_str().to_owned(), value.to_str().unwrap_or_default().trim().to_owned());
     }
     out
 }

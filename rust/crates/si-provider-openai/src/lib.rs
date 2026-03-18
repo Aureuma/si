@@ -477,7 +477,10 @@ pub fn get_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIRespons
     openai_get(runtime, &format!("/v1/organization/projects/{escaped}"), &[], true)
 }
 
-pub fn create_project(runtime: &OpenAIRuntime, payload: &Value) -> Result<OpenAIAPIResponse, String> {
+pub fn create_project(
+    runtime: &OpenAIRuntime,
+    payload: &Value,
+) -> Result<OpenAIAPIResponse, String> {
     openai_send_json(runtime, "POST", "/v1/organization/projects", payload, true)
 }
 
@@ -491,7 +494,13 @@ pub fn update_project(
         return Err("project id is required".to_owned());
     }
     let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
-    openai_send_json(runtime, "POST", &format!("/v1/organization/projects/{escaped}"), payload, true)
+    openai_send_json(
+        runtime,
+        "POST",
+        &format!("/v1/organization/projects/{escaped}"),
+        payload,
+        true,
+    )
 }
 
 pub fn archive_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse, String> {
@@ -964,15 +973,9 @@ fn openai_request(
     body: Option<Vec<u8>>,
     use_admin_key: bool,
 ) -> Result<OpenAIAPIResponse, String> {
-    let params = params
-        .iter()
-        .map(|(key, value)| ((*key).to_owned(), value.clone()))
-        .collect::<Vec<_>>();
-    let content_type = if body.is_some() {
-        Some("application/json")
-    } else {
-        None
-    };
+    let params =
+        params.iter().map(|(key, value)| ((*key).to_owned(), value.clone())).collect::<Vec<_>>();
+    let content_type = if body.is_some() { Some("application/json") } else { None };
     openai_request_with_headers(
         runtime,
         method,
@@ -1051,9 +1054,7 @@ fn openai_request_with_headers(
     if let Some(body) = body {
         request = request.body(body);
     }
-    let response = request
-        .send()
-        .map_err(|err| format!("openai request failed: {err}"))?;
+    let response = request.send().map_err(|err| format!("openai request failed: {err}"))?;
     let status = response.status();
     let status_text = status.to_string();
     let request_id = first_header(response.headers(), &["x-request-id", "openai-processing-ms"]);
@@ -1081,10 +1082,8 @@ fn resolve_url_owned(
     path: &str,
     params: &[(String, String)],
 ) -> Result<String, String> {
-    let params = params
-        .iter()
-        .map(|(key, value)| (key.as_str(), value.clone()))
-        .collect::<Vec<_>>();
+    let params =
+        params.iter().map(|(key, value)| (key.as_str(), value.clone())).collect::<Vec<_>>();
     resolve_url(base_url, path, &params)
 }
 
