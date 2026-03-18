@@ -723,6 +723,7 @@ Status: in_progress
 2. Re-run installer smoke lanes from repo root with a prepared install directory and explicit expected runtime prerequisites (`docker` + network + non-root policy) before final green on phase 9.
 3. Keep `update-tap-repo` dry-run expectation aligned in docs/tests (no `--dry-run` flag exists).
 4. Add a small, documented matrix entrypoint script under `tickets/` so this command matrix can be replayed deterministically.
+   - Added `tickets/phase9-10-realhost-matrix.sh` with bounded command execution.
 
 ## Execution update (2026-03-18)
 
