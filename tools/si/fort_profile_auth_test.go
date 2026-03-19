@@ -618,7 +618,7 @@ func TestPrepareFortRuntimeAuthUsesRustBootstrapViewForHostResolution(t *testing
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := prepareFortRuntimeAuth([]string{"get"}); err != nil {
 		t.Fatalf("prepareFortRuntimeAuth: %v", err)
@@ -658,7 +658,7 @@ func TestPrepareFortRuntimeAuthFallbackUsesSharedBootstrapLoader(t *testing.T) {
 	t.Setenv("FORT_TOKEN_PATH", "")
 	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
 	t.Setenv(siRustCLIBinEnv, "")
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	profileFortDir := filepath.Join(home, ".si", "codex", "profiles", "alpha", fortProfileStateDirName)
 	if err := os.MkdirAll(profileFortDir, 0o700); err != nil {
@@ -823,7 +823,7 @@ func TestLoadCodexFortBootstrapFromProfileStateDelegatesToRustCLIWhenConfigured(
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -901,7 +901,7 @@ func TestLoadFortProfileSessionStateDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, err := loadFortProfileSessionState("/tmp/session.json")
 	if err != nil {
@@ -928,7 +928,7 @@ func TestSaveFortProfileSessionStateDelegatesToRustCLIWhenConfigured(t *testing.
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	err := saveFortProfileSessionState("/tmp/session.json", fortProfileSessionState{
 		ProfileID: "alpha",
@@ -994,7 +994,7 @@ func TestRefreshCodexProfileFortSessionLockedDelegatesRefreshTransitionToRustCLI
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	boot, err := refreshCodexProfileFortSessionLocked(context.Background(), profile, paths)
 	if err != nil {
@@ -1066,7 +1066,7 @@ func TestRefreshCodexProfileFortSessionLockedUsesRustBootstrapViewForHostResolut
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := refreshCodexProfileFortSessionLocked(context.Background(), profile, paths); err != nil {
 		t.Fatalf("refreshCodexProfileFortSessionLocked: %v", err)
@@ -1144,7 +1144,7 @@ func TestEnsureCodexProfileFortSessionUsesRustBootstrapViewAfterOpenWhenConfigur
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	boot, err := ensureCodexProfileFortSession(context.Background(), nil, profile, "")
 	if err != nil {
@@ -1211,7 +1211,7 @@ func TestRefreshCodexProfileFortSessionLockedPersistsRustRevocationOnUnauthorize
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := refreshCodexProfileFortSessionLocked(context.Background(), profile, paths); err == nil {
 		t.Fatalf("expected unauthorized refresh to fail")
@@ -1265,7 +1265,7 @@ func TestEnsureUsableCodexProfileFortSessionHonorsRustRevokedClassification(t *t
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	refreshCalls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

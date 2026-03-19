@@ -17,7 +17,7 @@ func TestCmdWorkOSContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdWorkOSContextList([]string{"--json"})
@@ -45,7 +45,7 @@ func TestCmdWorkOSContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdWorkOSContextCurrent([]string{"--json"})
@@ -73,7 +73,7 @@ func TestCmdWorkOSAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdWorkOSAuthStatus([]string{"--json"})

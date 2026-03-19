@@ -17,7 +17,7 @@ func TestCmdOCIContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOCIContextList([]string{"--json"})
@@ -45,7 +45,7 @@ func TestCmdOCIContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOCIContextCurrent([]string{"--json"})

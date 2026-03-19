@@ -17,7 +17,7 @@ func TestCmdCodexStopDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexStop([]string{"ferma"})
@@ -44,7 +44,7 @@ func TestCmdCodexStartDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexStart([]string{"ferma"})
@@ -71,7 +71,7 @@ func TestCmdCodexLogsDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	_ = captureOutputForTest(t, func() {
 		cmdCodexLogs([]string{"ferma", "--tail", "25"})
@@ -95,7 +95,7 @@ func TestCmdCodexTailDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	_ = captureOutputForTest(t, func() {
 		cmdCodexTail([]string{"ferma", "--tail", "25"})
@@ -119,7 +119,7 @@ func TestCmdCodexCloneDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexClone([]string{"ferma", "acme/repo", "--gh-pat", "tok"})
@@ -146,7 +146,7 @@ func TestCmdCodexListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexList([]string{"--json"})
@@ -173,7 +173,7 @@ func TestCmdCodexExecDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	_ = captureOutputForTest(t, func() {
 		cmdCodexExec([]string{"ferma", "--no-tmux", "--", "git", "status"})
@@ -210,7 +210,7 @@ func TestCmdCodexRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexRemove([]string{"ferma"})
@@ -276,7 +276,7 @@ func TestCmdCodexSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prev := observeCodexSpawnPreparedFn
 	t.Cleanup(func() {
@@ -348,7 +348,7 @@ func TestCodexDelegatedLifecycleSmoke(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	startOutput := captureOutputForTest(t, func() {
 		cmdCodexStart([]string{"ferma"})
@@ -442,7 +442,7 @@ func TestCodexDelegatedSpawnAndRemoveProfileMatrix(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	cases := []struct {
 		name            string

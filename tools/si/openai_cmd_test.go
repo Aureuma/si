@@ -17,7 +17,7 @@ func TestCmdOpenAIContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIContextList([]string{"--json"})
@@ -45,7 +45,7 @@ func TestCmdOpenAIContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIContextCurrent([]string{"--json"})
@@ -73,7 +73,7 @@ func TestCmdOpenAIAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIAuthStatus([]string{"--json", "--auth-mode", "api"})
@@ -101,7 +101,7 @@ func TestCmdOpenAIModelListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIModelList([]string{"--json", "--limit", "1"})
@@ -129,7 +129,7 @@ func TestCmdOpenAIModelGetDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIModelGet([]string{"gpt-test"})
@@ -157,7 +157,7 @@ func TestCmdOpenAIProjectListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectList([]string{"--json", "--limit", "1", "--include-archived"})
@@ -185,7 +185,7 @@ func TestCmdOpenAIProjectGetDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectGet([]string{"proj_123"})
@@ -213,7 +213,7 @@ func TestCmdOpenAIProjectAPIKeyListDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectAPIKeyList([]string{"--json", "--project-id", "proj_123", "--limit", "1"})
@@ -241,7 +241,7 @@ func TestCmdOpenAIProjectAPIKeyGetDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectAPIKeyGet([]string{"--project-id", "proj_123", "key_123"})
@@ -269,7 +269,7 @@ func TestCmdOpenAIProjectServiceAccountListDelegatesToRustCLIWhenConfigured(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectServiceAccountList([]string{"--json", "--project-id", "proj_123", "--limit", "1"})
@@ -297,7 +297,7 @@ func TestCmdOpenAIProjectServiceAccountGetDelegatesToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectServiceAccountGet([]string{"--project-id", "proj_123", "sa_123"})
@@ -325,7 +325,7 @@ func TestCmdOpenAIProjectRateLimitListDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIProjectRateLimitList([]string{"--json", "--project-id", "proj_123", "--limit", "1", "--after", "cursor"})
@@ -353,7 +353,7 @@ func TestCmdOpenAIKeyListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIKeyList([]string{"--json", "--limit", "1", "--order", "desc"})
@@ -381,7 +381,7 @@ func TestCmdOpenAIKeyGetDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIKeyGet([]string{"key_123"})
@@ -409,7 +409,7 @@ func TestCmdOpenAIUsageMetricDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdOpenAIUsageMetric("completions", []string{"--json", "--limit", "1", "--model", "gpt-5-codex"})
