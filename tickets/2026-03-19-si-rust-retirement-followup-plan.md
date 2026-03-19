@@ -148,6 +148,7 @@ Progress:
 - completed: the entirely dead Go command files for `github repo`, `github pr`, and `github issue` have been removed, since those families are already dispatched through the Rust-owned root GitHub entrypoint and no longer have live Go call sites
 - completed: the remaining dead Go command layer for `github branch`, `github release`, and `github workflow` has been removed while preserving the small helper functions still covered by Go tests, cutting most of the last nested GitHub runtime ownership out of `tools/si`
 - completed: the dead Go command surfaces for `github raw`, `github graphql`, and `github secret` have been retired, leaving only the shared client/query helpers and the small secret-encryption helpers that still have direct Go test coverage
+- completed: `github_project_cmd.go` has been reduced to the tiny parser/field helper surface still exercised by Go unit tests, with the old Go GraphQL command runtime removed now that `si github project ...` executes through Rust at the root
 
 ### Phase D: Port The Remaining State Machines And Interactive Glue
 
