@@ -610,6 +610,7 @@ Progress notes:
 - completed: retired the Go `import-dotenv-to-si-vault` helper by moving the wrapper to a Rust `si-tools` binary with equivalent dotenv parsing and target-env inference tests, deleting the standalone Go helper and its tests from `tools/si/cmd`
 - completed: retired the standalone Go `fake-codex` helper by moving the dyad smoke wrapper onto a Rust `si-tools` binary, keeping the same prompt/report behavior while deleting the old Go entrypoint under `tools/si/cmd`
 - completed: retired the Go CLI dependency from the Orbit runner shell entrypoints by moving those wrappers onto a Rust `si-tools` runner binary, while intentionally keeping Go toolchain setup only for the underlying Orbit test packages they still execute
+- completed: retired the standalone Go `test-fort-spawn-matrix` helper by moving its shell wrapper onto a Rust `si-tools` binary, while intentionally leaving the underlying Fort integration test itself on the Go side for now
 
 ## Test Strategy by Layer
 
