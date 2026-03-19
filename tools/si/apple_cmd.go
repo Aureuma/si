@@ -5,13 +5,8 @@ import "strings"
 const appleUsageText = "usage: si apple <appstore|app-store|app-store-connect>"
 
 func cmdApple(args []string) {
-	delegated, err := runAppleCommand(args)
-	if err != nil {
-		fatal(err)
-	}
-	if delegated {
-		return
-	}
+	requireRustCLIDelegation("apple", runAppleCommand(args))
+	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, appleUsageText)
 	if !routedOK {
 		return

@@ -362,6 +362,10 @@ func runProvidersCharacteristicsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("providers", append([]string{"characteristics"}, args...)...)
 }
 
+func runProvidersHealthCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("providers", append([]string{"health"}, args...)...)
+}
+
 func runCloudflareContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"context", "list"}, args...)...)
 }
@@ -3730,7 +3734,7 @@ func maybeParseRustCodexReportCapture(clean string, raw string, promptIndex int,
 }
 
 func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {
-	if !shouldUseRustCompatCLI() {
+	if !shouldUseRustVaultCLI() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -4345,11 +4349,11 @@ func buildRustCodexSpawnStartArgs(request rustCodexSpawnSpecRequest) []string {
 }
 
 func shouldUseRustDyadCLI() bool {
-	return rustCLIAvailable()
+	return true
 }
 
 func shouldUseRustCodexCLI() bool {
-	return rustCLIAvailable()
+	return true
 }
 
 func shouldUseRustWarmupCLI() bool {
@@ -4357,11 +4361,15 @@ func shouldUseRustWarmupCLI() bool {
 }
 
 func shouldUseRustFortCLI() bool {
-	return rustCLIAvailable()
+	return true
+}
+
+func shouldUseRustVaultCLI() bool {
+	return true
 }
 
 func shouldUseRustCompatCLI() bool {
-	return rustCLIAvailable()
+	return true
 }
 
 func rustCLIAvailable() bool {
@@ -4409,4 +4417,42 @@ func resolveExecutablePath(path string) (string, error) {
 		return "", fmt.Errorf("%s is not executable", abs)
 	}
 	return abs, nil
+}
+
+func runCodexCommand(cmd string, args []string) (bool, error) {
+	subcommand := strings.ToLower(strings.TrimSpace(cmd))
+	switch subcommand {
+	case "ps":
+		subcommand = "list"
+	case "rm", "delete":
+		subcommand = "remove"
+	case "run":
+		subcommand = "exec"
+	}
+	if subcommand == "" {
+		return false, nil
+	}
+	return maybeDispatchRustCLICompat("codex", append([]string{subcommand}, args...)...)
+}
+
+func runDyadCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("dyad", args...)
+}
+
+func runFortCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("fort", args...)
+}
+
+func runVaultCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("vault", args...)
+}
+
+func requireRustCLIDelegation(feature string, delegated bool, err error) {
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+	fatal(fmt.Errorf("%s is owned by the Rust CLI runtime; Go fallback has been removed", strings.TrimSpace(feature)))
 }
