@@ -56,6 +56,6 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
 
 ## Follow-up Actions
 
-1. Re-run matrix with normal timeout budget (or CI-host equivalent) for smoke-lanes, with npm and Docker prerequisites prepared (now achieved with prebuilt asset reuse).
-2. Re-run matrix with `SKIP_RELEASE_BUILD=0` on release-capable runners to validate artifact generation in non-cached contexts.
-3. Confirm GitHub-hosted `SI Tests` and `Orbit Runners` runs reach green once GitHub API auth is restored.
+1. Re-run matrix with normal timeout budget (or CI-host equivalent) for smoke-lanes, with npm and Docker prerequisites prepared (achieved locally with `SMOKE_TIMEOUT_SECS=900`, `SI_INSTALL_SMOKE_SKIP_NONROOT=1`, and prebuilt artifacts via `SI_INSTALL_SMOKE_ASSETS_DIR`).
+2. Re-run matrix with `SKIP_RELEASE_BUILD=0` on release-capable runners to validate artifact generation in non-cached contexts (achieved for local real-host run).
+3. Confirm GitHub-hosted `SI Tests` and `Orbit Runners` runs reach green once GitHub API auth is restored (pending due local `gh` auth state).
