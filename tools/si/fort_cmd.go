@@ -232,12 +232,23 @@ func buildFortBinary(repo, out string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "build", "-o", out, "./cmd/fort")
+	if _, err := os.Stat(filepath.Join(repo, "Cargo.toml")); err != nil {
+		return fmt.Errorf("fort Cargo.toml not found at %s", filepath.Join(repo, "Cargo.toml"))
+	}
+	targetDir := filepath.Join(repo, ".artifacts", "cargo-target")
+	cmd := exec.Command("cargo", "build", "--bin", "fort", "--target-dir", targetDir)
 	cmd.Dir = repo
-	cmd.Env = envWithOverride(os.Environ(), "GOWORK", "off")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	built := filepath.Join(targetDir, "debug", "fort")
+	raw, err := os.ReadFile(built)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(out, raw, 0o755)
 }
 
 func fortFlagProvided(fs *flag.FlagSet, name string) bool {
