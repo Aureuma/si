@@ -90,7 +90,8 @@ func (e *gcpAPIErrorDetails) Error() string {
 }
 
 func cmdGCP(args []string) {
-	requireRustCLIDelegation("gcp", runGCPCommand(args))
+	delegated, err := runGCPCommand(args)
+	requireRustCLIDelegation("gcp", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, gcpUsageText)
 	if !routedOK {

@@ -88,7 +88,8 @@ func (e *awsAPIErrorDetails) Error() string {
 }
 
 func cmdAWS(args []string) {
-	requireRustCLIDelegation("aws", runAWSCommand(args))
+	delegated, err := runAWSCommand(args)
+	requireRustCLIDelegation("aws", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, awsUsageText)
 	if !routedOK {

@@ -5,7 +5,8 @@ import "strings"
 const googlePlacesUsageText = "usage: si google places <auth|context|doctor|session|autocomplete|search-text|search-nearby|details|photo|types|raw|report>"
 
 func cmdGooglePlaces(args []string) {
-	requireRustCLIDelegation("google places", runGooglePlacesCommand(args))
+	delegated, err := runGooglePlacesCommand(args)
+	requireRustCLIDelegation("google places", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googlePlacesUsageText)
 	if !routedOK {

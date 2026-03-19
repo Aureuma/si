@@ -5,7 +5,8 @@ import "strings"
 const googleUsageText = "usage: si google <places|play|youtube|youtube-data>"
 
 func cmdGoogle(args []string) {
-	requireRustCLIDelegation("google", runGoogleCommand(args))
+	delegated, err := runGoogleCommand(args)
+	requireRustCLIDelegation("google", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googleUsageText)
 	if !routedOK {

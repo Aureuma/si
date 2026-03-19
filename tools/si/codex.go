@@ -2719,12 +2719,14 @@ func runCodexRemoveAll(removeVolumes bool) error {
 }
 
 func resolveCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, error) {
-	artifacts, delegated, err := maybeBuildRustCodexRemoveArtifacts(name)
-	if err != nil {
-		return nil, false, err
-	}
-	if delegated && artifacts != nil {
-		return artifacts, true, nil
+	if rustCLIAvailable() {
+		artifacts, delegated, err := maybeBuildRustCodexRemoveArtifacts(name)
+		if err != nil {
+			return nil, false, err
+		}
+		if delegated && artifacts != nil {
+			return artifacts, true, nil
+		}
 	}
 	slug := codexContainerSlug(name)
 	if strings.TrimSpace(slug) == "" {

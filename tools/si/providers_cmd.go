@@ -37,7 +37,8 @@ func cmdProviders(args []string) {
 }
 
 func cmdProvidersCharacteristics(args []string) {
-	requireRustCLIDelegation("providers characteristics", runProvidersCharacteristicsCommand(args))
+	delegated, err := runProvidersCharacteristicsCommand(args)
+	requireRustCLIDelegation("providers characteristics", delegated, err)
 	return
 
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
@@ -157,7 +158,8 @@ func formatRate(value float64) string {
 }
 
 func cmdProvidersHealth(args []string) {
-	requireRustCLIDelegation("providers health", runProvidersHealthCommand(args))
+	delegated, err := runProvidersHealthCommand(args)
+	requireRustCLIDelegation("providers health", delegated, err)
 	return
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("providers health", flag.ExitOnError)
