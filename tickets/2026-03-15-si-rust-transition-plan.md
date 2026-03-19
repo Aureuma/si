@@ -747,10 +747,11 @@ Status: in_progress
 
 ### Next actions from this plan run
 
-1. Re-run `self release-asset` and `self release-assets` with a warm `target` cache on CI or a non-time-constrained host to confirm full end-to-end artifact parity.
-2. Re-run installer smoke lanes from repo root with prepared runtime prerequisites (`npm` + network + `docker` + non-root policy) before final green on phase 9.
-3. Keep `update-tap-repo` dry-run expectation aligned in docs/tests (no `--dry-run` flag exists).
-4. Keep `tickets/phase9-10-realhost-matrix.sh` updated as the deterministic replay entrypoint and keep its output matrix current.
+1. Completed for non-cached and fresh-host paths in this environment:
+   - full `release-asset` / `release-assets` / `verify-release-assets` execution
+   - installer smoke lanes (`host`, `npm`, `docker`) through matrix completion
+   - matrix replay updates and finalization documentation
+2. Remaining: execute the corresponding GitHub-hosted Phase 9/10 CI and Orbit runner workflows once token-backed GH auth is restored.
 
 ## Execution update (2026-03-18)
 
@@ -809,8 +810,8 @@ Status: in_progress
 
 ### Next actions from this follow-up
 
-1. Run the release-asset matrix lanes (`release-assets`, `build-cli-release-asset`, and `build-cli-release-assets`) in CI or a longer-lived host where full compile times can complete.
-2. Re-run all installer smoke lanes on a host with deterministic npm + Docker behavior to convert timeout lanes to stable outcomes.
+1. Completed locally with fresh non-cached artifacts and prepared smoke flow.
+2. Remaining: validate the same outcomes in CI/Orbit runner parity with release automation and publish gate jobs.
 
 ### Execution update (2026-03-18 continuation)
 
