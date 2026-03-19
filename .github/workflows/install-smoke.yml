@@ -89,6 +89,9 @@ jobs:
           go-version-file: tools/si/go.mod
           cache: true
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
+
       - name: Run codex image preflight lanes
         run: ./tools/si-image/preflight-codex-upgrade.sh
 
