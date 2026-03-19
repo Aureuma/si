@@ -68,7 +68,7 @@ Update release version constants:
 ./tools/test-install-si-homebrew.sh
 ./tools/test-install-si-docker.sh
 ./si analyze --module tools/si
-./si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md tools/si/version.go
 git commit -m "Bump version to vX.Y.Z"

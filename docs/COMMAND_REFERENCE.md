@@ -51,8 +51,8 @@ si <command> <subcommand> --help
 | Command family | Purpose | Typical usage |
 | --- | --- | --- |
 | `si build image` | Build local runtime image | `si build image` |
-| `si build self` | Build or upgrade `si` binary | `si build self` |
-| `si build self release-assets` | Build all release archives + `checksums.txt` locally | `si build self release-assets --version vX.Y.Z` |
+| `si-rs build self` | Build or upgrade `si` binary | `si-rs build self` |
+| `si-rs build self release-assets` | Build all release archives + `checksums.txt` locally | `si-rs build self release-assets --version vX.Y.Z` |
 | `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
 | `si analyze` (`si lint`) | Go static analysis | `si analyze --module tools/si` |
 | `si docker` | Raw Docker passthrough | `si docker ps` |
@@ -64,7 +64,7 @@ si <command> <subcommand> --help
 ### 1. New machine bootstrap
 
 ```bash
-si build self
+si-rs build self
 si vault status
 si --help
 si mintlify validate
@@ -82,7 +82,7 @@ si cloudflare doctor --json
 ### 3. Release maintainer preflight
 
 ```bash
-si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Guardrails
