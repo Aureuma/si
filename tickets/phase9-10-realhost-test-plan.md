@@ -7,13 +7,13 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
 ## Test Environment
 
 - Repo: `/home/shawn/Development/si`
-- Commit: `8ff0101`
-- Time window: `2026-03-18`
+- Commit: `5e49fbf`
+- Time window: `2026-03-19`
 - Primary command path:
   - `./tickets/phase9-10-realhost-matrix.sh`
   - Log sink: `tickets/phase9-10-realhost-matrix-latest.log`
 - Invocation for this run:
-  - `SKIP_RELEASE_BUILD=1 TIMEOUT_SECS=180 SMOKE_TIMEOUT_SECS=60 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh`
+  - `OUT_DIR=/tmp/si-e2e-check-single MULTI_DIR=/tmp/si-e2e-check-multi SKIP_RELEASE_BUILD=1 SMOKE_TIMEOUT_SECS=120 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh`
 
 ## Execution Matrix
 
@@ -23,23 +23,29 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
 | 2 | Validate release version (valid tag) | `build self validate-release-version --tag v0.54.0` | Version accepted and aligned with `tools/si/version.go` | Passed |
 | 3 | Validate release version (invalid tag) | `build self validate-release-version --tag 0.54.0` | Expected non-zero + tag-format error (handled by test harness) | Passed with warning (`exit 1` expected) |
 | 4 | Release artifact short-path path reuse | Pre-cached asset branch when present | Skip and continue | Skipped as expected |
-| 5 | Homebrew core formula render | `build homebrew render-core-formula ...` | Formula file emitted | Passed |
-| 6 | NPM package build | `build npm build-package ...` | Package artifact emitted | Passed |
-7 | NPM publish dry-run | `build npm publish-package --dry-run` | Either dry-run success or clean skip when package exists | Skipped because package already published |
-| 8 | Vault-backed npm dry-run | `build npm publish-from-vault --dry-run` | Pass with vault available; non-zero allowed if vault path absent | Warned: `vault list failed` |
-| 9 | Installer settings helper print | `build installer settings-helper --print` | Helper output includes configured defaults | Passed |
-| 10 | Installer smoke (host) | `build installer smoke-host` | Installer help/tests/e2e flow validates | Returned timeout in this run |
-| 11 | Installer smoke (npm) | `build installer smoke-npm` | Installer smoke command completes | Returned timeout in this run |
-| 12 | Installer smoke (docker) | `build installer smoke-docker` | Installer smoke command completes | Returned timeout in this run |
-| 13 | Installer smoke (homebrew) | `build installer smoke-homebrew` | Smoke command runs when `brew` available or skipped | Skipped: `brew` not available |
+| 5 | Release single tarball short-path | `build self release-asset` | Reuses/creates single Linux archive + checksum | Reused cached artifact at `/tmp/si-e2e-check-single/si_0.54.0_linux_amd64.tar.gz` |
+| 6 | Release multi-archive path | `build self release-assets` | Reuses/creates multi-platform archive set + `checksums.txt` | Reused cached artifact at `/tmp/si-e2e-check-multi` |
+| 7 | Release asset verification | `build self verify-release-assets` | Verifies every generated artifact and checksum | Passed (`verified release assets in /tmp/si-e2e-check-multi`) |
+| 8 | Homebrew core formula render | `build homebrew render-core-formula ...` | Formula file emitted | Passed |
+| 9 | Homebrew tap formula render | `build homebrew render-tap-formula ...` | Formula file emitted using checksums | Passed |
+| 10 | Homebrew tap update | `build homebrew update-tap-repo ...` | Tap file updated without errors | Passed |
+| 11 | NPM package build | `build npm build-package ...` | Package artifact emitted | Passed |
+| 12 | NPM publish dry-run | `build npm publish-package --dry-run` | Either dry-run success or clean skip when package exists | Skipped because package already published |
+| 13 | Vault-backed npm dry-run | `build npm publish-from-vault --dry-run` | Pass with vault available; non-zero allowed if vault path absent | Warned: `vault list failed` |
+| 14 | Installer settings helper print | `build installer settings-helper --print` | Helper output includes configured defaults | Passed |
+| 15 | Installer smoke (host) | `build installer smoke-host` | Installer help/tests/e2e flow validates | Passed |
+| 16 | Installer smoke (npm) | `build installer smoke-npm` | Installer smoke command completes | Timeout at 120s (still blocked locally) |
+| 17 | Installer smoke (docker) | `build installer smoke-docker` | Installer smoke command completes | Timeout at 120s (still blocked locally) |
+| 18 | Installer smoke (homebrew) | `build installer smoke-homebrew` | Smoke command runs when `brew` available or skipped | Skipped: `brew` not available |
 
 ## Notes
 
-- Warnings in steps 8–12 are currently bounded by local `TIMEOUT_SECS`/`SMOKE_TIMEOUT_SECS` values and should be re-run with normal time budgets for full confidence.
+- Warnings in steps 16–17 are bounded by local `SMOKE_TIMEOUT_SECS=120`; those lanes should be re-run with a normal timeout and a prepared environment (npm/Docker) for full confidence.
 - No source changes were required by this local validation pass; behavior matched expected handling for known environmental constraints.
 - This run validates that the current formatting-only transition fixes did not regress the matrix entry points.
 
 ## Follow-up Actions
 
-1. Re-run matrix with normal timeout budget and `SKIP_RELEASE_BUILD=0` in a release-like environment if full end-to-end smoke duration is required.
-2. Confirm GitHub-hosted `SI Tests` and `Orbit Runners` runs reach green once GitHub API auth is restored.
+1. Re-run matrix with normal timeout budget (or CI-host equivalent) for smoke-lanes, with npm and Docker prerequisites prepared.
+2. Re-run matrix with `SKIP_RELEASE_BUILD=0` on release-capable runners to validate artifact generation in non-cached contexts.
+3. Confirm GitHub-hosted `SI Tests` and `Orbit Runners` runs reach green once GitHub API auth is restored.
