@@ -112,37 +112,6 @@ func (e *ociAPIErrorDetails) Error() string {
 func cmdOCI(args []string) {
 	delegated, err := runOCICommand(args)
 	requireRustCLIDelegation("oci", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, ociUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	sub := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch sub {
-	case "help", "-h", "--help":
-		printUsage(ociUsageText)
-	case "auth":
-		cmdOCIAuth(rest)
-	case "context":
-		cmdOCIContext(rest)
-	case "doctor":
-		cmdOCIDoctor(rest)
-	case "identity":
-		cmdOCIIdentity(rest)
-	case "network":
-		cmdOCINetwork(rest)
-	case "compute":
-		cmdOCICompute(rest)
-	case "oracular":
-		cmdOCIOracular(rest)
-	case "raw":
-		cmdOCIRaw(rest)
-	default:
-		printUnknown("oci", sub)
-		printUsage(ociUsageText)
-	}
 }
 
 func cmdOCIAuth(args []string) {
