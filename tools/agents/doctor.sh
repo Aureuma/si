@@ -3,4 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
-exec go run ./tools/si/cmd/agents-doctor "$@"
+RUST_BIN="${ROOT}/.artifacts/cargo-target/release/agents-doctor"
+if [[ -x "${RUST_BIN}" ]]; then
+  exec "${RUST_BIN}" "$@"
+fi
+exec cargo run --quiet --locked --manifest-path "${ROOT}/rust/crates/si-agents/Cargo.toml" --bin agents-doctor -- "$@"
