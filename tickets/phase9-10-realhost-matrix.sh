@@ -12,12 +12,14 @@ ROOT=${ROOT:-"$(cd "$(dirname "$0")/.." && pwd)"}
 : "${SMOKE_TIMEOUT_SECS:=120}"
 : "${OUT_DIR:=/tmp/si-e2e/releases/single}"
 : "${MULTI_DIR:=/tmp/si-e2e/releases/multi}"
+: "${SI_INSTALL_SMOKE_ASSETS_DIR:=}"
 : "${NPM_OUT:=/tmp/si-e2e/npm}"
 : "${HOME_FORMULA:=/tmp/si-e2e/homebrew/core.rb}"
 : "${TAP_FORMULA:=/tmp/si-e2e/homebrew/tap.rb}"
 : "${LOG_FILE:=tickets/phase9-10-realhost-matrix-latest.log}"
 export LOG_FILE
 export SI_INSTALLER_USE_PREBUILT=1
+export SI_INSTALL_SMOKE_ASSETS_DIR="${SI_INSTALL_SMOKE_ASSETS_DIR:-${MULTI_DIR}}"
 exec > >(tee -a "${LOG_FILE}")
 exec 2>&1
 
