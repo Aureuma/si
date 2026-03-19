@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"

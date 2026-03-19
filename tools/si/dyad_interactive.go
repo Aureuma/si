@@ -13,7 +13,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"golang.org/x/term"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 type dyadRow struct {

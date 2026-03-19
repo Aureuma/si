@@ -19,7 +19,7 @@ func TestNormalizeAnalyzeModuleFilter(t *testing.T) {
 
 func TestResolveAnalyzeModules_NoFilterReturnsAll(t *testing.T) {
 	all := []analyzeModule{
-		{Rel: "agents/shared", Dir: "/repo/agents/shared"},
+		{Rel: "tools/si/internal/shareddocker", Dir: "/repo/tools/si/internal/shareddocker"},
 		{Rel: "tools/si", Dir: "/repo/tools/si"},
 	}
 	got, err := resolveAnalyzeModules(all, nil)
@@ -33,7 +33,7 @@ func TestResolveAnalyzeModules_NoFilterReturnsAll(t *testing.T) {
 
 func TestResolveAnalyzeModules_FilterByRelativePath(t *testing.T) {
 	all := []analyzeModule{
-		{Rel: "agents/shared", Dir: "/repo/agents/shared"},
+		{Rel: "tools/si/internal/shareddocker", Dir: "/repo/tools/si/internal/shareddocker"},
 		{Rel: "tools/si", Dir: "/repo/tools/si"},
 	}
 	got, err := resolveAnalyzeModules(all, []string{"tools/si"})
@@ -47,14 +47,14 @@ func TestResolveAnalyzeModules_FilterByRelativePath(t *testing.T) {
 
 func TestResolveAnalyzeModules_FilterByBasename(t *testing.T) {
 	all := []analyzeModule{
-		{Rel: "agents/shared", Dir: "/repo/agents/shared"},
+		{Rel: "tools/si/internal/shareddocker", Dir: "/repo/tools/si/internal/shareddocker"},
 		{Rel: "tools/si", Dir: "/repo/tools/si"},
 	}
 	got, err := resolveAnalyzeModules(all, []string{"shared"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 1 || got[0].Rel != "agents/shared" {
+	if len(got) != 1 || got[0].Rel != "tools/si/internal/shareddocker" {
 		t.Fatalf("unexpected modules: %+v", got)
 	}
 }

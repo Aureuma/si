@@ -14,7 +14,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup>"

@@ -173,6 +173,7 @@ Progress notes:
 - completed: the runtime images no longer ship a default `si-go` helper binary; they now keep only the Go toolchain plus the explicit `critic-go` compatibility helper while Rust `si-rs` remains the sole shipped `si` executable
 - completed: the shipped `critic` binary is now native Rust loop/config/runtime logic rather than a Rust exec-wrapper over `critic-go`, and the runtime images no longer build or ship the `critic-go` compatibility helper
 - completed: `agents/shared` is no longer an active `go.work` member or part of the default Go workspace/preflight test surface; it remains only as a replace-based dependency behind the shrinking legacy `tools/si` package
+- completed: the separate `agents/shared` Go module has been collapsed into `tools/si/internal/shareddocker`, removing the last standalone non-`tools/si` Go module boundary from the repo while the remaining legacy Go runtime continues to live under `tools/si`
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
