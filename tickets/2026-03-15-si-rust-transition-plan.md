@@ -608,6 +608,7 @@ Progress notes:
 - completed: GitHub Actions release/install workflows now stop provisioning Go for Rust-owned release-asset and installer-smoke wrappers, and the agent workflows explicitly provision Rust before the migrated `tools/agents/doctor.sh` helper runs
 - completed: retired the Go `preflight-codex-upgrade` helper binary too by moving the wrapper to Rust under `si-agents`, leaving the GitHub Actions codex-image preflight lane dependent on Go only for the underlying Go test packages rather than for a Go wrapper executable
 - completed: retired the Go `import-dotenv-to-si-vault` helper by moving the wrapper to a Rust `si-tools` binary with equivalent dotenv parsing and target-env inference tests, deleting the standalone Go helper and its tests from `tools/si/cmd`
+- completed: retired the standalone Go `fake-codex` helper by moving the dyad smoke wrapper onto a Rust `si-tools` binary, keeping the same prompt/report behavior while deleting the old Go entrypoint under `tools/si/cmd`
 
 ## Test Strategy by Layer
 
