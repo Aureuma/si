@@ -5,7 +5,8 @@ import "strings"
 const githubUsageText = "usage: si github <auth|context|doctor|git|repo|project|branch|pr|issue|workflow|release|secret|raw|graphql>"
 
 func cmdGithub(args []string) {
-	requireRustCLIDelegation("github", runGitHubCommand(args))
+	delegated, err := runGitHubCommand(args)
+	requireRustCLIDelegation("github", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, githubUsageText)
 	if !routedOK {

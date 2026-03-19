@@ -40,7 +40,8 @@ type dyadLogsResult struct {
 }
 
 func cmdDyad(args []string) {
-	requireRustCLIDelegation("dyad", runDyadCommand(args))
+	delegated, err := runDyadCommand(args)
+	requireRustCLIDelegation("dyad", delegated, err)
 	return
 	if len(args) > 0 {
 		switch strings.TrimSpace(args[0]) {
@@ -367,9 +368,6 @@ func runDyadSpawnFlow(opts shared.DyadOptions, profile *codexProfile) error {
 }
 
 func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, opts shared.DyadOptions) (string, string, bool, error) {
-	if !shouldUseRustDyadCLI() {
-		return "", "", false, nil
-	}
 	actorName, criticName, err := resolveDyadSpawnExistingContainerNames(opts.Dyad)
 	if err != nil {
 		return "", "", false, err

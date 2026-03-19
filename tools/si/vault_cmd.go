@@ -32,7 +32,8 @@ var vaultDockerActions = []subcommandAction{
 }
 
 func cmdVault(args []string) {
-	requireRustCLIDelegation("vault", runVaultCommand(args))
+	delegated, err := runVaultCommand(args)
+	requireRustCLIDelegation("vault", delegated, err)
 	return
 	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultAction)
 	if showUsage {

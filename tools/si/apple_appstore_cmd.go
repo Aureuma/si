@@ -5,7 +5,8 @@ import "strings"
 const appleAppStoreUsageText = "usage: si apple appstore <auth|context|doctor|app|listing|raw|apply>"
 
 func cmdAppleAppStore(args []string) {
-	requireRustCLIDelegation("apple appstore", runAppleAppStoreCommand(args))
+	delegated, err := runAppleAppStoreCommand(args)
+	requireRustCLIDelegation("apple appstore", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, appleAppStoreUsageText)
 	if !routedOK {

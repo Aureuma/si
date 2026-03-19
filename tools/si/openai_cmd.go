@@ -107,7 +107,8 @@ func (e *openaiAPIErrorDetails) Error() string {
 }
 
 func cmdOpenAI(args []string) {
-	requireRustCLIDelegation("openai", runOpenAICommand(args))
+	delegated, err := runOpenAICommand(args)
+	requireRustCLIDelegation("openai", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIUsageText)
 	if !routedOK {

@@ -306,7 +306,7 @@ type rustFortSessionTransition struct {
 }
 
 func maybeLoadRustCodexFortBootstrap(sessionStatePath string, profileID string, accessTokenPath string, refreshTokenPath string, accessTokenContainerPath string, refreshTokenContainerPath string) (*codexFortBootstrap, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -3217,7 +3217,7 @@ func runGitHubCommand(args []string) (bool, error) {
 }
 
 func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodexSpawnPlan, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(buildRustCodexSpawnPlanArgs(request)...)
@@ -3232,7 +3232,7 @@ func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodex
 }
 
 func maybeBuildRustCodexSpawnSpec(request rustCodexSpawnSpecRequest) (*rustCodexSpawnSpec, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(buildRustCodexSpawnSpecArgs(request)...)
@@ -3247,7 +3247,7 @@ func maybeBuildRustCodexSpawnSpec(request rustCodexSpawnSpecRequest) (*rustCodex
 }
 
 func maybeBuildRustDyadSpawnPlan(request rustDyadSpawnPlanRequest) (*rustDyadSpawnPlan, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(buildRustDyadSpawnPlanArgs(request)...)
@@ -3262,7 +3262,7 @@ func maybeBuildRustDyadSpawnPlan(request rustDyadSpawnPlanRequest) (*rustDyadSpa
 }
 
 func maybeStartRustDyadSpawn(request rustDyadSpawnPlanRequest) (bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(buildRustDyadSpawnStartArgs(request)...); err != nil {
@@ -3272,7 +3272,7 @@ func maybeStartRustDyadSpawn(request rustDyadSpawnPlanRequest) (bool, error) {
 }
 
 func maybeRunRustDyadContainerAction(action string, dyad string) (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	action = strings.TrimSpace(action)
@@ -3287,7 +3287,7 @@ func maybeRunRustDyadContainerAction(action string, dyad string) (string, bool, 
 }
 
 func maybeRunRustDyadRemove(dyad string) (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	output, err := runRustCLIText("dyad", "remove", strings.TrimSpace(dyad))
@@ -3298,7 +3298,7 @@ func maybeRunRustDyadRemove(dyad string) (string, bool, error) {
 }
 
 func maybeRunRustDyadExec(dyad string, member string, tty bool, cmd []string) (bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	bin, err := resolveRustCLIBinary()
@@ -3328,7 +3328,7 @@ func maybeRunRustDyadExec(dyad string, member string, tty bool, cmd []string) (b
 }
 
 func maybeRunRustDyadCleanup() (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	output, err := runRustCLIText("dyad", "cleanup")
@@ -3339,7 +3339,7 @@ func maybeRunRustDyadCleanup() (string, bool, error) {
 }
 
 func maybeRunRustDyadLogs(dyad string, member string, tail int, jsonOut bool) (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3359,7 +3359,7 @@ func maybeRunRustDyadLogs(dyad string, member string, tail int, jsonOut bool) (s
 }
 
 func maybeRunRustDyadList(jsonOut bool) (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3374,7 +3374,7 @@ func maybeRunRustDyadList(jsonOut bool) (string, bool, error) {
 }
 
 func maybeRunRustDyadStatus(dyad string, jsonOut bool) (string, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3389,7 +3389,7 @@ func maybeRunRustDyadStatus(dyad string, jsonOut bool) (string, bool, error) {
 }
 
 func maybeRunRustWarmupStatus(jsonOut bool) (string, bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3404,7 +3404,7 @@ func maybeRunRustWarmupStatus(jsonOut bool) (string, bool, error) {
 }
 
 func maybeReadRustDyadStatus(dyad string) (*rustDyadStatus, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON("dyad", "status", strings.TrimSpace(dyad), "--format", "json")
@@ -3419,7 +3419,7 @@ func maybeReadRustDyadStatus(dyad string) (*rustDyadStatus, bool, error) {
 }
 
 func maybeReadRustDyadPeekPlan(dyad string, member string, session string) (*rustDyadPeekPlan, bool, error) {
-	if !shouldUseRustDyadCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -3442,7 +3442,7 @@ func maybeReadRustDyadPeekPlan(dyad string, member string, session string) (*rus
 }
 
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	output, err := runRustCLIText(buildRustCodexSpawnStartArgs(request)...)
@@ -3453,7 +3453,7 @@ func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, 
 }
 
 func maybeBuildRustCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON("codex", "remove-plan", strings.TrimSpace(name), "--format", "json")
@@ -3468,7 +3468,7 @@ func maybeBuildRustCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts,
 }
 
 func maybeRunRustCodexRemove(name string, removeVolumes bool) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	args := []string{"codex", "remove", strings.TrimSpace(name)}
@@ -3483,7 +3483,7 @@ func maybeRunRustCodexRemove(name string, removeVolumes bool) (string, bool, err
 }
 
 func maybeRunRustCodexContainerActionResult(action string, name string) (*rustCodexContainerActionResult, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON("codex", strings.TrimSpace(action), strings.TrimSpace(name), "--format", "json")
@@ -3498,7 +3498,7 @@ func maybeRunRustCodexContainerActionResult(action string, name string) (*rustCo
 }
 
 func maybeRunRustCodexRemoveResult(name string, removeVolumes bool) (*rustCodexRemoveResult, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{"codex", "remove", strings.TrimSpace(name), "--format", "json"}
@@ -3517,7 +3517,7 @@ func maybeRunRustCodexRemoveResult(name string, removeVolumes bool) (*rustCodexR
 }
 
 func maybeRunRustCodexLogs(name string, tail string, follow bool) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	subcommand := "logs"
@@ -3532,7 +3532,7 @@ func maybeRunRustCodexLogs(name string, tail string, follow bool) (string, bool,
 }
 
 func maybeRunRustCodexCloneResult(name string, repo string, ghPAT string) (*rustCodexCloneResult, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{"codex", "clone", strings.TrimSpace(name), strings.TrimSpace(repo), "--format", "json"}
@@ -3551,7 +3551,7 @@ func maybeRunRustCodexCloneResult(name string, repo string, ghPAT string) (*rust
 }
 
 func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bool, env []string, cmd []string) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	args := []string{
@@ -3585,7 +3585,7 @@ func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bo
 }
 
 func maybeRunRustCodexList(jsonOut bool) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3600,7 +3600,7 @@ func maybeRunRustCodexList(jsonOut bool) (string, bool, error) {
 }
 
 func maybeReadRustCodexStatus(name string, raw bool) (*rustCodexStatusRead, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{"codex", "status-read", strings.TrimSpace(name), "--format", "json"}
@@ -3619,7 +3619,7 @@ func maybeReadRustCodexStatus(name string, raw bool) (*rustCodexStatusRead, bool
 }
 
 func maybeRunRustCodexStatus(name string, raw bool, jsonOut bool) (string, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3638,7 +3638,7 @@ func maybeRunRustCodexStatus(name string, raw bool, jsonOut bool) (string, bool,
 }
 
 func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContainers []string) (*rustCodexRespawnPlan, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{"codex", "respawn-plan", strings.TrimSpace(name), "--format", "json"}
@@ -3663,7 +3663,7 @@ func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContai
 }
 
 func maybeReadRustCodexTmuxPlan(name string, startDir string, resumeSessionID string, resumeProfile string) (*rustCodexTmuxPlan, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -3691,7 +3691,7 @@ func maybeReadRustCodexTmuxPlan(name string, startDir string, resumeSessionID st
 }
 
 func maybeReadRustCodexTmuxCommand(container string) (*rustCodexTmuxCommand, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3710,7 +3710,7 @@ func maybeReadRustCodexTmuxCommand(container string) (*rustCodexTmuxCommand, boo
 }
 
 func maybeParseRustCodexReportCapture(clean string, raw string, promptIndex int, ansi bool) (*rustCodexReportParseResult, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	payload, err := json.Marshal(map[string]any{
@@ -3734,7 +3734,7 @@ func maybeParseRustCodexReportCapture(clean string, raw string, promptIndex int,
 }
 
 func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {
-	if !shouldUseRustVaultCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -3757,7 +3757,7 @@ func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string
 }
 
 func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return warmWeeklyState{}, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3776,7 +3776,7 @@ func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
 }
 
 func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3794,7 +3794,7 @@ func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) 
 }
 
 func maybeReadRustWarmupMarkerState(autostartPath string, disabledPath string) (*rustWarmupMarkerState, bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3814,7 +3814,7 @@ func maybeReadRustWarmupMarkerState(autostartPath string, disabledPath string) (
 }
 
 func maybeWriteRustWarmupAutostartMarker(path string) (bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3827,7 +3827,7 @@ func maybeWriteRustWarmupAutostartMarker(path string) (bool, error) {
 }
 
 func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3841,7 +3841,7 @@ func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
 }
 
 func maybeReadRustWarmupAutostartDecision(statePath string, autostartPath string, disabledPath string) (*rustWarmupAutostartDecision, bool, error) {
-	if !shouldUseRustWarmupCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3862,7 +3862,7 @@ func maybeReadRustWarmupAutostartDecision(statePath string, autostartPath string
 }
 
 func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return fortProfileSessionState{}, false, nil
 	}
 	output, err := runRustCLIJSON("fort", "session-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
@@ -3877,7 +3877,7 @@ func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, 
 }
 
 func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSessionClassification, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3897,7 +3897,7 @@ func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSes
 }
 
 func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentState, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return fortProfileRuntimeAgentState{}, false, nil
 	}
 	output, err := runRustCLIJSON("fort", "runtime-agent-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
@@ -3918,7 +3918,7 @@ func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentSta
 }
 
 func maybeSaveRustFortSessionState(path string, state fortProfileSessionState) (bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3936,7 +3936,7 @@ func maybeSaveRustFortSessionState(path string, state fortProfileSessionState) (
 }
 
 func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAgentState) (bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3954,7 +3954,7 @@ func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAge
 }
 
 func maybeClearRustFortSessionState(path string) (bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3967,7 +3967,7 @@ func maybeClearRustFortSessionState(path string) (bool, error) {
 }
 
 func maybeClearRustFortRuntimeAgentState(path string) (bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3980,7 +3980,7 @@ func maybeClearRustFortRuntimeAgentState(path string) (bool, error) {
 }
 
 func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionRefreshResult, now time.Time) (*rustFortSessionTransition, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	accessExpiry, err := time.Parse(time.RFC3339, strings.TrimSpace(refreshed.AccessExpiresAt))
@@ -4007,7 +4007,7 @@ func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionR
 }
 
 func maybeApplyRustFortUnauthorizedRefreshOutcome(path string, now time.Time) (*rustFortSessionTransition, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -4028,7 +4028,7 @@ func maybeApplyRustFortUnauthorizedRefreshOutcome(path string, now time.Time) (*
 }
 
 func maybeRunRustFortSessionTeardown(path string, now time.Time) (*rustFortSessionClassification, bool, error) {
-	if !shouldUseRustFortCLI() {
+	if !rustCLIAvailable() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -4089,12 +4089,9 @@ func normalizeRustFortSessionVariant(value string) string {
 }
 
 func maybeDispatchRustCLICompat(command string, args ...string) (bool, error) {
-	if !shouldUseRustCompatCLI() {
-		return false, nil
-	}
 	bin, err := resolveRustCLIBinary()
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 	cmd := rustCLIExecCommand(bin, append([]string{command}, args...)...)
 	cmd.Stdout = os.Stdout
@@ -4346,30 +4343,6 @@ func buildRustCodexSpawnStartArgs(request rustCodexSpawnSpecRequest) []string {
 	args := buildRustCodexSpawnSpecArgs(request)
 	args[1] = "spawn-start"
 	return args
-}
-
-func shouldUseRustDyadCLI() bool {
-	return true
-}
-
-func shouldUseRustCodexCLI() bool {
-	return true
-}
-
-func shouldUseRustWarmupCLI() bool {
-	return true
-}
-
-func shouldUseRustFortCLI() bool {
-	return true
-}
-
-func shouldUseRustVaultCLI() bool {
-	return true
-}
-
-func shouldUseRustCompatCLI() bool {
-	return true
 }
 
 func rustCLIAvailable() bool {

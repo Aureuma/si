@@ -5,7 +5,8 @@ import "strings"
 const stripeUsageText = "usage: si stripe <auth|context|doctor|object|raw|report|sync>"
 
 func cmdStripe(args []string) {
-	requireRustCLIDelegation("stripe", runStripeCommand(args))
+	delegated, err := runStripeCommand(args)
+	requireRustCLIDelegation("stripe", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, stripeUsageText)
 	if !routedOK {

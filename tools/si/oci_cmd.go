@@ -110,7 +110,8 @@ func (e *ociAPIErrorDetails) Error() string {
 }
 
 func cmdOCI(args []string) {
-	requireRustCLIDelegation("oci", runOCICommand(args))
+	delegated, err := runOCICommand(args)
+	requireRustCLIDelegation("oci", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, ociUsageText)
 	if !routedOK {
