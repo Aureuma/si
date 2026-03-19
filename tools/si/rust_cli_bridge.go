@@ -4424,17 +4424,23 @@ func resolveRustCLIBinary() (string, error) {
 		return path, nil
 	}
 
-	if root, err := rustCLIRepoRoot(); err == nil {
-		candidate := filepath.Join(root, ".artifacts", "cargo-target", "debug", "si-rs")
-		if path, err := resolveExecutablePath(candidate); err == nil {
-			return path, nil
-		}
-	}
-
 	path, err := rustCLILookPath("si-rs")
 	if err == nil {
 		return path, nil
 	}
+
+	if root, err := rustCLIRepoRoot(); err == nil {
+		candidates := []string{
+			filepath.Join(root, ".artifacts", "cargo-target", "release", "si-rs"),
+			filepath.Join(root, ".artifacts", "cargo-target", "debug", "si-rs"),
+		}
+		for _, candidate := range candidates {
+			if path, err := resolveExecutablePath(candidate); err == nil {
+				return path, nil
+			}
+		}
+	}
+
 	return "", fmt.Errorf(
 		"Rust CLI requested but no si-rs binary found; set %s or build rust/crates/si-cli",
 		siRustCLIBinEnv,

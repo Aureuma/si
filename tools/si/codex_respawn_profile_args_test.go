@@ -124,7 +124,7 @@ func TestCmdCodexRespawnUsesRustPlanForRemoveAndSpawnActions(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevRemove := runCodexRemoveFn
 	prevSpawn := runCodexSpawnFn
@@ -212,7 +212,7 @@ func TestCmdCodexRespawnProfileMatrix(t *testing.T) {
 			}
 
 			t.Setenv(siRustCLIBinEnv, scriptPath)
-			t.Setenv(siExperimentalRustCLIEnv, "")
+			t.Setenv(siRustCLILegacyToggleEnv, "")
 
 			prevRemove := runCodexRemoveFn
 			prevSpawn := runCodexSpawnFn

@@ -273,7 +273,7 @@ func TestMaybeApplyRustDyadSpawnPlanMutatesOptionsWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	opts := &shared.DyadOptions{
 		Dyad:          "alpha",
@@ -310,7 +310,7 @@ func TestRemoveDyadWithCompatibilityDelegatesToRustWhenConfigured(t *testing.T) 
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := removeDyadWithCompatibility(context.Background(), nil, "alpha")
 	if err != nil {
@@ -333,7 +333,7 @@ func TestRemoveDyadWithCompatibilityDelegatesToRustWhenConfigured(t *testing.T) 
 
 func TestRemoveDyadWithCompatibilityRequiresClientWithoutRust(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, "")
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	_, delegated, err := removeDyadWithCompatibility(context.Background(), nil, "alpha")
 	if err == nil {
@@ -793,7 +793,7 @@ func TestCmdDyadStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadStatus([]string{"--json", "alpha"})
@@ -820,7 +820,7 @@ func TestCmdDyadListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadList([]string{"--json"})
@@ -847,7 +847,7 @@ func TestCmdDyadCleanupDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadCleanup(nil)
@@ -874,7 +874,7 @@ func TestCmdDyadLogsDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadLogs([]string{"--json", "--member", "critic", "--tail", "50", "alpha"})
@@ -901,7 +901,7 @@ func TestCmdDyadStartDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadStart([]string{"alpha"})
@@ -928,7 +928,7 @@ func TestCmdDyadStopDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadStop([]string{"alpha"})
@@ -955,7 +955,7 @@ func TestCmdDyadRestartDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadRestart([]string{"alpha"})
@@ -982,7 +982,7 @@ func TestCmdDyadRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdDyadRemove([]string{"alpha"})
@@ -1051,7 +1051,7 @@ func TestDyadDelegatedLifecycleSmoke(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	statusOutput := captureOutputForTest(t, func() {
 		cmdDyadStatus([]string{"--json", "alpha"})
@@ -1134,7 +1134,7 @@ func TestDyadDelegatedFullLifecycleSmoke(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevClient := newDyadClientFn
 	prevLookup := dyadContainerByNameFn
@@ -1260,7 +1260,7 @@ func TestCmdDyadPeekDelegatesPlanToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevLookup := lookupDyadPeekContainersFn
 	prevEnsure := ensureDyadPeekTmuxAvailableFn
@@ -1338,7 +1338,7 @@ func TestCmdDyadPeekAttachedUsesRustSessionName(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevLookup := lookupDyadPeekContainersFn
 	prevEnsure := ensureDyadPeekTmuxAvailableFn
@@ -1402,7 +1402,7 @@ func TestCmdDyadSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevRun := runDyadSpawnFlowFn
 	t.Cleanup(func() {
@@ -1481,7 +1481,7 @@ func TestCmdDyadSpawnWorkspaceConfigsMatrix(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevRun := runDyadSpawnFlowFn
 	t.Cleanup(func() {

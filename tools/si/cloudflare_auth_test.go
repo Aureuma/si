@@ -143,7 +143,7 @@ func TestCmdCloudflareContextListDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdCloudflareContextList([]string{"--json"})
@@ -171,7 +171,7 @@ func TestCmdCloudflareContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdCloudflareContextCurrent([]string{"--json"})
