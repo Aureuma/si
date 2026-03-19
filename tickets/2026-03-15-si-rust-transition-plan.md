@@ -168,6 +168,7 @@ Progress notes:
 - completed: the runtime `warmup` and `fort` compatibility bridges now also default to Rust whenever `si-rs` is resolvable, so persisted warmup state, marker flows, Fort session state, Fort bootstrap views, and runtime-agent state management now follow the same Rust-first policy as the larger codex/dyad cutovers
 - completed: the generic provider/admin compatibility dispatcher and the remaining vault trust lookup helper now also default to Rust whenever `si-rs` is resolvable, so the broad compat families wired through `maybeDispatchRustCLICompat` are no longer gated behind the legacy experimental opt-in either
 - completed: the runtime images and the local `tools/si-dev` wrapper now build and ship the Rust `si-rs` binary as the primary `si` executable, with the Go CLI retained only as an explicit compatibility helper binary (`si-go`) instead of the default shipped/runtime path
+- completed: the old `shouldUseExperimentalRustCLI()` helper has been removed and the repo documentation now reflects the Rust-primary state more directly, including the current `tools/si` role as a shrinking compatibility/helper surface rather than the primary CLI path
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
