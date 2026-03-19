@@ -142,6 +142,7 @@ Progress:
 - completed: the `warmup` family no longer uses optional Go fallback at runtime; `shouldUseRustWarmupCLI` is now hard-wired on and the remaining tests validate the Rust-owned autostart/state/marker flow
 - completed: the Rust-only root command entrypoints now correctly unpack `(delegated, err)` before enforcing `requireRustCLIDelegation(...)`, repairing the broken Go compatibility module build after the Rust-primary cutover
 - completed: optional Go helper paths that still exist during retirement now short-circuit cleanly when `si-rs` is unavailable instead of hard-failing metadata-only and state-file operations, so the remaining `tools/si` module validation still passes while real Rust-owned runtime entrypoints continue to require the Rust binary
+- completed: the fully Rust-owned root command handlers have had their unreachable in-file Go fallback dispatch bodies removed (`apple`, `aws`, `cloudflare`, `dyad`, `gcp`, `github`, `google`, `oci`, `openai`, `stripe`, `vault`, `workos`, and related wrappers), reducing the visible Go ownership surface without changing the active Rust delegation contract
 
 ### Phase D: Port The Remaining State Machines And Interactive Glue
 

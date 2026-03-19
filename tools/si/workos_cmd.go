@@ -99,39 +99,6 @@ func (e *workosAPIErrorDetails) Error() string {
 func cmdWorkOS(args []string) {
 	delegated, err := runWorkOSCommand(args)
 	requireRustCLIDelegation("workos", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, workosUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	sub := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch sub {
-	case "help", "-h", "--help":
-		printUsage(workosUsageText)
-	case "auth":
-		cmdWorkOSAuth(rest)
-	case "context":
-		cmdWorkOSContext(rest)
-	case "doctor":
-		cmdWorkOSDoctor(rest)
-	case "organization", "org":
-		cmdWorkOSOrganization(rest)
-	case "user", "users":
-		cmdWorkOSUser(rest)
-	case "membership", "memberships":
-		cmdWorkOSMembership(rest)
-	case "invitation", "invitations", "invite":
-		cmdWorkOSInvitation(rest)
-	case "directory", "directories":
-		cmdWorkOSDirectory(rest)
-	case "raw":
-		cmdWorkOSRaw(rest)
-	default:
-		printUnknown("workos", sub)
-		printUsage(workosUsageText)
-	}
 }
 
 func cmdWorkOSAuth(args []string) {

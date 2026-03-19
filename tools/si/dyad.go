@@ -42,53 +42,6 @@ type dyadLogsResult struct {
 func cmdDyad(args []string) {
 	delegated, err := runDyadCommand(args)
 	requireRustCLIDelegation("dyad", delegated, err)
-	return
-	if len(args) > 0 {
-		switch strings.TrimSpace(args[0]) {
-		case "help", "-h", "--help":
-			printUsage(dyadUsageText)
-			return
-		}
-	}
-	if len(args) == 0 {
-		if !isInteractiveTerminal() {
-			printUsage(dyadUsageText)
-			return
-		}
-		selected, ok := selectDyadAction()
-		if !ok {
-			return
-		}
-		args = []string{selected}
-	}
-	switch normalizeDyadCommand(args[0]) {
-	case "spawn":
-		cmdDyadSpawn(args[1:])
-	case "list":
-		cmdDyadList(args[1:])
-	case "remove":
-		cmdDyadRemove(args[1:])
-	case "recreate":
-		cmdDyadRecreate(args[1:])
-	case "status":
-		cmdDyadStatus(args[1:])
-	case "peek":
-		cmdDyadPeek(args[1:])
-	case "exec":
-		cmdDyadExec(args[1:])
-	case "logs":
-		cmdDyadLogs(args[1:])
-	case "start":
-		cmdDyadStart(args[1:])
-	case "stop":
-		cmdDyadStop(args[1:])
-	case "restart":
-		cmdDyadRestart(args[1:])
-	case "cleanup":
-		cmdDyadCleanup(args[1:])
-	default:
-		printUnknown("dyad", args[0])
-	}
 }
 
 func cmdDyadSpawn(args []string) {

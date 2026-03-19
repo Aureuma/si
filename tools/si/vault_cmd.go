@@ -34,57 +34,6 @@ var vaultDockerActions = []subcommandAction{
 func cmdVault(args []string) {
 	delegated, err := runVaultCommand(args)
 	requireRustCLIDelegation("vault", delegated, err)
-	return
-	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultAction)
-	if showUsage {
-		printUsage(vaultUsageText)
-		return
-	}
-	if !ok {
-		return
-	}
-	args = resolved
-	cmd := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	if err := vaultGuardContainerLocalAccess(cmd); err != nil {
-		fatal(err)
-	}
-	switch cmd {
-	case "help", "-h", "--help":
-		printUsage(vaultUsageText)
-	case "keypair":
-		cmdVaultKeygen(rest)
-	case "keygen":
-		cmdVaultKeygen(rest)
-	case "status":
-		cmdVaultStatus(rest)
-	case "check":
-		cmdVaultCheck(rest)
-	case "hooks", "hook":
-		cmdVaultHooks(rest)
-	case "encrypt":
-		cmdVaultEncrypt(rest)
-	case "decrypt":
-		cmdVaultDecrypt(rest)
-	case "restore":
-		cmdVaultRestore(rest)
-	case "set":
-		cmdVaultSet(rest)
-	case "unset":
-		cmdVaultUnset(rest)
-	case "get":
-		cmdVaultGet(rest)
-	case "list", "ls":
-		cmdVaultList(rest)
-	case "run":
-		cmdVaultRun(rest)
-	case "docker":
-		cmdVaultDocker(rest)
-	default:
-		printUnknown("vault", cmd)
-		printUsage(vaultUsageText)
-		os.Exit(1)
-	}
 }
 
 func selectVaultAction() (string, bool) {

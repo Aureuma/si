@@ -1,53 +1,8 @@
 package main
 
-import "strings"
-
 const githubUsageText = "usage: si github <auth|context|doctor|git|repo|project|branch|pr|issue|workflow|release|secret|raw|graphql>"
 
 func cmdGithub(args []string) {
 	delegated, err := runGitHubCommand(args)
 	requireRustCLIDelegation("github", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, githubUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	cmd := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch cmd {
-	case "help", "-h", "--help":
-		printUsage(githubUsageText)
-	case "auth":
-		cmdGithubAuth(rest)
-	case "context":
-		cmdGithubContext(rest)
-	case "doctor":
-		cmdGithubDoctor(rest)
-	case "git":
-		cmdGithubGit(rest)
-	case "repo":
-		cmdGithubRepo(rest)
-	case "project":
-		cmdGithubProject(rest)
-	case "branch":
-		cmdGithubBranch(rest)
-	case "pr":
-		cmdGithubPR(rest)
-	case "issue":
-		cmdGithubIssue(rest)
-	case "workflow":
-		cmdGithubWorkflow(rest)
-	case "release":
-		cmdGithubRelease(rest)
-	case "secret":
-		cmdGithubSecret(rest)
-	case "raw":
-		cmdGithubRaw(rest)
-	case "graphql":
-		cmdGithubGraphQL(rest)
-	default:
-		printUnknown("github", cmd)
-		printUsage(githubUsageText)
-	}
 }
