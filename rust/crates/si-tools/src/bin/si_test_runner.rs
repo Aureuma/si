@@ -5,7 +5,6 @@ use std::process::{Command, ExitCode};
 const TEST_WORKSPACE_MODULES: &[&str] = &[
     "./agents/critic/...",
     "./agents/shared/...",
-    "./tools/codex-interactive-driver/...",
     "./tools/si/...",
 ];
 
