@@ -109,41 +109,6 @@ func (e *openaiAPIErrorDetails) Error() string {
 func cmdOpenAI(args []string) {
 	delegated, err := runOpenAICommand(args)
 	requireRustCLIDelegation("openai", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	sub := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch sub {
-	case "help", "-h", "--help":
-		printUsage(openAIUsageText)
-	case "auth":
-		cmdOpenAIAuth(rest)
-	case "context":
-		cmdOpenAIContext(rest)
-	case "doctor":
-		cmdOpenAIDoctor(rest)
-	case "model", "models":
-		cmdOpenAIModel(rest)
-	case "project", "projects":
-		cmdOpenAIProject(rest)
-	case "key", "keys", "admin-key", "admin-keys":
-		cmdOpenAIKey(rest)
-	case "usage":
-		cmdOpenAIUsage(rest)
-	case "monitor", "monitoring":
-		cmdOpenAIMonitor(rest)
-	case "codex":
-		cmdOpenAICodex(rest)
-	case "raw":
-		cmdOpenAIRaw(rest)
-	default:
-		printUnknown("openai", sub)
-		printUsage(openAIUsageText)
-	}
 }
 
 func cmdOpenAIAuth(args []string) {

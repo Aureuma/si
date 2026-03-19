@@ -90,55 +90,6 @@ func (e *awsAPIErrorDetails) Error() string {
 func cmdAWS(args []string) {
 	delegated, err := runAWSCommand(args)
 	requireRustCLIDelegation("aws", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, awsUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	sub := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch sub {
-	case "help", "-h", "--help":
-		printUsage(awsUsageText)
-	case "auth":
-		cmdAWSAuth(rest)
-	case "context":
-		cmdAWSContext(rest)
-	case "doctor":
-		cmdAWSDoctor(rest)
-	case "iam":
-		cmdAWSIAM(rest)
-	case "sts":
-		cmdAWSSTS(rest)
-	case "s3":
-		cmdAWSS3(rest)
-	case "ec2":
-		cmdAWSEC2(rest)
-	case "lambda":
-		cmdAWSLambda(rest)
-	case "ecr":
-		cmdAWSECR(rest)
-	case "secrets", "secretsmanager", "secret":
-		cmdAWSSecrets(rest)
-	case "kms":
-		cmdAWSKMS(rest)
-	case "dynamodb":
-		cmdAWSDynamoDB(rest)
-	case "ssm":
-		cmdAWSSSM(rest)
-	case "cloudwatch":
-		cmdAWSCloudWatch(rest)
-	case "logs", "cloudwatch-logs":
-		cmdAWSLogs(rest)
-	case "bedrock", "ai":
-		cmdAWSBedrock(rest)
-	case "raw":
-		cmdAWSRaw(rest)
-	default:
-		printUnknown("aws", sub)
-		printUsage(awsUsageText)
-	}
 }
 
 func cmdAWSAuth(args []string) {

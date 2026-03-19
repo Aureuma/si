@@ -92,41 +92,6 @@ func (e *gcpAPIErrorDetails) Error() string {
 func cmdGCP(args []string) {
 	delegated, err := runGCPCommand(args)
 	requireRustCLIDelegation("gcp", delegated, err)
-	return
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, gcpUsageText)
-	if !routedOK {
-		return
-	}
-	args = routedArgs
-	sub := strings.ToLower(strings.TrimSpace(args[0]))
-	rest := args[1:]
-	switch sub {
-	case "help", "-h", "--help":
-		printUsage(gcpUsageText)
-	case "auth":
-		cmdGCPAuth(rest)
-	case "context":
-		cmdGCPContext(rest)
-	case "doctor":
-		cmdGCPDoctor(rest)
-	case "service", "services":
-		cmdGCPService(rest)
-	case "iam":
-		cmdGCPIAM(rest)
-	case "apikey", "api-key", "apikeys":
-		cmdGCPAPIKey(rest)
-	case "gemini", "generativelanguage":
-		cmdGCPGemini(rest)
-	case "vertex":
-		cmdGCPVertex(rest)
-	case "ai":
-		cmdGCPAI(rest)
-	case "raw":
-		cmdGCPRaw(rest)
-	default:
-		printUnknown("gcp", sub)
-		printUsage(gcpUsageText)
-	}
 }
 
 func cmdGCPAuth(args []string) {
