@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	siExperimentalRustCLIEnv = "SI_EXPERIMENTAL_RUST_CLI"
+	siRustCLILegacyToggleEnv = "SI_EXPERIMENTAL_RUST_CLI"
 	siRustCLIBinEnv          = "SI_RUST_CLI_BIN"
 )
 
@@ -4349,7 +4349,7 @@ func shouldUseRustDyadCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
 	case "0", "false", "no", "off":
 		return false
 	case "1", "true", "yes", "on":
@@ -4363,7 +4363,7 @@ func shouldUseRustCodexCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
 	case "0", "false", "no", "off":
 		return false
 	case "1", "true", "yes", "on":
@@ -4377,7 +4377,7 @@ func shouldUseRustWarmupCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
 	case "0", "false", "no", "off":
 		return false
 	case "1", "true", "yes", "on":
@@ -4391,7 +4391,7 @@ func shouldUseRustFortCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
 	case "0", "false", "no", "off":
 		return false
 	case "1", "true", "yes", "on":
@@ -4405,7 +4405,7 @@ func shouldUseRustCompatCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
 	case "0", "false", "no", "off":
 		return false
 	case "1", "true", "yes", "on":
@@ -4436,7 +4436,7 @@ func resolveRustCLIBinary() (string, error) {
 		return path, nil
 	}
 	return "", fmt.Errorf(
-		"experimental Rust CLI enabled but no si-rs binary found; set %s or build rust/crates/si-cli",
+		"Rust CLI requested but no si-rs binary found; set %s or build rust/crates/si-cli",
 		siRustCLIBinEnv,
 	)
 }
