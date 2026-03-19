@@ -97,7 +97,8 @@ func (e *workosAPIErrorDetails) Error() string {
 }
 
 func cmdWorkOS(args []string) {
-	requireRustCLIDelegation("workos", runWorkOSCommand(args))
+	delegated, err := runWorkOSCommand(args)
+	requireRustCLIDelegation("workos", delegated, err)
 	return
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, workosUsageText)
 	if !routedOK {

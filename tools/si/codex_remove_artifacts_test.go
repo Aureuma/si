@@ -7,15 +7,18 @@ import (
 	"testing"
 )
 
-func TestResolveCodexRemoveArtifactsRequiresRustCLI(t *testing.T) {
+func TestResolveCodexRemoveArtifactsFallsBackWithoutRustCLI(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, filepath.Join(t.TempDir(), "missing-si-rs"))
 
-	_, delegated, err := resolveCodexRemoveArtifacts("ferma")
-	if err == nil {
-		t.Fatalf("expected missing rust cli error")
+	artifacts, delegated, err := resolveCodexRemoveArtifacts("ferma")
+	if err != nil {
+		t.Fatalf("resolveCodexRemoveArtifacts: %v", err)
 	}
 	if delegated {
 		t.Fatalf("unexpected delegated Rust invocation")
+	}
+	if artifacts == nil || artifacts.ContainerName != "si-codex-ferma" || artifacts.CodexVolume != "si-codex-ferma" {
+		t.Fatalf("unexpected fallback artifacts %#v", artifacts)
 	}
 }
 
