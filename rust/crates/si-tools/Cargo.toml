@@ -25,3 +25,25 @@ path = "src/bin/test_fort_spawn_matrix.rs"
 [[bin]]
 name = "si-test-runner"
 path = "src/bin/si_test_runner.rs"
+
+[[bin]]
+name = "si-codex-init"
+path = "src/bin/si_codex_init.rs"
+
+[[bin]]
+name = "si-entrypoint"
+path = "src/bin/si_entrypoint.rs"
+
+[[bin]]
+name = "codex-stdout-parser"
+path = "src/bin/codex_stdout_parser.rs"
+
+[dependencies]
+chrono.workspace = true
+libc.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

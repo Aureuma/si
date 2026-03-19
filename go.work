@@ -4,8 +4,6 @@ toolchain go1.25.7
 use (
 	./agents/critic
 	./agents/shared
-	./tools/codex-init
 	./tools/codex-interactive-driver
-	./tools/codex-stdout-parser
 	./tools/si
 )
