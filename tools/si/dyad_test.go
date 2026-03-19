@@ -329,17 +329,17 @@ func TestRemoveDyadWithCompatibilityDelegatesToRustWhenConfigured(t *testing.T) 
 	}
 }
 
-func TestRemoveDyadWithCompatibilityRequiresClientWithoutRust(t *testing.T) {
-	t.Setenv(siRustCLIBinEnv, "")
+func TestRemoveDyadWithCompatibilityRequiresRustCLI(t *testing.T) {
+	t.Setenv(siRustCLIBinEnv, filepath.Join(t.TempDir(), "missing-si-rs"))
 
 	_, delegated, err := removeDyadWithCompatibility(context.Background(), nil, "alpha")
 	if err == nil {
-		t.Fatalf("expected missing client error")
+		t.Fatalf("expected missing rust cli error")
 	}
 	if delegated {
 		t.Fatalf("did not expect delegation without Rust")
 	}
-	if !strings.Contains(err.Error(), "client required") {
+	if !strings.Contains(err.Error(), siRustCLIBinEnv) {
 		t.Fatalf("unexpected error %v", err)
 	}
 }

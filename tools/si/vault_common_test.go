@@ -9,8 +9,8 @@ import (
 	"si/tools/si/internal/vault"
 )
 
-func TestVaultRequireTrustedUsesGoTrustStoreByDefault(t *testing.T) {
-	t.Setenv(siRustCLIBinEnv, "")
+func TestVaultRequireTrustedRequiresRustCLIByDefault(t *testing.T) {
+	t.Setenv(siRustCLIBinEnv, filepath.Join(t.TempDir(), "missing-si-rs"))
 
 	doc := vault.ParseDotenv([]byte("# si-vault:recipient age1example\nSECRET=value\n"))
 	fp, err := vaultTrustFingerprint(doc)
@@ -33,12 +33,8 @@ func TestVaultRequireTrustedUsesGoTrustStoreByDefault(t *testing.T) {
 	settings.Vault.TrustStore = storePath
 	target := vault.Target{RepoRoot: "/repo", File: "/repo/.env"}
 
-	got, err := vaultRequireTrusted(settings, target, doc)
-	if err != nil {
-		t.Fatalf("vaultRequireTrusted: %v", err)
-	}
-	if got != fp {
-		t.Fatalf("expected fingerprint %q, got %q", fp, got)
+	if _, err := vaultRequireTrusted(settings, target, doc); err == nil {
+		t.Fatalf("expected missing rust cli error")
 	}
 }
 

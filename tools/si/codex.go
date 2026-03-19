@@ -47,48 +47,6 @@ var (
 	observeCodexExecTmuxPreparedFn = func(codexExecTmuxPrepared) (bool, error) { return false, nil }
 )
 
-func dispatchCodexCommand(cmd string, args []string) bool {
-	maybeAutoRepairWarmupScheduler(cmd)
-
-	switch cmd {
-	case "spawn":
-		cmdCodexSpawn(args)
-	case "respawn":
-		cmdCodexRespawn(args)
-	case "list", "ps":
-		cmdCodexList(args)
-	case "status":
-		cmdCodexStatus(args)
-	case "report":
-		cmdCodexReport(args)
-	case "login":
-		cmdCodexLogin(args)
-	case "logout":
-		cmdCodexLogout(args)
-	case "swap":
-		cmdCodexSwap(args)
-	case "exec", "run":
-		cmdCodexExec(args)
-	case "logs":
-		cmdCodexLogs(args)
-	case "tail":
-		cmdCodexTail(args)
-	case "clone":
-		cmdCodexClone(args)
-	case "remove", "rm", "delete":
-		cmdCodexRemove(args)
-	case "stop":
-		cmdCodexStop(args)
-	case "start":
-		cmdCodexStart(args)
-	case "warmup":
-		cmdWarmup(args)
-	default:
-		return false
-	}
-	return true
-}
-
 type codexSpawnFlags struct {
 	image         *string
 	workspaceHost *string

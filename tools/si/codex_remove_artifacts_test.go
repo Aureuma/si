@@ -7,24 +7,15 @@ import (
 	"testing"
 )
 
-func TestResolveCodexRemoveArtifactsFallsBackToGoArtifacts(t *testing.T) {
-	t.Setenv(siRustCLIBinEnv, "")
+func TestResolveCodexRemoveArtifactsRequiresRustCLI(t *testing.T) {
+	t.Setenv(siRustCLIBinEnv, filepath.Join(t.TempDir(), "missing-si-rs"))
 
-	artifacts, delegated, err := resolveCodexRemoveArtifacts("ferma")
-	if err != nil {
-		t.Fatalf("resolveCodexRemoveArtifacts: %v", err)
+	_, delegated, err := resolveCodexRemoveArtifacts("ferma")
+	if err == nil {
+		t.Fatalf("expected missing rust cli error")
 	}
 	if delegated {
-		t.Fatalf("expected Go fallback artifacts")
-	}
-	if artifacts == nil {
-		t.Fatalf("expected fallback artifacts")
-	}
-	if artifacts.ContainerName != "si-codex-ferma" {
-		t.Fatalf("unexpected container name %q", artifacts.ContainerName)
-	}
-	if artifacts.CodexVolume != "si-codex-ferma" || artifacts.GHVolume != "si-gh-ferma" {
-		t.Fatalf("unexpected volumes %#v", artifacts)
+		t.Fatalf("unexpected delegated Rust invocation")
 	}
 }
 

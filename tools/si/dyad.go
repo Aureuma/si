@@ -40,6 +40,8 @@ type dyadLogsResult struct {
 }
 
 func cmdDyad(args []string) {
+	requireRustCLIDelegation("dyad", runDyadCommand(args))
+	return
 	if len(args) > 0 {
 		switch strings.TrimSpace(args[0]) {
 		case "help", "-h", "--help":

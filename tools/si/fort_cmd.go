@@ -109,6 +109,8 @@ func fortArgsContainCredentialFlags(args []string) bool {
 }
 
 func cmdFort(args []string) {
+	requireRustCLIDelegation("fort", runFortCommand(args))
+	return
 	if len(args) == 0 {
 		printUsage(fortUsageText)
 		return
