@@ -828,3 +828,11 @@ Status: in_progress
 ### Execution update (2026-03-19 follow-up)
 
 - `./tickets/phase9-10-realhost-matrix.sh` with `OUT_DIR=/tmp/si-e2e-check-single`, `MULTI_DIR=/tmp/si-e2e-check-multi`, `SKIP_RELEASE_BUILD=1`, `SMOKE_TIMEOUT_SECS=900`, and prebuilt asset directory injected via matrix default `SI_INSTALL_SMOKE_ASSETS_DIR=${MULTI_DIR}`: all execution lanes reached `Matrix complete.` including `installer smoke-npm` and `installer smoke-docker`.
+
+### Execution update (2026-03-19 finalization, non-cached path)
+
+- `OUT_DIR=/tmp/si-e2e-fresh-single MULTI_DIR=/tmp/si-e2e-fresh-multi SMOKE_TIMEOUT_SECS=900 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh` (fresh directories, `SKIP_RELEASE_BUILD=0`):
+  - `release-asset`, `release-assets`, and `verify-release-assets` completed from scratch.
+  - `installer smoke-host`, `installer smoke-npm`, and `installer smoke-docker` completed.
+  - `installer smoke-homebrew` skipped (brew unavailable).
+  - Matrix reached `Matrix complete.`
