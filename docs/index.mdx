@@ -12,7 +12,7 @@ SI is an operations-first CLI that combines secure secrets, integration bridges,
 1. Install SI:
    - npm: `mkdir -p "$HOME/.npm-global" && npm config set prefix "$HOME/.npm-global" && export PATH="$HOME/.npm-global/bin:$PATH" && npm install -g @aureuma/si`
    - Homebrew: `brew install aureuma/si/si`
-2. Build and verify your local binary from source when needed: `si build self`
+2. Build and verify your local binary from source when needed: `./.artifacts/cargo-target/release/si-rs build self`
 3. Validate secret setup: `si vault status`
 4. Inspect command surface: `si --help`
 5. Validate docs before publishing changes: `si mintlify validate`
