@@ -9,22 +9,24 @@ while [[ -h "${SOURCE}" ]]; do
 done
 ROOT="$(cd "$(dirname "${SOURCE}")/.." && pwd)"
 BIN="${ROOT}/.artifacts/si"
+TARGET_DIR="${ROOT}/.artifacts/cargo-target"
 
 needs_build=0
 if [[ ! -x "${BIN}" ]]; then
   needs_build=1
 else
-  if find "${ROOT}/tools/si" "${ROOT}/agents/shared" -name '*.go' -newer "${BIN}" -print -quit | grep -q .; then
+  if find "${ROOT}/rust" -name '*.rs' -newer "${BIN}" -print -quit | grep -q .; then
     needs_build=1
   fi
-  if [[ "${ROOT}/tools/si/go.mod" -nt "${BIN}" || "${ROOT}/tools/si/go.sum" -nt "${BIN}" ]]; then
+  if [[ "${ROOT}/Cargo.toml" -nt "${BIN}" || "${ROOT}/Cargo.lock" -nt "${BIN}" || "${ROOT}/rust/crates/si-cli/Cargo.toml" -nt "${BIN}" ]]; then
     needs_build=1
   fi
 fi
 
 if [[ ${needs_build} -eq 1 ]]; then
   mkdir -p "${ROOT}/.artifacts"
-  (cd "${ROOT}/tools/si" && go build -o "${BIN}" .)
+  (cd "${ROOT}" && cargo build --release --locked -p si-rs-cli --bin si-rs --target-dir "${TARGET_DIR}")
+  cp "${TARGET_DIR}/release/si-rs" "${BIN}"
 fi
 
 exec "${BIN}" "$@"
