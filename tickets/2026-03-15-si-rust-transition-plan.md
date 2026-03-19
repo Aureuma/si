@@ -161,6 +161,7 @@ Progress notes:
 - completed: the release workflow and checked-in Homebrew core artifact now follow the Rust-only cutover too, with `.github/workflows/cli-release-assets.yml` provisioning Rust for the release helpers and `packaging/homebrew-core/si.rb` regenerated through the Rust renderer for the current release tag
 - completed: the image/runtime cutover now ships Rust-native `si-codex-init`, `si-entrypoint`, and `codex-stdout-parser` binaries from `rust/crates/si-tools`, with the legacy Go implementations retired from the active workspace and local Go test matrix
 - completed: the standalone Codex REPL driver is now owned by the Rust `si-tools` crate as `codex-interactive-driver`, allowing the final auxiliary PTY automation helper to leave the Go workspace too
+- completed: the remaining top-level Go entry boundaries now default toward Rust ownership too: `tools/si/main.go` now execs the Rust `si-rs` binary when present before falling back to in-process Go dispatch, and the shipped `critic` binary is now a Rust wrapper that delegates to a packaged compatibility helper (`critic-go`) while the critic loop internals remain on the Go side
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`

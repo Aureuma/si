@@ -4,7 +4,8 @@ FROM rust:1.86-bookworm AS rust-tools-build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY rust ./rust
-RUN cargo build --release -p si-tools --bin codex-stdout-parser --bin si-codex-init --bin si-entrypoint
+RUN cargo build --release -p si-tools --bin codex-stdout-parser --bin si-codex-init --bin si-entrypoint \
+    && cargo build --release -p si-agents --bin critic
 
 FROM golang:1.25-bookworm AS critic-build
 WORKDIR /src
@@ -13,7 +14,7 @@ COPY agents/shared /shared
 COPY agents/critic/cmd ./cmd
 RUN go mod download
 RUN go mod tidy
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic ./cmd/critic
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic-go ./cmd/critic
 
 FROM golang:1.25-bookworm AS si-build
 WORKDIR /src/tools/si
@@ -82,7 +83,8 @@ COPY tools/codex-skills /opt/si/codex-skills
 
 COPY --from=rust-tools-build /src/target/release/codex-stdout-parser /usr/local/bin/codex-stdout-parser
 COPY --from=rust-tools-build /src/target/release/si-codex-init /usr/local/bin/si-codex-init
-COPY --from=critic-build /out/critic /usr/local/bin/critic
+COPY --from=rust-tools-build /src/target/release/critic /usr/local/bin/critic
+COPY --from=critic-build /out/critic-go /usr/local/bin/critic-go
 COPY --from=si-build /out/si /usr/local/bin/si
 COPY --from=rust-tools-build /src/target/release/si-entrypoint /usr/local/bin/si-entrypoint
 COPY --from=si-build /usr/local/go /usr/local/go
