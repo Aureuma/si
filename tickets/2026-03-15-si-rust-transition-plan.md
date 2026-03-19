@@ -171,6 +171,7 @@ Progress notes:
 - completed: the old `shouldUseExperimentalRustCLI()` helper has been removed and the repo documentation now reflects the Rust-primary state more directly, including the current `tools/si` role as a shrinking compatibility/helper surface rather than the primary CLI path
 - completed: the remaining legacy env toggle is now treated explicitly as a backward-compatibility knob rather than an “experimental” cutover gate, and the bridge-layer error text now describes the Rust CLI as the normal requested path
 - completed: the runtime images no longer ship a default `si-go` helper binary; they now keep only the Go toolchain plus the explicit `critic-go` compatibility helper while Rust `si-rs` remains the sole shipped `si` executable
+- completed: the shipped `critic` binary is now native Rust loop/config/runtime logic rather than a Rust exec-wrapper over `critic-go`, and the runtime images no longer build or ship the `critic-go` compatibility helper
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
