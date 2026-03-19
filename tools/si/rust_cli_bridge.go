@@ -4353,7 +4353,7 @@ func shouldUseRustCodexCLI() bool {
 }
 
 func shouldUseRustWarmupCLI() bool {
-	return rustCLIAvailable()
+	return true
 }
 
 func shouldUseRustFortCLI() bool {
