@@ -144,6 +144,7 @@ Progress:
 - completed: optional Go helper paths that still exist during retirement now short-circuit cleanly when `si-rs` is unavailable instead of hard-failing metadata-only and state-file operations, so the remaining `tools/si` module validation still passes while real Rust-owned runtime entrypoints continue to require the Rust binary
 - completed: the fully Rust-owned root command handlers have had their unreachable in-file Go fallback dispatch bodies removed (`apple`, `aws`, `cloudflare`, `dyad`, `gcp`, `github`, `google`, `oci`, `openai`, `stripe`, `vault`, `workos`, and related wrappers), reducing the visible Go ownership surface without changing the active Rust delegation contract
 - completed: the Rust-owned `providers characteristics` and `providers health` entrypoints now have their dead in-file Go implementations removed, matching the existing `requireRustCLIDelegation(...)` enforcement and shrinking another already-modeled provider surface
+- completed: dead nested GitHub auth/context/doctor Go command handlers and their stale direct-invocation tests have been removed, aligning the remaining Go module with the fact that `si github ...` is already Rust-required at the root entrypoint
 
 ### Phase D: Port The Remaining State Machines And Interactive Glue
 
