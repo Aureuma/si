@@ -21,3 +21,10 @@ path = "src/bin/preflight_codex_upgrade.rs"
 [[bin]]
 name = "critic"
 path = "src/bin/critic.rs"
+
+[dependencies]
+chrono.workspace = true
+libc.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
