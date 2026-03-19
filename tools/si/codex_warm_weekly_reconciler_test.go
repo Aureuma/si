@@ -218,7 +218,7 @@ func TestMaybeAutoRepairWarmupSchedulerLaunchesEnable(t *testing.T) {
 	}
 }
 
-func TestWarmWeeklyAutostartRequestedFallsBackToLoggedInProfiles(t *testing.T) {
+func TestWarmWeeklyAutostartRequestedUsesRustDecisionForCachedAuth(t *testing.T) {
 	origLoggedInProfilesFn := loggedInProfilesFn
 	defer func() {
 		loggedInProfilesFn = origLoggedInProfilesFn
@@ -226,6 +226,14 @@ func TestWarmWeeklyAutostartRequestedFallsBackToLoggedInProfiles(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"requested\":true,\"reason\":\"cached_auth\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
 
 	loggedInProfilesFn = func() []codexProfile {
 		return []codexProfile{{ID: "profile-alpha"}}
@@ -238,9 +246,16 @@ func TestWarmWeeklyAutostartRequestedFallsBackToLoggedInProfiles(t *testing.T) {
 	if reason != "cached_auth" {
 		t.Fatalf("expected cached_auth reason, got %q", reason)
 	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nautostart-decision\n--state-path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
 }
 
-func TestMaybeAutoRepairWarmupSchedulerPersistsMarkerFromCachedAuth(t *testing.T) {
+func TestMaybeAutoRepairWarmupSchedulerPersistsRustMarkerFromCachedAuth(t *testing.T) {
 	origRequested := warmWeeklyAutostartRequestedFn
 	origHealth := warmWeeklySchedulerHealthFn
 	origLaunch := launchWarmupCommandAsyncFn
@@ -255,6 +270,14 @@ func TestMaybeAutoRepairWarmupSchedulerPersistsMarkerFromCachedAuth(t *testing.T
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\npath=''\nprev=''\nfor arg in \"$@\"; do\n  if [ \"$prev\" = '--path' ]; then\n    path=\"$arg\"\n    break\n  fi\n  prev=\"$arg\"\ndone\nif [ -n \"$path\" ]; then\n  mkdir -p \"$(dirname \"$path\")\"\n  printf 'cached_auth\\n' >\"$path\"\nfi\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
 
 	warmWeeklyAutostartRequestedFn = func() (bool, string) { return true, "cached_auth" }
 	warmWeeklySchedulerHealthFn = func() (bool, string, error) { return true, "running", nil }
@@ -271,6 +294,13 @@ func TestMaybeAutoRepairWarmupSchedulerPersistsMarkerFromCachedAuth(t *testing.T
 	}
 	if _, err := os.Stat(markerPath); err != nil {
 		t.Fatalf("expected autostart marker to be written, got %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nmarker\nwrite-autostart\n--path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
 	}
 }
 
