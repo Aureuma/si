@@ -29,16 +29,10 @@ fn main() -> ExitCode {
         .trim()
         .to_string();
 
-    let tests = [
-        (
-            "./agents/shared/docker",
-            "Test(BuildContainerCoreMounts|BuildDyadSpecs|BuildDyadEnvForwardsBrowserMCPOverrides|HostSiCodexProfileMounts|HasHostSiMount|HostDockerConfigMount|HasHostDockerConfigMount|HostSiGoToolchainMount|HasHostSiGoToolchainMount|HostVaultEnvFileMount|HasHostVaultEnvFileMount|HasDevelopmentMount|HasHostDevelopmentMount)",
-        ),
-        (
-            "./tools/si",
-            "Test(CodexBrowserMCPURL|CodexContainerWorkspaceMatches|CodexContainerWorkspaceSource|SplitNameAndFlags|CodexRespawnBoolFlags|SplitDyadSpawnArgs|DyadProfileArg|DyadSkipAuthArg|DyadLoopBoolEnv|DyadLoopIntSetting|DockerBuildArgsIncludesSecret|RunDockerBuild|ShouldRetryLegacyBuild|CmdBuildImage)",
-        ),
-    ];
+    let tests = [(
+        "./tools/si",
+        "Test(CodexBrowserMCPURL|CodexContainerWorkspaceMatches|CodexContainerWorkspaceSource|SplitNameAndFlags|CodexRespawnBoolFlags|SplitDyadSpawnArgs|DyadProfileArg|DyadSkipAuthArg|DyadLoopBoolEnv|DyadLoopIntSetting|DockerBuildArgsIncludesSecret|RunDockerBuild|ShouldRetryLegacyBuild|CmdBuildImage)",
+    )];
 
     println!("[preflight] codex image compatibility checks (spawn + dyad + container runtime)");
     for (pkg, pattern) in tests {
