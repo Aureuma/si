@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 type reportOptions struct {

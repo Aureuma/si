@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 type codexStatus struct {

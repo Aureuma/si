@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"sync"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 var autoDockerHostFn = shared.AutoDockerHost

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 	"si/tools/si/internal/apibridge"
 )
 

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 const weeklyWarmPrompt = "You are warming the Codex weekly limit. Read the following brief project memo and reply with exactly two bullet points labeled 'A' and 'B' that summarize the two biggest risks. Keep the response under 40 words.\n\n" +
