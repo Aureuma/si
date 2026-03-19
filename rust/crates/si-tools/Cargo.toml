@@ -1,0 +1,11 @@
+[package]
+name = "si-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "import-dotenv-to-si-vault"
+path = "src/bin/import_dotenv_to_si_vault.rs"
