@@ -365,7 +365,7 @@ func runDyadSpawnFlow(opts shared.DyadOptions, profile *codexProfile) error {
 }
 
 func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, opts shared.DyadOptions) (string, string, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustDyadCLI() {
 		return "", "", false, nil
 	}
 	actorName, criticName, err := resolveDyadSpawnExistingContainerNames(opts.Dyad)
