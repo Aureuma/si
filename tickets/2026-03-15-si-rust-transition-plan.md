@@ -172,6 +172,7 @@ Progress notes:
 - completed: the remaining legacy env toggle is now treated explicitly as a backward-compatibility knob rather than an “experimental” cutover gate, and the bridge-layer error text now describes the Rust CLI as the normal requested path
 - completed: the runtime images no longer ship a default `si-go` helper binary; they now keep only the Go toolchain plus the explicit `critic-go` compatibility helper while Rust `si-rs` remains the sole shipped `si` executable
 - completed: the shipped `critic` binary is now native Rust loop/config/runtime logic rather than a Rust exec-wrapper over `critic-go`, and the runtime images no longer build or ship the `critic-go` compatibility helper
+- completed: `agents/shared` is no longer an active `go.work` member or part of the default Go workspace/preflight test surface; it remains only as a replace-based dependency behind the shrinking legacy `tools/si` package
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`

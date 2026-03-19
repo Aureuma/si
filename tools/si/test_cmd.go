@@ -14,7 +14,6 @@ const testUsageText = "usage: si test <workspace|vault|orbits|all> [args]"
 const testOrbitsUsageText = "usage: si test orbits <unit|policy|catalog|e2e|all> [args]"
 
 var testWorkspaceModules = []string{
-	"./agents/shared/...",
 	"./tools/si/...",
 }
 
