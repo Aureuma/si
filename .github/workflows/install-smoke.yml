@@ -105,11 +105,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/si/go.mod
-          cache: true
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run host installer smoke tests
         run: ./tools/test-install-si.sh
@@ -123,11 +120,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/si/go.mod
-          cache: true
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -145,6 +139,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run docker installer smoke tests
         run: ./tools/test-install-si-docker.sh

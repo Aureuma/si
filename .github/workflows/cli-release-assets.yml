@@ -50,12 +50,6 @@ jobs:
         with:
           ref: ${{ needs.resolve-tag.outputs.tag }}
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/si/go.mod
-          cache: true
-
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.86.0
 
@@ -232,12 +226,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve-tag.outputs.tag }}
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/si/go.mod
-          cache: true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.86.0

@@ -32,6 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y shfmt
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
+
       - name: Agent doctor
         run: bash tools/agents/doctor.sh
 
