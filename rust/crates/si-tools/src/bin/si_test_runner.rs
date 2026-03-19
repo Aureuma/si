@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-const TEST_WORKSPACE_MODULES: &[&str] = &["./tools/si/..."];
+const TEST_MODULE_PATTERNS: &[&str] = &["./..."];
 
 fn main() -> ExitCode {
     let root = match repo_root() {
@@ -34,11 +34,15 @@ fn main() -> ExitCode {
 
 fn repo_root() -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("go.work").is_file() {
+    if cwd.join("tools/si/go.mod").is_file() {
         Ok(cwd)
     } else {
-        Err("go.work not found. Run this command from the repo root.".to_string())
+        Err("tools/si/go.mod not found. Run this command from the repo root.".to_string())
     }
+}
+
+fn go_module_dir(root: &PathBuf) -> PathBuf {
+    root.join("tools/si")
 }
 
 fn run_workspace(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
@@ -63,19 +67,17 @@ fn run_workspace(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
     }
     println!("go test timeout: {}", timeout.trim());
     if list {
-        for module in TEST_WORKSPACE_MODULES {
+        for module in TEST_MODULE_PATTERNS {
             println!("{module}");
         }
         return ExitCode::SUCCESS;
     }
 
-    println!("Running go test on: {}", TEST_WORKSPACE_MODULES.join(" "));
+    println!("Running go test on: ./...");
     let mut cmd = Command::new(go_bin);
-    cmd.current_dir(root);
+    cmd.current_dir(go_module_dir(root));
     cmd.arg("test").arg("-timeout").arg(timeout.trim());
-    for module in TEST_WORKSPACE_MODULES {
-        cmd.arg(module);
-    }
+    cmd.arg("./...");
     run_command(cmd)
 }
 
@@ -103,7 +105,7 @@ fn run_vault(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
 
     println!("[1/3] vault command wiring + guardrail unit tests");
     let mut wiring = Command::new(go_bin);
-    wiring.current_dir(root);
+    wiring.current_dir(go_module_dir(root));
     wiring.args([
         "test",
         "-timeout",
@@ -112,7 +114,7 @@ fn run_vault(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
         "-shuffle=on",
         "-run",
         "^(TestVaultCommandActionSetsArePopulated|TestVaultActionNamesMatchDispatchSwitches|TestVaultValidateImplicitTargetRepoScope.*)$",
-        "./tools/si",
+        ".",
     ]);
     if run_command(wiring) != ExitCode::SUCCESS {
         return ExitCode::from(1);
@@ -120,14 +122,14 @@ fn run_vault(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
 
     println!("[2/3] vault internal package tests");
     let mut internal = Command::new(go_bin);
-    internal.current_dir(root);
+    internal.current_dir(go_module_dir(root));
     internal.args([
         "test",
         "-timeout",
         timeout.trim(),
         "-count=1",
         "-shuffle=on",
-        "./tools/si/internal/vault/...",
+        "./internal/vault/...",
     ]);
     if run_command(internal) != ExitCode::SUCCESS {
         return ExitCode::from(1);
@@ -138,7 +140,7 @@ fn run_vault(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
     } else {
         println!("[3/3] vault e2e subprocess tests");
         let mut e2e = Command::new(go_bin);
-        e2e.current_dir(root);
+        e2e.current_dir(go_module_dir(root));
         e2e.args([
             "test",
             "-timeout",
@@ -147,7 +149,7 @@ fn run_vault(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
             "-shuffle=on",
             "-run",
             "^TestVaultE2E_",
-            "./tools/si",
+            ".",
         ]);
         if run_command(e2e) != ExitCode::SUCCESS {
             return ExitCode::from(1);
@@ -188,7 +190,7 @@ fn run_all(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
     }
 
     if !skip_go {
-        eprintln!("==> Go workspace tests");
+        eprintln!("==> Go module tests");
         if run_workspace(root, go_bin, &[]) != ExitCode::SUCCESS {
             return ExitCode::from(1);
         }
@@ -241,7 +243,9 @@ fn print_go_version(root: &PathBuf, go_bin: &str) -> bool {
 
 fn run_script(root: &PathBuf, rel_path: &str) -> ExitCode {
     let path = root.join(rel_path);
-    run_command(Command::new(path).current_dir(root))
+    let mut command = Command::new(path);
+    command.current_dir(root);
+    run_command(command)
 }
 
 fn run_command(mut command: Command) -> ExitCode {
