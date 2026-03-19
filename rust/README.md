@@ -14,7 +14,7 @@ Current scope:
 - initial dyad spawn planning for actor/critic names, env, labels, volumes, configs mount, and core mount assembly
 - Rust CLI exposure for codex spawn planning via `si-rs codex spawn-plan`
 - Rust CLI exposure for dyad spawn planning via `si-rs dyad spawn-plan`
-- a small Rust CLI entrypoint for read-only diagnostics
+- the primary Rust CLI entrypoint used for local and shipped runtime flows
 
 Current entrypoint:
 
@@ -27,12 +27,4 @@ cargo run -p si-rs-cli -- paths show --format json
 cargo run -p si-rs-cli -- dyad spawn-plan --name alpha --workspace "$PWD" --format json
 ```
 
-Experimental Go-to-Rust delegation path for the first migrated read-only command:
-
-```bash
-SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si version
-SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si help remote-control
-SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si providers characteristics --provider github --json
-```
-
-The shipping Go `si` CLI remains the source of truth until a command family reaches the cutover criteria in `tickets/2026-03-15-si-rust-transition-plan.md`.
+The repository now treats Rust as the primary CLI/runtime path. The remaining Go code exists as compatibility and helper surface while the last subsystem internals are retired according to `tickets/2026-03-15-si-rust-transition-plan.md`.

@@ -17,13 +17,7 @@ RUN go mod download
 RUN go mod tidy
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic-go ./cmd/critic
 
-FROM golang:1.25-bookworm AS si-build
-WORKDIR /src/tools/si
-COPY tools/si/go.mod tools/si/go.sum ./
-COPY agents/shared /src/agents/shared
-COPY tools/si ./
-RUN go mod download
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/si-go .
+FROM golang:1.25-bookworm AS go-toolchain
 
 FROM node:22-bookworm
 
@@ -87,9 +81,8 @@ COPY --from=rust-tools-build /src/target/release/si-codex-init /usr/local/bin/si
 COPY --from=rust-tools-build /src/target/release/critic /usr/local/bin/critic
 COPY --from=critic-build /out/critic-go /usr/local/bin/critic-go
 COPY --from=rust-tools-build /src/target/release/si-rs /usr/local/bin/si
-COPY --from=si-build /out/si-go /usr/local/bin/si-go
 COPY --from=rust-tools-build /src/target/release/si-entrypoint /usr/local/bin/si-entrypoint
-COPY --from=si-build /usr/local/go /usr/local/go
+COPY --from=go-toolchain /usr/local/go /usr/local/go
 RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
     && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
