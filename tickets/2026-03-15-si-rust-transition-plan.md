@@ -165,6 +165,7 @@ Progress notes:
 - completed: `agents/critic` is no longer part of the active `go.work` workspace or the default local Go workspace test matrix; it remains only as an explicitly packaged compatibility helper behind the Rust-owned `critic` binary path
 - completed: the live `dyad` compatibility bridge now defaults to the Rust CLI whenever `si-rs` is resolvable, instead of requiring the old experimental env opt-in, so one of the largest remaining Go command families now runs Rust-first by default while explicit `SI_EXPERIMENTAL_RUST_CLI=0` still forces the legacy Go path
 - completed: the live `codex` compatibility bridge now follows the same Rust-first default policy when `si-rs` is resolvable, moving another major command family off the legacy opt-in bridge while still allowing an explicit `SI_EXPERIMENTAL_RUST_CLI=0` escape hatch back to the Go path
+- completed: the runtime `warmup` and `fort` compatibility bridges now also default to Rust whenever `si-rs` is resolvable, so persisted warmup state, marker flows, Fort session state, Fort bootstrap views, and runtime-agent state management now follow the same Rust-first policy as the larger codex/dyad cutovers
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`

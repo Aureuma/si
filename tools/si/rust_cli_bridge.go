@@ -307,7 +307,7 @@ type rustFortSessionTransition struct {
 }
 
 func maybeLoadRustCodexFortBootstrap(sessionStatePath string, profileID string, accessTokenPath string, refreshTokenPath string, accessTokenContainerPath string, refreshTokenContainerPath string) (*codexFortBootstrap, bool, error) {
-	if !shouldUseRustCodexCLI() {
+	if !shouldUseRustFortCLI() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -3386,7 +3386,7 @@ func maybeRunRustDyadStatus(dyad string, jsonOut bool) (string, bool, error) {
 }
 
 func maybeRunRustWarmupStatus(jsonOut bool) (string, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return "", false, nil
 	}
 	format := "text"
@@ -3754,7 +3754,7 @@ func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string
 }
 
 func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return warmWeeklyState{}, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3773,7 +3773,7 @@ func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
 }
 
 func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3791,7 +3791,7 @@ func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) 
 }
 
 func maybeReadRustWarmupMarkerState(autostartPath string, disabledPath string) (*rustWarmupMarkerState, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3811,7 +3811,7 @@ func maybeReadRustWarmupMarkerState(autostartPath string, disabledPath string) (
 }
 
 func maybeWriteRustWarmupAutostartMarker(path string) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3824,7 +3824,7 @@ func maybeWriteRustWarmupAutostartMarker(path string) (bool, error) {
 }
 
 func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3838,7 +3838,7 @@ func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
 }
 
 func maybeReadRustWarmupAutostartDecision(statePath string, autostartPath string, disabledPath string) (*rustWarmupAutostartDecision, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustWarmupCLI() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3859,7 +3859,7 @@ func maybeReadRustWarmupAutostartDecision(statePath string, autostartPath string
 }
 
 func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return fortProfileSessionState{}, false, nil
 	}
 	output, err := runRustCLIJSON("fort", "session-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
@@ -3874,7 +3874,7 @@ func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, 
 }
 
 func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSessionClassification, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -3894,7 +3894,7 @@ func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSes
 }
 
 func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentState, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return fortProfileRuntimeAgentState{}, false, nil
 	}
 	output, err := runRustCLIJSON("fort", "runtime-agent-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
@@ -3915,7 +3915,7 @@ func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentSta
 }
 
 func maybeSaveRustFortSessionState(path string, state fortProfileSessionState) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3933,7 +3933,7 @@ func maybeSaveRustFortSessionState(path string, state fortProfileSessionState) (
 }
 
 func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAgentState) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return false, nil
 	}
 	raw, err := json.Marshal(state)
@@ -3951,7 +3951,7 @@ func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAge
 }
 
 func maybeClearRustFortSessionState(path string) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3964,7 +3964,7 @@ func maybeClearRustFortSessionState(path string) (bool, error) {
 }
 
 func maybeClearRustFortRuntimeAgentState(path string) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return false, nil
 	}
 	if _, err := runRustCLIText(
@@ -3977,7 +3977,7 @@ func maybeClearRustFortRuntimeAgentState(path string) (bool, error) {
 }
 
 func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionRefreshResult, now time.Time) (*rustFortSessionTransition, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return nil, false, nil
 	}
 	accessExpiry, err := time.Parse(time.RFC3339, strings.TrimSpace(refreshed.AccessExpiresAt))
@@ -4004,7 +4004,7 @@ func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionR
 }
 
 func maybeApplyRustFortUnauthorizedRefreshOutcome(path string, now time.Time) (*rustFortSessionTransition, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -4025,7 +4025,7 @@ func maybeApplyRustFortUnauthorizedRefreshOutcome(path string, now time.Time) (*
 }
 
 func maybeRunRustFortSessionTeardown(path string, now time.Time) (*rustFortSessionClassification, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustFortCLI() {
 		return nil, false, nil
 	}
 	output, err := runRustCLIJSON(
@@ -4372,6 +4372,34 @@ func shouldUseRustDyadCLI() bool {
 }
 
 func shouldUseRustCodexCLI() bool {
+	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	case "0", "false", "no", "off":
+		return false
+	case "1", "true", "yes", "on":
+		return true
+	}
+	_, err := resolveRustCLIBinary()
+	return err == nil
+}
+
+func shouldUseRustWarmupCLI() bool {
+	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	case "0", "false", "no", "off":
+		return false
+	case "1", "true", "yes", "on":
+		return true
+	}
+	_, err := resolveRustCLIBinary()
+	return err == nil
+}
+
+func shouldUseRustFortCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
