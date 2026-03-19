@@ -77,7 +77,7 @@ si mintlify broken-links
 ### Release preflight
 
 ```bash
-si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Safety guidance

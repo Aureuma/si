@@ -175,7 +175,7 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:
-- `si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
+- `./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
 - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 ## License
