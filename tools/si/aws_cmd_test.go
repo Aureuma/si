@@ -17,7 +17,6 @@ func TestCmdAWSContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdAWSContextList([]string{"--json"})
@@ -45,7 +44,6 @@ func TestCmdAWSContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdAWSContextCurrent([]string{"--json"})
@@ -73,7 +71,6 @@ func TestCmdAWSAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdAWSAuthStatus([]string{"--json"})

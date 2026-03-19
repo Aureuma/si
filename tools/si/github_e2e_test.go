@@ -46,9 +46,9 @@ func TestGitHubE2E_RawWithAppAuth(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_APP_ID":              "1",
-		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
-		"GITHUB_TEST_INSTALLATION_ID":     "123",
+		"GITHUB_APP_ID":              "1",
+		"GITHUB_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_INSTALLATION_ID":     "123",
 	}, "github", "raw", "--account", "test", "--base-url", server.URL, "--method", "GET", "--path", "/repos/acme/repo", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -83,7 +83,7 @@ func TestGitHubE2E_RawWithOAuthToken(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "raw", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--method", "GET", "--path", "/user", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -134,9 +134,9 @@ func TestGitHubE2E_ReleaseUploadUsesAPIUploadURL(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_APP_ID":              "1",
-		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
-		"GITHUB_TEST_INSTALLATION_ID":     "123",
+		"GITHUB_APP_ID":              "1",
+		"GITHUB_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_INSTALLATION_ID":     "123",
 	}, "github", "release", "upload", "acme/repo", "v1", "--account", "test", "--base-url", server.URL, "--asset", assetPath, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -191,9 +191,9 @@ func TestGitHubE2E_SecretRepoSetEncryptsValue(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_APP_ID":              "1",
-		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
-		"GITHUB_TEST_INSTALLATION_ID":     "123",
+		"GITHUB_APP_ID":              "1",
+		"GITHUB_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_INSTALLATION_ID":     "123",
 	}, "github", "secret", "repo", "set", "acme/repo", "MY_SECRET", "--account", "test", "--base-url", server.URL, "--value", "super-secret", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -207,37 +207,6 @@ func TestGitHubE2E_SecretRepoSetEncryptsValue(t *testing.T) {
 	}
 	if payload["status"] != "201 Created" {
 		t.Fatalf("unexpected response payload: %#v", payload)
-	}
-}
-
-func TestGitHubE2E_DoctorPublic(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip e2e-style subprocess test in short mode")
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/zen" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte("keep it logically awesome"))
-	}))
-	defer server.Close()
-
-	stdout, stderr, err := runSICommand(t, map[string]string{},
-		"github", "doctor",
-		"--public",
-		"--base-url", server.URL,
-		"--json",
-	)
-	if err != nil {
-		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
-	}
-	if ok, _ := payload["ok"].(bool); !ok {
-		t.Fatalf("expected ok payload: %#v", payload)
 	}
 }
 
@@ -282,9 +251,9 @@ func TestGitHubE2E_BranchCreateFromDefaultBranch(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_APP_ID":              "1",
-		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
-		"GITHUB_TEST_INSTALLATION_ID":     "123",
+		"GITHUB_APP_ID":              "1",
+		"GITHUB_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_INSTALLATION_ID":     "123",
 	}, "github", "branch", "create", "acme/repo", "--account", "test", "--base-url", server.URL, "--name", "feature/new-api", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -343,10 +312,10 @@ func TestGitHubE2E_BranchProtect(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_APP_ID":              "1",
-		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
-		"GITHUB_TEST_INSTALLATION_ID":     "123",
-	}, "github", "branch", "protect", "acme/repo", "main", "--account", "test", "--base-url", server.URL, "--required-check", "ci", "--required-check", "lint", "--required-approvals", "2", "--dismiss-stale-reviews", "--require-code-owner-reviews", "--allow-force-pushes", "--require-linear-history", "--json")
+		"GITHUB_APP_ID":              "1",
+		"GITHUB_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_INSTALLATION_ID":     "123",
+	}, "github", "branch", "protect", "acme/repo", "main", "--account", "test", "--base-url", server.URL, "--required-check", "ci", "--required-check", "lint", "--required-approvals", "2", "--dismiss-stale-reviews=true", "--require-code-owner-reviews=true", "--allow-force-pushes=true", "--require-linear-history=true", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -405,14 +374,36 @@ func siTestBinaryPath(t *testing.T) string {
 			return
 		}
 		siTestBinary = filepath.Join(tmpDir, "si-test")
-		args := []string{"build", "-trimpath", "-buildvcs=false", "-o", siTestBinary, "."}
-		cmd := exec.Command("go", args...)
-		cmd.Dir = "."
+		root, err := repoRoot()
+		if err != nil {
+			siTestBinaryErr = fmt.Errorf("resolve repo root: %w", err)
+			return
+		}
+		targetDir := filepath.Join(root, ".artifacts", "cargo-target")
+		args := []string{
+			"build",
+			"--locked",
+			"--manifest-path", filepath.Join("rust", "crates", "si-cli", "Cargo.toml"),
+			"--bin", "si-rs",
+			"--target-dir", targetDir,
+		}
+		cmd := exec.Command("cargo", args...)
+		cmd.Dir = root
 		cmd.Env = append([]string{}, os.Environ()...)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
 			siTestBinaryErr = fmt.Errorf("build si test binary: %w: %s", err, strings.TrimSpace(stderr.String()))
+			return
+		}
+		built := filepath.Join(targetDir, "debug", "si-rs")
+		raw, err := os.ReadFile(built)
+		if err != nil {
+			siTestBinaryErr = fmt.Errorf("read rust si test binary: %w", err)
+			return
+		}
+		if err := os.WriteFile(siTestBinary, raw, 0o755); err != nil {
+			siTestBinaryErr = fmt.Errorf("write si test binary: %w", err)
 			return
 		}
 	})

@@ -37,11 +37,8 @@ fn run() -> Result<(), String> {
             .ok()
             .filter(|value| !value.trim().is_empty())
             .map(PathBuf::from);
-        write_codex_config(
-            Path::new("/home/si/.codex/config.toml"),
-            template_path.as_deref(),
-        )
-        .map_err(|err| format!("write config: {err}"))?;
+        write_codex_config(Path::new("/home/si/.codex/config.toml"), template_path.as_deref())
+            .map_err(|err| format!("write config: {err}"))?;
         chown_paths(&["/home/si/.codex", "/home/si/.config/gh", "/workspace"])?;
         let safe_dirs = collect_git_safe_directories(Some(Path::new("/workspace")))
             .map_err(|err| format!("collect git safe directories: {err}"))?;
@@ -49,18 +46,9 @@ fn run() -> Result<(), String> {
             .map_err(|err| format!("configure root git safe dirs: {err}"))?;
         ensure_git_safe_directories(Path::new("/home/si"), &safe_dirs)
             .map_err(|err| format!("configure si git safe dirs: {err}"))?;
-        let quoted = command
-            .iter()
-            .map(|arg| shell_escape(arg))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let err = Command::new("su")
-            .arg("-s")
-            .arg("/bin/bash")
-            .arg("si")
-            .arg("-c")
-            .arg(quoted)
-            .exec();
+        let quoted = command.iter().map(|arg| shell_escape(arg)).collect::<Vec<_>>().join(" ");
+        let err =
+            Command::new("su").arg("-s").arg("/bin/bash").arg("si").arg("-c").arg(quoted).exec();
         return Err(format!("exec su: {err}"));
     }
 
@@ -87,11 +75,7 @@ fn apply_host_ids() -> Result<(), String> {
 
     if let Some(gid) = host_gid {
         run_status(
-            Command::new("groupmod")
-                .arg("-o")
-                .arg("-g")
-                .arg(gid.to_string())
-                .arg("si"),
+            Command::new("groupmod").arg("-o").arg("-g").arg(gid.to_string()).arg("si"),
             "groupmod",
         )?;
     }
@@ -133,23 +117,14 @@ fn directory_is_empty(path: &Path) -> std::io::Result<bool> {
 
 fn chown_paths(paths: &[&str]) -> Result<(), String> {
     for path in paths {
-        run_status(
-            Command::new("chown")
-                .arg("-R")
-                .arg("si:si")
-                .arg(path),
-            "chown",
-        )?;
+        run_status(Command::new("chown").arg("-R").arg("si:si").arg(path), "chown")?;
     }
     Ok(())
 }
 
 fn env_value(keys: &[&str]) -> Option<String> {
     keys.iter().find_map(|key| {
-        env::var(key)
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
+        env::var(key).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
     })
 }
 
@@ -158,12 +133,6 @@ fn parse_id_env(keys: &[&str]) -> Option<u32> {
 }
 
 fn run_status(command: &mut Command, label: &str) -> Result<(), String> {
-    let status = command
-        .status()
-        .map_err(|err| format!("{label}: {err}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("{label}: exit status {status}"))
-    }
+    let status = command.status().map_err(|err| format!("{label}: {err}"))?;
+    if status.success() { Ok(()) } else { Err(format!("{label}: exit status {status}")) }
 }

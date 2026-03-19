@@ -78,8 +78,8 @@ fn run() -> Result<(), String> {
     }
 
     let config = parse_args(args)?;
-    let prompt = Regex::new(&config.prompt_regex)
-        .map_err(|err| format!("invalid prompt regex: {err}"))?;
+    let prompt =
+        Regex::new(&config.prompt_regex).map_err(|err| format!("invalid prompt regex: {err}"))?;
 
     let mut raw = Vec::new();
     if !config.no_initial_wait {
@@ -91,18 +91,11 @@ fn run() -> Result<(), String> {
     raw.extend(config.steps.clone());
     let actions = normalize_actions(&raw, config.default_wait)?;
 
-    let mut runner = Runner::new(
-        &config.command,
-        prompt,
-        config.max_bytes,
-        config.default_wait,
-    )?;
+    let mut runner = Runner::new(&config.command, prompt, config.max_bytes, config.default_wait)?;
 
     let result = (|| {
         run_plan(&mut runner, &actions)?;
-        runner
-            .wait_exit(config.final_wait)
-            .map_err(|err| format!("wait exit: {err}"))?;
+        runner.wait_exit(config.final_wait).map_err(|err| format!("wait exit: {err}"))?;
         if config.print_output {
             print!("{}", runner.output_string());
         }
@@ -127,11 +120,8 @@ impl Runner {
             return Err("-command is required".to_string());
         }
         let max_bytes = if max_bytes == 0 { 1 << 20 } else { max_bytes };
-        let default_wait = if default_wait.is_zero() {
-            Duration::from_secs(20)
-        } else {
-            default_wait
-        };
+        let default_wait =
+            if default_wait.is_zero() { Duration::from_secs(20) } else { default_wait };
 
         let mut child = Command::new("script");
         child
@@ -195,9 +185,7 @@ impl Runner {
         if text.trim().is_empty() {
             return Ok(());
         }
-        self.stdin
-            .write_all(text.as_bytes())
-            .map_err(|err| err.to_string())
+        self.stdin.write_all(text.as_bytes()).map_err(|err| err.to_string())
     }
 
     fn send_line(&mut self, line: &str) -> Result<(), String> {
@@ -209,11 +197,7 @@ impl Runner {
     }
 
     fn wait_prompt(&mut self, timeout: Duration) -> Result<(), String> {
-        let timeout = if timeout.is_zero() {
-            self.default_wait
-        } else {
-            timeout
-        };
+        let timeout = if timeout.is_zero() { self.default_wait } else { timeout };
         let deadline = Instant::now() + timeout;
         loop {
             if self.prompt.is_match(&last_line(&strip_ansi(&self.output_string()))) {
@@ -234,11 +218,7 @@ impl Runner {
         if needle.is_empty() {
             return Ok(());
         }
-        let timeout = if timeout.is_zero() {
-            self.default_wait
-        } else {
-            timeout
-        };
+        let timeout = if timeout.is_zero() { self.default_wait } else { timeout };
         let deadline = Instant::now() + timeout;
         loop {
             if strip_ansi(&self.output_string()).contains(needle) {
@@ -255,11 +235,7 @@ impl Runner {
     }
 
     fn wait_exit(&mut self, timeout: Duration) -> Result<(), String> {
-        let timeout = if timeout.is_zero() {
-            Duration::from_secs(2)
-        } else {
-            timeout
-        };
+        let timeout = if timeout.is_zero() { Duration::from_secs(2) } else { timeout };
         let deadline = Instant::now() + timeout;
         loop {
             if let Some(status) = self.child.try_wait().map_err(|err| err.to_string())? {
@@ -324,8 +300,12 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
             "script" => config.script_path = Some(take_value(&args, &mut idx, inline, key)?),
             "step" => config.steps.push(take_value(&args, &mut idx, inline, key)?),
             "prompt-regex" => config.prompt_regex = take_value(&args, &mut idx, inline, key)?,
-            "wait" => config.default_wait = parse_duration(&take_value(&args, &mut idx, inline, key)?)?,
-            "final-wait" => config.final_wait = parse_duration(&take_value(&args, &mut idx, inline, key)?)?,
+            "wait" => {
+                config.default_wait = parse_duration(&take_value(&args, &mut idx, inline, key)?)?
+            }
+            "final-wait" => {
+                config.final_wait = parse_duration(&take_value(&args, &mut idx, inline, key)?)?
+            }
             "max-bytes" => {
                 config.max_bytes = take_value(&args, &mut idx, inline, key)?
                     .parse::<usize>()
@@ -362,9 +342,7 @@ fn take_value(
         return Ok(value);
     }
     *idx += 1;
-    args.get(*idx)
-        .cloned()
-        .ok_or_else(|| format!("missing value for -{key}"))
+    args.get(*idx).cloned().ok_or_else(|| format!("missing value for -{key}"))
 }
 
 fn take_bool(args: &[String], idx: &mut usize, inline: Option<String>) -> Result<bool, String> {
@@ -390,16 +368,10 @@ fn parse_bool(value: &str) -> Result<bool, String> {
 
 fn parse_duration(value: &str) -> Result<Duration, String> {
     if let Some(raw) = value.strip_suffix("ms") {
-        return raw
-            .parse::<u64>()
-            .map(Duration::from_millis)
-            .map_err(|err| err.to_string());
+        return raw.parse::<u64>().map(Duration::from_millis).map_err(|err| err.to_string());
     }
     if let Some(raw) = value.strip_suffix('s') {
-        return raw
-            .parse::<u64>()
-            .map(Duration::from_secs)
-            .map_err(|err| err.to_string());
+        return raw.parse::<u64>().map(Duration::from_secs).map_err(|err| err.to_string());
     }
     if let Some(raw) = value.strip_suffix('m') {
         return raw
@@ -426,9 +398,7 @@ fn read_script(path: &str) -> Result<Vec<String>, String> {
 }
 
 fn normalize_actions(raw: &[String], default_wait: Duration) -> Result<Vec<Action>, String> {
-    raw.iter()
-        .map(|spec| parse_action(spec, default_wait))
-        .collect()
+    raw.iter().map(|spec| parse_action(spec, default_wait)).collect()
 }
 
 fn parse_action(spec: &str, default_wait: Duration) -> Result<Action, String> {
@@ -443,9 +413,8 @@ fn parse_action(spec: &str, default_wait: Duration) -> Result<Action, String> {
             timeout: default_wait,
         });
     }
-    if let Some(value) = spec
-        .strip_prefix("wait_prompt:")
-        .or_else(|| spec.strip_prefix("wait_prompt="))
+    if let Some(value) =
+        spec.strip_prefix("wait_prompt:").or_else(|| spec.strip_prefix("wait_prompt="))
     {
         return Ok(Action {
             kind: ActionKind::WaitPrompt,
@@ -475,29 +444,23 @@ fn parse_action(spec: &str, default_wait: Duration) -> Result<Action, String> {
             timeout: default_wait,
         });
     }
-    if let Some(arg) = spec
-        .strip_prefix("sleep:")
-        .or_else(|| spec.strip_prefix("sleep "))
-    {
+    if let Some(arg) = spec.strip_prefix("sleep:").or_else(|| spec.strip_prefix("sleep ")) {
         return Ok(Action {
             kind: ActionKind::Sleep,
             arg: String::new(),
             timeout: parse_duration_or(arg.trim(), default_wait),
         });
     }
-    if let Some(arg) = spec
-        .strip_prefix("wait_contains:")
-        .or_else(|| spec.strip_prefix("wait_contains "))
+    if let Some(arg) =
+        spec.strip_prefix("wait_contains:").or_else(|| spec.strip_prefix("wait_contains "))
     {
         let (text, timeout) = match arg.split_once('|') {
-            Some((text, timeout)) => (text.trim().to_string(), parse_duration_or(timeout, default_wait)),
+            Some((text, timeout)) => {
+                (text.trim().to_string(), parse_duration_or(timeout, default_wait))
+            }
             None => (arg.trim().to_string(), default_wait),
         };
-        return Ok(Action {
-            kind: ActionKind::WaitContains,
-            arg: text,
-            timeout,
-        });
+        return Ok(Action { kind: ActionKind::WaitContains, arg: text, timeout });
     }
     Err(format!("unsupported action {spec:?}"))
 }
@@ -510,25 +473,25 @@ fn run_plan(runner: &mut Runner, actions: &[Action]) -> Result<(), String> {
     for (index, action) in actions.iter().enumerate() {
         let step = index + 1;
         match action.kind {
-            ActionKind::WaitPrompt => runner
-                .wait_prompt(action.timeout)
-                .map_err(|err| format!("step {step} wait_prompt: {err}\n--- tail ---\n{}", runner.tail(80)))?,
-            ActionKind::Send => runner
-                .send_line(&action.arg)
-                .map_err(|err| format!("step {step} send: {err}"))?,
-            ActionKind::Type => runner
-                .send(&action.arg)
-                .map_err(|err| format!("step {step} type: {err}"))?,
+            ActionKind::WaitPrompt => runner.wait_prompt(action.timeout).map_err(|err| {
+                format!("step {step} wait_prompt: {err}\n--- tail ---\n{}", runner.tail(80))
+            })?,
+            ActionKind::Send => {
+                runner.send_line(&action.arg).map_err(|err| format!("step {step} send: {err}"))?
+            }
+            ActionKind::Type => {
+                runner.send(&action.arg).map_err(|err| format!("step {step} type: {err}"))?
+            }
             ActionKind::Key => {
                 let key = decode_key(&action.arg)?;
-                runner
-                    .send(&key)
-                    .map_err(|err| format!("step {step} key send: {err}"))?;
+                runner.send(&key).map_err(|err| format!("step {step} key send: {err}"))?;
             }
             ActionKind::Sleep => thread::sleep(action.timeout),
-            ActionKind::WaitContains => runner
-                .wait_contains(&action.arg, action.timeout)
-                .map_err(|err| format!("step {step} wait_contains: {err}\n--- tail ---\n{}", runner.tail(80)))?,
+            ActionKind::WaitContains => {
+                runner.wait_contains(&action.arg, action.timeout).map_err(|err| {
+                    format!("step {step} wait_contains: {err}\n--- tail ---\n{}", runner.tail(80))
+                })?
+            }
         }
     }
     Ok(())
@@ -549,12 +512,7 @@ fn decode_key(name: &str) -> Result<String, String> {
 }
 
 fn last_line(text: &str) -> String {
-    text.replace('\r', "")
-        .lines()
-        .last()
-        .unwrap_or_default()
-        .trim()
-        .to_string()
+    text.replace('\r', "").lines().last().unwrap_or_default().trim().to_string()
 }
 
 fn strip_ansi(input: &str) -> String {

@@ -869,6 +869,15 @@ func cmdCodexRespawn(args []string) {
 	}
 	filtered, profileKey = normalizeRespawnSpawnProfileArgs(filtered, nameArg, profileKey, resolveCodexProfileID)
 	name := nameArg
+	profileContainers := []string{name}
+	if rustPlan, delegated, err := maybeBuildRustCodexRespawnPlan(name, profileKey, profileContainers); err != nil {
+		fatal(err)
+	} else if delegated && rustPlan != nil {
+		targets := append([]string(nil), rustPlan.RemoveTargets...)
+		filtered, name, profileKey, targets = applyRustCodexRespawnPlan(filtered, name, profileKey, targets, rustPlan, resolveCodexProfileID)
+		runCodexRespawnActions(targets, *removeVolumes, filtered, name, runCodexRemoveFn, runCodexSpawnFn)
+		return
+	}
 	removeTargets := map[string]struct{}{
 		name: {},
 	}
@@ -886,7 +895,7 @@ func cmdCodexRespawn(args []string) {
 			removeTargets[codexContainerSlug(ref.Name)] = struct{}{}
 		}
 	}
-	profileContainers := make([]string, 0, len(removeTargets))
+	profileContainers = make([]string, 0, len(removeTargets))
 	for target := range removeTargets {
 		target = strings.TrimSpace(target)
 		if target != "" {
@@ -895,11 +904,6 @@ func cmdCodexRespawn(args []string) {
 	}
 	targets := append([]string(nil), profileContainers...)
 	sort.Strings(targets)
-	if rustPlan, delegated, err := maybeBuildRustCodexRespawnPlan(name, profileKey, profileContainers); err != nil {
-		fatal(err)
-	} else if delegated && rustPlan != nil {
-		filtered, name, profileKey, targets = applyRustCodexRespawnPlan(filtered, name, profileKey, targets, rustPlan, resolveCodexProfileID)
-	}
 	runCodexRespawnActions(targets, *removeVolumes, filtered, name, runCodexRemoveFn, runCodexSpawnFn)
 }
 

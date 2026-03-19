@@ -182,7 +182,7 @@ func TestAppleAppStoreE2E_ListingUpdateCreatesVersionAndLocalizations(t *testing
 		"--bundle-id", "com.acme.listing",
 		"--locale", "en-US",
 		"--version", "1.2.3",
-		"--create-version",
+		"--create-version=true",
 		"--name", "Acme Listing",
 		"--description", "Long description",
 		"--whats-new", "Bug fixes",

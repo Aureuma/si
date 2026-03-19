@@ -31,7 +31,6 @@ func TestCmdCodexStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdCodexStatus([]string{"ferma", "--json"})

@@ -67,12 +67,7 @@ fn run() -> Result<ExitCode, String> {
         .map_err(|err| format!("configure git safe directories: {err}"))?;
 
     if let Some(url) = browser_mcp_url_from_env() {
-        let status = Command::new("codex")
-            .arg("mcp")
-            .arg("add")
-            .arg("browser")
-            .arg(url)
-            .status();
+        let status = Command::new("codex").arg("mcp").arg("add").arg("browser").arg(url).status();
         if !config.quiet {
             match status {
                 Ok(result) if result.success() => {

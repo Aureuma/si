@@ -100,7 +100,6 @@ func TestReadCodexReportCaptureDelegatesToRustWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	segments, report, err := readCodexReportCapture("› Prompt\n• Done.\nWorked for 0m 2s\n› Next", "› Prompt\n• Done.\nWorked for 0m 2s\n› Next", 0, false)
 	if err != nil {
@@ -130,7 +129,6 @@ func TestCmdCodexReportUsesInjectedHappyPath(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	prevLock := acquireCodexReportLockFn
 	prevLookup := lookupCodexReportContainerFn

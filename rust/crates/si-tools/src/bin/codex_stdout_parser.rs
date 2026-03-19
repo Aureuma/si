@@ -366,7 +366,11 @@ fn run_command_mode(config: &Config, parser: &mut Parser) -> Result<(), String> 
     parser.finish()
 }
 
-fn pump_reader<R: Read>(reader: R, raw_log: Option<Arc<Mutex<File>>>, tx: mpsc::Sender<Option<String>>) {
+fn pump_reader<R: Read>(
+    reader: R,
+    raw_log: Option<Arc<Mutex<File>>>,
+    tx: mpsc::Sender<Option<String>>,
+) {
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
     loop {
@@ -503,34 +507,44 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
             "command" => config.command = Some(take_value(&args, &mut idx, inline_value, key)?),
             "prompt" => config.prompts.push(take_value(&args, &mut idx, inline_value, key)?),
             "prompt-file" => {
-                config.prompt_file = Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?))
+                config.prompt_file =
+                    Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?))
             }
             "send-exit" => config.send_exit = take_bool(&args, &mut idx, inline_value, key)?,
             "prompt-delay" => {
-                config.prompt_delay = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.prompt_delay =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "type-delay" => {
-                config.type_delay = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.type_delay =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "bracketed-paste" => {
                 config.bracketed_paste = take_bool(&args, &mut idx, inline_value, key)?
             }
             "session-log" => {
-                config.session_log = Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?))
+                config.session_log =
+                    Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?))
             }
             "session-log-wait" => {
                 config.session_log_wait =
                     parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
-            "raw-log" => config.raw_log = Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?)),
+            "raw-log" => {
+                config.raw_log =
+                    Some(PathBuf::from(take_value(&args, &mut idx, inline_value, key)?))
+            }
             "start-delay" => {
-                config.start_delay = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.start_delay =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "idle-timeout" => {
-                config.idle_timeout = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.idle_timeout =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "turn-timeout" => {
-                config.turn_timeout = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.turn_timeout =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "submit-seq" => config.submit_seq = take_value(&args, &mut idx, inline_value, key)?,
             "term" => config.term = take_value(&args, &mut idx, inline_value, key)?,
@@ -544,7 +558,8 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
                     .map_err(|err| format!("invalid max-turns: {err}"))?
             }
             "exit-grace" => {
-                config.exit_grace = parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
+                config.exit_grace =
+                    parse_duration(&take_value(&args, &mut idx, inline_value, key)?)?
             }
             "source" => config.source = Some(take_value(&args, &mut idx, inline_value, key)?),
             other => return Err(format!("unknown arg: {other}\n{USAGE}")),
@@ -562,17 +577,25 @@ fn split_arg(raw: &str) -> (&str, Option<String>) {
     }
 }
 
-fn take_value(args: &[String], idx: &mut usize, inline_value: Option<String>, key: &str) -> Result<String, String> {
+fn take_value(
+    args: &[String],
+    idx: &mut usize,
+    inline_value: Option<String>,
+    key: &str,
+) -> Result<String, String> {
     if let Some(value) = inline_value {
         return Ok(value);
     }
     *idx += 1;
-    args.get(*idx)
-        .cloned()
-        .ok_or_else(|| format!("missing value for -{key}"))
+    args.get(*idx).cloned().ok_or_else(|| format!("missing value for -{key}"))
 }
 
-fn take_bool(args: &[String], idx: &mut usize, inline_value: Option<String>, key: &str) -> Result<bool, String> {
+fn take_bool(
+    args: &[String],
+    idx: &mut usize,
+    inline_value: Option<String>,
+    key: &str,
+) -> Result<bool, String> {
     match inline_value {
         Some(value) => parse_bool(&value),
         None => {

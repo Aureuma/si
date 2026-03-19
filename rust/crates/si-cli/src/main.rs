@@ -288,6 +288,10 @@ enum Command {
         #[command(subcommand)]
         command: WorkOSCommand,
     },
+    Image {
+        #[command(subcommand)]
+        command: ImageCommand,
+    },
     #[command(name = "github")]
     GitHub {
         #[command(subcommand)]
@@ -324,6 +328,58 @@ enum CommandsCommand {
     List {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ImageCommand {
+    Unsplash {
+        #[command(subcommand)]
+        command: ImageProviderCommand,
+    },
+    Pexels {
+        #[command(subcommand)]
+        command: ImageProviderCommand,
+    },
+    Pixabay {
+        #[command(subcommand)]
+        command: ImageProviderCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ImageProviderCommand {
+    Auth {
+        #[command(subcommand)]
+        command: ImageAuthCommand,
+    },
+    Search {
+        #[arg(long)]
+        query: String,
+        #[arg(long, default_value_t = 1)]
+        page: i32,
+        #[arg(long = "per-page", default_value_t = 10)]
+        per_page: i32,
+        #[arg(long)]
+        orientation: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ImageAuthCommand {
+    Status {
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -32957,6 +33013,15 @@ fn main() -> Result<()> {
                 }
             },
         },
+        Command::Image { command } => match command {
+            ImageCommand::Unsplash { command } => {
+                run_image_command(ImageProvider::Unsplash, command)?
+            }
+            ImageCommand::Pexels { command } => run_image_command(ImageProvider::Pexels, command)?,
+            ImageCommand::Pixabay { command } => {
+                run_image_command(ImageProvider::Pixabay, command)?
+            }
+        },
     }
 
     Ok(())
@@ -32995,6 +33060,211 @@ fn render_help(view: HelpView, format: OutputFormat) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ImageProvider {
+    Unsplash,
+    Pexels,
+    Pixabay,
+}
+
+fn run_image_command(provider: ImageProvider, command: ImageProviderCommand) -> Result<()> {
+    match command {
+        ImageProviderCommand::Auth { command } => match command {
+            ImageAuthCommand::Status { api_key, base_url, json } => {
+                run_image_auth_status(provider, api_key, base_url, json)
+            }
+        },
+        ImageProviderCommand::Search {
+            query,
+            page,
+            per_page,
+            orientation,
+            api_key,
+            base_url,
+            json,
+        } => run_image_search(
+            provider,
+            &query,
+            page,
+            per_page,
+            orientation.as_deref(),
+            api_key,
+            base_url,
+            json,
+        ),
+    }
+}
+
+fn run_image_auth_status(
+    provider: ImageProvider,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let base_url = image_base_url(provider, base_url.as_deref());
+    match image_api_key(provider, api_key.as_deref()) {
+        Ok((_, source)) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "ok": true,
+                        "provider": image_provider_name(provider),
+                        "base_url": base_url,
+                        "source": source,
+                    }))?
+                );
+            } else {
+                println!("{} auth configured ({source})", image_provider_name(provider));
+            }
+            Ok(())
+        }
+        Err(err) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "ok": false,
+                        "provider": image_provider_name(provider),
+                        "base_url": base_url,
+                        "error": err.to_string(),
+                    }))?
+                );
+            }
+            Err(err)
+        }
+    }
+}
+
+fn run_image_search(
+    provider: ImageProvider,
+    query: &str,
+    page: i32,
+    per_page: i32,
+    orientation: Option<&str>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let (api_key, _) = image_api_key(provider, api_key.as_deref())?;
+    let base_url = image_base_url(provider, base_url.as_deref());
+    let path = match provider {
+        ImageProvider::Unsplash => "/search/photos",
+        ImageProvider::Pexels => "/v1/search",
+        ImageProvider::Pixabay => "/api/",
+    };
+    let mut url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let mut params = vec![
+        (
+            match provider {
+                ImageProvider::Pixabay => "q",
+                _ => "query",
+            },
+            query.to_owned(),
+        ),
+        ("page", page.max(1).to_string()),
+        ("per_page", per_page.clamp(1, 80).to_string()),
+    ];
+    if let Some(value) = orientation.map(str::trim).filter(|value| !value.is_empty()) {
+        if matches!(provider, ImageProvider::Unsplash) {
+            params.push(("orientation", value.to_owned()));
+        }
+    }
+    if matches!(provider, ImageProvider::Pixabay) {
+        params.push(("key", api_key.clone()));
+    }
+    let client = BlockingHttpClient::new();
+    let mut request = client.get(&url).query(&params);
+    request = match provider {
+        ImageProvider::Unsplash => request.header("Authorization", format!("Client-ID {api_key}")),
+        ImageProvider::Pexels => request.header("Authorization", api_key),
+        ImageProvider::Pixabay => request,
+    };
+    let response = request.send().context("run image search request")?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response.text().context("read image search response body")?;
+    let parsed =
+        serde_json::from_str::<Value>(&body).unwrap_or_else(|_| Value::String(body.clone()));
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "status_code": status.as_u16(),
+                "status": status.to_string(),
+                "request_id": image_request_id(provider, &headers),
+                "data": parsed,
+            }))?
+        );
+    } else {
+        url.clear();
+        println!("{body}");
+    }
+    if !status.is_success() {
+        return Err(anyhow!(
+            "image request failed: provider={} status={}",
+            image_provider_name(provider),
+            status
+        ));
+    }
+    Ok(())
+}
+
+fn image_provider_name(provider: ImageProvider) -> &'static str {
+    match provider {
+        ImageProvider::Unsplash => "unsplash",
+        ImageProvider::Pexels => "pexels",
+        ImageProvider::Pixabay => "pixabay",
+    }
+}
+
+fn image_base_url(provider: ImageProvider, override_base: Option<&str>) -> String {
+    if let Some(value) = override_base.map(str::trim).filter(|value| !value.is_empty()) {
+        return value.trim_end_matches('/').to_owned();
+    }
+    match provider {
+        ImageProvider::Unsplash => "https://api.unsplash.com".to_owned(),
+        ImageProvider::Pexels => "https://api.pexels.com".to_owned(),
+        ImageProvider::Pixabay => "https://pixabay.com".to_owned(),
+    }
+}
+
+fn image_api_key(
+    provider: ImageProvider,
+    override_key: Option<&str>,
+) -> Result<(String, &'static str)> {
+    if let Some(value) = override_key.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok((value.to_owned(), "flag:--api-key"));
+    }
+    let env_key = match provider {
+        ImageProvider::Unsplash => "UNSPLASH_ACCESS_KEY",
+        ImageProvider::Pexels => "PEXELS_API_KEY",
+        ImageProvider::Pixabay => "PIXABAY_API_KEY",
+    };
+    if let Ok(value) = std::env::var(env_key) {
+        if !value.trim().is_empty() {
+            return Ok((value.trim().to_owned(), "env"));
+        }
+    }
+    Err(anyhow!(
+        "missing {} api key (set {} or pass --api-key)",
+        image_provider_name(provider),
+        env_key
+    ))
+}
+
+fn image_request_id(
+    provider: ImageProvider,
+    headers: &reqwest::header::HeaderMap,
+) -> Option<String> {
+    let key = match provider {
+        ImageProvider::Unsplash => "x-request-id",
+        ImageProvider::Pexels => "x-request-id",
+        ImageProvider::Pixabay => "x-request-id",
+    };
+    headers.get(key).and_then(|value| value.to_str().ok()).map(str::to_owned)
 }
 
 fn show_paths(

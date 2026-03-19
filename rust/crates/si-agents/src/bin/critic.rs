@@ -2,9 +2,9 @@ use chrono::Utc;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::ffi::CString;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -44,9 +44,8 @@ fn ensure_codex_base_config() -> Result<(), String> {
     maybe_apply_host_ownership(parent);
 
     let browser_url = browser_mcp_url_from_env();
-    let browser_section = browser_url
-        .as_ref()
-        .map(|url| format!("[mcp_servers.browser]\nurl = \"{url}\"\n"));
+    let browser_section =
+        browser_url.as_ref().map(|url| format!("[mcp_servers.browser]\nurl = \"{url}\"\n"));
     if !config_path.exists() {
         let mut content = String::from(CONFIG_HEADER);
         content.push('\n');
@@ -98,9 +97,7 @@ fn codex_config_path() -> PathBuf {
             return PathBuf::from(trimmed).join("config.toml");
         }
     }
-    PathBuf::from(env_or("HOME", "/root"))
-        .join(".codex")
-        .join("config.toml")
+    PathBuf::from(env_or("HOME", "/root")).join(".codex").join("config.toml")
 }
 
 #[derive(Clone, Debug)]
@@ -182,10 +179,8 @@ fn load_loop_config() -> LoopConfig {
     };
     let goal = match env_or_empty("DYAD_LOOP_GOAL") {
         value if !value.is_empty() => value,
-        _ => {
-            "Continuously improve the task outcome through actor execution and critic review."
-                .to_string()
-        }
+        _ => "Continuously improve the task outcome through actor execution and critic review."
+            .to_string(),
     };
     LoopConfig {
         enabled: env_bool("DYAD_LOOP_ENABLED", default_enabled),
@@ -374,11 +369,7 @@ impl CodexTurnExecutor {
     fn new(cfg: &LoopConfig) -> Result<Self, String> {
         let session_suffix = sanitize_session_name(&cfg.dyad_name);
         let start_cmd = interactive_codex_command(&cfg.codex_start_cmd)?;
-        run_command(
-            "tmux",
-            &["-V"],
-            Duration::from_secs(10),
-        )?;
+        run_command("tmux", &["-V"], Duration::from_secs(10))?;
         ensure_actor_container_running(Duration::from_secs(15), &cfg.actor_container)?;
         run_command(
             "docker",
@@ -407,13 +398,12 @@ impl CodexTurnExecutor {
     }
 
     fn actor_turn(&self, timeout: Duration, prompt: &str) -> Result<String, String> {
-        ensure_actor_container_running(timeout.min(Duration::from_secs(15)), &self.actor_container)?;
+        ensure_actor_container_running(
+            timeout.min(Duration::from_secs(15)),
+            &self.actor_container,
+        )?;
         let runner = TmuxRunner {
-            prefix: vec![
-                "docker".to_string(),
-                "exec".to_string(),
-                self.actor_container.clone(),
-            ],
+            prefix: vec!["docker".to_string(), "exec".to_string(), self.actor_container.clone()],
         };
         self.run_turn(timeout, &runner, &self.actor_session, prompt, "actor")
     }
@@ -435,20 +425,16 @@ impl CodexTurnExecutor {
         let (pane_target, ready_output) =
             self.ensure_interactive_session(timeout, runner, session, role)?;
         let clean_ready = strip_ansi(&ready_output);
-        let mut baseline_report_end = clean_ready.rfind(REPORT_END_MARKER).map(|idx| idx as isize).unwrap_or(-1);
+        let mut baseline_report_end =
+            clean_ready.rfind(REPORT_END_MARKER).map(|idx| idx as isize).unwrap_or(-1);
         if let Ok(full) = tmux_capture(
             runner,
             &pane_target,
-            &StatusOptions {
-                capture_mode: self.capture_mode.clone(),
-                capture_lines: 0,
-            },
+            &StatusOptions { capture_mode: self.capture_mode.clone(), capture_lines: 0 },
             remaining(timeout, start)?,
         ) {
-            baseline_report_end = strip_ansi(&full)
-                .rfind(REPORT_END_MARKER)
-                .map(|idx| idx as isize)
-                .unwrap_or(-1);
+            baseline_report_end =
+                strip_ansi(&full).rfind(REPORT_END_MARKER).map(|idx| idx as isize).unwrap_or(-1);
         }
         tmux_send_keys(runner, &pane_target, &["C-u"], remaining(timeout, start)?)?;
         let (wire_prompt, turn_id) = wrap_turn_prompt(prompt, role);
@@ -494,7 +480,8 @@ impl CodexTurnExecutor {
             )?;
         }
         apply_dyad_tmux_session_defaults(runner, session, timeout);
-        let _ = runner.output(timeout, &["rename-window", "-t", &format!("{session}:0"), &window_name]);
+        let _ =
+            runner.output(timeout, &["rename-window", "-t", &format!("{session}:0"), &window_name]);
         let _ = runner.output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
         if let Ok(out) =
             runner.output(timeout, &["display-message", "-p", "-t", &pane_target, "#{pane_dead}"])
@@ -516,11 +503,16 @@ impl CodexTurnExecutor {
                     ],
                 )?;
                 apply_dyad_tmux_session_defaults(runner, session, timeout);
-                let _ = runner.output(timeout, &["rename-window", "-t", &format!("{session}:0"), &window_name]);
-                let _ = runner.output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
+                let _ = runner.output(
+                    timeout,
+                    &["rename-window", "-t", &format!("{session}:0"), &window_name],
+                );
+                let _ = runner
+                    .output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
             }
         }
-        let _ = runner.output(timeout, &["resize-pane", "-t", &pane_target, "-x", "160", "-y", "60"]);
+        let _ =
+            runner.output(timeout, &["resize-pane", "-t", &pane_target, "-x", "160", "-y", "60"]);
         let output = self.wait_for_prompt_ready(runner, &pane_target, timeout)?;
         Ok((pane_target, output))
     }
@@ -549,11 +541,7 @@ impl CodexTurnExecutor {
             }
             let clean = strip_ansi(&output);
             if codex_auth_required(&clean) {
-                let fallback = if last_output.trim().is_empty() {
-                    clean
-                } else {
-                    last_output
-                };
+                let fallback = if last_output.trim().is_empty() { clean } else { last_output };
                 return Err(format!(
                     "{fallback}\ncodex is prompting for sign-in; authenticate via `si login` or `si dyad peek` and complete the login flow"
                 ));
@@ -611,31 +599,31 @@ impl CodexTurnExecutor {
             let mut report = extract_tagged_work_report(&clean, turn_id);
             let mut report_was_delimited = false;
             if let Some(body) = report.as_ref() {
-                if role == "actor" && actor_report_looks_placeholder_with_mode(body, self.strict_report)
+                if role == "actor"
+                    && actor_report_looks_placeholder_with_mode(body, self.strict_report)
                 {
                     report = None;
                 }
-                if role == "critic" && critic_report_looks_placeholder_with_mode(body, self.strict_report)
+                if role == "critic"
+                    && critic_report_looks_placeholder_with_mode(body, self.strict_report)
                 {
                     report = None;
                 }
             }
 
-            let after = if sig.is_empty() {
-                None
-            } else {
-                clean.rfind(&sig)
-            };
+            let after = if sig.is_empty() { None } else { clean.rfind(&sig) };
             if report.is_none() {
                 report = extract_delimited_work_report_after(&clean, after.map(|idx| idx as isize));
                 report_was_delimited = report.is_some();
             }
             if let Some(body) = report.as_ref() {
-                if role == "actor" && actor_report_looks_placeholder_with_mode(body, self.strict_report)
+                if role == "actor"
+                    && actor_report_looks_placeholder_with_mode(body, self.strict_report)
                 {
                     report = None;
                 }
-                if role == "critic" && critic_report_looks_placeholder_with_mode(body, self.strict_report)
+                if role == "critic"
+                    && critic_report_looks_placeholder_with_mode(body, self.strict_report)
                 {
                     report = None;
                 }
@@ -645,17 +633,17 @@ impl CodexTurnExecutor {
                 if let Ok(full) = tmux_capture(
                     runner,
                     target,
-                    &StatusOptions {
-                        capture_mode: self.capture_mode.clone(),
-                        capture_lines: 0,
-                    },
+                    &StatusOptions { capture_mode: self.capture_mode.clone(), capture_lines: 0 },
                     remaining(timeout, start)?,
                 ) {
                     let full_clean = strip_ansi(&full);
                     if let Some(body) = extract_tagged_work_report(&full_clean, turn_id) {
                         if !body.trim().is_empty()
                             && ((role == "actor"
-                                && !actor_report_looks_placeholder_with_mode(&body, self.strict_report))
+                                && !actor_report_looks_placeholder_with_mode(
+                                    &body,
+                                    self.strict_report,
+                                ))
                                 || (role == "critic"
                                     && !critic_report_looks_placeholder_with_mode(
                                         &body,
@@ -670,7 +658,10 @@ impl CodexTurnExecutor {
                     {
                         if !body.trim().is_empty()
                             && ((role == "actor"
-                                && !actor_report_looks_placeholder_with_mode(&body, self.strict_report))
+                                && !actor_report_looks_placeholder_with_mode(
+                                    &body,
+                                    self.strict_report,
+                                ))
                                 || (role == "critic"
                                     && !critic_report_looks_placeholder_with_mode(
                                         &body,
@@ -728,12 +719,8 @@ impl CodexTurnExecutor {
                         continue;
                     }
                     if submit_attempts < 2 && last_submit.elapsed() > Duration::from_secs(4) {
-                        let _ = tmux_send_keys(
-                            runner,
-                            target,
-                            &["C-m"],
-                            remaining(timeout, start)?,
-                        );
+                        let _ =
+                            tmux_send_keys(runner, target, &["C-m"], remaining(timeout, start)?);
                         submit_attempts += 1;
                         last_submit = Instant::now();
                         thread::sleep(self.poll_interval);
@@ -743,13 +730,14 @@ impl CodexTurnExecutor {
                         last_output = output;
                     }
                     if last_output.trim().is_empty() {
-                        return Err("codex prompt ready but missing work report markers".to_string());
+                        return Err(
+                            "codex prompt ready but missing work report markers".to_string()
+                        );
                     }
                     return Err("codex prompt ready but missing work report markers".to_string());
                 }
                 if submit_attempts < 2 && last_submit.elapsed() > Duration::from_secs(4) {
-                    let _ =
-                        tmux_send_keys(runner, target, &["C-m"], remaining(timeout, start)?);
+                    let _ = tmux_send_keys(runner, target, &["C-m"], remaining(timeout, start)?);
                     submit_attempts += 1;
                     last_submit = Instant::now();
                 }
@@ -825,16 +813,11 @@ fn tmux_capture(
     opts: &StatusOptions,
     timeout: Duration,
 ) -> Result<String, String> {
-    let start = if opts.capture_lines > 0 {
-        format!("-{}", opts.capture_lines)
-    } else {
-        "-".to_string()
-    };
+    let start =
+        if opts.capture_lines > 0 { format!("-{}", opts.capture_lines) } else { "-".to_string() };
     match opts.capture_mode.as_str() {
-        "alt" => runner.output(
-            timeout,
-            &["capture-pane", "-t", target, "-p", "-J", "-S", &start, "-a", "-q"],
-        ),
+        "alt" => runner
+            .output(timeout, &["capture-pane", "-t", target, "-p", "-J", "-S", &start, "-a", "-q"]),
         "main" => runner.output(timeout, &["capture-pane", "-t", target, "-p", "-J", "-S", &start]),
         other => Err(format!("unsupported tmux capture mode: {other}")),
     }
@@ -893,9 +876,7 @@ fn ensure_actor_container_running(timeout: Duration, container: &str) -> Result<
         }
         thread::sleep(Duration::from_millis(250));
     }
-    Err(format!(
-        "actor container {container} did not reach running state after restart"
-    ))
+    Err(format!("actor container {container} did not reach running state after restart"))
 }
 
 fn apply_dyad_tmux_session_defaults(runner: &TmuxRunner, session: &str, timeout: Duration) {
@@ -904,10 +885,8 @@ fn apply_dyad_tmux_session_defaults(runner: &TmuxRunner, session: &str, timeout:
     }
     let _ = runner.output(timeout, &["set-option", "-t", session, "remain-on-exit", "off"]);
     let _ = runner.output(timeout, &["set-option", "-t", session, "mouse", "on"]);
-    let _ = runner.output(
-        timeout,
-        &["set-option", "-t", session, "history-limit", DYAD_TMUX_HISTORY_LIMIT],
-    );
+    let _ = runner
+        .output(timeout, &["set-option", "-t", session, "history-limit", DYAD_TMUX_HISTORY_LIMIT]);
 }
 
 fn extract_delimited_work_report(output: &str) -> Option<String> {
@@ -977,9 +956,7 @@ fn strip_ansi(input: &str) -> String {
 
 fn codex_prompt_ready(output: &str, prompt_lines: usize, allow_mcp_startup: bool) -> bool {
     let lower = output.to_lowercase();
-    if !allow_mcp_startup
-        && (lower.contains("starting mcp") || lower.contains("mcp startup"))
-    {
+    if !allow_mcp_startup && (lower.contains("starting mcp") || lower.contains("mcp startup")) {
         return false;
     }
     let max_lines = prompt_lines.max(1) * 4;
@@ -1012,11 +989,7 @@ fn last_codex_prompt_line(output: &str, prompt_lines: usize) -> Option<String> {
 }
 
 fn codex_prompt_line_looks_like_echo(prompt_line: &str, sent_prompt: &str) -> bool {
-    let trimmed = prompt_line
-        .trim()
-        .trim_start_matches('›')
-        .trim()
-        .to_string();
+    let trimmed = prompt_line.trim().trim_start_matches('›').trim().to_string();
     if trimmed.is_empty() {
         return false;
     }
@@ -1027,11 +1000,7 @@ fn codex_prompt_line_looks_like_echo(prompt_line: &str, sent_prompt: &str) -> bo
     if sent_prompt.is_empty() {
         return false;
     }
-    let prefix = if sent_prompt.len() > 32 {
-        &sent_prompt[..32]
-    } else {
-        sent_prompt
-    };
+    let prefix = if sent_prompt.len() > 32 { &sent_prompt[..32] } else { sent_prompt };
     trimmed.contains(prefix)
 }
 
@@ -1053,10 +1022,7 @@ fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> {
             if let Some(segment) = current.take() {
                 segments.push(segment);
             }
-            current = Some(PromptSegment {
-                lines: Vec::new(),
-                raw: Vec::new(),
-            });
+            current = Some(PromptSegment { lines: Vec::new(), raw: Vec::new() });
             continue;
         }
         if let Some(segment) = current.as_mut() {
@@ -1258,13 +1224,7 @@ fn append_task_board_turn_log(task_board_path: &str, dyad: &str, turn: usize, ac
         summary.truncate(140);
         summary.push_str("...");
     }
-    let line = format!(
-        "- {} {} actor Turn {}: {}\n",
-        Utc::now().to_rfc3339(),
-        dyad,
-        turn,
-        summary
-    );
+    let line = format!("- {} {} actor Turn {}: {}\n", Utc::now().to_rfc3339(), dyad, turn, summary);
     if let Ok(mut existing) = fs::read_to_string(&task_board) {
         existing.push_str(&line);
         let _ = write_text_file(&task_board, &existing);
@@ -1325,17 +1285,11 @@ fn save_loop_state(path: &Path, state: &LoopState) -> Result<(), String> {
 
 fn default_dyad_state_dir(dyad: &str) -> PathBuf {
     let name = if dyad.trim().is_empty() { "unknown" } else { dyad.trim() };
-    PathBuf::from(env_or("HOME", "/root"))
-        .join(".si")
-        .join("dyad")
-        .join(name)
+    PathBuf::from(env_or("HOME", "/root")).join(".si").join("dyad").join(name)
 }
 
 fn read_loop_control(state_dir: &Path) -> (bool, bool) {
-    (
-        state_dir.join("control.stop").exists(),
-        state_dir.join("control.pause").exists(),
-    )
+    (state_dir.join("control.stop").exists(), state_dir.join("control.pause").exists())
 }
 
 fn interactive_codex_command(custom: &str) -> Result<String, String> {
@@ -1354,10 +1308,7 @@ fn interactive_codex_command(custom: &str) -> Result<String, String> {
 }
 
 fn normalize_interactive_prompt(prompt: &str) -> String {
-    normalize_newlines(prompt)
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    normalize_newlines(prompt).split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn build_turn_id(role: &str) -> String {
@@ -1404,25 +1355,18 @@ fn sanitize_session_name(raw: &str) -> String {
         .chars()
         .filter(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || *ch == '-' || *ch == '_')
         .collect::<String>();
-    if filtered.is_empty() {
-        "unknown".to_string()
-    } else {
-        filtered
-    }
+    if filtered.is_empty() { "unknown".to_string() } else { filtered }
 }
 
 fn critic_requests_stop(report: &str) -> bool {
-    normalize_newlines(report)
-        .lines()
-        .map(|line| line.trim().to_lowercase())
-        .any(|line| {
-            line.contains("continue loop: no")
-                || line.contains("continue_loop=no")
-                || line.contains("loop_continue=false")
-                || line.contains("stop loop: yes")
-                || line.contains("stop_loop=true")
-                || line.contains("#stop_loop")
-        })
+    normalize_newlines(report).lines().map(|line| line.trim().to_lowercase()).any(|line| {
+        line.contains("continue loop: no")
+            || line.contains("continue_loop=no")
+            || line.contains("loop_continue=false")
+            || line.contains("stop loop: yes")
+            || line.contains("stop_loop=true")
+            || line.contains("#stop_loop")
+    })
 }
 
 fn critic_message_looks_placeholder(message: &str) -> bool {
@@ -1485,7 +1429,9 @@ fn actor_report_looks_placeholder_with_mode(report: &str, strict: bool) -> bool 
         || norm.contains("<specific")
         || norm.contains("<what you")
         || (norm.matches("...").count() >= 2 && report_bullet_count(report) <= 2)
-        || (norm.contains("summary:") && norm.contains("changes:") && report_bullet_count(report) < 2)
+        || (norm.contains("summary:")
+            && norm.contains("changes:")
+            && report_bullet_count(report) < 2)
 }
 
 fn critic_report_looks_placeholder_with_mode(report: &str, strict: bool) -> bool {
@@ -1540,11 +1486,7 @@ fn critic_report_looks_placeholder_with_mode(report: &str, strict: bool) -> bool
 }
 
 fn normalize_report_text(value: &str) -> String {
-    normalize_newlines(value)
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    normalize_newlines(value).to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn contains_codex_chrome(value: &str) -> bool {
@@ -1591,9 +1533,7 @@ fn is_path_on_mount(path: &Path) -> bool {
         fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
     };
     mount_points().into_iter().any(|mp| {
-        !mp.as_os_str().is_empty()
-            && mp != Path::new("/")
-            && (abs == mp || abs.starts_with(&mp))
+        !mp.as_os_str().is_empty() && mp != Path::new("/") && (abs == mp || abs.starts_with(&mp))
     })
 }
 
@@ -1655,11 +1595,7 @@ fn remaining(timeout: Duration, start: Instant) -> Result<Duration, String> {
 }
 
 fn retry_backoff(base: Duration, attempt: usize) -> Duration {
-    let base = if base.is_zero() {
-        Duration::from_secs(1)
-    } else {
-        base
-    };
+    let base = if base.is_zero() { Duration::from_secs(1) } else { base };
     let multiplier = 2u32.saturating_pow(attempt.saturating_sub(1) as u32);
     (base * multiplier).min(Duration::from_secs(30))
 }
@@ -1704,11 +1640,7 @@ fn env_is_true(key: &str) -> bool {
 
 fn env_or(key: &str, default: &str) -> String {
     let value = env_or_empty(key);
-    if value.is_empty() {
-        default.to_string()
-    } else {
-        value
-    }
+    if value.is_empty() { default.to_string() } else { value }
 }
 
 fn env_or_empty(key: &str) -> String {

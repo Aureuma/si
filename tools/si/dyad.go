@@ -952,7 +952,7 @@ func cmdDyadRemove(args []string) {
 		successf("dyad %s removed", name)
 		return
 	}
-	client, err := shared.NewClient()
+	client, err := newDyadClientFn()
 	if err != nil {
 		fatal(err)
 	}
@@ -1039,7 +1039,7 @@ func cmdDyadRecreate(args []string) {
 			fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", resolved.ID, resolved.ID))
 		}
 	}
-	client, err := shared.NewClient()
+	client, err := newDyadClientFn()
 	if err != nil {
 		fatal(err)
 	}

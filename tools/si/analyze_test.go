@@ -50,7 +50,7 @@ func TestResolveAnalyzeModules_FilterByBasename(t *testing.T) {
 		{Rel: "tools/si/internal/shareddocker", Dir: "/repo/tools/si/internal/shareddocker"},
 		{Rel: "tools/si", Dir: "/repo/tools/si"},
 	}
-	got, err := resolveAnalyzeModules(all, []string{"shared"})
+	got, err := resolveAnalyzeModules(all, []string{"shareddocker"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

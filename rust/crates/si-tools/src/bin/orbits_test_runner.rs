@@ -16,10 +16,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let go_bin = env::var("SI_GO_BIN")
-        .unwrap_or_else(|_| "go".to_string())
-        .trim()
-        .to_string();
+    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
     let lane = args[0].trim().to_ascii_lowercase();
     let rest = &args[1..];
 

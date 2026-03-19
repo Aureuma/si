@@ -2,9 +2,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-const TEST_WORKSPACE_MODULES: &[&str] = &[
-    "./tools/si/...",
-];
+const TEST_WORKSPACE_MODULES: &[&str] = &["./tools/si/..."];
 
 fn main() -> ExitCode {
     let root = match repo_root() {
@@ -21,10 +19,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let go_bin = env::var("SI_GO_BIN")
-        .unwrap_or_else(|_| "go".to_string())
-        .trim()
-        .to_string();
+    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
 
     match args[0].trim() {
         "workspace" => run_workspace(&root, &go_bin, &args[1..]),
@@ -178,11 +173,15 @@ fn run_all(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
             "--skip-npm" => skip_npm = true,
             "--skip-docker" => skip_docker = true,
             "--help" | "-h" => {
-                println!("usage: si-test-runner all [--skip-go] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]");
+                println!(
+                    "usage: si-test-runner all [--skip-go] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]"
+                );
                 return ExitCode::SUCCESS;
             }
             _ => {
-                eprintln!("usage: si-test-runner all [--skip-go] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]");
+                eprintln!(
+                    "usage: si-test-runner all [--skip-go] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]"
+                );
                 return ExitCode::from(2);
             }
         }
@@ -223,10 +222,7 @@ fn run_all(root: &PathBuf, go_bin: &str, args: &[String]) -> ExitCode {
 }
 
 fn print_go_version(root: &PathBuf, go_bin: &str) -> bool {
-    let output = Command::new(go_bin)
-        .arg("version")
-        .current_dir(root)
-        .output();
+    let output = Command::new(go_bin).arg("version").current_dir(root).output();
     match output {
         Ok(output) if output.status.success() => {
             println!("go version: {}", String::from_utf8_lossy(&output.stdout).trim());

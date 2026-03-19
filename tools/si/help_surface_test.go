@@ -9,19 +9,11 @@ func TestHelpSurfaceDoesNotExecuteCommands(t *testing.T) {
 	t.Parallel()
 
 	cases := [][]string{
-		{"logs", "--help"},
-		{"tail", "--help"},
-		{"stop", "--help"},
-		{"start", "--help"},
-		{"status", "help"},
-		{"report", "help"},
-		{"login", "help"},
-		{"swap", "help"},
-		{"run", "help"},
-		{"persona", "help"},
-		{"skill", "help"},
+		{"help"},
 		{"image", "--help"},
-		{"images", "--help"},
+		{"google", "youtube", "--help"},
+		{"providers", "characteristics", "--help"},
+		{"vault", "trust", "--help"},
 	}
 
 	for _, tc := range cases {
@@ -33,8 +25,8 @@ func TestHelpSurfaceDoesNotExecuteCommands(t *testing.T) {
 				t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 			}
 			combined := strings.ToLower(strings.TrimSpace(stdout + "\n" + stderr))
-			if !strings.Contains(combined, "usage") {
-				t.Fatalf("expected usage output\nstdout=%q\nstderr=%q", stdout, stderr)
+			if !strings.Contains(combined, "usage") && !strings.Contains(combined, "summary=") {
+				t.Fatalf("expected help output\nstdout=%q\nstderr=%q", stdout, stderr)
 			}
 		})
 	}

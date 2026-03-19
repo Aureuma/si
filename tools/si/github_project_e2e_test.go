@@ -47,7 +47,7 @@ func TestGitHubE2E_ProjectList(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "project", "list", "Aureuma", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -87,7 +87,7 @@ func TestGitHubE2E_ProjectListGraphQLErrorFails(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "project", "list", "Aureuma", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
 	if err == nil {
 		t.Fatalf("expected command failure when graphql errors are returned\nstdout=%s\nstderr=%s", stdout, stderr)
@@ -95,8 +95,8 @@ func TestGitHubE2E_ProjectListGraphQLErrorFails(t *testing.T) {
 	if !strings.Contains(stderr, "graphql returned errors") {
 		t.Fatalf("expected stderr to include graphql error message, got: %s", stderr)
 	}
-	if !strings.Contains(stdout, "Resource not accessible by personal access token") {
-		t.Fatalf("expected stdout JSON payload to include error details, got: %s", stdout)
+	if strings.TrimSpace(stdout) != "" {
+		t.Fatalf("expected no stdout payload on graphql failure, got: %s", stdout)
 	}
 }
 
@@ -105,6 +105,15 @@ func TestGitHubE2E_ProjectItemAddIssue(t *testing.T) {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/acme/sandbox/issues/42" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      42,
+				"node_id": "I_42",
+				"number":  42,
+				"title":   "Issue 42",
+			})
+			return
+		}
 		if r.URL.Path != "/graphql" {
 			http.NotFound(w, r)
 			return
@@ -119,18 +128,6 @@ func TestGitHubE2E_ProjectItemAddIssue(t *testing.T) {
 				"data": map[string]any{
 					"organization": map[string]any{
 						"projectV2": map[string]any{"id": "PVT_proj_7", "number": 7},
-					},
-				},
-			})
-		case strings.Contains(payload.Query, "repository(owner:$owner, name:$repo)"):
-			vars := payload.Variables
-			if vars["owner"] != "acme" || vars["repo"] != "sandbox" || int(vars["number"].(float64)) != 42 {
-				t.Fatalf("unexpected issue lookup vars: %#v", vars)
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{
-					"repository": map[string]any{
-						"issue": map[string]any{"id": "I_42", "number": 42, "title": "Issue 42"},
 					},
 				},
 			})
@@ -156,7 +153,7 @@ func TestGitHubE2E_ProjectItemAddIssue(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "project", "item-add", "Aureuma/7", "--repo", "acme/sandbox", "--issue", "42", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -193,7 +190,7 @@ func TestGitHubE2E_ProjectItemSetSingleSelectByName(t *testing.T) {
 					},
 				},
 			})
-		case strings.Contains(payload.Query, "fields(first:100)"):
+		case strings.Contains(payload.Query, "fields(first:$first)"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
 					"node": map[string]any{
@@ -231,7 +228,7 @@ func TestGitHubE2E_ProjectItemSetSingleSelectByName(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "project", "item-set", "Aureuma/7", "PVTI_1", "--field", "Status", "--single-select", "In Progress", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
@@ -308,7 +305,7 @@ func TestGitHubE2E_ProjectUpdate(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+		"GITHUB_OAUTH_TOKEN": "oauth-token-123",
 	}, "github", "project", "update", "Aureuma/7", "--title", "Roadmap", "--description", "Delivery plan", "--public", "true", "--closed", "false", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)

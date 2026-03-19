@@ -35,8 +35,15 @@ func TestGCPE2E_AuthStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	if !strings.Contains(stdout, `"status": "ready"`) {
-		t.Fatalf("unexpected output: %s", stdout)
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if payload["project_id"] != "proj-123" {
+		t.Fatalf("unexpected auth payload: %#v", payload)
+	}
+	if payload["base_url"] != server.URL {
+		t.Fatalf("unexpected auth payload: %#v", payload)
 	}
 }
 
@@ -110,25 +117,38 @@ func TestGCPE2E_ServiceList(t *testing.T) {
 	}
 }
 
-func TestGCPE2E_DoctorPublic(t *testing.T) {
+func TestGCPE2E_Doctor(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/services" {
+		if r.URL.Path != "/v1/projects/proj-123/services/serviceusage.googleapis.com" {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":  "projects/proj-123/services/serviceusage.googleapis.com",
+			"state": "ENABLED",
+		})
 	}))
 	defer server.Close()
 
-	stdout, stderr, err := runSICommand(t, map[string]string{}, "gcp", "doctor", "--public", "--base-url", server.URL, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"GCP_PROJECT_ID":            "proj-123",
+		"GOOGLE_OAUTH_ACCESS_TOKEN": "token-123",
+	}, "gcp", "doctor", "--base-url", server.URL, "--project", "proj-123", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	if !strings.Contains(stdout, `"ok": true`) {
-		t.Fatalf("unexpected output: %s", stdout)
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := payload["ok"].(bool); !ok {
+		t.Fatalf("unexpected doctor payload: %#v", payload)
 	}
 }
 

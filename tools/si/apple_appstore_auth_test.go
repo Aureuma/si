@@ -17,7 +17,6 @@ func TestCmdAppleAppStoreContextListDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdAppleAppStoreContextList([]string{"--json"})
@@ -45,7 +44,6 @@ func TestCmdAppleAppStoreContextCurrentDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdAppleAppStoreContextCurrent([]string{"--json"})

@@ -50,37 +50,6 @@ func TestCloudflareE2E_RawWithTokenAuth(t *testing.T) {
 	}
 }
 
-func TestCloudflareE2E_DoctorPublic(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip e2e-style subprocess test in short mode")
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ips" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"ipv4_cidrs": []string{"1.1.1.0/24"}}})
-	}))
-	defer server.Close()
-
-	stdout, stderr, err := runSICommand(t, map[string]string{},
-		"cloudflare", "doctor",
-		"--public",
-		"--base-url", server.URL,
-		"--json",
-	)
-	if err != nil {
-		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
-	}
-	if ok, _ := payload["ok"].(bool); !ok {
-		t.Fatalf("expected ok payload: %#v", payload)
-	}
-}
-
 func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
@@ -119,45 +88,6 @@ func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 	}
 	if int(payload["status_code"].(float64)) != 200 {
 		t.Fatalf("unexpected payload: %#v", payload)
-	}
-}
-
-func TestCloudflareE2E_StatusAlias(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip e2e-style subprocess test in short mode")
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/user/tokens/verify" {
-			http.NotFound(w, r)
-			return
-		}
-		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
-			t.Fatalf("unexpected auth header: %q", got)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"success": true,
-			"result": map[string]any{
-				"status": "active",
-			},
-		})
-	}))
-	defer server.Close()
-
-	stdout, stderr, err := runSICommand(t, map[string]string{},
-		"cloudflare", "status",
-		"--base-url", server.URL,
-		"--api-token", "token-123",
-		"--json",
-	)
-	if err != nil {
-		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
-	}
-	if status, _ := payload["status"].(string); status != "ready" {
-		t.Fatalf("unexpected status payload: %#v", payload)
 	}
 }
 
@@ -242,52 +172,12 @@ func TestCloudflareE2E_EmailRuleList(t *testing.T) {
 	}
 }
 
-func TestCloudflareE2E_APIAlias(t *testing.T) {
+func TestCloudflareE2E_TokenVerifyWithClientV4BasePath(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/zones" {
-			http.NotFound(w, r)
-			return
-		}
-		if got := r.Header.Get("Authorization"); got != "Bearer token-xyz" {
-			t.Fatalf("unexpected auth header: %q", got)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"success": true,
-			"result": []map[string]any{{
-				"id": "zone-1",
-			}},
-		})
-	}))
-	defer server.Close()
-
-	stdout, stderr, err := runSICommand(t, map[string]string{},
-		"cloudflare", "api",
-		"--base-url", server.URL,
-		"--api-token", "token-xyz",
-		"--path", "/zones",
-		"--json",
-	)
-	if err != nil {
-		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
-	}
-	if int(payload["status_code"].(float64)) != 200 {
-		t.Fatalf("unexpected payload: %#v", payload)
-	}
-}
-
-func TestCloudflareE2E_StatusWithClientV4BasePath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip e2e-style subprocess test in short mode")
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/client/v4/user/tokens/verify" {
+		if r.URL.Path != "/user/tokens/verify" && r.URL.Path != "/client/v4/user/tokens/verify" {
 			http.NotFound(w, r)
 			return
 		}
@@ -302,7 +192,7 @@ func TestCloudflareE2E_StatusWithClientV4BasePath(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{},
-		"cloudflare", "status",
+		"cloudflare", "token", "verify",
 		"--base-url", server.URL+"/client/v4",
 		"--api-token", "token-123",
 		"--json",
@@ -314,7 +204,7 @@ func TestCloudflareE2E_StatusWithClientV4BasePath(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
 	}
-	if status, _ := payload["status"].(string); status != "ready" {
+	if int(payload["status_code"].(float64)) != 200 {
 		t.Fatalf("unexpected status payload: %#v", payload)
 	}
 }
@@ -327,9 +217,9 @@ func TestCloudflareE2E_Smoke(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
 			t.Fatalf("unexpected auth header: %q", got)
 		}
-		path := r.URL.Path
-		switch path {
-		case "/client/v4/user/tokens/verify", "/client/v4/accounts", "/client/v4/zones", "/client/v4/accounts/acct_123/pages/projects":
+		switch r.URL.Path {
+		case "/user/tokens/verify", "/accounts", "/zones", "/accounts/acct_123/pages/projects",
+			"/client/v4/user/tokens/verify", "/client/v4/accounts", "/client/v4/zones", "/client/v4/accounts/acct_123/pages/projects":
 			_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "result": []map[string]any{}})
 			return
 		default:

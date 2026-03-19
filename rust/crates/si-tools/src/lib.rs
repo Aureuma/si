@@ -27,11 +27,7 @@ Notes:
 
 pub fn infer_target_env(base: &str) -> &'static str {
     let lower = base.to_ascii_lowercase();
-    if lower.contains(".prod") || lower.contains("production") {
-        "prod"
-    } else {
-        "dev"
-    }
+    if lower.contains(".prod") || lower.contains("production") { "prod" } else { "dev" }
 }
 
 pub fn list_env_files(src: &Path) -> Result<Vec<PathBuf>, std::io::Error> {

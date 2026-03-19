@@ -152,7 +152,6 @@ func TestFortRuntimeAgentStepDelegatesRefreshTransitionToRustCLIWhenConfigured(t
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := fortRuntimeAgentStep(context.Background(), profile, paths); err != nil {
 		t.Fatalf("fortRuntimeAgentStep: %v", err)
@@ -218,7 +217,6 @@ func TestFortRuntimeAgentStepUsesRustBootstrapViewForHostResolution(t *testing.T
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := fortRuntimeAgentStep(context.Background(), profile, paths); err != nil {
 		t.Fatalf("fortRuntimeAgentStep: %v", err)
@@ -301,7 +299,6 @@ exit 1
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if _, err := fortRuntimeAgentStep(context.Background(), profile, paths); err == nil {
 		t.Fatalf("expected unauthorized refresh to fail")
@@ -434,7 +431,6 @@ func TestCloseCodexProfileFortSessionDelegatesTeardownToRustCLIWhenConfigured(t 
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := closeCodexProfileFortSession(profile); err != nil {
 		t.Fatalf("closeCodexProfileFortSession: %v", err)
@@ -492,7 +488,6 @@ func TestCloseCodexProfileFortSessionUsesRustBootstrapViewForRemoteClose(t *test
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := closeCodexProfileFortSession(profile); err != nil {
 		t.Fatalf("closeCodexProfileFortSession: %v", err)
@@ -518,7 +513,6 @@ func TestLoadFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T)
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, err := loadFortRuntimeAgentState("/tmp/runtime-agent.json")
 	if err != nil {
@@ -545,7 +539,6 @@ func TestSaveFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T)
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	err := saveFortRuntimeAgentState("/tmp/runtime-agent.json", fortProfileRuntimeAgentState{
 		ProfileID: "alpha",
@@ -572,7 +565,6 @@ func TestClearFortRuntimeAgentStateFileDelegatesToRustCLIWhenConfigured(t *testi
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := clearFortRuntimeAgentStateFile("/tmp/runtime-agent.json"); err != nil {
 		t.Fatalf("clearFortRuntimeAgentStateFile: %v", err)
@@ -595,7 +587,6 @@ func TestClearFortSessionStateFileDelegatesToRustCLIWhenConfigured(t *testing.T)
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := clearFortSessionStateFile("/tmp/session.json"); err != nil {
 		t.Fatalf("clearFortSessionStateFile: %v", err)
@@ -641,7 +632,6 @@ func TestFortRuntimeAgentStepHonorsRustRevokedClassification(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	refreshCalls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
