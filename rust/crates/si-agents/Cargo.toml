@@ -17,3 +17,7 @@ path = "src/bin/agents_status.rs"
 [[bin]]
 name = "preflight-codex-upgrade"
 path = "src/bin/preflight_codex_upgrade.rs"
+
+[[bin]]
+name = "critic"
+path = "src/bin/critic.rs"
