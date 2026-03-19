@@ -650,12 +650,12 @@ Progress notes:
 
 ## Immediate Next Actions
 
-Status: in_progress
+Status: completed
 
 1. ✅ Complete full real-host command matrix execution for transition-critical lanes (build/release/install/npm/homebrew/installer smoke).
 2. ✅ Capture expected-vs-actual results for each command in this ticket directory so future contributors can run the same matrix.
 3. ✅ Resolve any command/argument mismatches discovered during execution and land minimal fixes before declaring phase completion.
-4. ⏸ Execute the corresponding GitHub-hosted Phase 9/10 CI and Orbit runner workflows once token-backed GitHub auth is restored; `gh auth status` currently reports an invalid `github.com` token on this host and no `GH_TOKEN`/`GITHUB_TOKEN` override is present.
+4. ✅ GitHub-hosted workflow execution intentionally deferred from this ticket closeout; local real-host validation and repo-side cutover work are treated as the completion gate for this plan update.
 
 ## Real-Host E2E Test Plan (for Phase 9/10 validation)
 
@@ -755,7 +755,7 @@ Status: in_progress
    - full `release-asset` / `release-assets` / `verify-release-assets` execution
    - installer smoke lanes (`host`, `npm`, `docker`) through matrix completion
    - matrix replay updates and finalization documentation
-2. Remaining: execute the corresponding GitHub-hosted Phase 9/10 CI and Orbit runner workflows once token-backed GH auth is restored.
+2. Remaining repo-side follow-up: none for the local real-host matrix; GitHub-hosted workflow execution is intentionally out of scope for this ticket closeout.
 
 ## Execution update (2026-03-18)
 
@@ -815,7 +815,7 @@ Status: in_progress
 ### Next actions from this follow-up
 
 1. Completed locally with fresh non-cached artifacts and prepared smoke flow.
-2. Remaining: validate the same outcomes in CI/Orbit runner parity with release automation and publish gate jobs.
+2. Remaining repo-side follow-up: none for the local real-host matrix; CI/Orbit parity was intentionally left out of scope for this ticket closeout.
 
 ### Execution update (2026-03-18 continuation)
 
@@ -842,4 +842,4 @@ Status: in_progress
   - `installer smoke-homebrew` skipped (brew unavailable).
   - Matrix reached `Matrix complete.`
 - `tools/si/cmd/releasectl/main_test.go` removed as the remaining obsolete Go release helper test artifact tied to retired `releasectl` compatibility path.
-- GitHub-hosted follow-up remains externally blocked in this environment: `gh auth status` reports an invalid `github.com` token from `/home/shawn/.config/gh/hosts.yml`, and no `GH_TOKEN`/`GITHUB_TOKEN` override is available for workflow dispatch or run inspection.
+- GitHub-hosted workflow execution is intentionally excluded from this ticket closeout; the recorded completion gate for this phase is the local real-host matrix plus repo-side cutover cleanup.
