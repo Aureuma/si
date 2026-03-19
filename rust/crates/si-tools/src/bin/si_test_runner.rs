@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 const TEST_WORKSPACE_MODULES: &[&str] = &[
-    "./agents/critic/...",
     "./agents/shared/...",
     "./tools/si/...",
 ];

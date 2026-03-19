@@ -162,6 +162,7 @@ Progress notes:
 - completed: the image/runtime cutover now ships Rust-native `si-codex-init`, `si-entrypoint`, and `codex-stdout-parser` binaries from `rust/crates/si-tools`, with the legacy Go implementations retired from the active workspace and local Go test matrix
 - completed: the standalone Codex REPL driver is now owned by the Rust `si-tools` crate as `codex-interactive-driver`, allowing the final auxiliary PTY automation helper to leave the Go workspace too
 - completed: the remaining top-level Go entry boundaries now default toward Rust ownership too: `tools/si/main.go` now execs the Rust `si-rs` binary when present before falling back to in-process Go dispatch, and the shipped `critic` binary is now a Rust wrapper that delegates to a packaged compatibility helper (`critic-go`) while the critic loop internals remain on the Go side
+- completed: `agents/critic` is no longer part of the active `go.work` workspace or the default local Go workspace test matrix; it remains only as an explicitly packaged compatibility helper behind the Rust-owned `critic` binary path
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
