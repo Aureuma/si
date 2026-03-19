@@ -15,15 +15,8 @@ fn main() -> ExitCode {
     let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
 
     match Command::new(go_bin)
-        .args([
-            "test",
-            "-tags=integration",
-            "./tools/si",
-            "-run",
-            "TestFortSpawnMatrix",
-            "-count=1",
-        ])
-        .current_dir(&root)
+        .args(["test", "-tags=integration", ".", "-run", "TestFortSpawnMatrix", "-count=1"])
+        .current_dir(format!("{root}/tools/si"))
         .status()
     {
         Ok(status) if status.success() => ExitCode::SUCCESS,
@@ -37,9 +30,9 @@ fn main() -> ExitCode {
 
 fn repo_root() -> Result<String, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("go.work").is_file() {
+    if cwd.join("tools/si/go.mod").is_file() {
         Ok(cwd.display().to_string())
     } else {
-        Err("go.work not found; run from repo root".to_string())
+        Err("tools/si/go.mod not found; run from repo root".to_string())
     }
 }

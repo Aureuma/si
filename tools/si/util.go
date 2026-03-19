@@ -41,7 +41,7 @@ Features:
   - OCI bridge: signed identity/network/compute orchestration helpers plus raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
-  - Static analysis: run go vet + golangci-lint across go.work modules.
+  - Static analysis: run go vet + golangci-lint across active Go modules.
   - Image build for local dev.
   - Mintlify docs workflow wrapper.
   - Docker passthrough for raw docker CLI calls.
@@ -281,7 +281,7 @@ analyze:
   si analyze --fix
   si analyze --no-fail
 
-  Runs static analysis over go.work modules:
+  Runs static analysis over active Go modules:
     - go vet ./...
     - golangci-lint run ./...
 

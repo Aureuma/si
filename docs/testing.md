@@ -1,8 +1,8 @@
 # Testing
 
-## Go workspace
-This repo uses a `go.work` workspace that aggregates the modules under `agents/` and `tools/`.
-Running `go test ./...` from the repo root will fail because the root directory is not itself a module.
+## Go module layout
+This repo no longer uses a repo-level `go.work` workspace.
+The remaining Go code lives in the single module at `tools/si/go.mod`, so direct Go commands should run from `tools/si/`.
 
 ## Running tests
 Use the repo test runner from the root:
@@ -13,9 +13,9 @@ si test workspace
 ./tools/test.sh
 ```
 
-That script runs `go test` across the workspace modules listed in `go.work`.
+That script runs `go test` against the active Go module under `tools/si`.
 Make sure the Go toolchain is installed and on your `PATH` before running tests.
-The script expects to be run from the repo root so it can find `go.work` and will
+The script expects to be run from the repo root so it can find `tools/si/go.mod` and will
 error with a short message if prerequisites are missing.
 Use `./tools/test.sh --help` for a quick usage reminder.
 Use `./tools/test.sh --list` to print the module list without running tests.
