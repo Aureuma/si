@@ -140,7 +140,6 @@ func TestFortSpawnMatrix(t *testing.T) {
 	}
 
 	requireCommand(t, "docker")
-	requireCommand(t, "go")
 
 	ctx := setupFortMatrixContext(t)
 	defer ctx.cleanup()
@@ -202,8 +201,8 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 	if !isExistingDir(fortRepo) {
 		t.Fatalf("fort repo not found: %s", fortRepo)
 	}
-	if !isExistingDir(filepath.Join(fortRepo, "cmd", "fort")) {
-		t.Fatalf("fort cmd directory missing: %s", filepath.Join(fortRepo, "cmd", "fort"))
+	if _, err := os.Stat(filepath.Join(fortRepo, "Cargo.toml")); err != nil {
+		t.Fatalf("fort Cargo.toml missing: %s", filepath.Join(fortRepo, "Cargo.toml"))
 	}
 
 	networkName := strings.TrimSpace(os.Getenv("SI_E2E_NETWORK"))
@@ -237,10 +236,6 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 	}
 
 	tmpRoot := mustWorkspaceTempDir(t, filepath.Join(siRepo, ".tmp", "fort-e2e"), "spawn-matrix-")
-	seedDir, seedErr := createTempSeedWorkspace(t, fortRepo)
-	if seedErr != nil {
-		t.Fatalf("prepare seed workspace: %v", seedErr)
-	}
 	ctx := &fortMatrixContext{
 		t:                t,
 		siRepo:           siRepo,
@@ -256,8 +251,8 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		keyringFile:      filepath.Join(tmpRoot, "state", "si-vault-keyring.json"),
 		stateFile:        filepath.Join(tmpRoot, "state", "state.json"),
 		jwtSigningKey:    filepath.Join(tmpRoot, "state", "jwt-signing.key"),
-		seedFile:         filepath.Join(seedDir, "seed.go"),
-		seedWorkspace:    seedDir,
+		seedFile:         "",
+		seedWorkspace:    "",
 		binDir:           filepath.Join(tmpRoot, "bin"),
 		profileTestHome:  filepath.Join(tmpRoot, "home"),
 		fortImageTag:     fortImageTag,
@@ -282,9 +277,6 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		t.Fatalf("seed test codex profiles: %v", err)
 	}
 
-	if err := os.WriteFile(ctx.seedFile, []byte(fortSeedProgram), 0o600); err != nil {
-		t.Fatalf("write seed helper: %v", err)
-	}
 	for _, p := range []string{ctx.stateDir, ctx.safeRoot, filepath.Join(ctx.safeRoot, "safe"), filepath.Join(ctx.safeRoot, "core"), ctx.binDir} {
 		if err := os.MkdirAll(p, 0o700); err != nil {
 			t.Fatalf("create dir %s: %v", p, err)
@@ -298,10 +290,6 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		t.Fatalf("build fort image %s: %v", ctx.fortImageTag, err)
 	}
 	ctx.imageBuilt = true
-
-	if err := runCommand(t, "", nil, "go", "version"); err != nil {
-		t.Fatalf("go toolchain check failed")
-	}
 
 	if err := ensureDockerNetwork(ctx.network); err != nil {
 		t.Fatalf("prepare docker network %s: %v", ctx.network, err)
@@ -388,10 +376,9 @@ func (ctx *fortMatrixContext) seedFortState() {
 		"STATE_PATH":       ctx.stateFile,
 		"KEYRING_PATH":     ctx.keyringFile,
 		"SIGNING_KEY_PATH": ctx.jwtSigningKey,
-		"GOWORK":           "off",
 		"PROFILE_IDS":      strings.Join(ctx.profiles, ","),
 	}
-	out, stderr, err := runCommandWithOutput(t, ctx.fortRepo, env, "go", "run", ctx.seedFile)
+	out, stderr, err := runCommandWithOutput(t, ctx.fortRepo, env, "cargo", "run", "--quiet", "--bin", "fort-seed")
 	if err != nil {
 		t.Fatalf("seed fort state: %v (stdout=%q stderr=%q)", err, out, stderr)
 	}
