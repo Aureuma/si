@@ -1006,10 +1006,10 @@ func buildVivaNodeBootstrapScript(runtime vivaNodeBootstrapRuntime) string {
 	if runtime.BuildSI {
 		siPath := "\"$WORKSPACE_DIR/si\""
 		lines = append(lines,
-			"if ! command -v go >/dev/null 2>&1; then echo \"error: go is required for build-si\" >&2; exit 1; fi",
+			"if ! command -v cargo >/dev/null 2>&1; then echo \"error: cargo is required for build-si\" >&2; exit 1; fi",
 			"if [ -d "+siPath+" ]; then",
 			"  mkdir -p \"$WORKSPACE_DIR/si/bin\"",
-			"  (cd \"$WORKSPACE_DIR/si\" && go build -o bin/si ./tools/si)",
+			"  (cd \"$WORKSPACE_DIR/si\" && cargo build --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs --target-dir .artifacts/cargo-target && cp .artifacts/cargo-target/debug/si-rs bin/si && chmod +x bin/si)",
 			"fi",
 		)
 	}

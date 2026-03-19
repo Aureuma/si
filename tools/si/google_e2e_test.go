@@ -39,31 +39,36 @@ func TestGooglePlacesE2E_SearchText(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
 	}
-	list, ok := payload["list"].([]any)
+	data, ok := payload["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+	list, ok := data["places"].([]any)
 	if !ok || len(list) != 1 {
 		t.Fatalf("unexpected list payload: %#v", payload)
 	}
 }
 
-func TestGooglePlacesE2E_DoctorPublic(t *testing.T) {
+func TestGooglePlacesE2E_Doctor(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/$discovery/rest" {
+		switch r.URL.Path {
+		case "/v1/places:autocomplete":
+			_ = json.NewEncoder(w).Encode(map[string]any{"suggestions": []map[string]any{{"placePrediction": map[string]any{"placeId": "place-1"}}}})
+		case "/v1/places:searchText":
+			_ = json.NewEncoder(w).Encode(map[string]any{"places": []map[string]any{{"id": "place-1"}}})
+		default:
 			http.NotFound(w, r)
 			return
 		}
-		if got := r.URL.Query().Get("version"); got != "v1" {
-			t.Fatalf("unexpected discovery version query: %q", got)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "discovery#restDescription"})
 	}))
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{},
 		"google", "places", "doctor",
-		"--public",
+		"--api-key", "key-123",
 		"--base-url", server.URL,
 		"--json",
 	)

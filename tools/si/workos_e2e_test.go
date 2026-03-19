@@ -40,7 +40,10 @@ func TestWorkOSE2E_AuthStatus(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
 	}
-	if got := strings.TrimSpace(stringifyWorkOSAny(payload["status"])); got != "ready" {
+	if payload["base_url"] != server.URL {
+		t.Fatalf("unexpected status payload: %#v", payload)
+	}
+	if got := strings.TrimSpace(stringifyWorkOSAny(payload["key_preview"])); got == "" {
 		t.Fatalf("unexpected status payload: %#v", payload)
 	}
 }
@@ -87,7 +90,7 @@ func TestWorkOSE2E_OrganizationCreate(t *testing.T) {
 	}
 }
 
-func TestWorkOSE2E_DoctorPublic(t *testing.T) {
+func TestWorkOSE2E_Doctor(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -99,11 +102,18 @@ func TestWorkOSE2E_DoctorPublic(t *testing.T) {
 		if got := r.URL.Query().Get("limit"); got != "1" {
 			t.Fatalf("unexpected limit query: %q", got)
 		}
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		if got := r.Header.Get("Authorization"); got != "Bearer wk_test_123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "org_1", "name": "Acme"}},
+		})
 	}))
 	defer server.Close()
 
-	stdout, stderr, err := runSICommand(t, map[string]string{}, "workos", "doctor", "--public", "--base-url", server.URL, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"WORKOS_API_KEY": "wk_test_123",
+	}, "workos", "doctor", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

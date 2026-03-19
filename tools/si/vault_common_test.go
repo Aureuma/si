@@ -10,7 +10,6 @@ import (
 )
 
 func TestVaultRequireTrustedUsesGoTrustStoreByDefault(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	doc := vault.ParseDotenv([]byte("# si-vault:recipient age1example\nSECRET=value\n"))
@@ -59,7 +58,6 @@ func TestVaultRequireTrustedDelegatesToRustLookupWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	settings := Settings{}
 	settings.Vault.TrustStore = filepath.Join(dir, "trust.json")

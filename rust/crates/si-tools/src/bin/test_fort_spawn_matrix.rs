@@ -12,10 +12,7 @@ fn main() -> ExitCode {
 
     println!("[fort-spawn-matrix] delegating to Go integration test");
 
-    let go_bin = env::var("SI_GO_BIN")
-        .unwrap_or_else(|_| "go".to_string())
-        .trim()
-        .to_string();
+    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
 
     match Command::new(go_bin)
         .args([

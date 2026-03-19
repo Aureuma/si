@@ -24,10 +24,7 @@ fn main() -> ExitCode {
         .unwrap_or_else(|_| "15m".to_string())
         .trim()
         .to_string();
-    let go_bin = env::var("SI_GO_BIN")
-        .unwrap_or_else(|_| "go".to_string())
-        .trim()
-        .to_string();
+    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
 
     let tests = [(
         "./tools/si",
@@ -52,14 +49,7 @@ fn main() -> ExitCode {
 
     println!("[preflight] cargo test -p si-tools --lib -- --nocapture");
     let cargo_status = Command::new("cargo")
-        .args([
-            "test",
-            "-p",
-            "si-tools",
-            "--lib",
-            "--",
-            "--nocapture",
-        ])
+        .args(["test", "-p", "si-tools", "--lib", "--", "--nocapture"])
         .env("CARGO_TERM_COLOR", "always")
         .env("CARGO_BUILD_JOBS", "1")
         .env("CARGO_NET_RETRY", "2")

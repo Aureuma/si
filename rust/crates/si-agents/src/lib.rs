@@ -13,11 +13,7 @@ pub fn repo_root() -> Result<PathBuf, String> {
 pub fn log_root_from_env() -> PathBuf {
     let raw = env::var("AGENT_LOG_ROOT").unwrap_or_default();
     let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        PathBuf::from(".artifacts/agent-logs")
-    } else {
-        PathBuf::from(trimmed)
-    }
+    if trimmed.is_empty() { PathBuf::from(".artifacts/agent-logs") } else { PathBuf::from(trimmed) }
 }
 
 pub fn latest_run_dirs(dir: &Path) -> Vec<PathBuf> {
@@ -26,11 +22,7 @@ pub fn latest_run_dirs(dir: &Path) -> Vec<PathBuf> {
             .filter_map(Result::ok)
             .filter_map(|entry| {
                 let path = entry.path();
-                if path.is_dir() {
-                    Some(path)
-                } else {
-                    None
-                }
+                if path.is_dir() { Some(path) } else { None }
             })
             .collect::<Vec<_>>(),
         Err(_) => Vec::new(),

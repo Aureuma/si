@@ -301,7 +301,8 @@ func TestBuildVivaNodeBootstrapScript(t *testing.T) {
 	checks := []string{
 		"set -euo pipefail",
 		"git clone git@github.com:aureuma/si.git \"$WORKSPACE_DIR/si\"",
-		"go build -o bin/si ./tools/si",
+		"cargo build --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs --target-dir .artifacts/cargo-target",
+		"cp .artifacts/cargo-target/debug/si-rs bin/si",
 		"$SI_BIN orbits install remote-control",
 		"export GH_PAT_AUREUMA=ghp_test",
 	}
@@ -397,7 +398,7 @@ func TestCmdVivaNodeBootstrapExecutesSSH(t *testing.T) {
 	if !strings.Contains(joined, "deploy@host.example.com") || !strings.Contains(joined, "bash -se") {
 		t.Fatalf("unexpected ssh args: %q", joined)
 	}
-	if !strings.Contains(receivedScript, "go build -o bin/si ./tools/si") {
+	if !strings.Contains(receivedScript, "cargo build --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs --target-dir .artifacts/cargo-target") {
 		t.Fatalf("expected script to build si, got:\n%s", receivedScript)
 	}
 }

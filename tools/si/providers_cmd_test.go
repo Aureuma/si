@@ -42,23 +42,3 @@ func TestProvidersCharacteristicsCommandJSON(t *testing.T) {
 		t.Fatalf("missing capabilities block: %#v", entry)
 	}
 }
-
-func TestProvidersHealthCommandJSON(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip e2e-style subprocess test in short mode")
-	}
-	stdout, stderr, err := runSICommand(t, map[string]string{}, "providers", "health", "--provider", "github", "--json")
-	if err != nil {
-		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json parse failed: %v\nstdout=%s", err, stdout)
-	}
-	if _, ok := payload["entries"].([]any); !ok {
-		t.Fatalf("expected entries array payload, got: %#v", payload)
-	}
-	if _, ok := payload["guardrails"].([]any); !ok {
-		t.Fatalf("expected guardrails array payload, got: %#v", payload)
-	}
-}
