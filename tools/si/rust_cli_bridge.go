@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	siRustCLILegacyToggleEnv = "SI_EXPERIMENTAL_RUST_CLI"
-	siRustCLIBinEnv          = "SI_RUST_CLI_BIN"
+	siRustCLIBinEnv = "SI_RUST_CLI_BIN"
 )
 
 var (
@@ -4346,71 +4345,26 @@ func buildRustCodexSpawnStartArgs(request rustCodexSpawnSpecRequest) []string {
 }
 
 func shouldUseRustDyadCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
-	case "0", "false", "no", "off":
-		return false
-	case "1", "true", "yes", "on":
-		return true
-	}
-	_, err := resolveRustCLIBinary()
-	return err == nil
+	return rustCLIAvailable()
 }
 
 func shouldUseRustCodexCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
-	case "0", "false", "no", "off":
-		return false
-	case "1", "true", "yes", "on":
-		return true
-	}
-	_, err := resolveRustCLIBinary()
-	return err == nil
+	return rustCLIAvailable()
 }
 
 func shouldUseRustWarmupCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
-	case "0", "false", "no", "off":
-		return false
-	case "1", "true", "yes", "on":
-		return true
-	}
-	_, err := resolveRustCLIBinary()
-	return err == nil
+	return rustCLIAvailable()
 }
 
 func shouldUseRustFortCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
-	case "0", "false", "no", "off":
-		return false
-	case "1", "true", "yes", "on":
-		return true
-	}
-	_, err := resolveRustCLIBinary()
-	return err == nil
+	return rustCLIAvailable()
 }
 
 func shouldUseRustCompatCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siRustCLILegacyToggleEnv))) {
-	case "0", "false", "no", "off":
-		return false
-	case "1", "true", "yes", "on":
-		return true
-	}
+	return rustCLIAvailable()
+}
+
+func rustCLIAvailable() bool {
 	_, err := resolveRustCLIBinary()
 	return err == nil
 }
@@ -4429,20 +4383,8 @@ func resolveRustCLIBinary() (string, error) {
 		return path, nil
 	}
 
-	if root, err := rustCLIRepoRoot(); err == nil {
-		candidates := []string{
-			filepath.Join(root, ".artifacts", "cargo-target", "release", "si-rs"),
-			filepath.Join(root, ".artifacts", "cargo-target", "debug", "si-rs"),
-		}
-		for _, candidate := range candidates {
-			if path, err := resolveExecutablePath(candidate); err == nil {
-				return path, nil
-			}
-		}
-	}
-
 	return "", fmt.Errorf(
-		"Rust CLI requested but no si-rs binary found; set %s or build rust/crates/si-cli",
+		"Rust CLI requested but no si-rs binary found; set %s or put si-rs on PATH",
 		siRustCLIBinEnv,
 	)
 }

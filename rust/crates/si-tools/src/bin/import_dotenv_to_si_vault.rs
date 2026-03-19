@@ -60,11 +60,7 @@ fn run(args: Vec<String>) -> Result<ExitCode, (String, ExitCode)> {
     }
 
     for path in env_files {
-        let base = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default()
-            .to_string();
+        let base = path.file_name().and_then(|name| name.to_str()).unwrap_or_default().to_string();
         let target_env = infer_target_env(&base);
         println!(
             "import: {} -> si vault env={} section={}",
@@ -98,15 +94,7 @@ fn parse_args(args: &[String]) -> Result<(Config, bool), (String, ExitCode)> {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--help" | "-h" => return Ok((
-                Config {
-                    src,
-                    section,
-                    identity_file,
-                    dry_run,
-                },
-                true,
-            )),
+            "--help" | "-h" => return Ok((Config { src, section, identity_file, dry_run }, true)),
             "--src" => {
                 i += 1;
                 let Some(value) = args.get(i) else {
@@ -145,15 +133,7 @@ fn parse_args(args: &[String]) -> Result<(Config, bool), (String, ExitCode)> {
         return usage_error("identity file required");
     }
 
-    Ok((
-        Config {
-            src,
-            section,
-            identity_file,
-            dry_run,
-        },
-        false,
-    ))
+    Ok((Config { src, section, identity_file, dry_run }, false))
 }
 
 fn usage_error(message: &str) -> Result<(Config, bool), (String, ExitCode)> {
@@ -162,11 +142,9 @@ fn usage_error(message: &str) -> Result<(Config, bool), (String, ExitCode)> {
 
 fn default_identity_file() -> PathBuf {
     match env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => Path::new(home.trim())
-            .join(".si")
-            .join("vault")
-            .join("keys")
-            .join("age.key"),
+        Ok(home) if !home.trim().is_empty() => {
+            Path::new(home.trim()).join(".si").join("vault").join("keys").join("age.key")
+        }
         _ => PathBuf::from(".si/vault/keys/age.key"),
     }
 }
@@ -200,17 +178,11 @@ fn set_vault_value(
     command.stderr(Stdio::piped());
     command.env("SI_VAULT_KEY_BACKEND", "file");
     command.env("SI_VAULT_KEY_FILE", identity_file);
-    let mut child = command
-        .spawn()
-        .map_err(|err| (err.to_string(), ExitCode::from(1)))?;
+    let mut child = command.spawn().map_err(|err| (err.to_string(), ExitCode::from(1)))?;
     if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(value.as_bytes())
-            .map_err(|err| (err.to_string(), ExitCode::from(1)))?;
+        stdin.write_all(value.as_bytes()).map_err(|err| (err.to_string(), ExitCode::from(1)))?;
     }
-    let output = child
-        .wait_with_output()
-        .map_err(|err| (err.to_string(), ExitCode::from(1)))?;
+    let output = child.wait_with_output().map_err(|err| (err.to_string(), ExitCode::from(1)))?;
     if output.status.success() {
         Ok(())
     } else {

@@ -121,7 +121,7 @@ func TestAWSE2E_DoctorPublic(t *testing.T) {
 	}))
 	defer server.Close()
 
-	stdout, stderr, err := runSICommand(t, map[string]string{}, "aws", "doctor", "--public", "--base-url", server.URL, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{}, "aws", "doctor", "--public=true", "--base-url", server.URL, "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

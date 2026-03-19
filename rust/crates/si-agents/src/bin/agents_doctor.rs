@@ -41,10 +41,7 @@ fn main() -> ExitCode {
 
     println!();
     println!("== Syntax checks ==");
-    let files = [
-        "tools/agents/doctor.sh",
-        "tools/agents/status.sh",
-    ];
+    let files = ["tools/agents/doctor.sh", "tools/agents/status.sh"];
     for file in files {
         if let Err(code) = run_bash_syntax_check(Path::new(file)) {
             return code;
@@ -64,19 +61,11 @@ fn has_command(name: &str) -> bool {
 }
 
 fn run_bash_syntax_check(path: &Path) -> Result<(), ExitCode> {
-    let status = Command::new("bash")
-        .arg("-n")
-        .arg(path)
-        .status()
-        .map_err(|err| {
-            eprintln!("{err}");
-            ExitCode::from(1)
-        })?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(ExitCode::from(status.code().unwrap_or(1) as u8))
-    }
+    let status = Command::new("bash").arg("-n").arg(path).status().map_err(|err| {
+        eprintln!("{err}");
+        ExitCode::from(1)
+    })?;
+    if status.success() { Ok(()) } else { Err(ExitCode::from(status.code().unwrap_or(1) as u8)) }
 }
 
 fn shell_escape(value: &str) -> String {

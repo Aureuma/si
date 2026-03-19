@@ -46,7 +46,6 @@ func TestCmdGooglePlacesContextListDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdGooglePlacesContextList([]string{"--json"})
@@ -74,7 +73,6 @@ func TestCmdGooglePlacesContextCurrentDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdGooglePlacesContextCurrent([]string{"--json"})
@@ -102,7 +100,6 @@ func TestCmdGooglePlacesAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		cmdGooglePlacesAuthStatus([]string{"--json"})

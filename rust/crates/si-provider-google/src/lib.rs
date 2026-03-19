@@ -1238,6 +1238,16 @@ pub fn execute_play_api_request(
     }
     if let Some(body) = &request.json_body {
         builder = builder.json(body);
+    } else if !request.media_path.trim().is_empty() {
+        let content_type = if request.content_type.trim().is_empty() {
+            "application/octet-stream"
+        } else {
+            request.content_type.trim()
+        };
+        let body = std::fs::read(&request.media_path).map_err(|err| {
+            format!("failed to read google play upload media {:?}: {err}", request.media_path)
+        })?;
+        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(body);
     } else if !request.raw_body.trim().is_empty() {
         let content_type = if request.content_type.trim().is_empty() {
             "application/json"

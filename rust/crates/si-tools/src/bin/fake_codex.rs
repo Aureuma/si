@@ -86,9 +86,9 @@ fn load_config() -> Result<Config, String> {
         .map_err(|err| format!("invalid FAKE_CODEX_DELAY_SECONDS: {err}"))?;
 
     let long_lines = match env::var("FAKE_CODEX_LONG_LINES") {
-        Ok(raw) if !raw.is_empty() => raw
-            .parse::<usize>()
-            .map_err(|err| format!("invalid FAKE_CODEX_LONG_LINES: {err}"))?,
+        Ok(raw) if !raw.is_empty() => {
+            raw.parse::<usize>().map_err(|err| format!("invalid FAKE_CODEX_LONG_LINES: {err}"))?
+        }
         _ => 0,
     };
 
@@ -128,8 +128,12 @@ fn handle_special(stdout: &mut impl Write, line: &str, prompt_char: &str) -> Opt
         "/" => Some("menu: /status /model /approval"),
         "1" => Some("menu-select: /status"),
         "2" => Some("menu-select: /model"),
-        _ if line.starts_with("\u{1b}[A") || line.starts_with("^[[A") => Some("menu-select: /status"),
-        _ if line.starts_with("\u{1b}[B") || line.starts_with("^[[B") => Some("menu-select: /model"),
+        _ if line.starts_with("\u{1b}[A") || line.starts_with("^[[A") => {
+            Some("menu-select: /status")
+        }
+        _ if line.starts_with("\u{1b}[B") || line.starts_with("^[[B") => {
+            Some("menu-select: /model")
+        }
         "/exit" => {
             println!("bye");
             return Some(true);
@@ -179,9 +183,5 @@ fn emit_body(member: &str, turn: usize, sig: &str) {
 
 fn truncate_chars(input: &str, max: usize) -> String {
     let chars: Vec<char> = input.chars().collect();
-    if chars.len() <= max {
-        input.to_string()
-    } else {
-        chars.into_iter().take(max).collect()
-    }
+    if chars.len() <= max { input.to_string() } else { chars.into_iter().take(max).collect() }
 }

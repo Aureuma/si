@@ -10,7 +10,6 @@ import (
 )
 
 func TestRunVersionCommandDefaultsToGoVersion(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	out := captureOutputForTest(t, func() {
@@ -34,7 +33,6 @@ func TestRunVersionCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		if err := runVersionCommand(); err != nil {
@@ -55,29 +53,29 @@ func TestRunVersionCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestMaybeDispatchRustCLIReadOnlyErrorsWhenConfiguredBinaryMissing(t *testing.T) {
+	origLookPath := rustCLILookPath
+	t.Cleanup(func() {
+		rustCLILookPath = origLookPath
+	})
+	rustCLILookPath = func(file string) (string, error) { return "", os.ErrNotExist }
 	t.Setenv(siRustCLIBinEnv, filepath.Join(t.TempDir(), "missing-si-rs"))
 
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
-	if err == nil {
-		t.Fatalf("expected missing explicit Rust CLI binary to fail")
-	}
 	if delegated {
-		t.Fatalf("expected delegated=false on failure")
+		t.Fatalf("expected delegated=false when Rust CLI is unavailable")
 	}
-	if !strings.Contains(err.Error(), siRustCLIBinEnv) {
-		t.Fatalf("expected error to mention %s, got %v", siRustCLIBinEnv, err)
+	if err != nil {
+		t.Fatalf("expected unavailable Rust CLI to short-circuit without error, got %v", err)
 	}
 }
 
-func TestRunVersionCommandUsesRepoBuiltRustBinaryWhenEnabled(t *testing.T) {
+func TestResolveRustCLIBinaryDoesNotUseRepoLocalArtifactFallback(t *testing.T) {
 	dir := t.TempDir()
-	argsPath := filepath.Join(dir, "args.txt")
 	binPath := filepath.Join(dir, ".artifacts", "cargo-target", "debug", "si-rs")
 	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
 		t.Fatalf("mkdir bin dir: %v", err)
 	}
-	script := "#!/bin/sh\nprintf '%s\\n' 'v-rust-repo'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
-	if err := os.WriteFile(binPath, []byte(script), 0o700); err != nil {
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
@@ -89,45 +87,19 @@ func TestRunVersionCommandUsesRepoBuiltRustBinaryWhenEnabled(t *testing.T) {
 	})
 	rustCLIRepoRoot = func() (string, error) { return dir, nil }
 	rustCLILookPath = func(file string) (string, error) { return "", os.ErrNotExist }
-
-	t.Setenv(siRustCLILegacyToggleEnv, "1")
 	t.Setenv(siRustCLIBinEnv, "")
 
-	out := captureOutputForTest(t, func() {
-		if err := runVersionCommand(); err != nil {
-			t.Fatalf("runVersionCommand: %v", err)
-		}
-	})
-
-	if strings.TrimSpace(out) != "v-rust-repo" {
-		t.Fatalf("expected repo Rust output, got %q", out)
-	}
-	argsData, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read args file: %v", err)
-	}
-	if strings.TrimSpace(string(argsData)) != "version" {
-		t.Fatalf("expected Rust CLI args to be 'version', got %q", string(argsData))
+	_, err := resolveRustCLIBinary()
+	if err == nil {
+		t.Fatalf("expected repo-local si-rs artifact to be ignored")
 	}
 }
 
-func TestResolveRustCLIBinaryPrefersLookPathOverRepoLocalArtifact(t *testing.T) {
-	dir := t.TempDir()
-	repoBin := filepath.Join(dir, ".artifacts", "cargo-target", "debug", "si-rs")
-	if err := os.MkdirAll(filepath.Dir(repoBin), 0o755); err != nil {
-		t.Fatalf("mkdir repo bin dir: %v", err)
-	}
-	if err := os.WriteFile(repoBin, []byte("#!/bin/sh\n"), 0o700); err != nil {
-		t.Fatalf("write repo bin: %v", err)
-	}
-
-	origRepoRoot := rustCLIRepoRoot
+func TestResolveRustCLIBinaryUsesLookPath(t *testing.T) {
 	origLookPath := rustCLILookPath
 	t.Cleanup(func() {
-		rustCLIRepoRoot = origRepoRoot
 		rustCLILookPath = origLookPath
 	})
-	rustCLIRepoRoot = func() (string, error) { return dir, nil }
 	rustCLILookPath = func(file string) (string, error) {
 		if file != "si-rs" {
 			t.Fatalf("unexpected lookpath target %q", file)
@@ -147,7 +119,6 @@ func TestResolveRustCLIBinaryPrefersLookPathOverRepoLocalArtifact(t *testing.T) 
 }
 
 func TestRunHelpCommandDefaultsToGoUsage(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	out := captureOutputForTest(t, func() {
@@ -171,7 +142,6 @@ func TestRunHelpCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		if err := runHelpCommand([]string{"remote-control"}); err != nil {
@@ -192,7 +162,6 @@ func TestRunHelpCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunProvidersCharacteristicsCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runProvidersCharacteristicsCommand([]string{"--provider", "github", "--json"})
@@ -214,7 +183,6 @@ func TestRunProvidersCharacteristicsCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runProvidersCharacteristicsCommand([]string{"--provider", "github", "--json"})
@@ -239,7 +207,6 @@ func TestRunProvidersCharacteristicsCommandDelegatesToRustCLIWhenConfigured(t *t
 }
 
 func TestRunCloudflareContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareContextListCommand([]string{"--json"})
@@ -261,7 +228,6 @@ func TestRunCloudflareContextListCommandDelegatesToRustCLIWhenConfigured(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareContextListCommand([]string{"--json"})
@@ -286,7 +252,6 @@ func TestRunCloudflareContextListCommandDelegatesToRustCLIWhenConfigured(t *test
 }
 
 func TestRunCloudflareContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareContextCommand([]string{"list", "--json"})
@@ -308,7 +273,6 @@ func TestRunCloudflareContextCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareContextCommand([]string{"list", "--json"})
@@ -333,7 +297,6 @@ func TestRunCloudflareContextCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunCloudflareContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareContextCurrentCommand([]string{"--json"})
@@ -355,7 +318,6 @@ func TestRunCloudflareContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareContextCurrentCommand([]string{"--json"})
@@ -380,7 +342,6 @@ func TestRunCloudflareContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *t
 }
 
 func TestRunCloudflareAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareAuthCommand([]string{"status", "--json"})
@@ -402,7 +363,6 @@ func TestRunCloudflareAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareAuthCommand([]string{"status", "--json"})
@@ -427,7 +387,6 @@ func TestRunCloudflareAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunCloudflareAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareAuthStatusCommand([]string{"--json"})
@@ -449,7 +408,6 @@ func TestRunCloudflareAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareAuthStatusCommand([]string{"--json"})
@@ -474,7 +432,6 @@ func TestRunCloudflareAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunCloudflareCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runCloudflareCommand([]string{"zone", "list", "--json"})
@@ -496,7 +453,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"context", "list", "--json"})
@@ -530,7 +486,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"raw", "--path", "/zones", "--json"})
@@ -564,7 +519,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForAnalytics(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"analytics", "http", "--json"})
@@ -598,7 +552,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForReport(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"report", "traffic-summary", "--json"})
@@ -632,7 +585,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForSmoke(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"smoke", "--json"})
@@ -666,7 +618,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsReceived(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "received", "--json"})
@@ -700,7 +651,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobList(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "job", "list", "--json"})
@@ -734,7 +684,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobGet(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "job", "get", "job_123", "--json"})
@@ -768,7 +717,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobCreate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "job", "create", "--param", "name=core", "--json"})
@@ -802,7 +750,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobUpdate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "job", "update", "job_123", "--param", "enabled=true", "--json"})
@@ -836,7 +783,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobDelete(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"logs", "job", "delete", "job_123", "--force", "--json"})
@@ -899,7 +845,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForResourceFamilies(t *testing.T)
 			}
 
 			t.Setenv(siRustCLIBinEnv, scriptPath)
-			t.Setenv(siRustCLILegacyToggleEnv, "")
 
 			out := captureOutputForTest(t, func() {
 				delegated, err := runCloudflareCommand(tc.args)
@@ -934,7 +879,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForTokenVerify(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"token", "verify", "--json"})
 		if err != nil {
@@ -958,7 +902,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForTunnelToken(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"tunnel", "token", "--tunnel", "tun_123", "--json"})
 		if err != nil {
@@ -982,7 +925,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForCachePurge(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	out := captureOutputForTest(t, func() {
 		delegated, err := runCloudflareCommand([]string{"cache", "purge", "--everything", "--force", "--json"})
 		if err != nil {
@@ -998,7 +940,6 @@ func TestRunCloudflareCommandDelegatesToRustCLIForCachePurge(t *testing.T) {
 }
 
 func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAppleAppStoreContextListCommand([]string{"--json"})
@@ -1020,7 +961,6 @@ func TestRunAppleAppStoreContextListCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreContextListCommand([]string{"--json"})
@@ -1045,7 +985,6 @@ func TestRunAppleAppStoreContextListCommandDelegatesToRustCLIWhenConfigured(t *t
 }
 
 func TestRunAppleAppStoreContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAppleAppStoreContextCurrentCommand([]string{"--json"})
@@ -1067,7 +1006,6 @@ func TestRunAppleAppStoreContextCurrentCommandDelegatesToRustCLIWhenConfigured(t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreContextCurrentCommand([]string{"--json"})
@@ -1101,7 +1039,6 @@ func TestRunAppleAppStoreAuthStatusCommandDelegatesToRustCLIWhenVerifyEnabled(t 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreAuthStatusCommand([]string{"--json"})
@@ -1135,7 +1072,6 @@ func TestRunAppleAppStoreAuthStatusCommandDelegatesToRustCLIWhenVerifyDisabled(t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreAuthStatusCommand([]string{"--verify=false", "--json"})
@@ -1169,7 +1105,6 @@ func TestRunAppleAppStoreAuthCommandDelegatesToRustCLIWhenVerifyEnabled(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreAuthCommand([]string{"status", "--json"})
@@ -1203,7 +1138,6 @@ func TestRunAppleAppStoreAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreAuthCommand([]string{"status", "--verify=false", "--json"})
@@ -1228,7 +1162,6 @@ func TestRunAppleAppStoreAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *test
 }
 
 func TestRunAppleAppStoreContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAppleAppStoreContextCommand([]string{"list", "--json"})
@@ -1250,7 +1183,6 @@ func TestRunAppleAppStoreContextCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreContextCommand([]string{"list", "--json"})
@@ -1284,7 +1216,6 @@ func TestRunAppleAppStoreCommandDelegatesToRustCLIWhenVerifyEnabled(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreCommand([]string{"auth", "status", "--json"})
@@ -1318,7 +1249,6 @@ func TestRunAppleAppStoreDoctorCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreDoctorCommand([]string{"--json"})
@@ -1343,7 +1273,6 @@ func TestRunAppleAppStoreDoctorCommandDelegatesToRustCLIWhenConfigured(t *testin
 }
 
 func TestRunAppleAppStoreDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAppleAppStoreDoctorCommand([]string{"--public", "--json"})
@@ -1365,7 +1294,6 @@ func TestRunAppleAppStoreCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreCommand([]string{"auth", "status", "--verify=false", "--json"})
@@ -1390,7 +1318,6 @@ func TestRunAppleAppStoreCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.
 }
 
 func TestRunAppleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAppleCommand([]string{"music", "search"})
@@ -1412,7 +1339,6 @@ func TestRunAppleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleCommand([]string{"appstore", "auth", "status", "--verify=false", "--json"})
@@ -1446,7 +1372,6 @@ func TestRunAppleAppStoreAppCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreAppCommand([]string{"create", "--bundle-id", "com.example.mobile", "--json"})
@@ -1480,7 +1405,6 @@ func TestRunAppleAppStoreListingCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreListingCommand([]string{"update", "--bundle-id", "com.example.mobile", "--json"})
@@ -1514,7 +1438,6 @@ func TestRunAppleAppStoreRawCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreRawCommand([]string{"--path", "/v1/apps", "--json"})
@@ -1548,7 +1471,6 @@ func TestRunAppleAppStoreApplyCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAppleAppStoreApplyCommand([]string{"--metadata-dir", "appstore", "--json"})
@@ -1573,7 +1495,6 @@ func TestRunAppleAppStoreApplyCommandDelegatesToRustCLIWhenConfigured(t *testing
 }
 
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSContextListCommand([]string{"--json"})
@@ -1595,7 +1516,6 @@ func TestRunAWSContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSContextListCommand([]string{"--json"})
@@ -1620,7 +1540,6 @@ func TestRunAWSContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunAWSContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSContextCurrentCommand([]string{"--json"})
@@ -1642,7 +1561,6 @@ func TestRunAWSContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSContextCurrentCommand([]string{"--json"})
@@ -1667,7 +1585,6 @@ func TestRunAWSContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunAWSAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSAuthCommand([]string{"status", "--json"})
@@ -1689,7 +1606,6 @@ func TestRunAWSAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSAuthCommand([]string{"status", "--json"})
@@ -1714,7 +1630,6 @@ func TestRunAWSAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunAWSContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSContextCommand([]string{"list", "--json"})
@@ -1736,7 +1651,6 @@ func TestRunAWSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSContextCommand([]string{"list", "--json"})
@@ -1761,7 +1675,6 @@ func TestRunAWSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunAWSCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSCommand([]string{"auth", "status", "--json"})
@@ -1783,7 +1696,6 @@ func TestRunAWSCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"auth", "status", "--json"})
@@ -1817,7 +1729,6 @@ func TestRunAWSCommandDelegatesToRustCLIForDoctor(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"doctor", "--json"})
@@ -1842,7 +1753,6 @@ func TestRunAWSCommandDelegatesToRustCLIForDoctor(t *testing.T) {
 }
 
 func TestRunAWSAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSAuthStatusCommand([]string{"--json"})
@@ -1864,7 +1774,6 @@ func TestRunAWSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSAuthStatusCommand([]string{"--json"})
@@ -1889,7 +1798,6 @@ func TestRunAWSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunAWSDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSDoctorCommand([]string{"--public", "--json"})
@@ -1911,7 +1819,6 @@ func TestRunAWSDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSDoctorCommand([]string{"--json"})
@@ -1945,7 +1852,6 @@ func TestRunAWSSTSCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"sts", "get-caller-identity", "--json"})
@@ -1979,7 +1885,6 @@ func TestRunAWSIAMCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"iam", "query", "--action", "ListUsers", "--json"})
@@ -2013,7 +1918,6 @@ func TestRunAWSS3CommandDelegatesBucketListToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"s3", "bucket", "list", "--json"})
@@ -2047,7 +1951,6 @@ func TestRunAWSEC2CommandDelegatesInstanceListToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"ec2", "instance", "list", "--json"})
@@ -2081,7 +1984,6 @@ func TestRunAWSLambdaCommandDelegatesFunctionListToRustCLIWhenConfigured(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"lambda", "function", "list", "--json"})
@@ -2115,7 +2017,6 @@ func TestRunAWSECRCommandDelegatesRepositoryListToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"ecr", "repository", "list", "--json"})
@@ -2149,7 +2050,6 @@ func TestRunAWSS3CommandDelegatesObjectListToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"s3", "object", "list", "--bucket", "demo", "--json"})
@@ -2183,7 +2083,6 @@ func TestRunAWSSecretsCommandDelegatesListToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"secrets", "list", "--json"})
@@ -2217,7 +2116,6 @@ func TestRunAWSKMSCommandDelegatesKeyListToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"kms", "key", "list", "--json"})
@@ -2251,7 +2149,6 @@ func TestRunAWSDynamoDBCommandDelegatesTableListToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"dynamodb", "table", "list", "--json"})
@@ -2285,7 +2182,6 @@ func TestRunAWSSSMCommandDelegatesParameterListToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"ssm", "parameter", "list", "--json"})
@@ -2319,7 +2215,6 @@ func TestRunAWSLogsCommandDelegatesGroupListToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"logs", "group", "list", "--json"})
@@ -2353,7 +2248,6 @@ func TestRunAWSCloudWatchCommandDelegatesMetricListToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"cloudwatch", "metric", "--json"})
@@ -2387,7 +2281,6 @@ func TestRunAWSBedrockCommandDelegatesFoundationModelListToRustCLIWhenConfigured
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "foundation-model", "list", "--json"})
@@ -2421,7 +2314,6 @@ func TestRunAWSBedrockCommandDelegatesRuntimeInvokeToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "runtime", "invoke", "--model-id", "m-1", "--prompt", "hello", "--json"})
@@ -2455,7 +2347,6 @@ func TestRunAWSBedrockCommandDelegatesJobListToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "job", "list", "--json"})
@@ -2480,7 +2371,6 @@ func TestRunAWSBedrockCommandDelegatesJobListToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunAWSBedrockCommandDefaultsToGoForJobStopWithoutForce(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runAWSCommand([]string{"bedrock", "job", "stop", "job-1", "--json"})
@@ -2502,7 +2392,6 @@ func TestRunAWSBedrockCommandDelegatesJobStopToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "job", "stop", "job-1", "--force", "--json"})
@@ -2536,7 +2425,6 @@ func TestRunAWSBedrockCommandDelegatesKnowledgeBaseDataSourceListToRustCLIWhenCo
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "knowledge-base", "data-source", "list", "--knowledge-base-id", "kb-1", "--json"})
@@ -2570,7 +2458,6 @@ func TestRunAWSBedrockCommandDelegatesAgentRuntimeRetrieveAndGenerateToRustCLIWh
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runAWSCommand([]string{"bedrock", "agent-runtime", "retrieve-and-generate", "--knowledge-base-id", "kb-1", "--query", "hello", "--json"})
@@ -2595,7 +2482,6 @@ func TestRunAWSBedrockCommandDelegatesAgentRuntimeRetrieveAndGenerateToRustCLIWh
 }
 
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPContextListCommand([]string{"--json"})
@@ -2617,7 +2503,6 @@ func TestRunGCPContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPContextListCommand([]string{"--json"})
@@ -2642,7 +2527,6 @@ func TestRunGCPContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunGCPContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPContextCurrentCommand([]string{"--json"})
@@ -2664,7 +2548,6 @@ func TestRunGCPContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPContextCurrentCommand([]string{"--json"})
@@ -2689,7 +2572,6 @@ func TestRunGCPContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunGCPAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPAuthStatusCommand([]string{"--json"})
@@ -2711,7 +2593,6 @@ func TestRunGCPAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPAuthStatusCommand([]string{"--json"})
@@ -2736,7 +2617,6 @@ func TestRunGCPAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGCPAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPAuthCommand([]string{"status", "--json"})
@@ -2758,7 +2638,6 @@ func TestRunGCPAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPAuthCommand([]string{"status", "--json"})
@@ -2783,7 +2662,6 @@ func TestRunGCPAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGCPContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPContextCommand([]string{"list", "--json"})
@@ -2805,7 +2683,6 @@ func TestRunGCPContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPContextCommand([]string{"list", "--json"})
@@ -2830,7 +2707,6 @@ func TestRunGCPContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGCPCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPCommand([]string{"auth", "status", "--json"})
@@ -2852,7 +2728,6 @@ func TestRunGCPCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"auth", "status", "--json"})
@@ -2877,7 +2752,6 @@ func TestRunGCPCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGCPDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGCPDoctorCommand([]string{"--public", "--json"})
@@ -2899,7 +2773,6 @@ func TestRunGCPDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPDoctorCommand([]string{"--json"})
@@ -2933,7 +2806,6 @@ func TestRunGCPCommandDelegatesToRustCLIForAPIKey(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"apikey", "list", "--json"})
@@ -2967,7 +2839,6 @@ func TestRunGCPCommandDelegatesToRustCLIForIAM(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"iam", "role", "list", "--json"})
@@ -3001,7 +2872,6 @@ func TestRunGCPCommandDelegatesToRustCLIForGemini(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"gemini", "models", "list", "--json"})
@@ -3035,7 +2905,6 @@ func TestRunGCPCommandDelegatesAIWrapperToRustCLIForGemini(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"ai", "gemini", "models", "list", "--json"})
@@ -3068,7 +2937,6 @@ func TestRunGCPCommandDelegatesToRustCLIForVertex(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"vertex", "model", "list", "--json"})
 		if err != nil {
@@ -3100,7 +2968,6 @@ func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"service", "list", "--json"})
@@ -3134,7 +3001,6 @@ func TestRunGCPCommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGCPCommand([]string{"raw", "--method", "GET", "--path", "/v1/projects/p/services/x", "--json"})
@@ -3159,7 +3025,6 @@ func TestRunGCPCommandDelegatesToRustCLIForRaw(t *testing.T) {
 }
 
 func TestRunGooglePlacesContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesContextListCommand([]string{"--json"})
@@ -3181,7 +3046,6 @@ func TestRunGooglePlacesContextListCommandDelegatesToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesContextListCommand([]string{"--json"})
@@ -3206,7 +3070,6 @@ func TestRunGooglePlacesContextListCommandDelegatesToRustCLIWhenConfigured(t *te
 }
 
 func TestRunGooglePlacesContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesContextCurrentCommand([]string{"--json"})
@@ -3228,7 +3091,6 @@ func TestRunGooglePlacesContextCurrentCommandDelegatesToRustCLIWhenConfigured(t 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesContextCurrentCommand([]string{"--json"})
@@ -3253,7 +3115,6 @@ func TestRunGooglePlacesContextCurrentCommandDelegatesToRustCLIWhenConfigured(t 
 }
 
 func TestRunGooglePlacesAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesAuthCommand([]string{"status", "--json"})
@@ -3275,7 +3136,6 @@ func TestRunGooglePlacesAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesAuthCommand([]string{"status", "--json"})
@@ -3300,7 +3160,6 @@ func TestRunGooglePlacesAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunGooglePlacesContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesContextCommand([]string{"list", "--json"})
@@ -3322,7 +3181,6 @@ func TestRunGooglePlacesContextCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesContextCommand([]string{"list", "--json"})
@@ -3347,7 +3205,6 @@ func TestRunGooglePlacesContextCommandDelegatesToRustCLIWhenConfigured(t *testin
 }
 
 func TestRunGooglePlacesCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesCommand([]string{"auth", "status", "--json"})
@@ -3369,7 +3226,6 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"auth", "status", "--json"})
@@ -3403,7 +3259,6 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIForAutocomplete(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"autocomplete", "--input", "cafe", "--json"})
@@ -3428,7 +3283,6 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIForAutocomplete(t *testing.T) {
 }
 
 func TestRunGooglePlacesPhotoGetDefaultsToGoForFollow(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesCommand([]string{"photo", "get", "places/p1/photos/ph1", "--follow"})
@@ -3450,7 +3304,6 @@ func TestRunGooglePlacesPhotoDownloadDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"photo", "download", "places/p1/photos/ph1", "--output", "/tmp/photo.jpg", "--json"})
@@ -3475,7 +3328,6 @@ func TestRunGooglePlacesPhotoDownloadDelegatesToRustCLIWhenConfigured(t *testing
 }
 
 func TestRunGooglePlacesDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesDoctorCommand([]string{"--public", "--json"})
@@ -3497,7 +3349,6 @@ func TestRunGooglePlacesDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesDoctorCommand([]string{"--json"})
@@ -3531,7 +3382,6 @@ func TestRunGooglePlacesRawDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"raw", "--method", "GET", "--path", "/v1/places/p1", "--json"})
@@ -3565,7 +3415,6 @@ func TestRunGooglePlacesSessionDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"session", "list", "--json"})
@@ -3599,7 +3448,6 @@ func TestRunGooglePlacesTypesDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"types", "list", "--json"})
@@ -3633,7 +3481,6 @@ func TestRunGooglePlacesReportDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesCommand([]string{"report", "usage", "--json"})
@@ -3667,7 +3514,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForMigratedPlacesAutocomplete(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleCommand([]string{"places", "autocomplete", "--input", "cafe", "--json"})
@@ -3692,7 +3538,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForMigratedPlacesAutocomplete(t *test
 }
 
 func TestRunGoogleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGoogleCommand([]string{"youtube", "video", "list"})
@@ -3714,7 +3559,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForPlayReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleCommand([]string{"play", "context", "list", "--json"})
@@ -3739,7 +3583,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForPlayReadPath(t *testing.T) {
 }
 
 func TestRunGooglePlayDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlayDoctorCommand([]string{"--public", "--json"})
@@ -3761,7 +3604,6 @@ func TestRunGooglePlayDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlayDoctorCommand([]string{"--json"})
@@ -3795,7 +3637,6 @@ func TestRunGooglePlayAppCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlayCommand([]string{"app", "create", "--title", "Acme", "--json"})
@@ -3829,7 +3670,6 @@ func TestRunGooglePlayAssetCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlayCommand([]string{"asset", "upload", "--type", "phone", "--file", "shot.png", "--json"})
@@ -3863,7 +3703,6 @@ func TestRunGooglePlayReleaseCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlayCommand([]string{"release", "status", "--track", "internal", "--json"})
@@ -3897,7 +3736,6 @@ func TestRunGooglePlayApplyCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlayCommand([]string{"apply", "--metadata-dir", "play-store", "--json"})
@@ -3931,7 +3769,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForYouTubeReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleCommand([]string{"youtube", "search", "list", "--query", "music", "--json"})
@@ -3956,7 +3793,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForYouTubeReadPath(t *testing.T) {
 }
 
 func TestRunGoogleYouTubeDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGoogleYouTubeDoctorCommand([]string{"--public", "--json"})
@@ -3978,7 +3814,6 @@ func TestRunGoogleYouTubeDoctorCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleYouTubeDoctorCommand([]string{"--json"})
@@ -4012,7 +3847,6 @@ func TestRunGoogleYouTubeSupportDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleYouTubeSupportCommand([]string{"languages", "--json"})
@@ -4046,7 +3880,6 @@ func TestRunGoogleYouTubeResourceDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleYouTubeCommand([]string{"channel", "list", "--id", "c1", "--json"})
@@ -4080,7 +3913,6 @@ func TestRunGoogleYouTubeMutationDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	cases := []struct {
 		name string
@@ -4145,7 +3977,6 @@ func TestRunGoogleYouTubeEngagementDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	cases := []struct {
 		name string
@@ -4205,7 +4036,6 @@ func TestRunGoogleYouTubeLiveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	cases := []struct {
 		name string
@@ -4260,7 +4090,6 @@ func TestRunGoogleYouTubeMediaDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	cases := []struct {
 		name string
@@ -4320,7 +4149,6 @@ func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGoogleCommand([]string{"places", "context", "list", "--json"})
@@ -4354,7 +4182,6 @@ func TestRunOpenAICommandDelegatesToRustCLIForMutationPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICommand([]string{"project", "create", "--name", "Core", "--json"})
@@ -4388,7 +4215,6 @@ func TestRunOpenAICommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICommand([]string{"project", "api-key", "list", "--project-id", "proj_123", "--json"})
@@ -4422,7 +4248,6 @@ func TestRunOpenAICommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICommand([]string{"raw", "--method", "POST", "--path", "/v1/models", "--json"})
@@ -4456,7 +4281,6 @@ func TestRunOpenAICommandDelegatesToRustCLIForDoctor(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICommand([]string{"doctor", "--json"})
@@ -4481,7 +4305,6 @@ func TestRunOpenAICommandDelegatesToRustCLIForDoctor(t *testing.T) {
 }
 
 func TestRunOpenAIAuthCommandDefaultsToGoForCodexStatus(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIAuthCommand([]string{"codex-status", "--json"})
@@ -4502,7 +4325,6 @@ func TestRunOpenAIAuthCommandDefaultsToGoForCodexModeStatus(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := runOpenAIAuthCommand([]string{"status", "--auth-mode", "codex", "--json"})
 	if err != nil {
@@ -4523,7 +4345,6 @@ func TestRunOpenAIAuthCommandDelegatesToRustCLIForAPIStatus(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIAuthCommand([]string{"status", "--json"})
@@ -4557,7 +4378,6 @@ func TestRunOpenAIProjectCommandDelegatesToRustCLIForCreate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectCommand([]string{"create", "--name", "Core", "--json"})
@@ -4591,7 +4411,6 @@ func TestRunOpenAIProjectCommandDelegatesToRustCLIForList(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectCommand([]string{"list", "--json"})
@@ -4625,7 +4444,6 @@ func TestRunOpenAIProjectRateLimitCommandDelegatesToRustCLIForUpdate(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectRateLimitCommand([]string{"update", "--project-id", "proj_123", "--rate-limit-id", "rl_123", "--max-requests-per-1-minute", "42", "--json"})
@@ -4659,7 +4477,6 @@ func TestRunOpenAIProjectRateLimitCommandDelegatesToRustCLIForList(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectRateLimitCommand([]string{"list", "--project-id", "proj_123", "--json"})
@@ -4693,7 +4510,6 @@ func TestRunOpenAIProjectAPIKeyCommandDelegatesToRustCLIForDelete(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectAPIKeyCommand([]string{"delete", "--project-id", "proj_123", "key_123", "--force", "--json"})
@@ -4727,7 +4543,6 @@ func TestRunOpenAIProjectAPIKeyCommandDelegatesToRustCLIForList(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectAPIKeyCommand([]string{"list", "--project-id", "proj_123", "--json"})
@@ -4761,7 +4576,6 @@ func TestRunOpenAIProjectServiceAccountCommandDelegatesToRustCLIForCreate(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectServiceAccountCommand([]string{"create", "--project-id", "proj_123", "--name", "Deploy", "--json"})
@@ -4795,7 +4609,6 @@ func TestRunOpenAIProjectServiceAccountCommandDelegatesToRustCLIForList(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectServiceAccountCommand([]string{"list", "--project-id", "proj_123", "--json"})
@@ -4829,7 +4642,6 @@ func TestRunOpenAIKeyCommandDelegatesToRustCLIForCreate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIKeyCommand([]string{"create", "--name", "Core", "--json"})
@@ -4863,7 +4675,6 @@ func TestRunOpenAIKeyCommandDelegatesToRustCLIForList(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIKeyCommand([]string{"list", "--json"})
@@ -4888,7 +4699,6 @@ func TestRunOpenAIKeyCommandDelegatesToRustCLIForList(t *testing.T) {
 }
 
 func TestRunGooglePlacesAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGooglePlacesAuthStatusCommand([]string{"--json"})
@@ -4910,7 +4720,6 @@ func TestRunGooglePlacesAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGooglePlacesAuthStatusCommand([]string{"--json"})
@@ -4935,7 +4744,6 @@ func TestRunGooglePlacesAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *tes
 }
 
 func TestRunOpenAIContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIContextListCommand([]string{"--json"})
@@ -4957,7 +4765,6 @@ func TestRunOpenAIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIContextListCommand([]string{"--json"})
@@ -4982,7 +4789,6 @@ func TestRunOpenAIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunOpenAIContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIContextCurrentCommand([]string{"--json"})
@@ -5004,7 +4810,6 @@ func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIContextCurrentCommand([]string{"--json"})
@@ -5029,7 +4834,6 @@ func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunOpenAIContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIContextCommand([]string{"list", "--json"})
@@ -5051,7 +4855,6 @@ func TestRunOpenAIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIContextCommand([]string{"list", "--json"})
@@ -5076,7 +4879,6 @@ func TestRunOpenAIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIAuthStatusCommand([]string{"--json"})
@@ -5098,7 +4900,6 @@ func TestRunOpenAIAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIAuthStatusCommand([]string{"--json"})
@@ -5123,7 +4924,6 @@ func TestRunOpenAIAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunOpenAIDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIDoctorCommand([]string{"--public", "--json"})
@@ -5145,7 +4945,6 @@ func TestRunOpenAIDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIDoctorCommand([]string{"--json"})
@@ -5170,7 +4969,6 @@ func TestRunOpenAIDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIModelCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIModelCommand([]string{"list", "--json", "--limit", "1"})
@@ -5192,7 +4990,6 @@ func TestRunOpenAIModelCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIModelCommand([]string{"list", "--json", "--limit", "1"})
@@ -5217,7 +5014,6 @@ func TestRunOpenAIModelCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIModelListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIModelListCommand([]string{"--json", "--limit", "1"})
@@ -5239,7 +5035,6 @@ func TestRunOpenAIModelListCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIModelListCommand([]string{"--json", "--limit", "1"})
@@ -5264,7 +5059,6 @@ func TestRunOpenAIModelListCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 }
 
 func TestRunOpenAIModelGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIModelGetCommand([]string{"gpt-test"})
@@ -5286,7 +5080,6 @@ func TestRunOpenAIModelGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIModelGetCommand([]string{"gpt-test"})
@@ -5311,7 +5104,6 @@ func TestRunOpenAIModelGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunOpenAIUsageCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIUsageCommand([]string{"completions", "--json", "--limit", "1"})
@@ -5333,7 +5125,6 @@ func TestRunOpenAIUsageCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIUsageCommand([]string{"completions", "--json", "--limit", "1"})
@@ -5358,7 +5149,6 @@ func TestRunOpenAIUsageCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIUsageMetricCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIUsageMetricCommand("completions", []string{"--json", "--limit", "1"})
@@ -5380,7 +5170,6 @@ func TestRunOpenAIUsageMetricCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIUsageMetricCommand("completions", []string{"--json", "--limit", "1"})
@@ -5405,7 +5194,6 @@ func TestRunOpenAIUsageMetricCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunOpenAICodexUsageCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAICodexUsageCommand([]string{"--json", "--limit", "1"})
@@ -5427,7 +5215,6 @@ func TestRunOpenAICodexUsageCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICodexUsageCommand([]string{"--json", "--limit", "1"})
@@ -5452,7 +5239,6 @@ func TestRunOpenAICodexUsageCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunOpenAIMonitorCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIMonitorCommand([]string{"usage", "--json", "--limit", "1"})
@@ -5474,7 +5260,6 @@ func TestRunOpenAIMonitorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIMonitorCommand([]string{"usage", "--json", "--limit", "1"})
@@ -5499,7 +5284,6 @@ func TestRunOpenAIMonitorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAICodexCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAICodexCommand([]string{"usage", "--json", "--limit", "1"})
@@ -5521,7 +5305,6 @@ func TestRunOpenAICodexCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAICodexCommand([]string{"usage", "--json", "--limit", "1"})
@@ -5546,7 +5329,6 @@ func TestRunOpenAICodexCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIKeyListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIKeyListCommand([]string{"--json", "--limit", "1"})
@@ -5568,7 +5350,6 @@ func TestRunOpenAIKeyListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIKeyListCommand([]string{"--json", "--limit", "1"})
@@ -5593,7 +5374,6 @@ func TestRunOpenAIKeyListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIKeyGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIKeyGetCommand([]string{"key_123"})
@@ -5615,7 +5395,6 @@ func TestRunOpenAIKeyGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIKeyGetCommand([]string{"key_123"})
@@ -5640,7 +5419,6 @@ func TestRunOpenAIKeyGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOpenAIProjectListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectListCommand([]string{"--json", "--limit", "1"})
@@ -5662,7 +5440,6 @@ func TestRunOpenAIProjectListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectListCommand([]string{"--json", "--limit", "1"})
@@ -5687,7 +5464,6 @@ func TestRunOpenAIProjectListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunOpenAIProjectGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectGetCommand([]string{"proj_123"})
@@ -5709,7 +5485,6 @@ func TestRunOpenAIProjectGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectGetCommand([]string{"proj_123"})
@@ -5734,7 +5509,6 @@ func TestRunOpenAIProjectGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunOpenAIProjectAPIKeyListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectAPIKeyListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5756,7 +5530,6 @@ func TestRunOpenAIProjectAPIKeyListCommandDelegatesToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectAPIKeyListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5781,7 +5554,6 @@ func TestRunOpenAIProjectAPIKeyListCommandDelegatesToRustCLIWhenConfigured(t *te
 }
 
 func TestRunOpenAIProjectAPIKeyGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectAPIKeyGetCommand([]string{"--project-id", "proj_123", "key_123"})
@@ -5803,7 +5575,6 @@ func TestRunOpenAIProjectAPIKeyGetCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectAPIKeyGetCommand([]string{"--project-id", "proj_123", "key_123"})
@@ -5828,7 +5599,6 @@ func TestRunOpenAIProjectAPIKeyGetCommandDelegatesToRustCLIWhenConfigured(t *tes
 }
 
 func TestRunOpenAIProjectServiceAccountListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectServiceAccountListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5850,7 +5620,6 @@ func TestRunOpenAIProjectServiceAccountListCommandDelegatesToRustCLIWhenConfigur
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectServiceAccountListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5875,7 +5644,6 @@ func TestRunOpenAIProjectServiceAccountListCommandDelegatesToRustCLIWhenConfigur
 }
 
 func TestRunOpenAIProjectServiceAccountGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectServiceAccountGetCommand([]string{"--project-id", "proj_123", "sa_123"})
@@ -5897,7 +5665,6 @@ func TestRunOpenAIProjectServiceAccountGetCommandDelegatesToRustCLIWhenConfigure
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectServiceAccountGetCommand([]string{"--project-id", "proj_123", "sa_123"})
@@ -5922,7 +5689,6 @@ func TestRunOpenAIProjectServiceAccountGetCommandDelegatesToRustCLIWhenConfigure
 }
 
 func TestRunOpenAIProjectRateLimitListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOpenAIProjectRateLimitListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5944,7 +5710,6 @@ func TestRunOpenAIProjectRateLimitListCommandDelegatesToRustCLIWhenConfigured(t 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOpenAIProjectRateLimitListCommand([]string{"--json", "--project-id", "proj_123"})
@@ -5969,7 +5734,6 @@ func TestRunOpenAIProjectRateLimitListCommandDelegatesToRustCLIWhenConfigured(t 
 }
 
 func TestRunOCIContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCIContextListCommand([]string{"--json"})
@@ -5991,7 +5755,6 @@ func TestRunOCIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIContextListCommand([]string{"--json"})
@@ -6016,7 +5779,6 @@ func TestRunOCIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunOCIContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCIContextCurrentCommand([]string{"--json"})
@@ -6038,7 +5800,6 @@ func TestRunOCIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIContextCurrentCommand([]string{"--json"})
@@ -6072,7 +5833,6 @@ func TestRunOCIAuthStatusCommandDelegatesToRustWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIAuthStatusCommand([]string{"--json"})
@@ -6106,7 +5866,6 @@ func TestRunOCIAuthStatusCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIAuthStatusCommand([]string{"--verify=false", "--json"})
@@ -6140,7 +5899,6 @@ func TestRunOCIAuthCommandDelegatesToRustWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIAuthCommand([]string{"status", "--json"})
@@ -6174,7 +5932,6 @@ func TestRunOCIAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIAuthCommand([]string{"status", "--verify=false", "--json"})
@@ -6199,7 +5956,6 @@ func TestRunOCIAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
 }
 
 func TestRunOCIContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCIContextCommand([]string{"list", "--json"})
@@ -6221,7 +5977,6 @@ func TestRunOCIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIContextCommand([]string{"list", "--json"})
@@ -6246,7 +6001,6 @@ func TestRunOCIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunOCICommandDefaultsToGoForUnmigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCICommand([]string{"doctor", "--json"})
@@ -6268,7 +6022,6 @@ func TestRunOCIDoctorCommandDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIDoctorCommand([]string{"--json"})
@@ -6293,7 +6046,6 @@ func TestRunOCIDoctorCommandDelegatesToRust(t *testing.T) {
 }
 
 func TestRunOCIDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCIDoctorCommand([]string{"--public", "--json"})
@@ -6315,7 +6067,6 @@ func TestRunOCICommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"oracular", "tenancy", "--json"})
@@ -6349,7 +6100,6 @@ func TestRunOCIOracularCloudInitDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIOracularCommand([]string{"cloud-init", "--json"})
@@ -6383,7 +6133,6 @@ func TestRunOCIIdentityAvailabilityDomainsDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"identity", "availability-domains", "list", "--json"})
@@ -6417,7 +6166,6 @@ func TestRunOCIIdentityCompartmentCreateDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"identity", "compartment", "create", "--parent", "ocid1.compartment.oc1..root", "--name", "prod", "--json"})
@@ -6451,7 +6199,6 @@ func TestRunOCINetworkVcnCreateDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"network", "vcn", "create", "--compartment", "ocid1.compartment.oc1..prod", "--json"})
@@ -6485,7 +6232,6 @@ func TestRunOCIComputeImageLatestUbuntuDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"compute", "image", "latest-ubuntu", "--json"})
@@ -6519,7 +6265,6 @@ func TestRunOCIComputeInstanceCreateDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"compute", "instance", "create", "--compartment", "ocid1.compartment.oc1..prod", "--ad", "AD-1", "--subnet-id", "ocid1.subnet.oc1..sub", "--image-id", "ocid1.image.oc1..img", "--json"})
@@ -6553,7 +6298,6 @@ func TestRunOCIRawDelegatesToRust(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCICommand([]string{"raw", "--path", "/20160918/vcns", "--json"})
@@ -6587,7 +6331,6 @@ func TestRunOCIOracularCommandDelegatesToRustCLIForTenancy(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIOracularCommand([]string{"tenancy", "--json"})
@@ -6612,7 +6355,6 @@ func TestRunOCIOracularCommandDelegatesToRustCLIForTenancy(t *testing.T) {
 }
 
 func TestRunOCIOracularTenancyCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runOCIOracularTenancyCommand([]string{"--json"})
@@ -6634,7 +6376,6 @@ func TestRunOCIOracularTenancyCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runOCIOracularTenancyCommand([]string{"--json"})
@@ -6659,7 +6400,6 @@ func TestRunOCIOracularTenancyCommandDelegatesToRustCLIWhenConfigured(t *testing
 }
 
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeContextListCommand([]string{"--json"})
@@ -6681,7 +6421,6 @@ func TestRunStripeContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeContextListCommand([]string{"--json"})
@@ -6706,7 +6445,6 @@ func TestRunStripeContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunStripeContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeContextCommand([]string{"list", "--json"})
@@ -6728,7 +6466,6 @@ func TestRunStripeContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeContextCommand([]string{"list", "--json"})
@@ -6753,7 +6490,6 @@ func TestRunStripeContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunStripeContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeContextCurrentCommand([]string{"--json"})
@@ -6775,7 +6511,6 @@ func TestRunStripeContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeContextCurrentCommand([]string{"--json"})
@@ -6800,7 +6535,6 @@ func TestRunStripeContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunStripeAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeAuthCommand([]string{"status", "--json"})
@@ -6822,7 +6556,6 @@ func TestRunStripeAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeAuthCommand([]string{"status", "--json"})
@@ -6847,7 +6580,6 @@ func TestRunStripeAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunStripeAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeAuthStatusCommand([]string{"--json"})
@@ -6869,7 +6601,6 @@ func TestRunStripeAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeAuthStatusCommand([]string{"--json"})
@@ -6894,7 +6625,6 @@ func TestRunStripeAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunStripeCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runStripeCommand([]string{"object", "list", "--json"})
@@ -6916,7 +6646,6 @@ func TestRunStripeCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"context", "list", "--json"})
@@ -6950,7 +6679,6 @@ func TestRunStripeCommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"raw", "--path", "/v1/products", "--json"})
@@ -6984,7 +6712,6 @@ func TestRunStripeCommandDelegatesToRustCLIForReport(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"report", "revenue-summary", "--json"})
@@ -7018,7 +6745,6 @@ func TestRunStripeCommandDelegatesToRustCLIForObjectList(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"object", "list", "product", "--json"})
@@ -7052,7 +6778,6 @@ func TestRunStripeCommandDelegatesToRustCLIForObjectGet(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"object", "get", "product", "prod_123", "--json"})
@@ -7086,7 +6811,6 @@ func TestRunStripeCommandDelegatesToRustCLIForObjectCreate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"object", "create", "product", "--param", "name=Core", "--json"})
@@ -7120,7 +6844,6 @@ func TestRunStripeCommandDelegatesToRustCLIForObjectUpdate(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"object", "update", "product", "prod_123", "--param", "name=Core 2", "--json"})
@@ -7154,7 +6877,6 @@ func TestRunStripeCommandDelegatesToRustCLIForObjectDelete(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"object", "delete", "product", "prod_123", "--force", "--json"})
@@ -7188,7 +6910,6 @@ func TestRunStripeCommandDelegatesToRustCLIForSyncPlan(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"sync", "live-to-sandbox", "plan", "--only", "products", "--json"})
@@ -7222,7 +6943,6 @@ func TestRunStripeCommandDelegatesToRustCLIForSyncApply(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runStripeCommand([]string{"sync", "live-to-sandbox", "apply", "--only", "products", "--force", "--json"})
@@ -7247,7 +6967,6 @@ func TestRunStripeCommandDelegatesToRustCLIForSyncApply(t *testing.T) {
 }
 
 func TestRunWorkOSContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSContextListCommand([]string{"--json"})
@@ -7269,7 +6988,6 @@ func TestRunWorkOSContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSContextListCommand([]string{"--json"})
@@ -7294,7 +7012,6 @@ func TestRunWorkOSContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunWorkOSContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSContextCommand([]string{"list", "--json"})
@@ -7316,7 +7033,6 @@ func TestRunWorkOSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSContextCommand([]string{"list", "--json"})
@@ -7341,7 +7057,6 @@ func TestRunWorkOSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunWorkOSContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSContextCurrentCommand([]string{"--json"})
@@ -7363,7 +7078,6 @@ func TestRunWorkOSContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSContextCurrentCommand([]string{"--json"})
@@ -7388,7 +7102,6 @@ func TestRunWorkOSContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunWorkOSAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSAuthCommand([]string{"status", "--json"})
@@ -7410,7 +7123,6 @@ func TestRunWorkOSAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSAuthCommand([]string{"status", "--json"})
@@ -7435,7 +7147,6 @@ func TestRunWorkOSAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunWorkOSAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSAuthStatusCommand([]string{"--json"})
@@ -7457,7 +7168,6 @@ func TestRunWorkOSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSAuthStatusCommand([]string{"--json"})
@@ -7482,7 +7192,6 @@ func TestRunWorkOSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunWorkOSCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runWorkOSCommand([]string{"doctor", "--public", "--json"})
@@ -7504,7 +7213,6 @@ func TestRunWorkOSCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSCommand([]string{"context", "list", "--json"})
@@ -7538,7 +7246,6 @@ func TestRunWorkOSCommandDelegatesToRustCLIForDoctor(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSCommand([]string{"doctor", "--json"})
@@ -7572,7 +7279,6 @@ func TestRunWorkOSCommandDelegatesToRustCLIForResourceLane(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSCommand([]string{"organization", "list", "--json"})
@@ -7606,7 +7312,6 @@ func TestRunWorkOSCommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runWorkOSCommand([]string{"raw", "--path", "/organizations", "--json"})
@@ -7630,7 +7335,6 @@ func TestRunWorkOSCommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 }
 func TestRunGitHubContextListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubContextListCommand([]string{"--json"})
@@ -7652,7 +7356,6 @@ func TestRunGitHubContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubContextListCommand([]string{"--json"})
@@ -7677,7 +7380,6 @@ func TestRunGitHubContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunGitHubContextCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubContextCommand([]string{"list", "--json"})
@@ -7699,7 +7401,6 @@ func TestRunGitHubContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubContextCommand([]string{"list", "--json"})
@@ -7724,7 +7425,6 @@ func TestRunGitHubContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGitHubContextCurrentCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubContextCurrentCommand([]string{"--json"})
@@ -7746,7 +7446,6 @@ func TestRunGitHubContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubContextCurrentCommand([]string{"--json"})
@@ -7771,7 +7470,6 @@ func TestRunGitHubContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunGitHubAuthCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubAuthCommand([]string{"status", "--json"})
@@ -7793,7 +7491,6 @@ func TestRunGitHubAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubAuthCommand([]string{"status", "--json"})
@@ -7818,7 +7515,6 @@ func TestRunGitHubAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGitHubAuthStatusCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubAuthStatusCommand([]string{"--json"})
@@ -7840,7 +7536,6 @@ func TestRunGitHubAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubAuthStatusCommand([]string{"--json"})
@@ -7874,7 +7569,6 @@ func TestRunGitHubReleaseCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseCommand([]string{"list", "Aureuma/si", "--json"})
@@ -7899,7 +7593,6 @@ func TestRunGitHubReleaseCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubReleaseListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubReleaseListCommand([]string{"Aureuma/si", "--json"})
@@ -7921,7 +7614,6 @@ func TestRunGitHubReleaseListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseListCommand([]string{"Aureuma/si", "--json"})
@@ -7946,7 +7638,6 @@ func TestRunGitHubReleaseListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunGitHubReleaseGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubReleaseGetCommand([]string{"Aureuma/si", "v1.2.3", "--json"})
@@ -7968,7 +7659,6 @@ func TestRunGitHubReleaseGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseGetCommand([]string{"Aureuma/si", "v1.2.3", "--json"})
@@ -8002,7 +7692,6 @@ func TestRunGitHubReleaseCreateCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseCreateCommand([]string{"Aureuma/si", "--tag", "v1.2.4", "--title", "Release", "--json"})
@@ -8036,7 +7725,6 @@ func TestRunGitHubReleaseUploadCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseUploadCommand([]string{"Aureuma/si", "v1.2.4", "--asset", "/tmp/build.tgz", "--json"})
@@ -8070,7 +7758,6 @@ func TestRunGitHubReleaseDeleteCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubReleaseDeleteCommand([]string{"Aureuma/si", "v1.2.4", "--force", "--json"})
@@ -8104,7 +7791,6 @@ func TestRunGitHubSecretRepoSetCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretRepoSetCommand([]string{"Aureuma/si", "MY_SECRET", "--value", "topsecret", "--json"})
@@ -8138,7 +7824,6 @@ func TestRunGitHubSecretRepoDeleteCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretRepoDeleteCommand([]string{"Aureuma/si", "MY_SECRET", "--force", "--json"})
@@ -8172,7 +7857,6 @@ func TestRunGitHubSecretEnvSetCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretEnvSetCommand([]string{"Aureuma/si", "prod", "MY_SECRET", "--value", "topsecret", "--json"})
@@ -8206,7 +7890,6 @@ func TestRunGitHubSecretEnvDeleteCommandDelegatesToRustCLIWhenConfigured(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretEnvDeleteCommand([]string{"Aureuma/si", "prod", "MY_SECRET", "--force", "--json"})
@@ -8240,7 +7923,6 @@ func TestRunGitHubSecretOrgSetCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretOrgSetCommand([]string{"Aureuma", "MY_SECRET", "--value", "topsecret", "--visibility", "selected", "--repos", "1,2", "--json"})
@@ -8274,7 +7956,6 @@ func TestRunGitHubSecretOrgDeleteCommandDelegatesToRustCLIWhenConfigured(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubSecretOrgDeleteCommand([]string{"Aureuma", "MY_SECRET", "--force", "--json"})
@@ -8299,7 +7980,6 @@ func TestRunGitHubSecretOrgDeleteCommandDelegatesToRustCLIWhenConfigured(t *test
 }
 
 func TestRunGitHubRepoCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubRepoCommand([]string{"create", "si", "--json"})
@@ -8321,7 +8001,6 @@ func TestRunGitHubRepoCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoCommand([]string{"list", "Aureuma", "--json"})
@@ -8346,7 +8025,6 @@ func TestRunGitHubRepoCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubRepoListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubRepoListCommand([]string{"Aureuma", "--json"})
@@ -8368,7 +8046,6 @@ func TestRunGitHubRepoListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoListCommand([]string{"Aureuma", "--json"})
@@ -8393,7 +8070,6 @@ func TestRunGitHubRepoListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunGitHubRepoGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubRepoGetCommand([]string{"Aureuma/si", "--json"})
@@ -8415,7 +8091,6 @@ func TestRunGitHubRepoGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoGetCommand([]string{"Aureuma/si", "--json"})
@@ -8449,7 +8124,6 @@ func TestRunGitHubRepoCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoCreateCommand([]string{"si-rs", "--owner", "Aureuma", "--json"})
@@ -8483,7 +8157,6 @@ func TestRunGitHubRepoUpdateCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoUpdateCommand([]string{"Aureuma/si", "--param", "has_issues=false", "--json"})
@@ -8517,7 +8190,6 @@ func TestRunGitHubRepoArchiveCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoArchiveCommand([]string{"Aureuma/si", "--force", "--json"})
@@ -8551,7 +8223,6 @@ func TestRunGitHubRepoDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRepoDeleteCommand([]string{"Aureuma/si", "--force", "--json"})
@@ -8576,7 +8247,6 @@ func TestRunGitHubRepoDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunGitHubProjectCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectCommand([]string{"update", "PVT_123", "--json"})
@@ -8598,7 +8268,6 @@ func TestRunGitHubProjectCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectCommand([]string{"list", "Aureuma", "--json"})
@@ -8623,7 +8292,6 @@ func TestRunGitHubProjectCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubProjectListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectListCommand([]string{"Aureuma", "--json"})
@@ -8645,7 +8313,6 @@ func TestRunGitHubProjectListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectListCommand([]string{"Aureuma", "--json"})
@@ -8670,7 +8337,6 @@ func TestRunGitHubProjectListCommandDelegatesToRustCLIWhenConfigured(t *testing.
 }
 
 func TestRunGitHubProjectGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectGetCommand([]string{"PVT_123", "--json"})
@@ -8692,7 +8358,6 @@ func TestRunGitHubProjectGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectGetCommand([]string{"PVT_123", "--json"})
@@ -8717,7 +8382,6 @@ func TestRunGitHubProjectGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunGitHubProjectUpdateCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectUpdateCommand([]string{"PVT_123", "--title", "Roadmap 2", "--json"})
@@ -8739,7 +8403,6 @@ func TestRunGitHubProjectUpdateCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectUpdateCommand([]string{"PVT_123", "--title", "Roadmap 2", "--json"})
@@ -8773,7 +8436,6 @@ func TestRunGitHubProjectItemAddCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemAddCommand([]string{"PVT_123", "--repo", "Aureuma/si", "--issue", "42", "--json"})
@@ -8807,7 +8469,6 @@ func TestRunGitHubProjectItemSetCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemSetCommand([]string{"PVT_123", "PVTI_1", "--field", "Status", "--text", "in progress", "--json"})
@@ -8841,7 +8502,6 @@ func TestRunGitHubProjectItemClearCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemClearCommand([]string{"PVT_123", "PVTI_1", "--field", "Status", "--json"})
@@ -8875,7 +8535,6 @@ func TestRunGitHubProjectItemArchiveCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemArchiveCommand([]string{"PVT_123", "PVTI_1", "--json"})
@@ -8909,7 +8568,6 @@ func TestRunGitHubProjectItemUnarchiveCommandDelegatesToRustCLIWhenConfigured(t 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemUnarchiveCommand([]string{"PVT_123", "PVTI_1", "--json"})
@@ -8943,7 +8601,6 @@ func TestRunGitHubProjectItemDeleteCommandDelegatesToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemDeleteCommand([]string{"PVT_123", "PVTI_1", "--json"})
@@ -8968,7 +8625,6 @@ func TestRunGitHubProjectItemDeleteCommandDelegatesToRustCLIWhenConfigured(t *te
 }
 
 func TestRunGitHubProjectFieldsCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectFieldsCommand([]string{"PVT_123", "--json"})
@@ -8990,7 +8646,6 @@ func TestRunGitHubProjectFieldsCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectFieldsCommand([]string{"PVT_123", "--json"})
@@ -9015,7 +8670,6 @@ func TestRunGitHubProjectFieldsCommandDelegatesToRustCLIWhenConfigured(t *testin
 }
 
 func TestRunGitHubProjectItemsCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubProjectItemsCommand([]string{"PVT_123", "--json"})
@@ -9037,7 +8691,6 @@ func TestRunGitHubProjectItemsCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubProjectItemsCommand([]string{"PVT_123", "--json"})
@@ -9071,7 +8724,6 @@ func TestRunGitHubWorkflowCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowCommand([]string{"list", "Aureuma/si", "--json"})
@@ -9096,7 +8748,6 @@ func TestRunGitHubWorkflowCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubWorkflowListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubWorkflowListCommand([]string{"Aureuma/si", "--json"})
@@ -9118,7 +8769,6 @@ func TestRunGitHubWorkflowListCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowListCommand([]string{"Aureuma/si", "--json"})
@@ -9143,7 +8793,6 @@ func TestRunGitHubWorkflowListCommandDelegatesToRustCLIWhenConfigured(t *testing
 }
 
 func TestRunGitHubWorkflowRunsCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubWorkflowRunsCommand([]string{"Aureuma/si", "--json"})
@@ -9165,7 +8814,6 @@ func TestRunGitHubWorkflowRunsCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowRunsCommand([]string{"Aureuma/si", "--json"})
@@ -9190,7 +8838,6 @@ func TestRunGitHubWorkflowRunsCommandDelegatesToRustCLIWhenConfigured(t *testing
 }
 
 func TestRunGitHubWorkflowRunGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubWorkflowRunGetCommand([]string{"Aureuma/si", "21", "--json"})
@@ -9212,7 +8859,6 @@ func TestRunGitHubWorkflowRunGetCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowRunGetCommand([]string{"Aureuma/si", "21", "--json"})
@@ -9237,7 +8883,6 @@ func TestRunGitHubWorkflowRunGetCommandDelegatesToRustCLIWhenConfigured(t *testi
 }
 
 func TestRunGitHubWorkflowLogsCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubWorkflowLogsCommand([]string{"Aureuma/si", "21", "--raw"})
@@ -9259,7 +8904,6 @@ func TestRunGitHubWorkflowLogsCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowLogsCommand([]string{"Aureuma/si", "21", "--raw"})
@@ -9293,7 +8937,6 @@ func TestRunGitHubWorkflowDispatchCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowDispatchCommand([]string{"Aureuma/si", "ci.yml", "--ref", "main", "--json"})
@@ -9327,7 +8970,6 @@ func TestRunGitHubWorkflowRunCancelCommandDelegatesToRustCLIWhenConfigured(t *te
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowRunCancelCommand([]string{"Aureuma/si", "21", "--json"})
@@ -9361,7 +9003,6 @@ func TestRunGitHubWorkflowRunRerunCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowRunRerunCommand([]string{"Aureuma/si", "21", "--json"})
@@ -9395,7 +9036,6 @@ func TestRunGitHubWorkflowWatchCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubWorkflowWatchCommand([]string{"Aureuma/si", "21", "--json"})
@@ -9420,7 +9060,6 @@ func TestRunGitHubWorkflowWatchCommandDelegatesToRustCLIWhenConfigured(t *testin
 }
 
 func TestRunGitHubIssueCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubIssueCommand([]string{"create", "Aureuma/si", "--json"})
@@ -9442,7 +9081,6 @@ func TestRunGitHubIssueCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueCommand([]string{"list", "Aureuma/si", "--json"})
@@ -9476,7 +9114,6 @@ func TestRunGitHubIssueCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueCreateCommand([]string{"Aureuma/si", "--title", "Rust issue", "--json"})
@@ -9510,7 +9147,6 @@ func TestRunGitHubIssueCommentCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueCommentCommand([]string{"Aureuma/si", "77", "--body", "looks good", "--json"})
@@ -9544,7 +9180,6 @@ func TestRunGitHubIssueCloseCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueCloseCommand([]string{"Aureuma/si", "77", "--json"})
@@ -9578,7 +9213,6 @@ func TestRunGitHubIssueReopenCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueReopenCommand([]string{"Aureuma/si", "77", "--json"})
@@ -9612,7 +9246,6 @@ func TestRunGitHubBranchCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchCommand([]string{"list", "Aureuma/si", "--json"})
@@ -9637,7 +9270,6 @@ func TestRunGitHubBranchCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubBranchListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubBranchListCommand([]string{"Aureuma/si", "--json"})
@@ -9659,7 +9291,6 @@ func TestRunGitHubBranchListCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchListCommand([]string{"Aureuma/si", "--json"})
@@ -9684,7 +9315,6 @@ func TestRunGitHubBranchListCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 }
 
 func TestRunGitHubBranchGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubBranchGetCommand([]string{"Aureuma/si", "main", "--json"})
@@ -9706,7 +9336,6 @@ func TestRunGitHubBranchGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchGetCommand([]string{"Aureuma/si", "main", "--json"})
@@ -9740,7 +9369,6 @@ func TestRunGitHubBranchCreateCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchCreateCommand([]string{"Aureuma/si", "feature/rust", "--from", "main", "--json"})
@@ -9774,7 +9402,6 @@ func TestRunGitHubBranchDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchDeleteCommand([]string{"Aureuma/si", "feature/rust", "--force", "--json"})
@@ -9808,7 +9435,6 @@ func TestRunGitHubBranchProtectCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchProtectCommand([]string{"Aureuma/si", "main", "--required-check", "ci", "--required-approvals", "2", "--json"})
@@ -9842,7 +9468,6 @@ func TestRunGitHubBranchUnprotectCommandDelegatesToRustCLIWhenConfigured(t *test
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubBranchUnprotectCommand([]string{"Aureuma/si", "main", "--force", "--json"})
@@ -9867,7 +9492,6 @@ func TestRunGitHubBranchUnprotectCommandDelegatesToRustCLIWhenConfigured(t *test
 }
 
 func TestRunGitHubGitCredentialCommandDefaultsToGoForNonGet(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubGitCredentialCommand([]string{"store"})
@@ -9889,7 +9513,6 @@ func TestRunGitHubGitCredentialCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGitCredentialCommand([]string{"get", "--auth-mode", "oauth"})
@@ -9914,7 +9537,6 @@ func TestRunGitHubGitCredentialCommandDelegatesToRustCLIWhenConfigured(t *testin
 }
 
 func TestRunGitHubGitCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubGitCommand([]string{"setup"})
@@ -9936,7 +9558,6 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForCredentialGet(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGitCommand([]string{"credential", "get", "--auth-mode", "oauth"})
@@ -9970,7 +9591,6 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForSetup(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGitCommand([]string{"setup", "--dry-run", "--json"})
@@ -10004,7 +9624,6 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForRemoteAuth(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGitCommand([]string{"remote-auth", "--vault-key", "GH_PAT"})
@@ -10038,7 +9657,6 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForCloneAuth(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGitCommand([]string{"clone-auth", "Aureuma/si", "--vault-key", "GH_PAT"})
@@ -10063,7 +9681,6 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForCloneAuth(t *testing.T) {
 }
 
 func TestRunGitHubIssueListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubIssueListCommand([]string{"Aureuma/si", "--json"})
@@ -10085,7 +9702,6 @@ func TestRunGitHubIssueListCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueListCommand([]string{"Aureuma/si", "--json"})
@@ -10110,7 +9726,6 @@ func TestRunGitHubIssueListCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 }
 
 func TestRunGitHubIssueGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubIssueGetCommand([]string{"Aureuma/si", "12", "--json"})
@@ -10132,7 +9747,6 @@ func TestRunGitHubIssueGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubIssueGetCommand([]string{"Aureuma/si", "12", "--json"})
@@ -10157,7 +9771,6 @@ func TestRunGitHubIssueGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 }
 
 func TestRunGitHubPRCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubPRCommand([]string{"create", "Aureuma/si", "--json"})
@@ -10179,7 +9792,6 @@ func TestRunGitHubPRCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRCommand([]string{"list", "Aureuma/si", "--json"})
@@ -10204,7 +9816,6 @@ func TestRunGitHubPRCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 }
 
 func TestRunGitHubPRListCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubPRListCommand([]string{"Aureuma/si", "--json"})
@@ -10226,7 +9837,6 @@ func TestRunGitHubPRListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRListCommand([]string{"Aureuma/si", "--json"})
@@ -10251,7 +9861,6 @@ func TestRunGitHubPRListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGitHubPRGetCommandDefaultsToGo(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubPRGetCommand([]string{"Aureuma/si", "34", "--json"})
@@ -10273,7 +9882,6 @@ func TestRunGitHubPRGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRGetCommand([]string{"Aureuma/si", "34", "--json"})
@@ -10307,7 +9915,6 @@ func TestRunGitHubPRCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRCreateCommand([]string{"Aureuma/si", "--head", "feature/rust", "--base", "main", "--title", "Rust PR", "--json"})
@@ -10341,7 +9948,6 @@ func TestRunGitHubPRCommentCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRCommentCommand([]string{"Aureuma/si", "35", "--body", "ship it", "--json"})
@@ -10375,7 +9981,6 @@ func TestRunGitHubPRMergeCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubPRMergeCommand([]string{"Aureuma/si", "35", "--method", "squash", "--json"})
@@ -10400,7 +10005,6 @@ func TestRunGitHubPRMergeCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 }
 
 func TestRunGitHubRawCommandDefaultsToGoForNonGetMethod(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubRawCommand([]string{"--method", "POST", "--path", "/graphql", "--json"})
@@ -10422,7 +10026,6 @@ func TestRunGitHubRawCommandDelegatesToRustCLIForGet(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubRawCommand([]string{"--path", "/rate_limit", "--param", "scope=core", "--json"})
@@ -10447,7 +10050,6 @@ func TestRunGitHubRawCommandDelegatesToRustCLIForGet(t *testing.T) {
 }
 
 func TestRunGitHubGraphQLCommandDefaultsToGoForMutation(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubGraphQLCommand([]string{"--query", "mutation { viewer { login } }", "--json"})
@@ -10469,7 +10071,6 @@ func TestRunGitHubGraphQLCommandDelegatesToRustCLIForQuery(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubGraphQLCommand([]string{"--query", "query { viewer { login } }", "--json"})
@@ -10494,7 +10095,6 @@ func TestRunGitHubGraphQLCommandDelegatesToRustCLIForQuery(t *testing.T) {
 }
 
 func TestRunGitHubCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
 	delegated, err := runGitHubCommand([]string{"repo", "create", "--json"})
@@ -10516,7 +10116,6 @@ func TestRunGitHubCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	out := captureOutputForTest(t, func() {
 		delegated, err := runGitHubCommand([]string{"repo", "list", "Aureuma", "--json"})
@@ -10549,7 +10148,6 @@ func TestMaybeRunRustVaultTrustLookupDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	lookup, delegated, err := maybeRunRustVaultTrustLookup("/tmp/trust.json", "/repo", "/repo/.env", "expected")
 	if err != nil {
@@ -10583,7 +10181,6 @@ func TestMaybeLoadRustWarmupStateDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, delegated, err := maybeLoadRustWarmupState("/tmp/warmup-state.json")
 	if err != nil {
@@ -10614,7 +10211,6 @@ func TestMaybeSaveRustWarmupStateDelegatesAndWritesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeSaveRustWarmupState("/tmp/warmup-state.json", warmWeeklyState{
 		Version: 3,
@@ -10647,7 +10243,6 @@ func TestMaybeReadRustWarmupMarkerStateDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, delegated, err := maybeReadRustWarmupMarkerState("/tmp/autostart.v1", "/tmp/disabled.v1")
 	if err != nil {
@@ -10678,7 +10273,6 @@ func TestMaybeWriteRustWarmupAutostartMarkerDelegates(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeWriteRustWarmupAutostartMarker("/tmp/autostart.v1")
 	if err != nil {
@@ -10706,7 +10300,6 @@ func TestMaybeSetRustWarmupDisabledDelegates(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeSetRustWarmupDisabled("/tmp/disabled.v1", true)
 	if err != nil {
@@ -10734,7 +10327,6 @@ func TestMaybeReadRustWarmupAutostartDecisionDelegatesAndParsesJSON(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	decision, delegated, err := maybeReadRustWarmupAutostartDecision("/tmp/state.json", "/tmp/autostart.v1", "/tmp/disabled.v1")
 	if err != nil {
@@ -10765,7 +10357,6 @@ func TestMaybeRunRustWarmupStatusDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustWarmupStatus(true)
 	if err != nil {
@@ -10796,7 +10387,6 @@ func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, delegated, err := maybeLoadRustFortSessionState("/tmp/session.json")
 	if err != nil {
@@ -10827,7 +10417,6 @@ func TestMaybeClassifyRustFortSessionStateDelegatesAndParsesVariant(t *testing.T
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	classification, delegated, err := maybeClassifyRustFortSessionState("/tmp/session.json", 123)
 	if err != nil {
@@ -10858,7 +10447,6 @@ func TestMaybeLoadRustFortRuntimeAgentStateDelegatesAndParsesJSON(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, delegated, err := maybeLoadRustFortRuntimeAgentState("/tmp/runtime-agent.json")
 	if err != nil {
@@ -10889,7 +10477,6 @@ func TestMaybeSaveRustFortSessionStateDelegatesAndWritesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeSaveRustFortSessionState("/tmp/session.json", fortProfileSessionState{
 		ProfileID: "ferma",
@@ -10924,7 +10511,6 @@ func TestMaybeSaveRustFortRuntimeAgentStateDelegatesAndWritesJSON(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeSaveRustFortRuntimeAgentState("/tmp/runtime-agent.json", fortProfileRuntimeAgentState{
 		ProfileID: "ferma",
@@ -10958,7 +10544,6 @@ func TestMaybeApplyRustFortSessionRefreshOutcomeDelegatesAndParsesJSON(t *testin
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	transition, delegated, err := maybeApplyRustFortSessionRefreshOutcome("/tmp/session.json", fortSessionRefreshResult{
 		AccessExpiresAt: "2030-01-01T00:00:00Z",
@@ -10997,7 +10582,6 @@ func TestMaybeRunRustFortSessionTeardownDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	classification, delegated, err := maybeRunRustFortSessionTeardown("/tmp/session.json", time.Unix(100, 0).UTC())
 	if err != nil {
@@ -11027,7 +10611,6 @@ func TestMaybeBuildRustDyadSpawnPlanDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	plan, delegated, err := maybeBuildRustDyadSpawnPlan(rustDyadSpawnPlanRequest{
 		Name:         "alpha",
@@ -11066,7 +10649,6 @@ func TestMaybeStartRustDyadSpawnDelegatesToRustCLI(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeStartRustDyadSpawn(rustDyadSpawnPlanRequest{
 		Name:         "alpha",
@@ -11105,7 +10687,6 @@ func TestMaybeRunRustDyadContainerActionDelegatesAndReturnsOutput(t *testing.T) 
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadContainerAction("start", "alpha")
 	if err != nil {
@@ -11135,7 +10716,6 @@ func TestMaybeRunRustDyadRemoveDelegatesAndReturnsOutput(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadRemove("alpha")
 	if err != nil {
@@ -11165,7 +10745,6 @@ func TestMaybeRunRustDyadExecDelegatesToRustCLI(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeRunRustDyadExec("alpha", "critic", true, []string{"bash", "-lc", "echo hi"})
 	if err != nil {
@@ -11192,7 +10771,6 @@ func TestMaybeRunRustDyadCleanupDelegatesAndReturnsOutput(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadCleanup()
 	if err != nil {
@@ -11222,7 +10800,6 @@ func TestMaybeRunRustDyadLogsDelegatesAndReturnsOutput(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadLogs("alpha", "critic", 42, true)
 	if err != nil {
@@ -11252,7 +10829,6 @@ func TestMaybeRunRustDyadListDelegatesAndReturnsOutput(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadList(true)
 	if err != nil {
@@ -11283,7 +10859,6 @@ func TestMaybeRunRustDyadStatusDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustDyadStatus("alpha", true)
 	if err != nil {
@@ -11313,7 +10888,6 @@ func TestMaybeReadRustDyadStatusDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	status, delegated, err := maybeReadRustDyadStatus("alpha")
 	if err != nil {
@@ -11343,7 +10917,6 @@ func TestMaybeReadRustDyadPeekPlanDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	plan, delegated, err := maybeReadRustDyadPeekPlan("alpha", "critic", "peek-main")
 	if err != nil {
@@ -11374,7 +10947,6 @@ func TestMaybeApplyRustFortUnauthorizedRefreshOutcomeDelegatesAndParsesJSON(t *t
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	transition, delegated, err := maybeApplyRustFortUnauthorizedRefreshOutcome("/tmp/session.json", time.Unix(100, 0).UTC())
 	if err != nil {
@@ -11405,7 +10977,6 @@ func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexLogs("ferma", "25", true)
 	if err != nil {
@@ -11436,7 +11007,6 @@ func TestMaybeRunRustCodexCloneResultDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	result, delegated, err := maybeRunRustCodexCloneResult("ferma", "acme/repo", "token-123")
 	if err != nil {
@@ -11467,7 +11037,6 @@ func TestMaybeRunRustCodexExecDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexExec("ferma", "/workspace/project", true, false, []string{"A=1", "B=2"}, []string{"git", "status"})
 	if err != nil {
@@ -11498,7 +11067,6 @@ func TestMaybeRunRustCodexListDelegatesForTextOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexList(false)
 	if err != nil {
@@ -11529,7 +11097,6 @@ func TestMaybeRunRustCodexListDelegatesForJSONOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexList(true)
 	if err != nil {
@@ -11560,7 +11127,6 @@ func TestMaybeReadRustCodexStatusDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	status, delegated, err := maybeReadRustCodexStatus("ferma", true)
 	if err != nil {
@@ -11591,7 +11157,6 @@ func TestMaybeRunRustCodexStatusDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexStatus("ferma", true, true)
 	if err != nil {
@@ -11622,7 +11187,6 @@ func TestMaybeBuildRustCodexRespawnPlanDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	plan, delegated, err := maybeBuildRustCodexRespawnPlan("ferma", "ferma", []string{"si-codex-alpha", "ferma"})
 	if err != nil {
@@ -11652,7 +11216,6 @@ func TestMaybeReadRustCodexTmuxPlanDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	plan, delegated, err := maybeReadRustCodexTmuxPlan("profile-beta", "/workspace/app", "sess-123", "profile-beta")
 	if err != nil {
@@ -11682,7 +11245,6 @@ func TestMaybeReadRustCodexTmuxCommandDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	command, delegated, err := maybeReadRustCodexTmuxCommand("abc123")
 	if err != nil {
@@ -11713,7 +11275,6 @@ func TestMaybeParseRustCodexReportCaptureDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	parsed, delegated, err := maybeParseRustCodexReportCapture("› first\nline a\n› second\n• Done\nWorked for 5s", "› first\nline a\n› second\n• Done\nWorked for 5s", 1, false)
 	if err != nil {
@@ -11835,7 +11396,6 @@ func TestMaybeBuildRustCodexSpawnPlanDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	got, delegated, err := maybeBuildRustCodexSpawnPlan(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
@@ -11923,7 +11483,6 @@ func TestMaybeBuildRustCodexSpawnSpecDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	got, delegated, err := maybeBuildRustCodexSpawnSpec(rustCodexSpawnSpecRequest{
 		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
@@ -11986,7 +11545,6 @@ func TestMaybeStartRustCodexSpawnDelegatesAndReturnsContainerID(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	got, delegated, err := maybeStartRustCodexSpawn(rustCodexSpawnSpecRequest{
 		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
@@ -12028,7 +11586,6 @@ func TestMaybeBuildRustCodexRemoveArtifactsDelegatesAndParsesJSON(t *testing.T) 
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	got, delegated, err := maybeBuildRustCodexRemoveArtifacts("ferma")
 	if err != nil {
@@ -12059,7 +11616,6 @@ func TestMaybeRunRustCodexRemoveDelegatesAndReturnsOutput(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output, delegated, err := maybeRunRustCodexRemove("ferma", true)
 	if err != nil {
@@ -12090,7 +11646,6 @@ func TestMaybeRunRustCodexRemoveResultDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	result, delegated, err := maybeRunRustCodexRemoveResult("ferma", true)
 	if err != nil {
@@ -12127,7 +11682,6 @@ func TestMaybeRunRustCodexContainerActionResultDelegatesAndParsesJSON(t *testing
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	result, delegated, err := maybeRunRustCodexContainerActionResult("stop", "ferma")
 	if err != nil {
@@ -12158,7 +11712,6 @@ func TestMaybeClearRustFortSessionStateDelegates(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeClearRustFortSessionState("/tmp/session.json")
 	if err != nil {
@@ -12186,7 +11739,6 @@ func TestMaybeClearRustFortRuntimeAgentStateDelegates(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	delegated, err := maybeClearRustFortRuntimeAgentState("/tmp/runtime-agent.json")
 	if err != nil {
@@ -12215,7 +11767,6 @@ func TestMaybeLoadRustCodexFortBootstrapDelegatesAndParsesJSON(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	boot, delegated, err := maybeLoadRustCodexFortBootstrap(
 		"/tmp/session.json",
