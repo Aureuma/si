@@ -4345,18 +4345,6 @@ func buildRustCodexSpawnStartArgs(request rustCodexSpawnSpecRequest) []string {
 	return args
 }
 
-func shouldUseExperimentalRustCLI() bool {
-	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 func shouldUseRustDyadCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true

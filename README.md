@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge" alt="License: AGPL-3.0"></a>
-  <a href="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white&style=for-the-badge" alt="Go 1.25"></a>
+  <a href="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge" alt="Rust 1.86"></a>
   <a href="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker required"></a>
   <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
   <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
@@ -25,12 +25,11 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 - Provider bridges: Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, Social, WorkOS, AWS, GCP, OpenAI, OCI.
 - Orbitals: namespaced integration catalog + install/enable/doctor lifecycle (`si orbits ...`).
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
-- Sustainable automation agents: PR guardian and website sentry (`tools/agents/*`).
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
 ## Repo layout
 
-- `tools/si`: remaining Go compatibility and test surface during retirement.
+- `tools/si`: remaining Go compatibility and helper surface during retirement (`si-go`, shared version source, legacy fallback internals).
 - `rust/`: primary Rust workspace and shipping CLI implementation.
 - `tools/si-browser`: browser runtime Docker assets.
 - `tools/si-image`: unified runtime image used by codex and dyad containers.
@@ -62,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh
 Prerequisites:
 
 - Docker Engine available on host.
-- Go 1.25+ only if working on the remaining Go compatibility/test surface.
+- Go 1.25+ only if working on the remaining Go compatibility/helper surface.
 
 Build local CLI + runtime image:
 
