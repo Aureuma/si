@@ -652,7 +652,7 @@ Status: in_progress
 1. ✅ Complete full real-host command matrix execution for transition-critical lanes (build/release/install/npm/homebrew/installer smoke).
 2. ✅ Capture expected-vs-actual results for each command in this ticket directory so future contributors can run the same matrix.
 3. ✅ Resolve any command/argument mismatches discovered during execution and land minimal fixes before declaring phase completion.
-4. ⏸ Execute the corresponding GitHub-hosted Phase 9/10 CI and Orbit runner workflows once token-backed GitHub auth is restored.
+4. ⏸ Execute the corresponding GitHub-hosted Phase 9/10 CI and Orbit runner workflows once token-backed GitHub auth is restored; `gh auth status` currently reports an invalid `github.com` token on this host and no `GH_TOKEN`/`GITHUB_TOKEN` override is present.
 
 ## Real-Host E2E Test Plan (for Phase 9/10 validation)
 
@@ -839,3 +839,4 @@ Status: in_progress
   - `installer smoke-homebrew` skipped (brew unavailable).
   - Matrix reached `Matrix complete.`
 - `tools/si/cmd/releasectl/main_test.go` removed as the remaining obsolete Go release helper test artifact tied to retired `releasectl` compatibility path.
+- GitHub-hosted follow-up remains externally blocked in this environment: `gh auth status` reports an invalid `github.com` token from `/home/shawn/.config/gh/hosts.yml`, and no `GH_TOKEN`/`GITHUB_TOKEN` override is available for workflow dispatch or run inspection.
