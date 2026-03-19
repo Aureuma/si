@@ -22,7 +22,7 @@ func runImageBuildPreflight(repoRoot string) error {
 	// Reuse SI's managed toolchain resolution so preflight does not fail just
 	// because host PATH does not currently include go.
 	if _, err := os.Stat(filepath.Join(repoRoot, "tools", "si", "go.mod")); err == nil {
-		resolved, err := resolveGoForSelfBuild(repoRoot, filepath.Join(repoRoot, "si"), "go")
+		resolved, err := resolveGoCompatToolchain(filepath.Join(repoRoot, "si"), "go")
 		if err != nil {
 			return fmt.Errorf("resolve go for image preflight: %w", err)
 		}

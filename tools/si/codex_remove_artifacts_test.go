@@ -9,7 +9,7 @@ import (
 
 func TestResolveCodexRemoveArtifactsFallsBackToGoArtifacts(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, "")
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	artifacts, delegated, err := resolveCodexRemoveArtifacts("ferma")
 	if err != nil {
@@ -40,7 +40,7 @@ func TestResolveCodexRemoveArtifactsUsesRustPlanWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	artifacts, delegated, err := resolveCodexRemoveArtifacts("ferma")
 	if err != nil {
@@ -72,7 +72,7 @@ func TestResolveCodexContainerNameUsesRustPlanWhenConfigured(t *testing.T) {
 	}
 
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	containerName, err := resolveCodexContainerName("ferma")
 	if err != nil {

@@ -44,7 +44,7 @@ func cmdAnalyze(args []string) {
 	}
 
 	root := mustRepoRoot()
-	goPath, err := resolveGoForSelfBuild(root, filepath.Join(root, "si"), "go")
+	goPath, err := resolveGoCompatToolchain(filepath.Join(root, "si"), "go")
 	if err != nil {
 		fatal(fmt.Errorf("go toolchain not found for analyze: %w", err))
 	}

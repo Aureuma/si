@@ -286,7 +286,7 @@ func TestLoadWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	state, err := loadWarmWeeklyState()
 	if err != nil {
@@ -316,7 +316,7 @@ func TestSaveWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	err := saveWarmWeeklyState(warmWeeklyState{
 		Version: 3,
@@ -348,7 +348,7 @@ func TestCmdWarmupStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	output := captureOutputForTest(t, func() {
 		cmdWarmupStatus([]string{"--json"})
@@ -495,7 +495,7 @@ func TestWarmWeeklyAutostartRequestedUsesRustMarkerStateWhenConfigured(t *testin
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	requested, reason := warmWeeklyAutostartRequested()
 	if requested || reason != "disabled" {
@@ -522,7 +522,7 @@ func TestWarmWeeklyAutostartRequestedDelegatesDecisionToRustWhenConfigured(t *te
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	requested, reason := warmWeeklyAutostartRequested()
 	if !requested || reason != "legacy_state" {
@@ -549,7 +549,7 @@ func TestWriteWarmWeeklyAutostartMarkerDelegatesToRustCLIWhenConfigured(t *testi
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := writeWarmWeeklyAutostartMarker(); err != nil {
 		t.Fatalf("writeWarmWeeklyAutostartMarker: %v", err)
@@ -575,7 +575,7 @@ func TestSetWarmWeeklyDisabledDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLILegacyToggleEnv, "")
 
 	if err := setWarmWeeklyDisabled(true); err != nil {
 		t.Fatalf("setWarmWeeklyDisabled: %v", err)
