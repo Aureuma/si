@@ -13,3 +13,7 @@ path = "src/bin/import_dotenv_to_si_vault.rs"
 [[bin]]
 name = "fake-codex"
 path = "src/bin/fake_codex.rs"
+
+[[bin]]
+name = "orbits-test-runner"
+path = "src/bin/orbits_test_runner.rs"
