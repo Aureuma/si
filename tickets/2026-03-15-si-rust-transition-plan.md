@@ -611,6 +611,7 @@ Progress notes:
 - completed: retired the standalone Go `fake-codex` helper by moving the dyad smoke wrapper onto a Rust `si-tools` binary, keeping the same prompt/report behavior while deleting the old Go entrypoint under `tools/si/cmd`
 - completed: retired the Go CLI dependency from the Orbit runner shell entrypoints by moving those wrappers onto a Rust `si-tools` runner binary, while intentionally keeping Go toolchain setup only for the underlying Orbit test packages they still execute
 - completed: retired the standalone Go `test-fort-spawn-matrix` helper by moving its shell wrapper onto a Rust `si-tools` binary, while intentionally leaving the underlying Fort integration test itself on the Go side for now
+- completed: retired the remaining `go run ./tools/si test ...` shell entrypoints (`tools/test.sh`, `tools/test-vault.sh`, and `tools/test-all.sh`) by moving their orchestration logic onto a Rust `si-tools` runner binary while keeping the underlying Go test invocations intact
 
 ## Test Strategy by Layer
 
