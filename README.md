@@ -30,8 +30,8 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## Repo layout
 
-- `tools/si`: main Go CLI.
-- `rust/`: staged Rust workspace for the gradual CLI rewrite.
+- `tools/si`: remaining Go compatibility and test surface during retirement.
+- `rust/`: primary Rust workspace and shipping CLI implementation.
 - `tools/si-browser`: browser runtime Docker assets.
 - `tools/si-image`: unified runtime image used by codex and dyad containers.
 - `docs/`: Markdown + Mintlify docs content.
@@ -62,17 +62,17 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh
 Prerequisites:
 
 - Docker Engine available on host.
-- Go 1.25+ only if building `si` directly on host (otherwise use Dockerized build flows).
+- Go 1.25+ only if working on the remaining Go compatibility/test surface.
 
 Build local CLI + runtime image:
 
 ```bash
-# host build
+# host build (Rust-primary CLI)
 cd /path/to/si
-go build -o si ./tools/si
+cargo build --release --locked --bin si-rs
 
 # runtime image for dyads/codex
-./si build image
+./.artifacts/cargo-target/release/si-rs build image
 ```
 
 ## Common workflows
