@@ -37,13 +37,8 @@ func cmdProviders(args []string) {
 }
 
 func cmdProvidersCharacteristics(args []string) {
-	delegated, err := runProvidersCharacteristicsCommand(args)
-	if err != nil {
-		fatal(err)
-	}
-	if delegated {
-		return
-	}
+	requireRustCLIDelegation("providers characteristics", runProvidersCharacteristicsCommand(args))
+	return
 
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("providers characteristics", flag.ExitOnError)
@@ -162,6 +157,8 @@ func formatRate(value float64) string {
 }
 
 func cmdProvidersHealth(args []string) {
+	requireRustCLIDelegation("providers health", runProvidersHealthCommand(args))
+	return
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("providers health", flag.ExitOnError)
 	providerID := fs.String("provider", "", "provider id (github, cloudflare, google_places, google_play, apple_appstore, youtube, stripe, social_*, workos, aws_iam, gcp_serviceusage, oci_core)")

@@ -121,7 +121,11 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 		}
 	}, "version", "--version", "-v")
 	register(func(cmd string, args []string) {
-		if !dispatchCodexCommand(cmd, args) {
+		delegated, err := runCodexCommand(cmd, args)
+		if err != nil {
+			fatal(err)
+		}
+		if !delegated {
 			printUnknown("", cmd)
 			usage()
 			os.Exit(1)
