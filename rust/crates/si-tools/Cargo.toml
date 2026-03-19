@@ -38,6 +38,10 @@ path = "src/bin/si_entrypoint.rs"
 name = "codex-stdout-parser"
 path = "src/bin/codex_stdout_parser.rs"
 
+[[bin]]
+name = "codex-interactive-driver"
+path = "src/bin/codex_interactive_driver.rs"
+
 [dependencies]
 chrono.workspace = true
 libc.workspace = true

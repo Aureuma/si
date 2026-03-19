@@ -16,7 +16,6 @@ const testOrbitsUsageText = "usage: si test orbits <unit|policy|catalog|e2e|all>
 var testWorkspaceModules = []string{
 	"./agents/critic/...",
 	"./agents/shared/...",
-	"./tools/codex-interactive-driver/...",
 	"./tools/si/...",
 }
 
