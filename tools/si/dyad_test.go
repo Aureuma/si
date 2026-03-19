@@ -10,7 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 )
 
 func TestNormalizeDyadCommandAliases(t *testing.T) {

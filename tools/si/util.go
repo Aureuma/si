@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	shared "si/agents/shared/docker"
+	shared "si/tools/si/internal/shareddocker"
 
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
