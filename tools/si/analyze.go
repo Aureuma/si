@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,16 +16,10 @@ type analyzeModule struct {
 	Dir string
 }
 
-type goWorkEditJSON struct {
-	Use []struct {
-		DiskPath string `json:"DiskPath"`
-	} `json:"Use"`
-}
-
 func cmdAnalyze(args []string) {
 	fs := flag.NewFlagSet("analyze", flag.ExitOnError)
 	modules := multiFlag{}
-	fs.Var(&modules, "module", "module path to analyze (repeatable; default: all go.work modules)")
+	fs.Var(&modules, "module", "module path to analyze (repeatable; default: all Go modules)")
 	skipVet := fs.Bool("skip-vet", false, "skip go vet")
 	skipLint := fs.Bool("skip-lint", false, "skip golangci-lint")
 	fix := fs.Bool("fix", false, "pass --fix to golangci-lint")
@@ -111,41 +104,13 @@ func runAnalyzeCommand(dir, name string, args []string) error {
 }
 
 func discoverAnalyzeModules(root string, goPath string) ([]analyzeModule, error) {
-	cmd := exec.Command(goPath, "work", "edit", "-json")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("discover modules from go.work: %w", err)
+	_ = goPath
+	rel := filepath.ToSlash(filepath.Join("tools", "si"))
+	dir := filepath.Join(root, rel)
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		return nil, fmt.Errorf("discover Go modules: tools/si/go.mod not found: %w", err)
 	}
-	var payload goWorkEditJSON
-	if err := json.Unmarshal(out, &payload); err != nil {
-		return nil, fmt.Errorf("parse go.work json: %w", err)
-	}
-	if len(payload.Use) == 0 {
-		return nil, errors.New("go.work has no use entries")
-	}
-	mods := make([]analyzeModule, 0, len(payload.Use))
-	seen := map[string]struct{}{}
-	for _, use := range payload.Use {
-		rel := strings.TrimSpace(use.DiskPath)
-		if rel == "" {
-			continue
-		}
-		rel = filepath.Clean(rel)
-		if rel == "." {
-			rel = "."
-		} else {
-			rel = strings.TrimPrefix(rel, "./")
-		}
-		dir := filepath.Join(root, rel)
-		if _, ok := seen[dir]; ok {
-			continue
-		}
-		seen[dir] = struct{}{}
-		mods = append(mods, analyzeModule{Rel: filepath.ToSlash(rel), Dir: dir})
-	}
-	sort.Slice(mods, func(i, j int) bool { return mods[i].Rel < mods[j].Rel })
-	return mods, nil
+	return []analyzeModule{{Rel: rel, Dir: dir}}, nil
 }
 
 func resolveAnalyzeModules(all []analyzeModule, filters []string) ([]analyzeModule, error) {
@@ -167,7 +132,7 @@ func resolveAnalyzeModules(all []analyzeModule, filters []string) ([]analyzeModu
 			}
 		}
 		if len(matches) == 0 {
-			return nil, fmt.Errorf("module %q not found in go.work", raw)
+			return nil, fmt.Errorf("module %q not found", raw)
 		}
 		if len(matches) > 1 {
 			names := make([]string, 0, len(matches))

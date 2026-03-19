@@ -59,8 +59,9 @@ jobs:
           go-version-file: tools/si/go.mod
 
       - name: Unit tests (Fort/Vault surface)
+        working-directory: tools/si
         run: |
-          go test ./tools/si -run 'Test(Fort|ResolveFort|PrepareFortRuntimeAuth|EnsureSIVault|ResolveSIVaultTarget|EncryptDotenvDoc|AnalyzeDotenvDecryptability|EnsureSIVaultPublicKeyHeader)' -count=1
+          go test . -run 'Test(Fort|ResolveFort|PrepareFortRuntimeAuth|EnsureSIVault|ResolveSIVaultTarget|EncryptDotenvDoc|AnalyzeDotenvDecryptability|EnsureSIVaultPublicKeyHeader)' -count=1
 
       - name: Build SI local image for spawn integration
         run: docker build -t aureuma/si:local -f tools/si-image/Dockerfile .
@@ -69,5 +70,6 @@ jobs:
         env:
           SI_REPO: ${{ github.workspace }}
           FORT_REPO: ${{ github.workspace }}/fort
+        working-directory: tools/si
         run: |
-          go test -tags integration ./tools/si -run TestFortSpawnMatrix -count=1
+          go test -tags integration . -run TestFortSpawnMatrix -count=1

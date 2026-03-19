@@ -14,7 +14,7 @@ const testUsageText = "usage: si test <workspace|vault|orbits|all> [args]"
 const testOrbitsUsageText = "usage: si test orbits <unit|policy|catalog|e2e|all> [args]"
 
 var testWorkspaceModules = []string{
-	"./tools/si/...",
+	"./...",
 }
 
 var runTestCommand = func(dir, name string, args ...string) error {
@@ -60,7 +60,7 @@ func cmdTestWorkspace(args []string) {
 	}
 	fs := flag.NewFlagSet("test workspace", flag.ContinueOnError)
 	fs.SetOutput(ioDiscardWriter{})
-	list := fs.Bool("list", false, "print go.work module patterns without running tests")
+	list := fs.Bool("list", false, "print Go module patterns without running tests")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -68,7 +68,7 @@ func cmdTestWorkspace(args []string) {
 		fatal(errors.New("usage: si test workspace [--list]"))
 	}
 
-	root, goBin := mustPrepareGoWorkspace()
+	_, moduleDir, goBin := mustPrepareGoWorkspace()
 	timeout := envOr("SI_GO_TEST_TIMEOUT", "15m")
 	printGoVersion(goBin)
 	fmt.Printf("go test timeout: %s\n", timeout)
@@ -80,7 +80,7 @@ func cmdTestWorkspace(args []string) {
 	}
 	fmt.Println("Running go test on:", strings.Join(testWorkspaceModules, " "))
 	testArgs := append([]string{"test", "-timeout", timeout}, testWorkspaceModules...)
-	if err := runTestCommand(root, goBin, testArgs...); err != nil {
+	if err := runTestCommand(moduleDir, goBin, testArgs...); err != nil {
 		fatal(err)
 	}
 }
@@ -100,24 +100,24 @@ func cmdTestVault(args []string) {
 		fatal(errors.New("usage: si test vault [--quick]"))
 	}
 
-	root, goBin := mustPrepareGoWorkspace()
+	_, moduleDir, goBin := mustPrepareGoWorkspace()
 	timeout := envOr("SI_GO_TEST_TIMEOUT", "20m")
 	printGoVersion(goBin)
 	fmt.Printf("go test timeout: %s\n", timeout)
 
 	fmt.Println("[1/3] vault command wiring + guardrail unit tests")
-	if err := runTestCommand(root, goBin,
+	if err := runTestCommand(moduleDir, goBin,
 		"test", "-timeout", timeout, "-count=1", "-shuffle=on",
 		"-run", "^(TestVaultCommandActionSetsArePopulated|TestVaultActionNamesMatchDispatchSwitches|TestVaultValidateImplicitTargetRepoScope.*)$",
-		"./tools/si",
+		".",
 	); err != nil {
 		fatal(err)
 	}
 
 	fmt.Println("[2/3] vault internal package tests")
-	if err := runTestCommand(root, goBin,
+	if err := runTestCommand(moduleDir, goBin,
 		"test", "-timeout", timeout, "-count=1", "-shuffle=on",
-		"./tools/si/internal/vault/...",
+		"./internal/vault/...",
 	); err != nil {
 		fatal(err)
 	}
@@ -126,10 +126,10 @@ func cmdTestVault(args []string) {
 		fmt.Println("[3/3] skipped vault e2e subprocess tests (--quick)")
 	} else {
 		fmt.Println("[3/3] vault e2e subprocess tests")
-		if err := runTestCommand(root, goBin,
+		if err := runTestCommand(moduleDir, goBin,
 			"test", "-timeout", timeout, "-count=1", "-shuffle=on",
 			"-run", "^TestVaultE2E_",
-			"./tools/si",
+			".",
 		); err != nil {
 			fatal(err)
 		}
@@ -215,22 +215,22 @@ func cmdTestOrbitsAll(args []string) {
 }
 
 func runTestOrbitLane(lane string) {
-	root, goBin := mustPrepareGoWorkspace()
+	_, moduleDir, goBin := mustPrepareGoWorkspace()
 	switch strings.ToLower(strings.TrimSpace(lane)) {
 	case "unit":
-		if err := runTestCommand(root, goBin, "test", "-count=1", "./tools/si/internal/orbitals", "-run", "Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)"); err != nil {
+		if err := runTestCommand(moduleDir, goBin, "test", "-count=1", "./internal/orbitals", "-run", "Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)"); err != nil {
 			fatal(err)
 		}
 	case "policy":
-		if err := runTestCommand(root, goBin, "test", "-count=1", "./tools/si", "-run", "TestOrbits(PolicyAffectsEffectiveState|PolicySetSupportsNamespaceWildcard)"); err != nil {
+		if err := runTestCommand(moduleDir, goBin, "test", "-count=1", ".", "-run", "TestOrbits(PolicyAffectsEffectiveState|PolicySetSupportsNamespaceWildcard)"); err != nil {
 			fatal(err)
 		}
 	case "catalog":
-		if err := runTestCommand(root, goBin, "test", "-count=1", "./tools/si", "-run", "TestOrbits(CatalogBuildAndValidateJSON|ListReadsEnvCatalogPaths|InfoIncludesCatalogSourceForBuiltin|ListCommandJSON|LifecycleViaCatalogJSON|UpdateCommandJSON)"); err != nil {
+		if err := runTestCommand(moduleDir, goBin, "test", "-count=1", ".", "-run", "TestOrbits(CatalogBuildAndValidateJSON|ListReadsEnvCatalogPaths|InfoIncludesCatalogSourceForBuiltin|ListCommandJSON|LifecycleViaCatalogJSON|UpdateCommandJSON)"); err != nil {
 			fatal(err)
 		}
 	case "e2e":
-		if err := runTestCommand(root, goBin, "test", "-count=1", "./tools/si", "-run", "TestOrbits"); err != nil {
+		if err := runTestCommand(moduleDir, goBin, "test", "-count=1", ".", "-run", "TestOrbits"); err != nil {
 			fatal(err)
 		}
 	default:
@@ -245,7 +245,7 @@ func cmdTestAll(args []string) {
 	}
 	fs := flag.NewFlagSet("test all", flag.ContinueOnError)
 	fs.SetOutput(ioDiscardWriter{})
-	skipGo := fs.Bool("skip-go", false, "skip go workspace tests")
+	skipGo := fs.Bool("skip-go", false, "skip Go module tests")
 	skipVault := fs.Bool("skip-vault", false, "skip vault strict suite")
 	skipInstaller := fs.Bool("skip-installer", false, "skip installer host smoke tests")
 	skipNPM := fs.Bool("skip-npm", false, "skip npm installer smoke tests")
@@ -257,14 +257,14 @@ func cmdTestAll(args []string) {
 		fatal(errors.New("usage: si test all [--skip-go] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]"))
 	}
 
-	root := mustGoWorkRoot()
+	root := mustRepoGoModuleRoot()
 	runStep := func(title string, fn func()) {
 		fmt.Fprintf(os.Stderr, "==> %s\n", title)
 		fn()
 	}
 
 	if !*skipGo {
-		runStep("Go workspace tests", func() { cmdTestWorkspace(nil) })
+		runStep("Go module tests", func() { cmdTestWorkspace(nil) })
 	}
 	if !*skipVault {
 		runStep("Vault strict suite", func() { cmdTestVault(nil) })
@@ -312,22 +312,23 @@ func requireNoArgs(args []string, usage string) bool {
 	return true
 }
 
-func mustPrepareGoWorkspace() (string, string) {
-	root := mustGoWorkRoot()
+func mustPrepareGoWorkspace() (string, string, string) {
+	root := mustRepoGoModuleRoot()
+	moduleDir := filepath.Join(root, "tools", "si")
 	goBin, err := lookupTestPath("go")
 	if err != nil {
 		fatal(errors.New("go is required but was not found on PATH"))
 	}
-	return root, goBin
+	return root, moduleDir, goBin
 }
 
-func mustGoWorkRoot() string {
+func mustRepoGoModuleRoot() string {
 	root, err := repoRoot()
 	if err != nil {
-		fatal(errors.New("go.work not found. Run this command from the repo root."))
+		fatal(errors.New("tools/si/go.mod not found. Run this command from the repo root."))
 	}
-	if _, err := os.Stat(filepath.Join(root, "go.work")); err != nil {
-		fatal(errors.New("go.work not found. Run this command from the repo root."))
+	if _, err := os.Stat(filepath.Join(root, "tools", "si", "go.mod")); err != nil {
+		fatal(errors.New("tools/si/go.mod not found. Run this command from the repo root."))
 	}
 	return root
 }

@@ -38,10 +38,10 @@ fn main() -> ExitCode {
 
 fn repo_root() -> Result<String, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("go.work").is_file() {
+    if cwd.join("tools/si/go.mod").is_file() {
         Ok(cwd.display().to_string())
     } else {
-        Err("go.work not found; run from repo root".to_string())
+        Err("tools/si/go.mod not found; run from repo root".to_string())
     }
 }
 
@@ -103,32 +103,32 @@ fn run_lane(root: &str, go_bin: &str, lane: &str) -> ExitCode {
         "unit" => vec![
             "test",
             "-count=1",
-            "./tools/si/internal/orbitals",
+            "./internal/orbitals",
             "-run",
             "Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)",
         ],
         "policy" => vec![
             "test",
             "-count=1",
-            "./tools/si",
+            ".",
             "-run",
             "TestOrbits(PolicyAffectsEffectiveState|PolicySetSupportsNamespaceWildcard)",
         ],
         "catalog" => vec![
             "test",
             "-count=1",
-            "./tools/si",
+            ".",
             "-run",
             "TestOrbits(CatalogBuildAndValidateJSON|ListReadsEnvCatalogPaths|InfoIncludesCatalogSourceForBuiltin|ListCommandJSON|LifecycleViaCatalogJSON|UpdateCommandJSON)",
         ],
-        "e2e" => vec!["test", "-count=1", "./tools/si", "-run", "TestOrbits"],
+        "e2e" => vec!["test", "-count=1", ".", "-run", "TestOrbits"],
         _ => {
             eprintln!("unknown orbits lane: {lane}");
             return ExitCode::from(2);
         }
     };
 
-    match Command::new(go_bin).args(args).current_dir(root).status() {
+    match Command::new(go_bin).args(args).current_dir(format!("{root}/tools/si")).status() {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
         Err(err) => {
