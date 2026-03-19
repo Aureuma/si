@@ -3,4 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
-exec go run ./tools/si/cmd/test-fort-spawn-matrix "$@"
+BIN="${ROOT}/.artifacts/cargo-target/release/test-fort-spawn-matrix"
+if [[ -x "${BIN}" ]]; then
+  exec "${BIN}" "$@"
+fi
+exec cargo run --quiet --locked --manifest-path "${ROOT}/rust/crates/si-tools/Cargo.toml" --bin test-fort-spawn-matrix -- "$@"
