@@ -29,7 +29,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## Repo layout
 
-- `tools/si`: remaining Go compatibility and helper surface during retirement (`si-go`, shared version source, legacy fallback internals).
+- `tools/si`: remaining Go compatibility and helper surface during retirement (shared version source, legacy fallback internals).
 - `rust/`: primary Rust workspace and shipping CLI implementation.
 - `tools/si-browser`: browser runtime Docker assets.
 - `tools/si-image`: unified runtime image used by codex and dyad containers.
