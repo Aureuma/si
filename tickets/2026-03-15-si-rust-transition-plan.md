@@ -604,6 +604,7 @@ Progress notes:
 - completed: retired the obsolete Go `build self release-assets` compatibility path and usage text (`tools/si/build_cmd.go`, `tools/si/self_cmd.go`, `tools/si/rust_cli_bridge.go`, and matching tests), leaving release-asset generation solely on the Rust-owned shell/script entrypoints instead of the old Go CLI surface
 - completed: Rust now owns the remaining practical `build self` parity surface too (`build`, `upgrade`, and `run`), using `cargo build`/`cargo run` against `rust/crates/si-cli` so the old Go self-build plumbing is no longer the only implementation for those developer workflows
 - completed: retired the Go `build self` command surface and tests entirely (`tools/si/build_cmd.go`, `tools/si/self_cmd.go`, `tools/si/self_cmd_test.go`, and Go usage text), leaving those self-build workflows exclusively on the Rust CLI now that parity exists there
+- completed: retired the Go `agents-doctor` and `agents-status` helper binaries by replacing their shell wrappers with the new Rust `si-agents` crate and deleting the corresponding Go entrypoints under `tools/si/cmd`
 
 ## Test Strategy by Layer
 
