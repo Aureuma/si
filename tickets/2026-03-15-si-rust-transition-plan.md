@@ -159,6 +159,7 @@ Progress notes:
 - completed: the release-asset builder now ships a Rust-only archive layout (`si`, `README.md`, `LICENSE`), replacing the previous Go-primary tarball structure and removing the packaged Go adapter from release assets
 - completed: the installer settings smoke wrapper now validates the Rust-owned settings-helper tests directly via `cargo test`, removing the last obvious Go-era release/install helper test entrypoint from the local runbook
 - completed: the release workflow and checked-in Homebrew core artifact now follow the Rust-only cutover too, with `.github/workflows/cli-release-assets.yml` provisioning Rust for the release helpers and `packaging/homebrew-core/si.rb` regenerated through the Rust renderer for the current release tag
+- completed: the image/runtime cutover now ships Rust-native `si-codex-init`, `si-entrypoint`, and `codex-stdout-parser` binaries from `rust/crates/si-tools`, with the legacy Go implementations retired from the active workspace and local Go test matrix
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`

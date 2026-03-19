@@ -1,5 +1,10 @@
+use std::collections::BTreeSet;
+use std::env;
 use std::fs;
+use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 pub const USAGE_TEXT: &str = r#"Import plaintext .env files into si vault (native SI format).
 
@@ -75,6 +80,185 @@ pub fn parse_dotenv(content: &str) -> std::collections::BTreeMap<String, String>
             }
         }
         out.insert(key.to_string(), value);
+    }
+    out
+}
+
+pub fn sync_codex_skills(src: &Path, dest: &Path) -> io::Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+    if dest.exists() {
+        fs::remove_dir_all(dest)?;
+    }
+    copy_tree(src, dest)
+}
+
+fn copy_tree(src: &Path, dest: &Path) -> io::Result<()> {
+    fs::create_dir_all(dest)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            copy_tree(&src_path, &dest_path)?;
+        } else if metadata.is_file() {
+            copy_file(&src_path, &dest_path, metadata.permissions().mode())?;
+        }
+    }
+    Ok(())
+}
+
+fn copy_file(src: &Path, dest: &Path, mode: u32) -> io::Result<()> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::copy(src, dest)?;
+    fs::set_permissions(dest, fs::Permissions::from_mode(mode))?;
+    Ok(())
+}
+
+pub fn shell_escape(input: &str) -> String {
+    if input.is_empty() {
+        return "''".to_string();
+    }
+    let escaped = input.replace('\'', "'\"'\"'");
+    format!("'{escaped}'")
+}
+
+pub fn command_exists(name: &str) -> bool {
+    Command::new("sh")
+        .arg("-lc")
+        .arg(format!("command -v {} >/dev/null 2>&1", shell_escape(name)))
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+pub fn browser_mcp_url_from_env() -> Option<String> {
+    for key in ["SI_BROWSER_MCP_URL", "BROWSER_MCP_URL", "CODEX_BROWSER_MCP_URL"] {
+        if let Ok(value) = env::var(key) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    let host = ["SI_BROWSER_MCP_HOST", "BROWSER_MCP_HOST", "CODEX_BROWSER_MCP_HOST"]
+        .into_iter()
+        .find_map(|key| env::var(key).ok())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+    let port = ["SI_BROWSER_MCP_PORT", "BROWSER_MCP_PORT", "CODEX_BROWSER_MCP_PORT"]
+        .into_iter()
+        .find_map(|key| env::var(key).ok())
+        .filter(|value| !value.trim().is_empty())?;
+    Some(format!("http://{}:{}/mcp", host.trim(), port.trim()))
+}
+
+pub fn write_codex_config(config_path: &Path, template_path: Option<&Path>) -> io::Result<()> {
+    if config_path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let body = match template_path {
+        Some(path) if path.exists() => fs::read_to_string(path)?,
+        _ => default_codex_config(),
+    };
+    fs::write(config_path, body)?;
+    fs::set_permissions(config_path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+fn default_codex_config() -> String {
+    r#"# managed by si-codex-init
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+"#
+    .to_string()
+}
+
+pub fn collect_git_safe_directories(cwd: Option<&Path>) -> io::Result<Vec<PathBuf>> {
+    let mut dirs = BTreeSet::new();
+    for path in ["/workspace", "/workspaces", "/mnt"] {
+        let path = PathBuf::from(path);
+        if path.exists() {
+            dirs.insert(path);
+        }
+    }
+    if let Some(path) = cwd {
+        let mut current = Some(path);
+        while let Some(candidate) = current {
+            if candidate.exists() {
+                dirs.insert(candidate.to_path_buf());
+            }
+            current = candidate.parent().filter(|parent| {
+                parent.starts_with("/workspace") || parent.starts_with("/workspaces")
+            });
+        }
+    }
+    for mount in read_mount_points()? {
+        if mount.starts_with("/workspace")
+            || mount.starts_with("/workspaces")
+            || mount.starts_with("/mnt")
+            || mount.starts_with("/home/si")
+        {
+            dirs.insert(mount);
+        }
+    }
+    Ok(dirs.into_iter().collect())
+}
+
+pub fn ensure_git_safe_directories(home: &Path, dirs: &[PathBuf]) -> io::Result<()> {
+    if !command_exists("git") {
+        return Ok(());
+    }
+    for dir in dirs {
+        let _ = Command::new("git")
+            .env("HOME", home)
+            .arg("config")
+            .arg("--global")
+            .arg("--add")
+            .arg("safe.directory")
+            .arg(dir)
+            .status();
+    }
+    Ok(())
+}
+
+fn read_mount_points() -> io::Result<Vec<PathBuf>> {
+    let content = fs::read_to_string("/proc/self/mountinfo")?;
+    let mut mounts = Vec::new();
+    for line in content.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if let Some(raw_mount) = fields.get(4) {
+            mounts.push(PathBuf::from(decode_mount_field(raw_mount)));
+        }
+    }
+    Ok(mounts)
+}
+
+fn decode_mount_field(raw: &str) -> String {
+    let mut out = String::new();
+    let bytes = raw.as_bytes();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx] == b'\\' && idx + 3 < bytes.len() {
+            let octal = &raw[idx + 1..idx + 4];
+            if octal.chars().all(|ch| ('0'..='7').contains(&ch)) {
+                if let Ok(value) = u8::from_str_radix(octal, 8) {
+                    out.push(value as char);
+                    idx += 4;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[idx] as char);
+        idx += 1;
     }
     out
 }
@@ -166,5 +350,16 @@ SPACE_KEY = value
             dir.path().join(".env.prod"),
         ];
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn shell_escape_handles_quotes() {
+        assert_eq!(shell_escape("plain"), "'plain'");
+        assert_eq!(shell_escape("foo'bar"), "'foo'\"'\"'bar'");
+    }
+
+    #[test]
+    fn decode_mount_field_unescapes_octal() {
+        assert_eq!(decode_mount_field("/workspace/foo\\040bar"), "/workspace/foo bar");
     }
 }
