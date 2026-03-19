@@ -21,3 +21,7 @@ path = "src/bin/orbits_test_runner.rs"
 [[bin]]
 name = "test-fort-spawn-matrix"
 path = "src/bin/test_fort_spawn_matrix.rs"
+
+[[bin]]
+name = "si-test-runner"
+path = "src/bin/si_test_runner.rs"
