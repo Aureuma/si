@@ -19,7 +19,7 @@ fn main() -> ExitCode {
 
     println!("== Agent doctor ==");
 
-    let required = ["bash", "git", "python3", "go"];
+    let required = ["bash", "git", "python3"];
     let optional = ["shfmt", "gofmt"];
 
     for command in required {
@@ -42,8 +42,6 @@ fn main() -> ExitCode {
     println!();
     println!("== Syntax checks ==");
     let files = [
-        "tools/agents/pr-guardian.sh",
-        "tools/agents/website-sentry.sh",
         "tools/agents/doctor.sh",
         "tools/agents/status.sh",
     ];
