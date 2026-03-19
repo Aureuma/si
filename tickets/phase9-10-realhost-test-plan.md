@@ -38,6 +38,16 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
 | 17 | Installer smoke (docker) | `build installer smoke-docker` | Installer smoke command completes | Passed (`SI_INSTALL_SMOKE_SKIP_NONROOT=1`) |
 | 18 | Installer smoke (homebrew) | `build installer smoke-homebrew` | Smoke command runs when `brew` available or skipped | Skipped: `brew` not available |
 
+### Execution update (2026-03-19 fresh matrix)
+
+- `OUT_DIR=/tmp/si-e2e-fresh-single MULTI_DIR=/tmp/si-e2e-fresh-multi SMOKE_TIMEOUT_SECS=900 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh`
+- Result:
+  - Release single and multi assets both generated from scratch (all target tarballs + checksums).
+  - `verify-release-assets`, Homebrew render/update, npm build/publish dry-runs passed.
+  - Installer host/npm/docker smoke paths all completed.
+  - `installer smoke-homebrew` remained skipped due missing `brew`.
+  - Matrix completed.
+
 ## Notes
 
 - Steps 16–17 now pass when `SI_INSTALL_SMOKE_SKIP_NONROOT=1` and `SMOKE_TIMEOUT_SECS=900` with prebuilt release artifacts (`SI_INSTALL_SMOKE_ASSETS_DIR=${MULTI_DIR}`), confirming the previously long-running smoke lanes are now deterministic on this host.
