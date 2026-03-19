@@ -93,9 +93,9 @@ Planned follow-on crates:
 | 5. Security/runtime migration | in_progress | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
 | 6. Codex/dyad lifecycle migration | completed | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
 | 7. Provider migration | completed | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
-| 8. Release/install migration | in_progress | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
-| 9. Primary binary cutover | planned | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
-| 10. Go retirement | planned | remove obsolete Go code paths | delete migrated Go modules and scripts, simplify repo | no runtime references left, docs updated, release published from Rust path |
+| 8. Release/install migration | completed | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
+| 9. Primary binary cutover | in_progress | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
+| 10. Go retirement | in_progress | remove obsolete Go code paths | delete migrated Go modules and scripts, simplify repo | no runtime references left, docs updated, release published from Rust path |
 
 ## Detailed Work Items
 
