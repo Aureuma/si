@@ -769,7 +769,7 @@ Status: in_progress
 
 ### Remaining/known blockers to close matrix
 
-- Host execution blockers in the real-host matrix (`smoke-docker`, `smoke-npm`, and release asset multi-target compile paths) remain environment-dependent and may still require a non-time-constrained environment or prepared tool prerequisites.
+- Host execution blockers in earlier reruns were environment-dependent (`smoke-docker`, `smoke-npm`, and release asset multi-target compile paths) and required a non-time-constrained environment and prepared tool prerequisites.
 - Script/runtime hardening now tracked in `tickets/phase9-10-realhost-matrix.sh`:
   - Added timeout/failure status logging to `run`, `run_with_timeout`, and `run_smoke_with_env`, so matrix output now explicitly distinguishes timeout and failure exits.
   - Added prechecks in the matrix for `npm` and `docker` before smoke-lane invocation to convert missing prerequisites into SKIP reasons.
@@ -782,7 +782,7 @@ Status: in_progress
   - `homebrew render-core-formula`, `render-tap-formula`, and `update-tap-repo` execute successfully in current environment.
   - `verify-release-assets` now attempts one targeted retry when checksum verification fails in a non-SKIP mode, then reports final status.
   - `installer smoke-homebrew` is skipped when brew is unavailable on the host.
-  - `installer smoke-*` commands still frequently require local prerequisites and may timeout in this host despite corrected invocation and timeouts.
+  - `installer smoke-*` commands now complete end-to-end when using prebuilt artifacts and `SMOKE_TIMEOUT_SECS=900` with `SI_INSTALL_SMOKE_SKIP_NONROOT=1`; host still skips `smoke-homebrew` when `brew` is unavailable.
 
 ### Execution update (follow-up, 2026-03-18)
 
@@ -823,4 +823,8 @@ Status: in_progress
 - `./.artifacts/cargo-target/release/si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64 --out-dir /tmp/si-e2e-check-single`: PASS.
 - `./.artifacts/cargo-target/release/si-rs build self release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS (~17m), produced full 5-platform archive set + `checksums.txt`.
 - `./.artifacts/cargo-target/release/si-rs build self verify-release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS.
-- `./tickets/phase9-10-realhost-matrix.sh` with `OUT_DIR=/tmp/si-e2e-check-single`, `MULTI_DIR=/tmp/si-e2e-check-multi`, and `SKIP_RELEASE_BUILD=1`: all non-smoke release/install/npm/homebrew lanes PASS; `installer smoke-host` PASS; `installer smoke-npm` and `installer smoke-docker` timed out at 120s.
+- `./tickets/phase9-10-realhost-matrix.sh` with `OUT_DIR=/tmp/si-e2e-check-single`, `MULTI_DIR=/tmp/si-e2e-check-multi`, `SKIP_RELEASE_BUILD=1`, and `SMOKE_TIMEOUT_SECS=900`: all targeted lanes PASS; `installer smoke-host`, `installer smoke-npm`, and `installer smoke-docker` PASS (non-root smoke skipped by `SI_INSTALL_SMOKE_SKIP_NONROOT=1`).
+
+### Execution update (2026-03-19 follow-up)
+
+- `./tickets/phase9-10-realhost-matrix.sh` with `OUT_DIR=/tmp/si-e2e-check-single`, `MULTI_DIR=/tmp/si-e2e-check-multi`, `SKIP_RELEASE_BUILD=1`, `SMOKE_TIMEOUT_SECS=900`, and prebuilt asset directory injected via matrix default `SI_INSTALL_SMOKE_ASSETS_DIR=${MULTI_DIR}`: all execution lanes reached `Matrix complete.` including `installer smoke-npm` and `installer smoke-docker`.

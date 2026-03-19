@@ -18032,18 +18032,32 @@ fn run_installer_smoke_npm() -> Result<()> {
     let root = std::env::current_dir().context("resolve repo root")?;
     let version = read_si_version(&root)?;
     let tmp = tempfile::tempdir().context("create temp dir")?;
-    let assets_dir = tmp.path().join("assets");
+    let mut assets_dir = tmp.path().join("assets");
     let npm_out = tmp.path().join("npm");
     let prefix_dir = tmp.path().join("prefix");
-    for dir in [&assets_dir, &npm_out, &prefix_dir] {
+    let mut build_assets = true;
+    if let Ok(provided_assets_dir) = std::env::var("SI_INSTALL_SMOKE_ASSETS_DIR") {
+        let provided = Path::new(&provided_assets_dir).to_path_buf();
+        if provided.join("checksums.txt").exists() {
+            assets_dir = provided;
+            build_assets = false;
+        }
+    }
+    if build_assets {
+        fs::create_dir_all(&assets_dir)
+            .with_context(|| format!("create {}", assets_dir.display()))?;
+    }
+    for dir in [&npm_out, &prefix_dir] {
         fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
     }
 
-    run_path_command_checked(
-        &root,
-        &root.join("tools").join("release").join("build-cli-release-assets.sh"),
-        &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-    )?;
+    if build_assets {
+        run_path_command_checked(
+            &root,
+            &root.join("tools").join("release").join("build-cli-release-assets.sh"),
+            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+        )?;
+    }
     run_path_command_checked(
         &root,
         &root.join("tools").join("release").join("npm").join("build-npm-package.sh"),
@@ -18169,11 +18183,25 @@ fn run_installer_smoke_homebrew() -> Result<()> {
         .with_context(|| format!("create {}", formula_dir.display()))?;
     fs::create_dir_all(&cache_dir).with_context(|| format!("create {}", cache_dir.display()))?;
 
-    run_path_command_checked(
-        &root,
-        &root.join("tools").join("release").join("build-cli-release-assets.sh"),
-        &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-    )?;
+    if let Ok(provided_assets_dir) = std::env::var("SI_INSTALL_SMOKE_ASSETS_DIR") {
+        let provided = Path::new(&provided_assets_dir).to_path_buf();
+        if provided.join("checksums.txt").exists() {
+            std::fs::copy(provided.join("checksums.txt"), assets_dir.join("checksums.txt"))
+                .context("copy prebuilt checksums")?;
+        } else {
+            run_path_command_checked(
+                &root,
+                &root.join("tools").join("release").join("build-cli-release-assets.sh"),
+                &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+            )?;
+        }
+    } else {
+        run_path_command_checked(
+            &root,
+            &root.join("tools").join("release").join("build-cli-release-assets.sh"),
+            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+        )?;
+    }
 
     let checksums_path = assets_dir.join("checksums.txt");
     let base_url = format!("file://{}", assets_dir.display());

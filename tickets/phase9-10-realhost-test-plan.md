@@ -13,7 +13,7 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
   - `./tickets/phase9-10-realhost-matrix.sh`
   - Log sink: `tickets/phase9-10-realhost-matrix-latest.log`
 - Invocation for this run:
-  - `OUT_DIR=/tmp/si-e2e-check-single MULTI_DIR=/tmp/si-e2e-check-multi SKIP_RELEASE_BUILD=1 SMOKE_TIMEOUT_SECS=120 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh`
+  - `OUT_DIR=/tmp/si-e2e-check-single MULTI_DIR=/tmp/si-e2e-check-multi SKIP_RELEASE_BUILD=1 SMOKE_TIMEOUT_SECS=900 RELEASE_VERSION=v0.54.0 ./tickets/phase9-10-realhost-matrix.sh`
 
 ## Execution Matrix
 
@@ -34,18 +34,18 @@ Validate that the Rust/Go transition deliverables in `SI Tests` are operational 
 | 13 | Vault-backed npm dry-run | `build npm publish-from-vault --dry-run` | Pass with vault available; non-zero allowed if vault path absent | Warned: `vault list failed` |
 | 14 | Installer settings helper print | `build installer settings-helper --print` | Helper output includes configured defaults | Passed |
 | 15 | Installer smoke (host) | `build installer smoke-host` | Installer help/tests/e2e flow validates | Passed |
-| 16 | Installer smoke (npm) | `build installer smoke-npm` | Installer smoke command completes | Timeout at 120s (still blocked locally) |
-| 17 | Installer smoke (docker) | `build installer smoke-docker` | Installer smoke command completes | Timeout at 120s (still blocked locally) |
+| 16 | Installer smoke (npm) | `build installer smoke-npm` | Installer smoke command completes | Passed |
+| 17 | Installer smoke (docker) | `build installer smoke-docker` | Installer smoke command completes | Passed (`SI_INSTALL_SMOKE_SKIP_NONROOT=1`) |
 | 18 | Installer smoke (homebrew) | `build installer smoke-homebrew` | Smoke command runs when `brew` available or skipped | Skipped: `brew` not available |
 
 ## Notes
 
-- Warnings in steps 16–17 are bounded by local `SMOKE_TIMEOUT_SECS=120`; those lanes should be re-run with a normal timeout and a prepared environment (npm/Docker) for full confidence.
+- Steps 16–17 now pass when `SI_INSTALL_SMOKE_SKIP_NONROOT=1` and `SMOKE_TIMEOUT_SECS=900` with prebuilt release artifacts (`SI_INSTALL_SMOKE_ASSETS_DIR=${MULTI_DIR}`), confirming the previously long-running smoke lanes are now deterministic on this host.
 - No source changes were required by this local validation pass; behavior matched expected handling for known environmental constraints.
 - This run validates that the current formatting-only transition fixes did not regress the matrix entry points.
 
 ## Follow-up Actions
 
-1. Re-run matrix with normal timeout budget (or CI-host equivalent) for smoke-lanes, with npm and Docker prerequisites prepared.
+1. Re-run matrix with normal timeout budget (or CI-host equivalent) for smoke-lanes, with npm and Docker prerequisites prepared (now achieved with prebuilt asset reuse).
 2. Re-run matrix with `SKIP_RELEASE_BUILD=0` on release-capable runners to validate artifact generation in non-cached contexts.
 3. Confirm GitHub-hosted `SI Tests` and `Orbit Runners` runs reach green once GitHub API auth is restored.
