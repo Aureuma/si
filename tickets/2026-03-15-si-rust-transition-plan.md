@@ -817,3 +817,10 @@ Status: in_progress
 - `./.artifacts/cargo-target/release/si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64 --out-dir /tmp/si-e2e-check-single`: PASS.
 - `./.artifacts/cargo-target/release/si-rs build self release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS (~17m), produced full 5-platform archive set + `checksums.txt`.
 - `tickets/phase9-10-realhost-matrix.sh` with `SKIP_RELEASE_BUILD=1` and `SMOKE_TIMEOUT_SECS=600`: PASS for all non-smoke lanes that can run in this host; `smoke-npm` and `smoke-docker` still timeout at 600s.
+
+### Execution update (2026-03-19)
+
+- `./.artifacts/cargo-target/release/si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64 --out-dir /tmp/si-e2e-check-single`: PASS.
+- `./.artifacts/cargo-target/release/si-rs build self release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS (~17m), produced full 5-platform archive set + `checksums.txt`.
+- `./.artifacts/cargo-target/release/si-rs build self verify-release-assets --version v0.54.0 --out-dir /tmp/si-e2e-check-multi`: PASS.
+- `./tickets/phase9-10-realhost-matrix.sh` with `OUT_DIR=/tmp/si-e2e-check-single`, `MULTI_DIR=/tmp/si-e2e-check-multi`, and `SKIP_RELEASE_BUILD=1`: all non-smoke release/install/npm/homebrew lanes PASS; `installer smoke-host` PASS; `installer smoke-npm` and `installer smoke-docker` timed out at 120s.
