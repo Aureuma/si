@@ -3731,7 +3731,7 @@ func maybeParseRustCodexReportCapture(clean string, raw string, promptIndex int,
 }
 
 func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustCompatCLI() {
 		return nil, false, nil
 	}
 	args := []string{
@@ -4086,7 +4086,7 @@ func normalizeRustFortSessionVariant(value string) string {
 }
 
 func maybeDispatchRustCLICompat(command string, args ...string) (bool, error) {
-	if !shouldUseExperimentalRustCLI() {
+	if !shouldUseRustCompatCLI() {
 		return false, nil
 	}
 	bin, err := resolveRustCLIBinary()
@@ -4400,6 +4400,20 @@ func shouldUseRustWarmupCLI() bool {
 }
 
 func shouldUseRustFortCLI() bool {
+	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(siExperimentalRustCLIEnv))) {
+	case "0", "false", "no", "off":
+		return false
+	case "1", "true", "yes", "on":
+		return true
+	}
+	_, err := resolveRustCLIBinary()
+	return err == nil
+}
+
+func shouldUseRustCompatCLI() bool {
 	if strings.TrimSpace(os.Getenv(siRustCLIBinEnv)) != "" {
 		return true
 	}
