@@ -3,8 +3,7 @@ use std::path::{Path, PathBuf};
 
 pub fn repo_root() -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("Cargo.toml").is_file() && cwd.join("rust").join("crates").join("si-cli").is_dir()
-    {
+    if cwd.join("Cargo.toml").is_file() && cwd.join("rust").join("crates").join("si-cli").is_dir() {
         Ok(cwd)
     } else {
         Err("repo root not found; run from the si workspace root".to_string())

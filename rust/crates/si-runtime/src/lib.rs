@@ -129,7 +129,7 @@ fn host_si_toolchain_mount(container_home: &Path, ctx: &HostMountContext) -> Opt
             source,
             container_home.join(".local").join("share").join("si").join("toolchain"),
         )
-            .read_only(true),
+        .read_only(true),
     )
 }
 

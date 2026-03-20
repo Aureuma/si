@@ -13,12 +13,7 @@ fn main() -> ExitCode {
 
     println!("[fort-spawn-matrix] running Rust fort package tests");
 
-    match Command::new("cargo")
-        .current_dir(&root)
-        .arg("test")
-        .arg("-p")
-        .arg("si-rs-fort")
-        .status()
+    match Command::new("cargo").current_dir(&root).arg("test").arg("-p").arg("si-rs-fort").status()
     {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
