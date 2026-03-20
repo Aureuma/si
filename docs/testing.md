@@ -14,7 +14,7 @@ si test workspace
 ```
 
 That runner executes `cargo test --workspace`.
-No Go toolchain is required.
+No secondary language toolchain is required.
 Use `./tools/test.sh --help` for a quick usage reminder.
 Use `./tools/test.sh --list` to print the active test lane without running it.
 
