@@ -15,6 +15,18 @@ fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
 }
 
+fn write_workspace_manifest(repo: &Path, version: &str) {
+    fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
+    fs::write(
+        repo.join("Cargo.toml"),
+        format!(
+            "[workspace]\nmembers = [\"rust/crates/si-cli\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"{}\"\nedition = \"2024\"\nlicense = \"AGPL-3.0-only\"\nrepository = \"https://example.invalid/si\"\nrust-version = \"1.86\"\n",
+            version.trim_start_matches('v')
+        ),
+    )
+    .expect("write Cargo.toml");
+}
+
 fn spawn_single_response_server(status: &str, body: &str) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
     let addr = listener.local_addr().expect("listener addr");
@@ -37,28 +49,19 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
 fn build_self_release_assets_writes_archives_and_checksums() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n")
-        .expect("write go.mod");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     fs::write(repo.path().join("README.md"), "readme\n").expect("write readme");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
-    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
-        .expect("write main");
 
-    let go_dir = tempdir().expect("go tempdir");
-    let cargo_path = go_dir.path().join("cargo");
+    let toolchain_dir = tempdir().expect("toolchain tempdir");
+    let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
     let out_dir = repo.path().join("out");
     let path_env =
-        format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+        format!("{}:{}", toolchain_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     cargo_bin()
         .args([
@@ -250,13 +253,8 @@ fn build_self_run_forwards_args_to_cargo() {
 fn build_npm_build_package_creates_tarball() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
         repo.path().join("npm/si/package.json"),
@@ -309,13 +307,8 @@ fn build_npm_build_package_creates_tarball() {
 fn build_npm_publish_package_dry_run_uses_generated_tarball() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
         repo.path().join("npm/si/package.json"),
@@ -517,18 +510,9 @@ fn build_homebrew_render_tap_formula_writes_formula() {
 fn build_self_verify_release_assets_checks_archives() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n")
-        .expect("write go.mod");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     fs::write(repo.path().join("README.md"), "readme\n").expect("write readme");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
-    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
-        .expect("write main");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
@@ -604,15 +588,11 @@ fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
 #[test]
 fn build_installer_run_dry_run_reports_rust_usage() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n")
-        .expect("write go.mod");
+    write_workspace_manifest(repo.path(), "v0.1.0");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.86.0\n");
-    let go_path = bin_dir.path().join("go");
-    write_executable_shell_script(&go_path, "#!/bin/sh\necho go version go1.22.0 linux/amd64\n");
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
@@ -640,9 +620,7 @@ fn build_installer_run_dry_run_reports_rust_usage() {
 #[test]
 fn build_installer_run_installs_fake_binary() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n")
-        .expect("write go.mod");
+    write_workspace_manifest(repo.path(), "v0.1.0");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
@@ -727,17 +705,7 @@ fn build_installer_smoke_host_runs_wrapped_scripts() {
 fn build_installer_smoke_npm_runs_release_scripts() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/release/npm")).expect("mkdir npm scripts");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .unwrap_or(());
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
     let build_npm = repo.path().join("tools/release/npm/build-npm-package.sh");
     fs::create_dir_all(build_assets.parent().expect("assets parent")).expect("mkdir assets parent");
@@ -854,12 +822,7 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
 fn build_installer_smoke_homebrew_runs_fake_brew() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/release")).expect("mkdir release");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
     fs::write(
         &build_assets,
@@ -959,12 +922,7 @@ fn oci_doctor_public_runs_rust_probe() {
 #[test]
 fn build_self_validate_release_version_accepts_matching_tag() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
+    write_workspace_manifest(repo.path(), "v1.2.3");
 
     cargo_bin()
         .current_dir(repo.path())
@@ -976,12 +934,7 @@ fn build_self_validate_release_version_accepts_matching_tag() {
 #[test]
 fn build_self_validate_release_version_rejects_mismatch() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
+    write_workspace_manifest(repo.path(), "v1.2.3");
 
     cargo_bin()
         .current_dir(repo.path())
@@ -994,19 +947,11 @@ fn build_self_validate_release_version_rejects_mismatch() {
 fn build_self_release_asset_creates_single_archive() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
-    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n").expect("go.mod");
+    write_workspace_manifest(repo.path(), "v1.2.3");
     fs::write(repo.path().join("README.md"), "readme\n").expect("readme");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("license");
-    fs::write(
-        repo.path().join("tools/si/version.go"),
-        "package main\n\nconst siVersion = \"v1.2.3\"\n",
-    )
-    .expect("write version");
-    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n")
-        .expect("write main");
-    let go_dir = tempdir().expect("go tempdir");
-    let cargo_path = go_dir.path().join("cargo");
+    let toolchain_dir = tempdir().expect("toolchain tempdir");
+    let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
@@ -1020,7 +965,7 @@ fn build_self_release_asset_creates_single_archive() {
     }
     let out_dir = repo.path().join("out");
     let path_env =
-        format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+        format!("{}:{}", toolchain_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     cargo_bin()
         .args([
             "build",

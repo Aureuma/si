@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
@@ -10,13 +11,13 @@ fn main() -> ExitCode {
         }
     };
 
-    println!("[fort-spawn-matrix] delegating to Go integration test");
+    println!("[fort-spawn-matrix] running Rust fort package tests");
 
-    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
-
-    match Command::new(go_bin)
-        .args(["test", "-tags=integration", ".", "-run", "TestFortSpawnMatrix", "-count=1"])
-        .current_dir(format!("{root}/tools/si"))
+    match Command::new("cargo")
+        .current_dir(&root)
+        .arg("test")
+        .arg("-p")
+        .arg("si-rs-fort")
         .status()
     {
         Ok(status) if status.success() => ExitCode::SUCCESS,
@@ -28,11 +29,11 @@ fn main() -> ExitCode {
     }
 }
 
-fn repo_root() -> Result<String, String> {
+fn repo_root() -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("tools/si/go.mod").is_file() {
-        Ok(cwd.display().to_string())
+    if cwd.join("Cargo.toml").is_file() {
+        Ok(cwd)
     } else {
-        Err("tools/si/go.mod not found; run from repo root".to_string())
+        Err("repo root not found; run from the si workspace root".to_string())
     }
 }
