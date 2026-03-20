@@ -541,18 +541,8 @@ enum BuildInstallerCommand {
         force: bool,
         #[arg(long, action = ArgAction::SetTrue)]
         uninstall: bool,
-        #[arg(long = "go-mode", default_value = "auto")]
-        go_mode: String,
-        #[arg(long = "go-version")]
-        go_version: Option<String>,
-        #[arg(long = "build-tags")]
-        build_tags: Option<String>,
-        #[arg(long = "build-ldflags", default_value = "-s -w")]
-        build_ldflags: String,
-        #[arg(long = "link-go", action = ArgAction::SetTrue)]
-        link_go: bool,
-        #[arg(long = "no-link-go", action = ArgAction::SetTrue)]
-        no_link_go: bool,
+        #[arg(long = "toolchain-mode", default_value = "auto")]
+        toolchain_mode: String,
         #[arg(long = "with-buildx", action = ArgAction::SetTrue)]
         with_buildx: bool,
         #[arg(long = "no-buildx", action = ArgAction::SetTrue)]
@@ -17133,18 +17123,27 @@ fn resolve_release_output_dir(out_dir: Option<PathBuf>, repo_root: &Path) -> Res
 }
 
 fn read_si_version(repo_root: &Path) -> Result<String> {
-    let version_path = repo_root.join("tools").join("si").join("version.go");
-    let raw = fs::read_to_string(&version_path)
-        .with_context(|| format!("read {}", version_path.display()))?;
-    let marker = "const siVersion = \"";
-    let start = raw
-        .find(marker)
-        .ok_or_else(|| anyhow!("si version constant not found in {}", version_path.display()))?;
-    let remainder = &raw[start + marker.len()..];
-    let end = remainder.find('"').ok_or_else(|| {
-        anyhow!("si version constant not terminated in {}", version_path.display())
-    })?;
-    Ok(remainder[..end].to_owned())
+    let cargo_toml_path = repo_root.join("Cargo.toml");
+    let raw = fs::read_to_string(&cargo_toml_path)
+        .with_context(|| format!("read {}", cargo_toml_path.display()))?;
+    let parsed: toml::Value =
+        toml::from_str(&raw).with_context(|| format!("parse {}", cargo_toml_path.display()))?;
+    let version = parsed
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("version"))
+        .and_then(toml::Value::as_str)
+        .ok_or_else(|| {
+            anyhow!(
+                "workspace.package.version not found in {}",
+                cargo_toml_path.display()
+            )
+        })?;
+    if version.starts_with('v') {
+        Ok(version.to_owned())
+    } else {
+        Ok(format!("v{version}"))
+    }
 }
 
 fn build_release_asset(
@@ -17346,10 +17345,6 @@ fn run_publish_npm_package(
 }
 
 fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<PathBuf> {
-    let version_path = repo_root.join("tools").join("si").join("version.go");
-    if !version_path.exists() {
-        return Err(anyhow!("tools/si/version.go not found"));
-    }
     let package_root = repo_root.join("npm").join("si");
     if !package_root.exists() {
         return Err(anyhow!("npm/si not found"));
@@ -17481,7 +17476,7 @@ struct InstallerRunConfig {
     install_path: Option<PathBuf>,
     force: bool,
     uninstall: bool,
-    go_mode: String,
+    toolchain_mode: String,
     os_override: Option<String>,
     arch_override: Option<String>,
     dry_run: bool,
@@ -17514,7 +17509,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     }
 
     let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
-    let cargo_bin = ensure_installer_cargo_toolchain(&cfg.go_mode)?;
+    let cargo_bin = ensure_installer_cargo_toolchain(&cfg.toolchain_mode)?;
     if cfg.dry_run {
         if !cfg.quiet {
             println!("rust: using system cargo ({cargo_bin})");
@@ -17634,9 +17629,14 @@ fn validate_installer_config(cfg: &InstallerRunConfig) -> Result<()> {
     if cfg.install_dir.is_some() && cfg.install_path.is_some() {
         return Err(anyhow!("--install-dir and --install-path are mutually exclusive"));
     }
-    match cfg.go_mode.trim() {
+    match cfg.toolchain_mode.trim() {
         "auto" | "system" => {}
-        value => return Err(anyhow!("invalid --go-mode {} (expected auto or system)", value)),
+        value => {
+            return Err(anyhow!(
+                "invalid --toolchain-mode {} (expected auto or system)",
+                value
+            ));
+        }
     }
     if (cfg.os_override.is_some() || cfg.arch_override.is_some()) && !cfg.dry_run {
         return Err(anyhow!("--os/--arch overrides require --dry-run"));
@@ -17735,18 +17735,19 @@ fn validate_installer_source_dir(path: &Path) -> Result<()> {
     if !path.is_dir() {
         return Err(anyhow!("source directory not found: {}", path.display()));
     }
-    if !path.join("tools").join("si").join("go.mod").exists() {
+    if !path.join("Cargo.toml").exists() || !path.join("rust").join("crates").join("si-cli").is_dir()
+    {
         return Err(anyhow!("source directory is not an si checkout: {}", path.display()));
     }
     Ok(())
 }
 
-fn ensure_installer_cargo_toolchain(go_mode: &str) -> Result<String> {
+fn ensure_installer_cargo_toolchain(toolchain_mode: &str) -> Result<String> {
     let output = StdCommand::new("cargo").arg("--version").output();
     match output {
         Ok(output) if output.status.success() => Ok("cargo".to_owned()),
-        Ok(_) | Err(_) if go_mode.trim() == "system" => {
-            Err(anyhow!("cargo is required for --go-mode system"))
+        Ok(_) | Err(_) if toolchain_mode.trim() == "system" => {
+            Err(anyhow!("cargo is required for --toolchain-mode system"))
         }
         Ok(_) => Err(anyhow!("cargo toolchain probe failed")),
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
@@ -17954,7 +17955,7 @@ fn run_installer_smoke_host() -> Result<()> {
         ],
     )?;
 
-    eprintln!("==> dry-run: darwin/arm64 go download URL computation");
+    eprintln!("==> dry-run: darwin/arm64 toolchain resolution");
     run_path_command_checked(
         &root,
         &installer,
@@ -17966,7 +17967,7 @@ fn run_installer_smoke_host() -> Result<()> {
             "darwin",
             "--arch",
             "arm64",
-            "--go-mode",
+            "--toolchain-mode",
             "auto",
             "--force",
         ],
@@ -18630,9 +18631,9 @@ fn run_validate_release_version(tag: String) -> Result<()> {
     let cwd = std::env::current_dir().context("read current dir")?;
     let actual = read_si_version(&cwd)?;
     if actual != tag {
-        return Err(anyhow!("tools/si/version.go has {}, but release tag is {}", actual, tag));
+        return Err(anyhow!("workspace Cargo.toml has {}, but release tag is {}", actual, tag));
     }
-    println!("release tag and tools/si/version.go are aligned ({tag})");
+    println!("release tag and workspace Cargo.toml are aligned ({tag})");
     Ok(())
 }
 
@@ -18969,12 +18970,7 @@ fn main() -> Result<()> {
                     install_path,
                     force,
                     uninstall,
-                    go_mode,
-                    go_version: _go_version,
-                    build_tags: _build_tags,
-                    build_ldflags: _build_ldflags,
-                    link_go: _link_go,
-                    no_link_go: _no_link_go,
+                    toolchain_mode,
                     with_buildx: _with_buildx,
                     no_buildx: _no_buildx,
                     os_override,
@@ -18993,7 +18989,7 @@ fn main() -> Result<()> {
                     install_path,
                     force,
                     uninstall,
-                    go_mode,
+                    toolchain_mode,
                     os_override,
                     arch_override,
                     dry_run,
