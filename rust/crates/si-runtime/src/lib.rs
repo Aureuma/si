@@ -76,7 +76,7 @@ pub fn build_container_core_mounts(
     if let Some(mount) = host_ssh_auth_sock_mount(ctx) {
         append_unique_mount(&mut mounts, mount);
     }
-    if let Some(mount) = host_si_go_toolchain_mount(&plan.container_home, ctx) {
+    if let Some(mount) = host_si_toolchain_mount(&plan.container_home, ctx) {
         append_unique_mount(&mut mounts, mount);
     }
     if let Some(mount) = host_vault_env_file_mount(plan.host_vault_env_file.as_deref()) {
@@ -122,10 +122,13 @@ fn host_ssh_auth_sock_mount(ctx: &HostMountContext) -> Option<BindMount> {
     Some(BindMount::new(&source, &source))
 }
 
-fn host_si_go_toolchain_mount(container_home: &Path, ctx: &HostMountContext) -> Option<BindMount> {
-    let source = host_si_go_toolchain_source(ctx)?;
+fn host_si_toolchain_mount(container_home: &Path, ctx: &HostMountContext) -> Option<BindMount> {
+    let source = host_si_toolchain_source(ctx)?;
     Some(
-        BindMount::new(source, container_home.join(".local").join("share").join("si").join("go"))
+        BindMount::new(
+            source,
+            container_home.join(".local").join("share").join("si").join("toolchain"),
+        )
             .read_only(true),
     )
 }
@@ -156,9 +159,9 @@ fn host_ssh_dir_source(ctx: &HostMountContext) -> Option<PathBuf> {
     path.is_dir().then_some(path)
 }
 
-fn host_si_go_toolchain_source(ctx: &HostMountContext) -> Option<PathBuf> {
+fn host_si_toolchain_source(ctx: &HostMountContext) -> Option<PathBuf> {
     let home = ctx.home_dir.as_ref()?;
-    let path = home.join(".local").join("share").join("si").join("go");
+    let path = home.join(".local").join("share").join("si").join("toolchain");
     path.is_dir().then_some(path)
 }
 
@@ -334,12 +337,14 @@ mod tests {
     }
 
     #[test]
-    fn build_container_core_mounts_includes_host_docker_and_go_tooling_mounts() {
+    fn build_container_core_mounts_includes_host_docker_and_toolchain_mounts() {
         let home = tempdir().expect("tempdir");
         std::fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
         std::fs::create_dir_all(home.path().join(".docker")).expect("mkdir .docker");
-        std::fs::create_dir_all(home.path().join(".local").join("share").join("si").join("go"))
-            .expect("mkdir go dir");
+        std::fs::create_dir_all(
+            home.path().join(".local").join("share").join("si").join("toolchain"),
+        )
+        .expect("mkdir toolchain dir");
         let workspace = tempdir().expect("tempdir");
         let ctx =
             HostMountContext { home_dir: Some(home.path().to_path_buf()), ssh_auth_sock: None };
@@ -359,9 +364,9 @@ mod tests {
         assert_eq!(mounts[3].target(), Path::new("/home/si/.docker"));
         assert_eq!(
             mounts[4].source(),
-            &home.path().join(".local").join("share").join("si").join("go")
+            &home.path().join(".local").join("share").join("si").join("toolchain")
         );
-        assert_eq!(mounts[4].target(), Path::new("/home/si/.local/share/si/go"));
+        assert_eq!(mounts[4].target(), Path::new("/home/si/.local/share/si/toolchain"));
         assert!(mounts[4].is_read_only());
     }
 

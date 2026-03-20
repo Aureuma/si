@@ -598,17 +598,14 @@ impl CodexTurnExecutor {
 
             let mut report = extract_tagged_work_report(&clean, turn_id);
             let mut report_was_delimited = false;
-            if let Some(body) = report.as_ref() {
-                if role == "actor"
-                    && actor_report_looks_placeholder_with_mode(body, self.strict_report)
-                {
-                    report = None;
-                }
-                if role == "critic"
-                    && critic_report_looks_placeholder_with_mode(body, self.strict_report)
-                {
-                    report = None;
-                }
+            let placeholder_report = report.as_deref().is_some_and(|body| {
+                (role == "actor"
+                    && actor_report_looks_placeholder_with_mode(body, self.strict_report))
+                    || (role == "critic"
+                        && critic_report_looks_placeholder_with_mode(body, self.strict_report))
+            });
+            if placeholder_report {
+                report = None;
             }
 
             let after = if sig.is_empty() { None } else { clean.rfind(&sig) };
@@ -616,17 +613,14 @@ impl CodexTurnExecutor {
                 report = extract_delimited_work_report_after(&clean, after.map(|idx| idx as isize));
                 report_was_delimited = report.is_some();
             }
-            if let Some(body) = report.as_ref() {
-                if role == "actor"
-                    && actor_report_looks_placeholder_with_mode(body, self.strict_report)
-                {
-                    report = None;
-                }
-                if role == "critic"
-                    && critic_report_looks_placeholder_with_mode(body, self.strict_report)
-                {
-                    report = None;
-                }
+            let placeholder_report = report.as_deref().is_some_and(|body| {
+                (role == "actor"
+                    && actor_report_looks_placeholder_with_mode(body, self.strict_report))
+                    || (role == "critic"
+                        && critic_report_looks_placeholder_with_mode(body, self.strict_report))
+            });
+            if placeholder_report {
+                report = None;
             }
 
             if report.is_none() && after.is_none() && baseline_report_end >= 0 {

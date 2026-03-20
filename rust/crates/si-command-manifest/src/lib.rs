@@ -370,19 +370,21 @@ pub fn visible_root_commands() -> impl Iterator<Item = &'static CommandSpec> {
 #[cfg(test)]
 mod tests {
     use super::{find_root_command, root_commands};
-    use regex::Regex;
     use std::collections::BTreeSet;
 
     #[test]
-    fn manifest_expanded_names_match_go_root_registry() {
-        let go_names = extract_go_root_names();
+    fn manifest_expanded_names_are_unique() {
         let manifest_names = root_commands()
             .iter()
             .flat_map(|spec| std::iter::once(spec.name).chain(spec.aliases.iter().copied()))
             .map(str::to_owned)
             .collect::<BTreeSet<_>>();
 
-        assert_eq!(manifest_names, go_names);
+        let expanded_len = root_commands()
+            .iter()
+            .map(|spec| 1 + spec.aliases.len())
+            .sum::<usize>();
+        assert_eq!(manifest_names.len(), expanded_len);
     }
 
     #[test]
@@ -393,95 +395,4 @@ mod tests {
         assert_eq!(find_root_command("github").unwrap().name, "github");
     }
 
-    fn extract_go_root_names() -> BTreeSet<String> {
-        let source = include_str!("../../../../tools/si/root_commands.go");
-        let string_literal = Regex::new(r#""([^"]+)""#).expect("regex");
-        let mut names = BTreeSet::new();
-        let mut offset = 0;
-
-        while let Some(start) = source[offset..].find("register(") {
-            let start = offset + start;
-            let end = find_register_call_end(source, start).expect("complete register call");
-            let call = &source[start..end];
-            let names_region = register_name_region(call).expect("register name region");
-            for capture in string_literal.captures_iter(names_region) {
-                names.insert(capture[1].to_owned());
-            }
-            offset = end;
-        }
-
-        names
-    }
-
-    fn find_register_call_end(source: &str, start: usize) -> Option<usize> {
-        let bytes = source.as_bytes();
-        let mut depth = 0usize;
-        let mut index = start;
-        let mut in_string = false;
-        let mut escaped = false;
-
-        while index < bytes.len() {
-            let byte = bytes[index];
-            if in_string {
-                if escaped {
-                    escaped = false;
-                } else if byte == b'\\' {
-                    escaped = true;
-                } else if byte == b'"' {
-                    in_string = false;
-                }
-                index += 1;
-                continue;
-            }
-
-            match byte {
-                b'"' => in_string = true,
-                b'(' => depth += 1,
-                b')' => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        return Some(index + 1);
-                    }
-                }
-                _ => {}
-            }
-            index += 1;
-        }
-
-        None
-    }
-
-    fn register_name_region(call: &str) -> Option<&str> {
-        let bytes = call.as_bytes();
-        let mut depth = 0usize;
-        let mut index = 0usize;
-        let mut in_string = false;
-        let mut escaped = false;
-
-        while index < bytes.len() {
-            let byte = bytes[index];
-            if in_string {
-                if escaped {
-                    escaped = false;
-                } else if byte == b'\\' {
-                    escaped = true;
-                } else if byte == b'"' {
-                    in_string = false;
-                }
-                index += 1;
-                continue;
-            }
-
-            match byte {
-                b'"' => in_string = true,
-                b'(' => depth += 1,
-                b')' => depth = depth.saturating_sub(1),
-                b',' if depth == 1 => return call.get(index + 1..call.len().saturating_sub(1)),
-                _ => {}
-            }
-            index += 1;
-        }
-
-        None
-    }
 }

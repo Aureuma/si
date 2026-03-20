@@ -13,11 +13,13 @@ The requested hard cutover is complete:
 - all remaining Go module and workspace files have been removed from the repository
 - the Go compatibility bridge has been removed by deleting the last Go runtime surface outright
 - `si` is now a Rust-only repository state, even where that leaves follow-on breakage to be repaired in Rust
+- the post-cutover Rust repair pass is complete enough for the full Cargo workspace to build and test cleanly again
 
 Validation snapshot after the cutover:
 
 - `find /home/shawn/Development/si -name '*.go' | wc -l` => `0`
 - `find /home/shawn/Development/si -maxdepth 4 \( -name 'go.mod' -o -name 'go.sum' -o -name 'go.work' -o -name 'go.work.sum' \) -print` => no results
+- `cargo test --workspace --quiet` => passing after the Rust-only follow-up repairs
 
 ## Objective
 
@@ -70,3 +72,11 @@ Result:
 ## Outcome
 
 This ticket is closed as a hard cutover, not as a behavior-preserving migration. Any follow-up work is now Rust-only repair, replacement, or cleanup work.
+
+Follow-up completed on 2026-03-20:
+
+- Rust version discovery now reads workspace Cargo metadata instead of deleted Go files
+- Rust command-manifest tests no longer depend on removed Go registries
+- Rust CLI tests now synthesize minimal Cargo workspaces instead of fake Go repos
+- Go-era test/preflight helper binaries have been rewritten as Cargo-based Rust helpers
+- remaining Rust-side Go storage naming was retired in favor of neutral toolchain naming

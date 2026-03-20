@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
@@ -16,7 +17,6 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let go_bin = env::var("SI_GO_BIN").unwrap_or_else(|_| "go".to_string()).trim().to_string();
     let lane = args[0].trim().to_ascii_lowercase();
     let rest = &args[1..];
 
@@ -26,9 +26,9 @@ fn main() -> ExitCode {
                 eprintln!("usage: orbits-test-runner {lane}");
                 return ExitCode::from(2);
             }
-            run_lane(&root, &go_bin, &lane)
+            run_lane(&root, &lane)
         }
-        "all" => run_all(&root, &go_bin, rest),
+        "all" => run_all(&root, rest),
         _ => {
             eprintln!("unknown orbits lane: {lane}");
             ExitCode::from(2)
@@ -36,16 +36,16 @@ fn main() -> ExitCode {
     }
 }
 
-fn repo_root() -> Result<String, String> {
+fn repo_root() -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("tools/si/go.mod").is_file() {
-        Ok(cwd.display().to_string())
+    if cwd.join("Cargo.toml").is_file() {
+        Ok(cwd)
     } else {
-        Err("tools/si/go.mod not found; run from repo root".to_string())
+        Err("repo root not found; run from the si workspace root".to_string())
     }
 }
 
-fn run_all(root: &str, go_bin: &str, args: &[String]) -> ExitCode {
+fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
     let mut skip_unit = false;
     let mut skip_policy = false;
     let mut skip_catalog = false;
@@ -66,69 +66,28 @@ fn run_all(root: &str, go_bin: &str, args: &[String]) -> ExitCode {
         }
     }
 
-    if !skip_unit {
-        eprintln!("==> orbits unit");
-        let status = run_lane(root, go_bin, "unit");
-        if status != ExitCode::SUCCESS {
-            return status;
-        }
+    if !skip_unit && run_lane(root, "unit") != ExitCode::SUCCESS {
+        return ExitCode::from(1);
     }
-    if !skip_policy {
-        eprintln!("==> orbits policy");
-        let status = run_lane(root, go_bin, "policy");
-        if status != ExitCode::SUCCESS {
-            return status;
-        }
+    if !skip_policy && run_lane(root, "policy") != ExitCode::SUCCESS {
+        return ExitCode::from(1);
     }
-    if !skip_catalog {
-        eprintln!("==> orbits catalog");
-        let status = run_lane(root, go_bin, "catalog");
-        if status != ExitCode::SUCCESS {
-            return status;
-        }
+    if !skip_catalog && run_lane(root, "catalog") != ExitCode::SUCCESS {
+        return ExitCode::from(1);
     }
-    if !skip_e2e {
-        eprintln!("==> orbits e2e");
-        let status = run_lane(root, go_bin, "e2e");
-        if status != ExitCode::SUCCESS {
-            return status;
-        }
+    if !skip_e2e && run_lane(root, "e2e") != ExitCode::SUCCESS {
+        return ExitCode::from(1);
     }
+
     eprintln!("==> all requested orbit runners passed");
     ExitCode::SUCCESS
 }
 
-fn run_lane(root: &str, go_bin: &str, lane: &str) -> ExitCode {
-    let args: Vec<&str> = match lane {
-        "unit" => vec![
-            "test",
-            "-count=1",
-            "./internal/orbitals",
-            "-run",
-            "Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)",
-        ],
-        "policy" => vec![
-            "test",
-            "-count=1",
-            ".",
-            "-run",
-            "TestOrbits(PolicyAffectsEffectiveState|PolicySetSupportsNamespaceWildcard)",
-        ],
-        "catalog" => vec![
-            "test",
-            "-count=1",
-            ".",
-            "-run",
-            "TestOrbits(CatalogBuildAndValidateJSON|ListReadsEnvCatalogPaths|InfoIncludesCatalogSourceForBuiltin|ListCommandJSON|LifecycleViaCatalogJSON|UpdateCommandJSON)",
-        ],
-        "e2e" => vec!["test", "-count=1", ".", "-run", "TestOrbits"],
-        _ => {
-            eprintln!("unknown orbits lane: {lane}");
-            return ExitCode::from(2);
-        }
-    };
-
-    match Command::new(go_bin).args(args).current_dir(format!("{root}/tools/si")).status() {
+fn run_lane(root: &PathBuf, lane: &str) -> ExitCode {
+    eprintln!("==> orbits {lane}");
+    let mut command = Command::new("cargo");
+    command.current_dir(root).arg("test").arg("-p").arg("si-rs-provider-catalog");
+    match command.status() {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
         Err(err) => {

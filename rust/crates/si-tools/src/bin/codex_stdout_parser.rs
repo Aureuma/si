@@ -229,7 +229,7 @@ impl Parser {
 }
 
 fn run_reader<R: Read>(reader: R, config: &Config, parser: &mut Parser) -> Result<(), String> {
-    let mut raw_log = open_raw_log(config.raw_log.clone())?;
+    let raw_log = open_raw_log(config.raw_log.clone())?;
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
     loop {
