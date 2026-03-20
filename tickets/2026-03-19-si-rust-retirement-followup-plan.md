@@ -150,6 +150,7 @@ Progress:
 - completed: the dead Go command surfaces for `github raw`, `github graphql`, and `github secret` have been retired, leaving only the shared client/query helpers and the small secret-encryption helpers that still have direct Go test coverage
 - completed: `github_project_cmd.go` has been reduced to the tiny parser/field helper surface still exercised by Go unit tests, with the old Go GraphQL command runtime removed now that `si github project ...` executes through Rust at the root
 - completed: the dead `github git` runtime handlers (`root`, `credential`, `remote-auth`, `clone-auth`, and `setup`) have been removed, while the reusable repo/git utility functions remain in place for other Go code and tests
+- completed: the GitHub compatibility bridge no longer performs subcommand-family routing in Go; `runGitHubCommand(...)` now delegates the entire family straight to Rust, while only tiny prefix wrappers remain temporarily to preserve the current Go bridge test surface during retirement
 
 ### Phase D: Port The Remaining State Machines And Interactive Glue
 
