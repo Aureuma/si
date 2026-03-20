@@ -80,3 +80,4 @@ Follow-up completed on 2026-03-20:
 - Rust CLI tests now synthesize minimal Cargo workspaces instead of fake Go repos
 - Go-era test/preflight helper binaries have been rewritten as Cargo-based Rust helpers
 - remaining Rust-side Go storage naming was retired in favor of neutral toolchain naming
+- release workflows, installer smoke workflows, runtime Dockerfiles, and operator docs have been updated to Rust-only assumptions

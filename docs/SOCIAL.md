@@ -101,6 +101,6 @@ reddit_username = "acme_bot"
 ```
 
 ## Characteristics + Scalability
-- Default API version/base/auth/rate lives in Go specs (`internal/providers`).
+- Default API version/base/auth/rate lives in the Rust provider catalog/runtime.
 - API calls run through provider admission checks (token bucket).
 - Runtime feedback (`429`, `Retry-After`, `X-RateLimit-*`) adapts pacing dynamically.

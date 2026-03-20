@@ -3,73 +3,50 @@ name: fort-vault-ci
 on:
   push:
     paths:
-      - "tools/si/fort*.go"
-      - "tools/si/fort_*"
-      - "tools/si/vault*.go"
-      - "tools/si/vault_*"
-      - "tools/si/internal/vault/**"
-      - "tools/si/settings.go"
-      - "tools/si/fort_spawn_matrix_integration_test.go"
+      - "rust/crates/si-fort/**"
+      - "rust/crates/si-vault/**"
+      - "rust/crates/si-runtime/**"
+      - "rust/crates/si-config/**"
+      - "rust/crates/si-cli/**"
+      - "rust/crates/si-tools/**"
+      - "tools/si-image/**"
+      - "tools/test-fort-spawn-matrix.sh"
       - ".github/workflows/fort-vault-ci.yml"
   pull_request:
     paths:
-      - "tools/si/fort*.go"
-      - "tools/si/fort_*"
-      - "tools/si/vault*.go"
-      - "tools/si/vault_*"
-      - "tools/si/internal/vault/**"
-      - "tools/si/settings.go"
-      - "tools/si/fort_spawn_matrix_integration_test.go"
+      - "rust/crates/si-fort/**"
+      - "rust/crates/si-vault/**"
+      - "rust/crates/si-runtime/**"
+      - "rust/crates/si-config/**"
+      - "rust/crates/si-cli/**"
+      - "rust/crates/si-tools/**"
+      - "tools/si-image/**"
+      - "tools/test-fort-spawn-matrix.sh"
       - ".github/workflows/fort-vault-ci.yml"
 
 jobs:
   fort-vault:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout SI
         uses: actions/checkout@v4
 
-      - name: Require Fort checkout token
-        env:
-          FORT_REPO_TOKEN: ${{ secrets.GH_PAT_AUREUMA }}
-        run: |
-          if [ -z "${FORT_REPO_TOKEN}" ]; then
-            echo "::error::Missing GH_PAT_AUREUMA secret; fort-vault-ci requires read access to Aureuma/fort."
-            exit 1
-          fi
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.86.0
 
-      - name: Preflight Fort repo access
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT_AUREUMA }}
-        run: gh api repos/Aureuma/fort >/dev/null
-
-      - name: Checkout Fort
-        uses: actions/checkout@v4
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
         with:
-          repository: Aureuma/fort
-          path: fort
-          fetch-depth: 1
-          token: ${{ secrets.GH_PAT_AUREUMA }}
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/si/go.mod
+          workspaces: |
+            . -> .artifacts/cargo-target
 
       - name: Unit tests (Fort/Vault surface)
-        working-directory: tools/si
         run: |
-          go test . -run 'Test(Fort|ResolveFort|PrepareFortRuntimeAuth|EnsureSIVault|ResolveSIVaultTarget|EncryptDotenvDoc|AnalyzeDotenvDecryptability|EnsureSIVaultPublicKeyHeader)' -count=1
+          cargo test -p si-rs-fort -p si-rs-vault
 
       - name: Build SI local image for spawn integration
         run: docker build -t aureuma/si:local -f tools/si-image/Dockerfile .
 
-      - name: SI↔Fort spawn matrix integration
-        env:
-          SI_REPO: ${{ github.workspace }}
-          FORT_REPO: ${{ github.workspace }}/fort
-        working-directory: tools/si
-        run: |
-          go test -tags integration . -run TestFortSpawnMatrix -count=1
+      - name: SI Fort spawn matrix integration
+        run: ./tools/test-fort-spawn-matrix.sh

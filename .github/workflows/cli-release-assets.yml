@@ -62,24 +62,7 @@ jobs:
             tools/release/validate-release-version.sh --tag "${tag}"
             exit 0
           fi
-
-          if [[ ! -f "tools/si/version.go" ]]; then
-            echo "tools/si/version.go not found for tag ${tag}" >&2
-            exit 1
-          fi
-
-          actual="$(sed -n 's/^const siVersion = "\(.*\)"$/\1/p' tools/si/version.go)"
-          if [[ -z "${actual}" ]]; then
-            echo "unable to parse si version from tools/si/version.go" >&2
-            exit 1
-          fi
-
-          if [[ "${actual}" != "${tag}" ]]; then
-            echo "version mismatch: tools/si/version.go=${actual}, tag=${tag}" >&2
-            exit 1
-          fi
-
-          echo "release tag and tools/si/version.go are aligned (${tag})"
+          cargo run --quiet -p si-rs-cli -- build self validate-release-version --tag "${tag}"
 
       - name: Build all release archives and checksums
         shell: bash

@@ -724,7 +724,10 @@ fn resolve_youtube_runtime_context(
         ));
     }
     if auth_mode == "oauth" && access_token.trim().is_empty() && refresh_token.trim().is_empty() {
-        return Err("youtube oauth token not found (set --access-token, --refresh-token, or login via the Go path)".to_owned());
+        return Err(
+            "youtube oauth token not found (set --access-token, --refresh-token, or login first)"
+                .to_owned(),
+        );
     }
     let (language_code, language_source) =
         resolve_youtube_language_code(&alias, &account, env, &overrides.language);

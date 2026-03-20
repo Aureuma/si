@@ -24,13 +24,13 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
    - `## [vX.Y.Z] - YYYY-MM-DD`
 1. Add bullets grouped by area (Dyad, CLI, Image, Docs, Vault, etc.).
 1. Ensure the items are user-facing (what changed) and include important migration notes.
-1. Update `tools/si/version.go`:
-   - `const siVersion = "vX.Y.Z"`
+1. Update root `Cargo.toml`:
+   - `workspace.package.version = "X.Y.Z"`
 
 ## 3. Commit
 
 1. Commit release prep changes:
-   - `git add CHANGELOG.md tools/si/version.go`
+   - `git add CHANGELOG.md Cargo.toml`
    - `git commit -m "release: vX.Y.Z"`
 
 ## 4. Tag

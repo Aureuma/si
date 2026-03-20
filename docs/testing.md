@@ -1,8 +1,8 @@
 # Testing
 
-## Go module layout
-This repo no longer uses a repo-level `go.work` workspace.
-The remaining Go code lives in the single module at `tools/si/go.mod`, so direct Go commands should run from `tools/si/`.
+## Rust workspace layout
+This repo is Rust-only for build, test, and runtime flows.
+Run commands from the repo root so the workspace `Cargo.toml` and helper scripts resolve correctly.
 
 ## Running tests
 Use the repo test runner from the root:
@@ -13,13 +13,10 @@ si test workspace
 ./tools/test.sh
 ```
 
-That script runs `go test` against the active Go module under `tools/si`.
-Make sure the Go toolchain is installed and on your `PATH` before running tests.
-The script expects to be run from the repo root so it can find `tools/si/go.mod` and will
-error with a short message if prerequisites are missing.
+That runner executes `cargo test --workspace`.
+No Go toolchain is required.
 Use `./tools/test.sh --help` for a quick usage reminder.
-Use `./tools/test.sh --list` to print the module list without running tests.
-Use `SI_GO_TEST_TIMEOUT=20m ./tools/test.sh` to adjust the go-test timeout when needed.
+Use `./tools/test.sh --list` to print the active test lane without running it.
 
 For one-command local coverage of the standard test stack, run:
 
@@ -30,7 +27,7 @@ si test all
 ```
 
 ## Orbit runner matrix
-For orbit-system specific regression lanes (inspired by OpenClaw's segmented CI), use:
+For orbit-system specific regression lanes, use:
 
 ```bash
 si test orbits unit
@@ -79,23 +76,6 @@ To validate the Homebrew tap install path end-to-end, run:
 ./tools/test-install-si-homebrew.sh
 ```
 
-## Vault strict suite
-Run the dedicated strict vault suite:
-
-```bash
-si test vault
-# compatibility alias:
-./tools/test-vault.sh
-```
-
-Quick mode (skip subprocess e2e vault tests):
-
-```bash
-si test vault --quick
-# compatibility alias:
-./tools/test-vault.sh --quick
-```
-
 For containerized smoke coverage (root + non-root installer paths), run:
 
 ```bash
@@ -105,8 +85,27 @@ For containerized smoke coverage (root + non-root installer paths), run:
 Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 ./tools/test-install-si-docker.sh` to skip
 the non-root leg during local iteration.
 
+## Vault strict suite
+Run the dedicated vault suite:
+
+```bash
+si test vault
+# compatibility alias:
+./tools/test-vault.sh
+```
+
+Compatibility flag:
+
+```bash
+si test vault --quick
+# compatibility alias:
+./tools/test-vault.sh --quick
+```
+
+`--quick` is retained as a compatibility no-op; the Rust vault lane already runs as a single package suite.
+
 ## Fort spawn/respawn security matrix
-Run the live Fort integration matrix against real `si spawn` containers:
+Run the Fort integration matrix:
 
 ```bash
 ./tools/test-fort-spawn-matrix.sh
@@ -132,22 +131,18 @@ SI_FORT_ALLOW_INSECURE_HOST=1
 Bootstrap token file requirements:
 
 ```bash
-# default bootstrap admin token path used by SI
 ~/.si/fort/bootstrap/admin.token
 
-# file must be regular file with strict permissions
 chmod 600 ~/.si/fort/bootstrap/admin.token
 chmod 700 ~/.si/fort/bootstrap
 ```
 
-Runtime session token file requirements (container flow):
+Runtime session token file requirements:
 
 ```bash
-# injected per profile/session by si spawn + si respawn --volumes
 $FORT_TOKEN_PATH
 $FORT_REFRESH_TOKEN_PATH
 
-# both must remain regular 0600 files
 stat -c "%a %n" "$FORT_TOKEN_PATH" "$FORT_REFRESH_TOKEN_PATH"
 ```
 
@@ -163,12 +158,6 @@ when only docs/markdown files are modified.
 Run static analysis from the repo root:
 
 ```bash
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-```
-
-Then run:
-
-```bash
 ./si analyze
 ```
 
@@ -176,12 +165,6 @@ Use non-failing mode for local iteration while keeping CI strict with default `.
 
 ```bash
 ./si analyze --no-fail
-```
-
-If you only changed the CLI, this is the fastest local scope:
-
-```bash
-./si analyze --module tools/si
 ```
 
 ## CLI help smoke checks
@@ -195,8 +178,7 @@ After CLI command-surface changes, run targeted help checks:
 ```
 
 ## Image build smoke check
-`si build image` now runs a Codex compatibility preflight (dyad/spawn/mount/MCP
-lanes) before building the image.
+`si build image` runs a Codex compatibility preflight before building the image.
 
 Run the preflight directly:
 
@@ -217,6 +199,6 @@ The canonical local image build command is:
 ```
 
 Build mode behavior:
-- If `docker buildx` is available, SI runs `docker buildx build --load` directly (native buildx progress UI in interactive terminals).
+- If `docker buildx` is available, SI runs `docker buildx build --load` directly.
 - If `docker buildx` is unavailable or probe fails, SI uses classic `docker build`.
 - SI no longer retries/falls back mid-build after a buildx start; mode is selected once up front.
