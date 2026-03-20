@@ -968,7 +968,11 @@ func appleAppStoreDoctorPublicEnabled(args []string) bool {
 }
 
 func runAWSContextListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "list"}, args...)...)
+	return runAWSSubcommand([]string{"context", "list"}, args)
+}
+
+func runAWSSubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("aws", append(append([]string{}, prefix...), args...)...)
 }
 
 func runAWSCommand(args []string) (bool, error) {
@@ -1014,55 +1018,31 @@ func runAWSCommand(args []string) (bool, error) {
 }
 
 func runAWSContextCurrentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "current"}, args...)...)
+	return runAWSSubcommand([]string{"context", "current"}, args)
 }
 
 func runAWSContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runAWSContextListCommand(args[1:])
-	case "current":
-		return runAWSContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"context"}, args)
 }
 
 func runAWSAuthCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth"}, args...)...)
+	return runAWSSubcommand([]string{"auth"}, args)
 }
 
 func runAWSAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth", "status"}, args...)...)
+	return runAWSSubcommand([]string{"auth", "status"}, args)
 }
 
 func runAWSDoctorCommand(args []string) (bool, error) {
-	for idx := 0; idx < len(args); idx++ {
-		arg := strings.TrimSpace(args[idx])
-		switch {
-		case arg == "--public", arg == "--public=true", arg == "--public=1":
-			return false, nil
-		case arg == "--public=false", arg == "--public=0":
-		case arg == "--public" && idx+1 < len(args):
-			next := strings.TrimSpace(args[idx+1])
-			if next == "true" || next == "1" {
-				return false, nil
-			}
-			idx++
-		}
-	}
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"doctor"}, args...)...)
+	return runAWSSubcommand([]string{"doctor"}, args)
 }
 
 func runAWSSTSCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"sts"}, args...)...)
+	return runAWSSubcommand([]string{"sts"}, args)
 }
 
 func runAWSIAMCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"iam"}, args...)...)
+	return runAWSSubcommand([]string{"iam"}, args)
 }
 
 func awsForceEnabled(args []string) bool {
@@ -1084,277 +1064,47 @@ func awsForceEnabled(args []string) bool {
 }
 
 func runAWSS3Command(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "bucket":
-		if len(args) < 2 {
-			return false, nil
-		}
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "create":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
-		case "delete", "remove", "rm":
-			if !awsForceEnabled(args[2:]) {
-				return false, nil
-			}
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
-		default:
-			return false, nil
-		}
-	case "object":
-		if len(args) < 2 {
-			return false, nil
-		}
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "get", "put", "set", "upload":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
-		case "delete", "remove", "rm":
-			if !awsForceEnabled(args[2:]) {
-				return false, nil
-			}
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
-		default:
-			return false, nil
-		}
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"s3"}, args)
 }
 
 func runAWSSecretsCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "get", "create", "put", "set", "update":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"secrets"}, args...)...)
-	case "delete", "remove", "rm":
-		if !awsForceEnabled(args[1:]) {
-			return false, nil
-		}
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"secrets"}, args...)...)
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"secrets"}, args)
 }
 
 func runAWSKMSCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("aws", append([]string{"kms"}, args...)...)
+	return runAWSSubcommand([]string{"kms"}, args)
 }
 
 func runAWSDynamoDBCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "table":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
-	case "item":
-		if len(args) < 2 {
-			return false, nil
-		}
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "get", "put":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
-		case "delete", "remove", "rm":
-			if !awsForceEnabled(args[2:]) {
-				return false, nil
-			}
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
-		default:
-			return false, nil
-		}
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"dynamodb"}, args)
 }
 
 func runAWSSSMCommand(args []string) (bool, error) {
-	if len(args) == 0 || !strings.EqualFold(strings.TrimSpace(args[0]), "parameter") {
-		return false, nil
-	}
-	if len(args) < 2 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[1])) {
-	case "list", "get", "put":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ssm"}, args...)...)
-	case "delete", "remove", "rm":
-		if !awsForceEnabled(args[2:]) {
-			return false, nil
-		}
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ssm"}, args...)...)
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"ssm"}, args)
 }
 
 func runAWSLogsCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "group":
-		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
-		}
-	case "stream":
-		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
-		}
-	case "events":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
-	}
-	return false, nil
+	return runAWSSubcommand([]string{"logs"}, args)
 }
 
 func runAWSCloudWatchCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	if strings.EqualFold(strings.TrimSpace(args[0]), "metric") || strings.EqualFold(strings.TrimSpace(args[0]), "metrics") {
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"cloudwatch"}, args...)...)
-	}
-	return false, nil
+	return runAWSSubcommand([]string{"cloudwatch"}, args)
 }
 
 func runAWSBedrockCommand(args []string) (bool, error) {
-	if len(args) < 2 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "foundation-model", "foundation-models", "model", "models",
-		"inference-profile", "inference-profiles", "profile", "profiles",
-		"guardrail", "guardrails":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "get", "describe":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-		}
-	case "runtime":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "invoke", "converse", "count-tokens", "count", "tokens":
-			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
-		}
-	case "job", "jobs":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "get", "describe":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-		case "create":
-			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
-		case "stop", "cancel":
-			if awsForceEnabled(args[2:]) {
-				return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
-			}
-		}
-	case "agent", "agents":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "get", "describe":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-		case "alias", "aliases":
-			if len(args) >= 3 {
-				switch strings.ToLower(strings.TrimSpace(args[2])) {
-				case "list", "get", "describe":
-					return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-				}
-			}
-		}
-	case "knowledge-base", "knowledge-bases", "kb":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "get", "describe":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-		case "data-source", "datasource", "datasources":
-			if len(args) >= 3 {
-				switch strings.ToLower(strings.TrimSpace(args[2])) {
-				case "list", "get", "describe":
-					return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
-				}
-			}
-		}
-	case "agent-runtime", "agentruntime":
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "invoke-agent", "invoke", "retrieve", "retrieve-and-generate", "rag":
-			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
-		}
-	}
-	return false, nil
+	return runAWSSubcommand([]string{"bedrock"}, args)
 }
 
 func runAWSEC2Command(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	if strings.ToLower(strings.TrimSpace(args[0])) != "instance" {
-		return false, nil
-	}
-	if len(args) < 2 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[1])) {
-	case "list", "describe":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ec2"}, args...)...)
-	case "start", "stop", "terminate", "delete", "remove", "rm":
-		if !awsForceEnabled(args[2:]) {
-			return false, nil
-		}
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ec2"}, args...)...)
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"ec2"}, args)
 }
 
 func runAWSLambdaCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	if strings.ToLower(strings.TrimSpace(args[0])) != "function" {
-		return false, nil
-	}
-	if len(args) < 2 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[1])) {
-	case "list", "get":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"lambda"}, args...)...)
-	case "delete", "remove", "rm":
-		if !awsForceEnabled(args[2:]) {
-			return false, nil
-		}
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"lambda"}, args...)...)
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"lambda"}, args)
 }
 
 func runAWSECRCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "repository":
-		if len(args) < 2 {
-			return false, nil
-		}
-		switch strings.ToLower(strings.TrimSpace(args[1])) {
-		case "list", "create":
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
-		case "delete", "remove", "rm":
-			if !awsForceEnabled(args[2:]) {
-				return false, nil
-			}
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
-		default:
-			return false, nil
-		}
-	case "image":
-		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
-			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
-		}
-		return false, nil
-	default:
-		return false, nil
-	}
+	return runAWSSubcommand([]string{"ecr"}, args)
 }
 
 func runGCPAuthCommand(args []string) (bool, error) {
