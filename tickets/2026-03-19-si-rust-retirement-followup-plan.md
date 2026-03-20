@@ -71,7 +71,13 @@ Result:
 
 ## Outcome
 
-This ticket is closed as a hard cutover, not as a behavior-preserving migration. Any follow-up work is now Rust-only repair, replacement, or cleanup work.
+This ticket is closed as a hard cutover and the requested Rust-only repository state has been completed.
+
+Remaining migration work in the repos present in this workspace:
+
+- none
+
+Any future work should be treated as ordinary Rust feature work, maintenance, or cleanup rather than language-transition work.
 
 Follow-up completed on 2026-03-20:
 
