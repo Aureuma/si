@@ -245,12 +245,12 @@ fn decode_mount_field(raw: &str) -> String {
     while idx < bytes.len() {
         if bytes[idx] == b'\\' && idx + 3 < bytes.len() {
             let octal = &raw[idx + 1..idx + 4];
-            if octal.chars().all(|ch| ('0'..='7').contains(&ch)) {
-                if let Ok(value) = u8::from_str_radix(octal, 8) {
-                    out.push(value as char);
-                    idx += 4;
-                    continue;
-                }
+            if octal.chars().all(|ch| ('0'..='7').contains(&ch))
+                && let Ok(value) = u8::from_str_radix(octal, 8)
+            {
+                out.push(value as char);
+                idx += 4;
+                continue;
             }
         }
         out.push(bytes[idx] as char);
