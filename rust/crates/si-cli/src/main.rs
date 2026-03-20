@@ -17134,16 +17134,9 @@ fn read_si_version(repo_root: &Path) -> Result<String> {
         .and_then(|package| package.get("version"))
         .and_then(toml::Value::as_str)
         .ok_or_else(|| {
-            anyhow!(
-                "workspace.package.version not found in {}",
-                cargo_toml_path.display()
-            )
+            anyhow!("workspace.package.version not found in {}", cargo_toml_path.display())
         })?;
-    if version.starts_with('v') {
-        Ok(version.to_owned())
-    } else {
-        Ok(format!("v{version}"))
-    }
+    if version.starts_with('v') { Ok(version.to_owned()) } else { Ok(format!("v{version}")) }
 }
 
 fn build_release_asset(
@@ -17632,10 +17625,7 @@ fn validate_installer_config(cfg: &InstallerRunConfig) -> Result<()> {
     match cfg.toolchain_mode.trim() {
         "auto" | "system" => {}
         value => {
-            return Err(anyhow!(
-                "invalid --toolchain-mode {} (expected auto or system)",
-                value
-            ));
+            return Err(anyhow!("invalid --toolchain-mode {} (expected auto or system)", value));
         }
     }
     if (cfg.os_override.is_some() || cfg.arch_override.is_some()) && !cfg.dry_run {
@@ -17735,7 +17725,8 @@ fn validate_installer_source_dir(path: &Path) -> Result<()> {
     if !path.is_dir() {
         return Err(anyhow!("source directory not found: {}", path.display()));
     }
-    if !path.join("Cargo.toml").exists() || !path.join("rust").join("crates").join("si-cli").is_dir()
+    if !path.join("Cargo.toml").exists()
+        || !path.join("rust").join("crates").join("si-cli").is_dir()
     {
         return Err(anyhow!("source directory is not an si checkout: {}", path.display()));
     }

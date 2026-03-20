@@ -30,8 +30,7 @@ fn main() -> ExitCode {
 
 fn repo_root() -> Result<PathBuf, String> {
     let cwd = env::current_dir().map_err(|err| err.to_string())?;
-    if cwd.join("Cargo.toml").is_file() && cwd.join("rust").join("crates").join("si-cli").is_dir()
-    {
+    if cwd.join("Cargo.toml").is_file() && cwd.join("rust").join("crates").join("si-cli").is_dir() {
         Ok(cwd)
     } else {
         Err("repo root not found. Run this command from the si workspace root.".to_string())
@@ -60,12 +59,7 @@ fn run_workspace(root: &PathBuf, args: &[String]) -> ExitCode {
     }
 
     println!("Running cargo test --workspace");
-    run_command(
-        Command::new("cargo")
-            .current_dir(root)
-            .arg("test")
-            .arg("--workspace"),
-    )
+    run_command(Command::new("cargo").current_dir(root).arg("test").arg("--workspace"))
 }
 
 fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
@@ -89,13 +83,7 @@ fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
     } else {
         println!("Running cargo test -p si-rs-vault");
     }
-    run_command(
-        Command::new("cargo")
-            .current_dir(root)
-            .arg("test")
-            .arg("-p")
-            .arg("si-rs-vault"),
-    )
+    run_command(Command::new("cargo").current_dir(root).arg("test").arg("-p").arg("si-rs-vault"))
 }
 
 fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {

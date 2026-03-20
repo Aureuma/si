@@ -380,10 +380,7 @@ mod tests {
             .map(str::to_owned)
             .collect::<BTreeSet<_>>();
 
-        let expanded_len = root_commands()
-            .iter()
-            .map(|spec| 1 + spec.aliases.len())
-            .sum::<usize>();
+        let expanded_len = root_commands().iter().map(|spec| 1 + spec.aliases.len()).sum::<usize>();
         assert_eq!(manifest_names.len(), expanded_len);
     }
 
@@ -394,5 +391,4 @@ mod tests {
         assert_eq!(find_root_command("rm").unwrap().name, "remove");
         assert_eq!(find_root_command("github").unwrap().name, "github");
     }
-
 }
