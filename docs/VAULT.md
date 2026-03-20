@@ -86,7 +86,7 @@ si vault restore --env-file .env
 Run commands with decrypted env at runtime:
 
 ```bash
-si vault run --env-file .env --env dev -- go run ./cmd/server
+si vault run --env-file .env --env dev -- cargo run --bin server
 ```
 
 For SI runtime containers:

@@ -1,6 +1,6 @@
-# Rust Transition Workspace
+# Rust Workspace
 
-This workspace is the staged Rust rewrite for `si`.
+This workspace is the source of truth for `si`.
 
 Current scope:
 
@@ -27,4 +27,4 @@ cargo run -p si-rs-cli -- paths show --format json
 cargo run -p si-rs-cli -- dyad spawn-plan --name alpha --workspace "$PWD" --format json
 ```
 
-The repository now treats Rust as the primary CLI/runtime path. The remaining Go code exists as compatibility and helper surface while the last subsystem internals are retired according to `tickets/2026-03-15-si-rust-transition-plan.md`.
+The repository is now Rust-only for build, test, and runtime flows.

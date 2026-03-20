@@ -2,13 +2,13 @@
 
 `si` now uses a two-part traffic policy for external APIs:
 
-1. Built-in provider defaults in Go (`tools/si/internal/providers/specs.go`)
+1. Built-in provider defaults in the Rust provider catalog/runtime
 2. Runtime feedback from API responses (`429`, `Retry-After`, `X-RateLimit-*`, etc.)
 
 There is no external rate-limit or quota reference file to maintain.
 
 ## Shared Runtime
-- HTTP integrations now execute through a shared runtime (`tools/si/internal/integrationruntime/http_exec.go`).
+- HTTP integrations now execute through the shared Rust runtime.
 - Provider-specific code only supplies hooks for:
   - request building + auth injection
   - response normalization
@@ -40,5 +40,5 @@ There is no external rate-limit or quota reference file to maintain.
   - `si stripe doctor --public`
 
 ## CI
-- `si-tests` workflow runs full Go tests for `tools/si`.
+- `si-tests` workflow runs Rust workspace checks.
 - `si-live-smoke` workflow runs public probes plus optional authenticated smoke checks gated by repository secrets.

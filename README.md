@@ -29,7 +29,6 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## Repo layout
 
-- `tools/si`: shrinking Go helper surface during retirement; no longer a shipped runtime entrypoint.
 - `rust/`: primary Rust workspace and shipping CLI implementation.
 - `tools/si-browser`: browser runtime Docker assets.
 - `tools/si-image`: unified runtime image used by codex and dyad containers.
@@ -61,8 +60,8 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh
 Prerequisites:
 
 - Docker Engine available on host.
-- Go 1.25+ only if working on the remaining Go compatibility/helper surface.
-- `si-rs` is the runtime entrypoint. The old Go top-level launcher has been retired.
+- Rust 1.86 toolchain for local source builds.
+- `si-rs` is the runtime entrypoint.
 
 Build local CLI + runtime image:
 
@@ -159,7 +158,6 @@ Run static analysis:
 
 ```bash
 ./si analyze
-./si analyze --module tools/si
 ```
 
 ## Releases

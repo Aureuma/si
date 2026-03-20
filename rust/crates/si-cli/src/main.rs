@@ -46961,7 +46961,7 @@ fn run_google_places_photo_get(
     raw: bool,
 ) -> Result<()> {
     if follow {
-        anyhow::bail!("google places photo get --follow remains on the Go path for now");
+        anyhow::bail!("google places photo get --follow is not implemented in the Rust CLI yet");
     }
     let runtime = load_google_places_runtime(
         account,

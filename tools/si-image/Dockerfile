@@ -8,8 +8,6 @@ RUN cargo build --release -p si-tools --bin codex-stdout-parser --bin si-codex-i
     && cargo build --release -p si-agents --bin critic \
     && cargo build --release -p si-rs-cli --bin si-rs
 
-FROM golang:1.25-bookworm AS go-toolchain
-
 FROM node:22-bookworm
 
 RUN apt-get update -y \
@@ -32,7 +30,6 @@ RUN usermod -l si node \
 
 ENV HOME=/home/si
 ENV CODEX_HOME=/home/si/.codex
-ENV PATH=/usr/local/go/bin:${PATH}
 WORKDIR /workspace
 
 RUN printf '%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' > /etc/profile.d/si-codex-alias.sh \
@@ -72,9 +69,6 @@ COPY --from=rust-tools-build /src/target/release/si-codex-init /usr/local/bin/si
 COPY --from=rust-tools-build /src/target/release/critic /usr/local/bin/critic
 COPY --from=rust-tools-build /src/target/release/si-rs /usr/local/bin/si
 COPY --from=rust-tools-build /src/target/release/si-entrypoint /usr/local/bin/si-entrypoint
-COPY --from=go-toolchain /usr/local/go /usr/local/go
-RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
-    && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
 ENTRYPOINT ["tini", "-s", "--", "/usr/local/bin/si-entrypoint"]
 CMD ["bash", "-lc", "sleep infinity"]

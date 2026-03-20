@@ -54,7 +54,7 @@ si <command> <subcommand> --help
 | `si-rs build self` | Build or upgrade `si` binary | `si-rs build self` |
 | `si-rs build self release-assets` | Build all release archives + `checksums.txt` locally | `si-rs build self release-assets --version vX.Y.Z` |
 | `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
-| `si analyze` (`si lint`) | Go static analysis | `si analyze --module tools/si` |
+| `si analyze` (`si lint`) | Static analysis and validation lanes | `si analyze` |
 | `si docker` | Raw Docker passthrough | `si docker ps` |
 | `si persona` | Persona/profile helpers | `si persona <name>` |
 | `si skill` | Skill role helper | `si skill <role>` |
@@ -92,4 +92,4 @@ si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-pr
 - `si fort` bootstrap/admin auth uses `FORT_BOOTSTRAP_TOKEN_FILE`; runtime auth uses `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
-- Run `si mintlify validate` for docs changes and `si analyze` for Go changes.
+- Run `si mintlify validate` for docs changes and `si analyze` for code changes.

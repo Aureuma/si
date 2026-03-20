@@ -57,8 +57,8 @@ git pull --ff-only
 3. Keep language past tense and user-focused.
 
 ### 3) Bump version strings in code
-Update release version constants:
-- `tools/si/version.go` (`siVersion`)
+Update release version metadata:
+- root `Cargo.toml` `workspace.package.version`
 
 ### 4) Verify and commit the release prep
 ```
@@ -67,10 +67,9 @@ Update release version constants:
 ./tools/test-install-si-npm.sh
 ./tools/test-install-si-homebrew.sh
 ./tools/test-install-si-docker.sh
-./si analyze --module tools/si
 ./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight
-git add CHANGELOG.md tools/si/version.go
+git add CHANGELOG.md Cargo.toml
 git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.
@@ -176,7 +175,7 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 ```
 
 Notes:
-- The workflow validates that `tools/si/version.go` matches the release tag.
+- The workflow validates that the workspace `Cargo.toml` version matches the release tag.
 - The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path and `tools/release/verify-cli-release-assets.sh` as the local archive verification path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
