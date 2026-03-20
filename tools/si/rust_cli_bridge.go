@@ -2034,6 +2034,23 @@ func runOpenAICommand(args []string) (bool, error) {
 	}
 }
 
+func rustCLIFlagValue(args []string, name string) (string, bool) {
+	for idx := 0; idx < len(args); idx++ {
+		raw := strings.TrimSpace(args[idx])
+		if raw == name {
+			if idx+1 >= len(args) {
+				return "", false
+			}
+			return strings.TrimSpace(args[idx+1]), true
+		}
+		prefix := name + "="
+		if strings.HasPrefix(raw, prefix) {
+			return strings.TrimSpace(raw[len(prefix):]), true
+		}
+	}
+	return "", false
+}
+
 func runOpenAIAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -2629,591 +2646,300 @@ func runGitHubContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "current"}, args...)...)
 }
 
+func runGitHubSubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append(append([]string{}, prefix...), args...)...)
+}
+
 func runGitHubContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubContextListCommand(args[1:])
-	case "current":
-		return runGitHubContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
-}
-
-func runGitHubBranchListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"branch", "list"}, args...)...)
-}
-
-func runGitHubBranchGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"branch", "get"}, args...)...)
-}
-
-func runGitHubBranchCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"branch", "create"}, args...)...)
-}
-
-func runGitHubBranchDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"branch", "delete"}, args...)...)
-}
-
-func runGitHubBranchProtectCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"branch", "protect"}, args...)...)
-}
-
-func runGitHubBranchUnprotectCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"branch", "unprotect"}, args...)...)
-}
-
-func runGitHubBranchCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubBranchListCommand(args[1:])
-	case "get":
-		return runGitHubBranchGetCommand(args[1:])
-	case "create":
-		return runGitHubBranchCreateCommand(args[1:])
-	case "delete":
-		return runGitHubBranchDeleteCommand(args[1:])
-	case "protect":
-		return runGitHubBranchProtectCommand(args[1:])
-	case "unprotect":
-		return runGitHubBranchUnprotectCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"context"}, args)
 }
 
 func runGitHubAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"auth", "status"}, args...)...)
+	return runGitHubSubcommand([]string{"auth", "status"}, args)
 }
 
 func runGitHubAuthCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "status":
-		return runGitHubAuthStatusCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"auth"}, args)
+}
+
+func runGitHubBranchListCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "list"}, args)
+}
+
+func runGitHubBranchGetCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "get"}, args)
+}
+
+func runGitHubBranchCreateCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "create"}, args)
+}
+
+func runGitHubBranchDeleteCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "delete"}, args)
+}
+
+func runGitHubBranchProtectCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "protect"}, args)
+}
+
+func runGitHubBranchUnprotectCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch", "unprotect"}, args)
+}
+
+func runGitHubBranchCommand(args []string) (bool, error) {
+	return runGitHubSubcommand([]string{"branch"}, args)
 }
 
 func runGitHubReleaseListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"release", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"release", "list"}, args)
 }
 
 func runGitHubReleaseGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"release", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"release", "get"}, args)
 }
 
 func runGitHubReleaseCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"release", "create"}, args...)...)
+	return runGitHubSubcommand([]string{"release", "create"}, args)
 }
 
 func runGitHubReleaseUploadCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"release", "upload"}, args...)...)
+	return runGitHubSubcommand([]string{"release", "upload"}, args)
 }
 
 func runGitHubReleaseDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"release", "delete"}, args...)...)
+	return runGitHubSubcommand([]string{"release", "delete"}, args)
 }
 
 func runGitHubReleaseCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubReleaseListCommand(args[1:])
-	case "get":
-		return runGitHubReleaseGetCommand(args[1:])
-	case "create":
-		return runGitHubReleaseCreateCommand(args[1:])
-	case "upload":
-		return runGitHubReleaseUploadCommand(args[1:])
-	case "delete":
-		return runGitHubReleaseDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"release"}, args)
 }
 
 func runGitHubRepoListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"repo", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "list"}, args)
 }
 
 func runGitHubRepoGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"repo", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "get"}, args)
 }
 
 func runGitHubRepoCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"repo", "create"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "create"}, args)
 }
 
 func runGitHubRepoUpdateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"repo", "update"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "update"}, args)
 }
 
 func runGitHubRepoArchiveCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"repo", "archive"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "archive"}, args)
 }
 
 func runGitHubRepoDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"repo", "delete"}, args...)...)
+	return runGitHubSubcommand([]string{"repo", "delete"}, args)
 }
 
 func runGitHubRepoCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubRepoListCommand(args[1:])
-	case "get":
-		return runGitHubRepoGetCommand(args[1:])
-	case "create":
-		return runGitHubRepoCreateCommand(args[1:])
-	case "update":
-		return runGitHubRepoUpdateCommand(args[1:])
-	case "archive":
-		return runGitHubRepoArchiveCommand(args[1:])
-	case "delete":
-		return runGitHubRepoDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"repo"}, args)
 }
 
 func runGitHubProjectListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "list"}, args)
 }
 
 func runGitHubProjectGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "get"}, args)
 }
 
 func runGitHubProjectFieldsCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "fields"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "fields"}, args)
 }
 
 func runGitHubProjectItemsCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "items"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "items"}, args)
 }
 
 func runGitHubProjectUpdateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "update"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "update"}, args)
 }
 
 func runGitHubProjectItemAddCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-add"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-add"}, args)
 }
 
 func runGitHubProjectItemSetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-set"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-set"}, args)
 }
 
 func runGitHubProjectItemClearCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-clear"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-clear"}, args)
 }
 
 func runGitHubProjectItemArchiveCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-archive"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-archive"}, args)
 }
 
 func runGitHubProjectItemUnarchiveCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-unarchive"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-unarchive"}, args)
 }
 
 func runGitHubProjectItemDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-delete"}, args...)...)
+	return runGitHubSubcommand([]string{"project", "item-delete"}, args)
 }
 
 func runGitHubProjectCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubProjectListCommand(args[1:])
-	case "get":
-		return runGitHubProjectGetCommand(args[1:])
-	case "fields":
-		return runGitHubProjectFieldsCommand(args[1:])
-	case "items":
-		return runGitHubProjectItemsCommand(args[1:])
-	case "update":
-		return runGitHubProjectUpdateCommand(args[1:])
-	case "item-add":
-		return runGitHubProjectItemAddCommand(args[1:])
-	case "item-set":
-		return runGitHubProjectItemSetCommand(args[1:])
-	case "item-clear":
-		return runGitHubProjectItemClearCommand(args[1:])
-	case "item-archive":
-		return runGitHubProjectItemArchiveCommand(args[1:])
-	case "item-unarchive":
-		return runGitHubProjectItemUnarchiveCommand(args[1:])
-	case "item-delete":
-		return runGitHubProjectItemDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"project"}, args)
 }
 
 func runGitHubWorkflowListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "list"}, args)
 }
 
 func runGitHubWorkflowRunsCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "runs"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "runs"}, args)
 }
 
 func runGitHubWorkflowRunGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "run", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "run", "get"}, args)
 }
 
 func runGitHubWorkflowLogsCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "logs"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "logs"}, args)
 }
 
 func runGitHubWorkflowDispatchCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "dispatch"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "dispatch"}, args)
 }
 
 func runGitHubWorkflowRunCancelCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "run", "cancel"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "run", "cancel"}, args)
 }
 
 func runGitHubWorkflowRunRerunCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "run", "rerun"}, args...)...)
+	return runGitHubSubcommand([]string{"workflow", "run", "rerun"}, args)
 }
 
 func runGitHubWorkflowWatchCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "watch"}, args...)...)
-}
-
-func runGitHubWorkflowRunCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "get":
-		return runGitHubWorkflowRunGetCommand(args[1:])
-	case "cancel":
-		return runGitHubWorkflowRunCancelCommand(args[1:])
-	case "rerun":
-		return runGitHubWorkflowRunRerunCommand(args[1:])
-	default:
-		return runGitHubWorkflowDispatchCommand(args)
-	}
+	return runGitHubSubcommand([]string{"workflow", "watch"}, args)
 }
 
 func runGitHubWorkflowCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubWorkflowListCommand(args[1:])
-	case "runs":
-		return runGitHubWorkflowRunsCommand(args[1:])
-	case "run":
-		return runGitHubWorkflowRunCommand(args[1:])
-	case "logs":
-		return runGitHubWorkflowLogsCommand(args[1:])
-	case "watch":
-		return runGitHubWorkflowWatchCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"workflow"}, args)
 }
 
 func runGitHubGitCredentialGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"git", "credential", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"git", "credential", "get"}, args)
 }
 
 func runGitHubGitCredentialCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return runGitHubGitCredentialGetCommand(args)
-	}
-	first := strings.ToLower(strings.TrimSpace(args[0]))
-	if strings.HasPrefix(first, "-") {
-		return runGitHubGitCredentialGetCommand(args)
-	}
-	switch first {
-	case "get":
-		return runGitHubGitCredentialGetCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"git", "credential"}, args)
 }
 
 func runGitHubGitCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "credential":
-		return runGitHubGitCredentialCommand(args[1:])
-	case "setup":
-		return maybeDispatchRustCLICompat("github", append([]string{"git", "setup"}, args[1:]...)...)
-	case "remote-auth":
-		return maybeDispatchRustCLICompat("github", append([]string{"git", "remote-auth"}, args[1:]...)...)
-	case "clone-auth":
-		return maybeDispatchRustCLICompat("github", append([]string{"git", "clone-auth"}, args[1:]...)...)
-	default:
-		return false, nil
-	}
-}
-
-func rustCLIFlagValue(args []string, name string) (string, bool) {
-	for idx := 0; idx < len(args); idx++ {
-		raw := strings.TrimSpace(args[idx])
-		if raw == name {
-			if idx+1 >= len(args) {
-				return "", false
-			}
-			return strings.TrimSpace(args[idx+1]), true
-		}
-		prefix := name + "="
-		if strings.HasPrefix(raw, prefix) {
-			return strings.TrimSpace(raw[len(prefix):]), true
-		}
-	}
-	return "", false
+	return runGitHubSubcommand([]string{"git"}, args)
 }
 
 func runGitHubRawCommand(args []string) (bool, error) {
-	method := "GET"
-	if value, ok := rustCLIFlagValue(args, "--method"); ok && strings.TrimSpace(value) != "" {
-		method = value
-	}
-	if !strings.EqualFold(strings.TrimSpace(method), "GET") {
-		return false, nil
-	}
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"raw"}, args...)...)
+	return runGitHubSubcommand([]string{"raw"}, args)
 }
 
 func runGitHubGraphQLCommand(args []string) (bool, error) {
-	query, ok := rustCLIFlagValue(args, "--query")
-	if !ok || strings.TrimSpace(query) == "" {
-		return false, nil
-	}
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(query)), "mutation") {
-		return false, nil
-	}
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"graphql"}, args...)...)
+	return runGitHubSubcommand([]string{"graphql"}, args)
 }
 
 func runGitHubIssueListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"issue", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "list"}, args)
 }
 
 func runGitHubIssueGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"issue", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "get"}, args)
 }
 
 func runGitHubIssueCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"issue", "create"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "create"}, args)
 }
 
 func runGitHubIssueCommentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"issue", "comment"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "comment"}, args)
 }
 
 func runGitHubIssueCloseCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"issue", "close"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "close"}, args)
 }
 
 func runGitHubIssueReopenCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"issue", "reopen"}, args...)...)
+	return runGitHubSubcommand([]string{"issue", "reopen"}, args)
 }
 
 func runGitHubIssueCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubIssueListCommand(args[1:])
-	case "get":
-		return runGitHubIssueGetCommand(args[1:])
-	case "create":
-		return runGitHubIssueCreateCommand(args[1:])
-	case "comment":
-		return runGitHubIssueCommentCommand(args[1:])
-	case "close":
-		return runGitHubIssueCloseCommand(args[1:])
-	case "reopen":
-		return runGitHubIssueReopenCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"issue"}, args)
 }
 
 func runGitHubPRListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"pr", "list"}, args...)...)
+	return runGitHubSubcommand([]string{"pr", "list"}, args)
 }
 
 func runGitHubPRGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("github", append([]string{"pr", "get"}, args...)...)
+	return runGitHubSubcommand([]string{"pr", "get"}, args)
 }
 
 func runGitHubPRCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"pr", "create"}, args...)...)
+	return runGitHubSubcommand([]string{"pr", "create"}, args)
 }
 
 func runGitHubPRCommentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"pr", "comment"}, args...)...)
+	return runGitHubSubcommand([]string{"pr", "comment"}, args)
 }
 
 func runGitHubPRMergeCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"pr", "merge"}, args...)...)
+	return runGitHubSubcommand([]string{"pr", "merge"}, args)
 }
 
 func runGitHubPRCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runGitHubPRListCommand(args[1:])
-	case "get":
-		return runGitHubPRGetCommand(args[1:])
-	case "create":
-		return runGitHubPRCreateCommand(args[1:])
-	case "comment":
-		return runGitHubPRCommentCommand(args[1:])
-	case "merge":
-		return runGitHubPRMergeCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"pr"}, args)
 }
 
 func runGitHubSecretRepoSetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "repo", "set"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "repo", "set"}, args)
 }
 
 func runGitHubSecretRepoDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "repo", "delete"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "repo", "delete"}, args)
 }
 
 func runGitHubSecretRepoCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "set":
-		return runGitHubSecretRepoSetCommand(args[1:])
-	case "delete":
-		return runGitHubSecretRepoDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"secret", "repo"}, args)
 }
 
 func runGitHubSecretEnvSetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "env", "set"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "env", "set"}, args)
 }
 
 func runGitHubSecretEnvDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "env", "delete"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "env", "delete"}, args)
 }
 
 func runGitHubSecretEnvCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "set":
-		return runGitHubSecretEnvSetCommand(args[1:])
-	case "delete":
-		return runGitHubSecretEnvDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"secret", "env"}, args)
 }
 
 func runGitHubSecretOrgSetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "org", "set"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "org", "set"}, args)
 }
 
 func runGitHubSecretOrgDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("github", append([]string{"secret", "org", "delete"}, args...)...)
+	return runGitHubSubcommand([]string{"secret", "org", "delete"}, args)
 }
 
 func runGitHubSecretOrgCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "set":
-		return runGitHubSecretOrgSetCommand(args[1:])
-	case "delete":
-		return runGitHubSecretOrgDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"secret", "org"}, args)
 }
 
 func runGitHubSecretCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "repo":
-		return runGitHubSecretRepoCommand(args[1:])
-	case "env":
-		return runGitHubSecretEnvCommand(args[1:])
-	case "org":
-		return runGitHubSecretOrgCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runGitHubSubcommand([]string{"secret"}, args)
 }
 
 func runGitHubCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "auth":
-		return runGitHubAuthCommand(args[1:])
-	case "context":
-		return runGitHubContextCommand(args[1:])
-	case "branch":
-		return runGitHubBranchCommand(args[1:])
-	case "git":
-		return runGitHubGitCommand(args[1:])
-	case "raw":
-		return runGitHubRawCommand(args[1:])
-	case "graphql":
-		return runGitHubGraphQLCommand(args[1:])
-	case "issue":
-		return runGitHubIssueCommand(args[1:])
-	case "pr":
-		return runGitHubPRCommand(args[1:])
-	case "project":
-		return runGitHubProjectCommand(args[1:])
-	case "workflow":
-		return runGitHubWorkflowCommand(args[1:])
-	case "repo":
-		return runGitHubRepoCommand(args[1:])
-	case "release":
-		return runGitHubReleaseCommand(args[1:])
-	case "secret":
-		return runGitHubSecretCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return maybeDispatchRustCLICompat("github", args...)
 }
 
 func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodexSpawnPlan, bool, error) {
