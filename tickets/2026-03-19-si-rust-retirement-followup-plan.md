@@ -151,6 +151,7 @@ Progress:
 - completed: `github_project_cmd.go` has been reduced to the tiny parser/field helper surface still exercised by Go unit tests, with the old Go GraphQL command runtime removed now that `si github project ...` executes through Rust at the root
 - completed: the dead `github git` runtime handlers (`root`, `credential`, `remote-auth`, `clone-auth`, and `setup`) have been removed, while the reusable repo/git utility functions remain in place for other Go code and tests
 - completed: the GitHub compatibility bridge no longer performs subcommand-family routing in Go; `runGitHubCommand(...)` now delegates the entire family straight to Rust, while only tiny prefix wrappers remain temporarily to preserve the current Go bridge test surface during retirement
+- completed: the AWS compatibility bridge has been flattened to root alias normalization plus thin Rust-prefix shims; the old Go-side subtree parsing for `auth`, `context`, `doctor`, `s3`, `bedrock`, `ec2`, `lambda`, `ecr`, and related surfaces has been removed from active routing
 
 ### Phase D: Port The Remaining State Machines And Interactive Glue
 
