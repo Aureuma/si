@@ -1970,112 +1970,51 @@ func runOpenAIProjectCommand(args []string) (bool, error) {
 }
 
 func runOCIContextListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "list"}, args...)...)
+	return runOCISubcommand([]string{"context", "list"}, args)
 }
 
 func runOCIContextCurrentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "current"}, args...)...)
+	return runOCISubcommand([]string{"context", "current"}, args)
+}
+
+func runOCISubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("oci", append(append([]string{}, prefix...), args...)...)
 }
 
 func runOCIContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOCIContextListCommand(args[1:])
-	case "current":
-		return runOCIContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOCISubcommand([]string{"context"}, args)
 }
 
 func runOCIAuthCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	if strings.EqualFold(strings.TrimSpace(args[0]), "status") {
-		return runOCIAuthStatusCommand(args[1:])
-	}
-	return false, nil
+	return runOCISubcommand([]string{"auth"}, args)
 }
 
 func runOCIDoctorCommand(args []string) (bool, error) {
-	for idx := 0; idx < len(args); idx++ {
-		arg := strings.TrimSpace(args[idx])
-		switch {
-		case arg == "--public", arg == "--public=true", arg == "--public=1":
-			return false, nil
-		case arg == "--public=false", arg == "--public=0":
-		case arg == "--public" && idx+1 < len(args):
-			next := strings.TrimSpace(args[idx+1])
-			if next == "true" || next == "1" {
-				return false, nil
-			}
-			idx++
-		}
-	}
-	return maybeDispatchRustCLIReadOnly("oci", append([]string{"doctor"}, args...)...)
+	return runOCISubcommand([]string{"doctor"}, args)
 }
 
 func runOCIAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
+	return runOCISubcommand([]string{"auth", "status"}, args)
 }
 
 func runOCIOracularCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "cloud-init", "cloudinit":
-		return maybeDispatchRustCLIReadOnly("oci", append([]string{"oracular", "cloud-init"}, args[1:]...)...)
-	case "tenancy":
-		return runOCIOracularTenancyCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOCISubcommand([]string{"oracular"}, args)
 }
 
 func runOCIIdentityCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "availability-domains", "ads":
-		return maybeDispatchRustCLIReadOnly("oci", append([]string{"identity", "availability-domains"}, args[1:]...)...)
-	case "compartment", "compartments":
-		return maybeDispatchRustCLICompat("oci", append([]string{"identity", "compartment"}, args[1:]...)...)
-	default:
-		return false, nil
-	}
+	return runOCISubcommand([]string{"identity"}, args)
 }
 
 func runOCINetworkCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	return maybeDispatchRustCLICompat("oci", append([]string{"network"}, args...)...)
+	return runOCISubcommand([]string{"network"}, args)
 }
 
 func runOCIComputeCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "availability-domains", "ads":
-		return maybeDispatchRustCLIReadOnly("oci", append([]string{"compute", "availability-domains"}, args[1:]...)...)
-	case "image", "images":
-		return maybeDispatchRustCLIReadOnly("oci", append([]string{"compute", "image"}, args[1:]...)...)
-	case "instance", "instances":
-		return maybeDispatchRustCLICompat("oci", append([]string{"compute", "instance"}, args[1:]...)...)
-	default:
-		return false, nil
-	}
+	return runOCISubcommand([]string{"compute"}, args)
 }
 
 func runOCIRawCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("oci", append([]string{"raw"}, args...)...)
+	return runOCISubcommand([]string{"raw"}, args)
 }
 
 func runOCICommand(args []string) (bool, error) {
@@ -2105,90 +2044,47 @@ func runOCICommand(args []string) (bool, error) {
 }
 
 func runOCIOracularTenancyCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("oci", append([]string{"oracular", "tenancy"}, args...)...)
+	return runOCISubcommand([]string{"oracular", "tenancy"}, args)
 }
 
 func runStripeContextListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
+	return runStripeSubcommand([]string{"context", "list"}, args)
 }
 
 func runStripeContextCurrentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "current"}, args...)...)
+	return runStripeSubcommand([]string{"context", "current"}, args)
+}
+
+func runStripeSubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("stripe", append(append([]string{}, prefix...), args...)...)
 }
 
 func runStripeContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runStripeContextListCommand(args[1:])
-	case "current":
-		return runStripeContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runStripeSubcommand([]string{"context"}, args)
 }
 
 func runStripeAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"auth", "status"}, args...)...)
+	return runStripeSubcommand([]string{"auth", "status"}, args)
 }
 
 func runStripeRawCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("stripe", append([]string{"raw"}, args...)...)
+	return runStripeSubcommand([]string{"raw"}, args)
 }
 
 func runStripeReportCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"report"}, args...)...)
+	return runStripeSubcommand([]string{"report"}, args)
 }
 
 func runStripeObjectCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "list"}, args[1:]...)...)
-	case "get":
-		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "get"}, args[1:]...)...)
-	case "create":
-		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "create"}, args[1:]...)...)
-	case "update":
-		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "update"}, args[1:]...)...)
-	case "delete":
-		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "delete"}, args[1:]...)...)
-	default:
-		return false, nil
-	}
+	return runStripeSubcommand([]string{"object"}, args)
 }
 
 func runStripeSyncCommand(args []string) (bool, error) {
-	if len(args) < 2 {
-		return false, nil
-	}
-	if strings.ToLower(strings.TrimSpace(args[0])) != "live-to-sandbox" {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[1])) {
-	case "plan":
-		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"sync", "live-to-sandbox", "plan"}, args[2:]...)...)
-	case "apply":
-		return maybeDispatchRustCLICompat("stripe", append([]string{"sync", "live-to-sandbox", "apply"}, args[2:]...)...)
-	default:
-		return false, nil
-	}
+	return runStripeSubcommand([]string{"sync"}, args)
 }
 
 func runStripeAuthCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "status":
-		return runStripeAuthStatusCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runStripeSubcommand([]string{"auth"}, args)
 }
 
 func runStripeCommand(args []string) (bool, error) {
@@ -2214,41 +2110,27 @@ func runStripeCommand(args []string) (bool, error) {
 }
 
 func runWorkOSContextListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("workos", append([]string{"context", "list"}, args...)...)
+	return runWorkOSSubcommand([]string{"context", "list"}, args)
 }
 
 func runWorkOSContextCurrentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("workos", append([]string{"context", "current"}, args...)...)
+	return runWorkOSSubcommand([]string{"context", "current"}, args)
+}
+
+func runWorkOSSubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("workos", append(append([]string{}, prefix...), args...)...)
 }
 
 func runWorkOSContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runWorkOSContextListCommand(args[1:])
-	case "current":
-		return runWorkOSContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runWorkOSSubcommand([]string{"context"}, args)
 }
 
 func runWorkOSAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("workos", append([]string{"auth", "status"}, args...)...)
+	return runWorkOSSubcommand([]string{"auth", "status"}, args)
 }
 
 func runWorkOSAuthCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "status":
-		return runWorkOSAuthStatusCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runWorkOSSubcommand([]string{"auth"}, args)
 }
 
 func runWorkOSCommand(args []string) (bool, error) {
@@ -2280,21 +2162,7 @@ func runWorkOSCommand(args []string) (bool, error) {
 }
 
 func runWorkOSDoctorCommand(args []string) (bool, error) {
-	for idx := 0; idx < len(args); idx++ {
-		arg := strings.TrimSpace(args[idx])
-		switch {
-		case arg == "--public", arg == "--public=true", arg == "--public=1":
-			return false, nil
-		case arg == "--public=false", arg == "--public=0":
-		case arg == "--public" && idx+1 < len(args):
-			next := strings.TrimSpace(args[idx+1])
-			if next == "true" || next == "1" {
-				return false, nil
-			}
-			idx++
-		}
-	}
-	return maybeDispatchRustCLIReadOnly("workos", append([]string{"doctor"}, args...)...)
+	return runWorkOSSubcommand([]string{"doctor"}, args)
 }
 
 func runGitHubContextListCommand(args []string) (bool, error) {
