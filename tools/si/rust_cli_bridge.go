@@ -1801,263 +1801,172 @@ func rustCLIFlagValue(args []string, name string) (string, bool) {
 	return "", false
 }
 
+func runOpenAISubcommand(prefix []string, args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append(append([]string{}, prefix...), args...)...)
+}
+
 func runOpenAIAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "status":
+	subcommand := strings.ToLower(strings.TrimSpace(args[0]))
+	if subcommand == "codex-status" {
+		return false, nil
+	}
+	if subcommand == "status" {
 		if value, ok := rustCLIFlagValue(args[1:], "--auth-mode"); ok && normalizeOpenAIAuthMode(value) == "codex" {
 			return false, nil
 		}
-		return runOpenAIAuthStatusCommand(args[1:])
-	default:
-		return false, nil
 	}
+	return runOpenAISubcommand([]string{"auth"}, args)
 }
 
 func runOpenAIContextListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"context", "list"}, args)
 }
 
 func runOpenAIContextCurrentCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "current"}, args...)...)
+	return runOpenAISubcommand([]string{"context", "current"}, args)
 }
 
 func runOpenAIContextCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIContextListCommand(args[1:])
-	case "current":
-		return runOpenAIContextCurrentCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"context"}, args)
 }
 
 func runOpenAIAuthStatusCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"auth", "status"}, args...)...)
+	return runOpenAISubcommand([]string{"auth", "status"}, args)
 }
 
 func runOpenAIDoctorCommand(args []string) (bool, error) {
-	for idx := 0; idx < len(args); idx++ {
-		arg := strings.TrimSpace(args[idx])
-		switch {
-		case arg == "--public", arg == "--public=true", arg == "--public=1":
-			return false, nil
-		case arg == "--public=false", arg == "--public=0":
-		case arg == "--public" && idx+1 < len(args):
-			next := strings.TrimSpace(args[idx+1])
-			if next == "true" || next == "1" {
-				return false, nil
-			}
-			idx++
-		}
-	}
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"doctor"}, args...)...)
+	return runOpenAISubcommand([]string{"doctor"}, args)
 }
 
 func runOpenAIModelCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model"}, args...)...)
+	return runOpenAISubcommand([]string{"model"}, args)
 }
 
 func runOpenAIModelListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"model", "list"}, args)
 }
 
 func runOpenAIModelGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model", "get"}, args...)...)
+	return runOpenAISubcommand([]string{"model", "get"}, args)
 }
 
 func runOpenAIUsageCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage"}, args...)...)
+	return runOpenAISubcommand([]string{"usage"}, args)
 }
 
 func runOpenAIRawCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"raw"}, args...)...)
+	return runOpenAISubcommand([]string{"raw"}, args)
 }
 
 func runOpenAIUsageMetricCommand(metric string, args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage", metric}, args...)...)
+	return runOpenAISubcommand([]string{"usage", metric}, args)
 }
 
 func runOpenAIMonitorCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"monitor"}, args...)...)
+	return runOpenAISubcommand([]string{"monitor"}, args)
 }
 
 func runOpenAICodexCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"codex"}, args...)...)
+	return runOpenAISubcommand([]string{"codex"}, args)
 }
 
 func runOpenAICodexUsageCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"codex", "usage"}, args...)...)
+	return runOpenAISubcommand([]string{"codex", "usage"}, args)
 }
 
 func runOpenAIKeyListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"key", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"key", "list"}, args)
 }
 
 func runOpenAIKeyGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"key", "get"}, args...)...)
+	return runOpenAISubcommand([]string{"key", "get"}, args)
 }
 
 func runOpenAIKeyCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"key", "create"}, args...)...)
+	return runOpenAISubcommand([]string{"key", "create"}, args)
 }
 
 func runOpenAIKeyDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"key", "delete"}, args...)...)
+	return runOpenAISubcommand([]string{"key", "delete"}, args)
 }
 
 func runOpenAIKeyCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIKeyListCommand(args[1:])
-	case "get", "retrieve":
-		return runOpenAIKeyGetCommand(args[1:])
-	case "create":
-		return runOpenAIKeyCreateCommand(args[1:])
-	case "delete", "remove", "rm":
-		return runOpenAIKeyDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"key"}, args)
 }
 
 func runOpenAIProjectListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "list"}, args)
 }
 
 func runOpenAIProjectGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "get"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "get"}, args)
 }
 
 func runOpenAIProjectCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "create"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "create"}, args)
 }
 
 func runOpenAIProjectUpdateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "update"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "update"}, args)
 }
 
 func runOpenAIProjectArchiveCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "archive"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "archive"}, args)
 }
 
 func runOpenAIProjectAPIKeyListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "api-key", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "api-key", "list"}, args)
 }
 
 func runOpenAIProjectAPIKeyGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "api-key", "get"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "api-key", "get"}, args)
 }
 
 func runOpenAIProjectAPIKeyDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "api-key", "delete"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "api-key", "delete"}, args)
 }
 
 func runOpenAIProjectServiceAccountListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "service-account", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "service-account", "list"}, args)
 }
 
 func runOpenAIProjectServiceAccountGetCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "service-account", "get"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "service-account", "get"}, args)
 }
 
 func runOpenAIProjectServiceAccountCreateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "service-account", "create"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "service-account", "create"}, args)
 }
 
 func runOpenAIProjectServiceAccountDeleteCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "service-account", "delete"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "service-account", "delete"}, args)
 }
 
 func runOpenAIProjectRateLimitListCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "rate-limit", "list"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "rate-limit", "list"}, args)
 }
 
 func runOpenAIProjectRateLimitUpdateCommand(args []string) (bool, error) {
-	return maybeDispatchRustCLICompat("openai", append([]string{"project", "rate-limit", "update"}, args...)...)
+	return runOpenAISubcommand([]string{"project", "rate-limit", "update"}, args)
 }
 
 func runOpenAIProjectRateLimitCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIProjectRateLimitListCommand(args[1:])
-	case "update", "set":
-		return runOpenAIProjectRateLimitUpdateCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"project", "rate-limit"}, args)
 }
 
 func runOpenAIProjectAPIKeyCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIProjectAPIKeyListCommand(args[1:])
-	case "get", "retrieve":
-		return runOpenAIProjectAPIKeyGetCommand(args[1:])
-	case "delete", "remove", "rm":
-		return runOpenAIProjectAPIKeyDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"project", "api-key"}, args)
 }
 
 func runOpenAIProjectServiceAccountCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIProjectServiceAccountListCommand(args[1:])
-	case "get", "retrieve":
-		return runOpenAIProjectServiceAccountGetCommand(args[1:])
-	case "create":
-		return runOpenAIProjectServiceAccountCreateCommand(args[1:])
-	case "delete", "remove", "rm":
-		return runOpenAIProjectServiceAccountDeleteCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"project", "service-account"}, args)
 }
 
 func runOpenAIProjectCommand(args []string) (bool, error) {
-	if len(args) == 0 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return runOpenAIProjectListCommand(args[1:])
-	case "get", "retrieve":
-		return runOpenAIProjectGetCommand(args[1:])
-	case "create":
-		return runOpenAIProjectCreateCommand(args[1:])
-	case "update", "modify":
-		return runOpenAIProjectUpdateCommand(args[1:])
-	case "archive":
-		return runOpenAIProjectArchiveCommand(args[1:])
-	case "rate-limit", "rate-limits":
-		return runOpenAIProjectRateLimitCommand(args[1:])
-	case "api-key", "api-keys":
-		return runOpenAIProjectAPIKeyCommand(args[1:])
-	case "service-account", "service-accounts":
-		return runOpenAIProjectServiceAccountCommand(args[1:])
-	default:
-		return false, nil
-	}
+	return runOpenAISubcommand([]string{"project"}, args)
 }
 
 func runOCIContextListCommand(args []string) (bool, error) {
