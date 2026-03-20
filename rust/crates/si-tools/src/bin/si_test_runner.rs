@@ -69,13 +69,12 @@ fn run_workspace(root: &PathBuf, args: &[String]) -> ExitCode {
 }
 
 fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
+    let mut quick = false;
     for arg in args {
         match arg.as_str() {
-            "--quick" | "--help" | "-h" => {
+            "--quick" => quick = true,
+            "--help" | "-h" => {
                 println!("usage: si-test-runner vault");
-                if arg == "--quick" {
-                    println!("Rust vault coverage runs in a single package lane; --quick is no-op.");
-                }
                 return ExitCode::SUCCESS;
             }
             _ => {
@@ -85,7 +84,11 @@ fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
         }
     }
 
-    println!("Running cargo test -p si-rs-vault");
+    if quick {
+        println!("Running cargo test -p si-rs-vault (--quick is a compatibility no-op)");
+    } else {
+        println!("Running cargo test -p si-rs-vault");
+    }
     run_command(
         Command::new("cargo")
             .current_dir(root)

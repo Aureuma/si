@@ -32,7 +32,7 @@ si publish catalog list --query "product launch" --json
 
 ```bash
 si publish devto auth --json
-si publish devto article --title "Release" --body "# launch" --tags go,cli --published --json
+si publish devto article --title "Release" --body "# launch" --tags rust,cli --published --json
 si publish devto raw --path /api/articles/me --json
 ```
 
@@ -40,7 +40,7 @@ si publish devto raw --path /api/articles/me --json
 
 ```bash
 si publish hashnode auth --json
-si publish hashnode post --publication-id <id> --title "Release" --content-markdown "# launch" --tags go,saas --json
+si publish hashnode post --publication-id <id> --title "Release" --content-markdown "# launch" --tags rust,saas --json
 si publish hashnode raw --query 'query { me { id } }' --json
 ```
 
