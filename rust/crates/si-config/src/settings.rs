@@ -13,6 +13,8 @@ pub struct Settings {
     #[serde(default)]
     pub codex: CodexSettings,
     #[serde(default)]
+    pub fort: FortSettings,
+    #[serde(default)]
     pub stripe: StripeSettings,
     #[serde(default)]
     pub aws: AWSSettings,
@@ -81,6 +83,7 @@ impl Settings {
                 workspace_root: None,
             },
             codex: CodexSettings::default(),
+            fort: FortSettings::default(),
             stripe: StripeSettings::default(),
             aws: AWSSettings::default(),
             gcp: GCPSettings::default(),
@@ -135,6 +138,7 @@ impl Settings {
                 }
                 self.paths = payload.paths;
                 self.codex = payload.codex;
+                self.fort = payload.fort;
                 self.stripe = payload.stripe;
                 self.aws = payload.aws;
                 self.gcp = payload.gcp;
@@ -183,6 +187,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.workspace);
         normalize_option_string(&mut self.codex.workdir);
         normalize_option_string(&mut self.codex.profile);
+        self.fort.normalize();
         self.stripe.normalize();
         self.aws.normalize();
         self.gcp.normalize();
@@ -209,6 +214,8 @@ struct CoreSettingsModule {
     pub paths: SettingsPaths,
     #[serde(default)]
     pub codex: CodexSettings,
+    #[serde(default)]
+    pub fort: FortSettings,
     #[serde(default)]
     pub stripe: StripeSettings,
     #[serde(default)]
@@ -286,6 +293,24 @@ pub struct CodexSettings {
     pub workspace: Option<String>,
     pub workdir: Option<String>,
     pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct FortSettings {
+    pub repo: Option<String>,
+    pub bin: Option<String>,
+    pub build: Option<bool>,
+    pub host: Option<String>,
+    pub container_host: Option<String>,
+}
+
+impl FortSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.repo);
+        normalize_option_string(&mut self.bin);
+        normalize_option_string(&mut self.host);
+        normalize_option_string(&mut self.container_host);
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
