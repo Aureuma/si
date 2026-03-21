@@ -96,8 +96,9 @@ Defaults for the `si fort` wrapper (hosted Fort API access).
 CLI and runtime behavior:
 - `si fort config show` reads these values.
 - `si fort config set ...` writes these values to settings.
-- Wrapper bootstrap/admin auth resolves from `FORT_BOOTSTRAP_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`).
-- Runtime container token state resolves from `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
+- `si fort` injects `--host` from `[fort].host` when no explicit native `--host` flag is passed.
+- `si fort` injects `--token-file ~/.si/fort/bootstrap/admin.token` when that file exists and no explicit native `--token-file` flag is passed.
+- Runtime container token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
 ### `[dyad]`
 Defaults for dyad spawns.
