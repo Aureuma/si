@@ -59,6 +59,18 @@ fn surf_and_viva_wrappers_render_help() {
 }
 
 #[test]
+fn google_youtube_help_paths_render_without_flag_collisions() {
+    cargo_bin()
+        .args(["google", "youtube", "caption", "upload", "--help"])
+        .assert()
+        .success();
+    cargo_bin()
+        .args(["google", "youtube", "support", "categories", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn viva_wrapper_config_round_trip() {
     let home = tempdir().expect("home tempdir");
     cargo_bin()
