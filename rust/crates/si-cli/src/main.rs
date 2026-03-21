@@ -213,7 +213,7 @@ use std::io::{self, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command as StdCommand;
+use std::process::{Command as StdCommand, ExitStatus};
 use tar::Builder as TarBuilder;
 
 #[derive(Debug, Parser)]
@@ -33525,29 +33525,53 @@ fn run_native_fort_command(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let program = resolve_fort_program(&settings.fort, build, no_build, bin)?;
-    let mut command = StdCommand::new(&program);
+    let explicit_program = bin.is_some() || settings.fort.bin.is_some();
+    let program = resolve_fort_program(&settings.fort, build, no_build, bin.clone())?;
+    let status = match run_fort_program(&program, args, &settings.fort, &home) {
+        Ok(status) => status,
+        Err(error)
+            if error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+                && !build
+                && !no_build
+                && !explicit_program =>
+        {
+            let fallback = resolve_fort_build_fallback(&settings.fort)?;
+            run_fort_program(&fallback, args, &settings.fort, &home)
+                .with_context(|| format!("run fort wrapper command via {}", fallback.display()))?
+        }
+        Err(error) => {
+            return Err(error.context(format!("run fort wrapper command via {}", program.display())));
+        }
+    };
+    if status.success() {
+        return Ok(());
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn run_fort_program(
+    program: &Path,
+    args: &[String],
+    settings: &FortSettings,
+    home: &Path,
+) -> Result<ExitStatus> {
+    let mut command = StdCommand::new(program);
     command.args(args);
     command.env_remove("FORT_TOKEN");
     command.env_remove("FORT_REFRESH_TOKEN");
     if std::env::var("FORT_HOST").unwrap_or_default().trim().is_empty()
-        && let Some(host) = settings.fort.host.as_deref()
+        && let Some(host) = settings.host.as_deref()
     {
         command.env("FORT_HOST", host);
     }
     if std::env::var("FORT_TOKEN_PATH").unwrap_or_default().trim().is_empty()
         && std::env::var("FORT_BOOTSTRAP_TOKEN_FILE").unwrap_or_default().trim().is_empty()
     {
-        command.env("FORT_BOOTSTRAP_TOKEN_FILE", default_fort_bootstrap_token_path(&home));
+        command.env("FORT_BOOTSTRAP_TOKEN_FILE", default_fort_bootstrap_token_path(home));
     }
-
-    let status = command
-        .status()
-        .with_context(|| format!("run fort wrapper command via {}", program.display()))?;
-    if status.success() {
-        return Ok(());
-    }
-    std::process::exit(status.code().unwrap_or(1));
+    Ok(command.status()?)
 }
 
 fn resolve_fort_program(
@@ -33558,19 +33582,31 @@ fn resolve_fort_program(
 ) -> Result<PathBuf> {
     let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
     if should_build {
-        return build_fort_binary(settings);
+        return build_fort_binary(resolve_fort_repo(settings)?);
     }
     Ok(bin.unwrap_or_else(|| {
         settings.bin.as_deref().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("fort"))
     }))
 }
 
-fn build_fort_binary(settings: &FortSettings) -> Result<PathBuf> {
-    let repo = settings
-        .repo
-        .as_deref()
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("si fort build requires [fort].repo in settings"))?;
+fn resolve_fort_build_fallback(settings: &FortSettings) -> Result<PathBuf> {
+    build_fort_binary(resolve_fort_repo(settings)?)
+}
+
+fn resolve_fort_repo(settings: &FortSettings) -> Result<PathBuf> {
+    settings.repo.as_deref().map(PathBuf::from).or_else(discover_checkout_fort_repo).ok_or_else(
+        || anyhow!("si fort build requires [fort].repo in settings or a sibling fort checkout"),
+    )
+}
+
+fn discover_checkout_fort_repo() -> Option<PathBuf> {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let si_repo = manifest_dir.ancestors().nth(3)?;
+    let fort_repo = si_repo.parent()?.join("fort");
+    fort_repo.join("Cargo.toml").exists().then_some(fort_repo)
+}
+
+fn build_fort_binary(repo: PathBuf) -> Result<PathBuf> {
     let status = StdCommand::new("cargo")
         .arg("build")
         .arg("--quiet")
