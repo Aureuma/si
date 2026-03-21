@@ -26,6 +26,14 @@ si test all
 ./tools/test-all.sh
 ```
 
+For the direct Rust host matrix across `si`, sibling `fort`, and sibling `surf`, run:
+
+```bash
+./tools/test-rust-host-matrix.sh
+```
+
+That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
+
 ## Orbit runner matrix
 For orbit-system specific regression lanes, use:
 
@@ -148,6 +156,7 @@ stat -c "%a %n" "$FORT_TOKEN_PATH" "$FORT_REFRESH_TOKEN_PATH"
 
 Wrapper reminder:
 - `si fort` is a wrapper around `fort`.
+- If `fort` is not already on `PATH`, the wrapper can build and run the sibling `../fort` checkout when build fallback is allowed.
 - If a flag belongs to `fort` itself, pass it after `--` (for example: `si fort -- --host https://fort.aureuma.ai doctor`).
 
 ## CI notes
