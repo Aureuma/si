@@ -9550,8 +9550,6 @@ struct GoogleYouTubeCaptionUploadArgs {
     video_id: Option<String>,
     #[arg(long)]
     file: Option<PathBuf>,
-    #[arg(long, default_value = "en")]
-    language: String,
     #[arg(long)]
     name: Option<String>,
     #[arg(long, default_value_t = false)]
@@ -9969,7 +9967,7 @@ enum GoogleYouTubeSupportCommand {
         part: String,
         #[arg(long = "hl")]
         hl: Option<String>,
-        #[arg(long = "region")]
+        #[arg(long = "support-region", alias = "region-code")]
         support_region: Option<String>,
         #[arg(long = "param")]
         params: Vec<String>,
@@ -27348,7 +27346,6 @@ fn main() -> Result<()> {
                             command.runtime,
                             command.video_id,
                             command.file,
-                            command.language,
                             command.name,
                             command.draft,
                             command.part,
@@ -46041,7 +46038,6 @@ fn run_google_youtube_caption_upload(
     command: GoogleYouTubeMutationRuntimeArgs,
     video_id: Option<String>,
     file: Option<PathBuf>,
-    language: String,
     name: Option<String>,
     draft: bool,
     part: String,
@@ -46053,10 +46049,15 @@ fn run_google_youtube_caption_upload(
     let file = file.ok_or_else(|| anyhow::anyhow!("caption upload requires --file <path>"))?;
     let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
     require_google_youtube_oauth(&runtime, "caption upload")?;
+    let language = if runtime.language_code.trim().is_empty() {
+        "en"
+    } else {
+        runtime.language_code.trim()
+    };
     let metadata = serde_json::json!({
         "snippet": {
             "videoId": video_id,
-            "language": language.trim(),
+            "language": language,
             "name": name.unwrap_or_default().trim(),
             "isDraft": draft,
         }
