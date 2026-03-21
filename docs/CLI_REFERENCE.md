@@ -84,7 +84,7 @@ si mintlify broken-links
 
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - In SI runtime containers, use `si fort ...` for secret access.
-- `si fort` wrapper bootstrap/admin auth resolves from `FORT_BOOTSTRAP_TOKEN_FILE`; runtime sessions use `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`.
+- `si fort` wrapper passes explicit Fort file-path auth flags when defaults are available: `--host` from settings and `--token-file` from `~/.si/fort/bootstrap/admin.token`.
 - If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.

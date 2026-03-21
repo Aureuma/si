@@ -386,6 +386,9 @@ fn write_executable_shell_script(path: &Path, body: &str) {
 fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
     fs::write(
         home.path().join(".si/settings.toml"),
         "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
@@ -399,7 +402,7 @@ fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
     write_executable_shell_script(
         &fort_path,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN=%s\\nFORT_REFRESH_TOKEN=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN:-}}\" \"${{FORT_REFRESH_TOKEN:-}}\" > {}\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN=%s\\nFORT_REFRESH_TOKEN=%s\\nFORT_TOKEN_PATH=%s\\nFORT_REFRESH_TOKEN_PATH=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN:-}}\" \"${{FORT_REFRESH_TOKEN:-}}\" \"${{FORT_TOKEN_PATH:-}}\" \"${{FORT_REFRESH_TOKEN_PATH:-}}\" > {}\n",
             shell_escape_for_test(&args_file),
             shell_escape_for_test(&env_file),
         ),
@@ -413,35 +416,35 @@ fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
         .env("FORT_TOKEN", "legacy-token")
         .env("FORT_REFRESH_TOKEN", "legacy-refresh-token")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(args.trim(), "doctor");
-    let env = fs::read_to_string(&env_file).expect("read fort env");
-    assert!(env.contains("FORT_HOST=https://fort.example.test"));
-    assert!(
-        env.contains(&format!(
-            "FORT_BOOTSTRAP_TOKEN_FILE={}",
+    assert_eq!(
+        args,
+        format!(
+            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
             home.path().join(".si/fort/bootstrap/admin.token").display()
-        )),
-        "missing default bootstrap token path in env: {env}"
+        )
     );
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
     assert!(env.contains("FORT_TOKEN="));
     assert!(env.contains("FORT_REFRESH_TOKEN="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
+    assert!(env.contains("FORT_REFRESH_TOKEN_PATH="));
 }
 
 #[test]
-fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
+fn fort_wrapper_preserves_explicit_native_flags() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
     fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
         .expect("write settings");
-
-    let runtime_token = home.path().join("runtime.token");
-    fs::write(&runtime_token, "token\n").expect("write runtime token");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("fort-args.txt");
@@ -450,7 +453,7 @@ fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
     write_executable_shell_script(
         &fort_path,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_TOKEN_PATH=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\n' \"${{FORT_TOKEN_PATH:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" > {}\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_HOST=%s\\nFORT_TOKEN_PATH=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_TOKEN_PATH:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" > {}\n",
             shell_escape_for_test(&args_file),
             shell_escape_for_test(&env_file),
         ),
@@ -466,19 +469,25 @@ fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
             "--",
             "--host",
             "https://override.example.test",
+            "--token-file",
+            "/tmp/runtime.token",
             "doctor",
         ])
         .env("PATH", path_env)
         .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
-        .env("FORT_TOKEN_PATH", runtime_token.to_str().expect("token path"))
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(args, "--host\nhttps://override.example.test\ndoctor\n");
+    assert_eq!(
+        args,
+        "--host\nhttps://override.example.test\n--token-file\n/tmp/runtime.token\ndoctor\n"
+    );
     let env = fs::read_to_string(&env_file).expect("read fort env");
-    assert!(env.contains(&format!("FORT_TOKEN_PATH={}", runtime_token.display())));
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
 }
 
@@ -486,6 +495,9 @@ fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
 fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
     let repo = tempdir().expect("fort repo");
     let args_file = repo.path().join("fort-args.txt");
     let env_file = repo.path().join("fort-env.txt");
@@ -503,7 +515,7 @@ fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
     write_executable_shell_script(
         &cargo_path,
         &format!(
-            "#!/bin/sh\nset -eu\nif [ \"$1\" != \"build\" ]; then\n  printf 'unexpected cargo command: %s\\n' \"$1\" >&2\n  exit 1\nfi\nmkdir -p \"$PWD/target/debug\"\ncat > \"$PWD/target/debug/fort\" <<'EOF'\n#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" > {env}\nEOF\nchmod +x \"$PWD/target/debug/fort\"\n",
+            "#!/bin/sh\nset -eu\nif [ \"$1\" != \"build\" ]; then\n  printf 'unexpected cargo command: %s\\n' \"$1\" >&2\n  exit 1\nfi\nmkdir -p \"$PWD/target/debug\"\ncat > \"$PWD/target/debug/fort\" <<'EOF'\n#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN_PATH=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN_PATH:-}}\" > {env}\nEOF\nchmod +x \"$PWD/target/debug/fort\"\n",
             args = shell_escape_for_test(&args_file),
             env = shell_escape_for_test(&env_file),
         ),
@@ -520,16 +532,17 @@ fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(args.trim(), "doctor");
-    let env = fs::read_to_string(&env_file).expect("read fort env");
-    assert!(env.contains("FORT_HOST=https://fort.example.test"));
-    assert!(
-        env.contains(&format!(
-            "FORT_BOOTSTRAP_TOKEN_FILE={}",
+    assert_eq!(
+        args,
+        format!(
+            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
             home.path().join(".si/fort/bootstrap/admin.token").display()
-        )),
-        "missing default bootstrap token path in env: {env}"
+        )
     );
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
 }
 
 #[test]

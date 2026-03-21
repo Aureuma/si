@@ -33542,7 +33542,9 @@ fn run_native_fort_command(
                 .with_context(|| format!("run fort wrapper command via {}", fallback.display()))?
         }
         Err(error) => {
-            return Err(error.context(format!("run fort wrapper command via {}", program.display())));
+            return Err(
+                error.context(format!("run fort wrapper command via {}", program.display()))
+            );
         }
     };
     if status.success() {
@@ -33558,20 +33560,38 @@ fn run_fort_program(
     home: &Path,
 ) -> Result<ExitStatus> {
     let mut command = StdCommand::new(program);
-    command.args(args);
+    command.args(build_fort_command_args(args, settings, home));
+    command.env_remove("FORT_HOST");
+    command.env_remove("FORT_TOKEN_PATH");
+    command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
+    command.env_remove("FORT_REFRESH_TOKEN_PATH");
     command.env_remove("FORT_TOKEN");
     command.env_remove("FORT_REFRESH_TOKEN");
-    if std::env::var("FORT_HOST").unwrap_or_default().trim().is_empty()
-        && let Some(host) = settings.host.as_deref()
-    {
-        command.env("FORT_HOST", host);
-    }
-    if std::env::var("FORT_TOKEN_PATH").unwrap_or_default().trim().is_empty()
-        && std::env::var("FORT_BOOTSTRAP_TOKEN_FILE").unwrap_or_default().trim().is_empty()
-    {
-        command.env("FORT_BOOTSTRAP_TOKEN_FILE", default_fort_bootstrap_token_path(home));
-    }
     Ok(command.status()?)
+}
+
+fn build_fort_command_args(args: &[String], settings: &FortSettings, home: &Path) -> Vec<String> {
+    let mut command_args = Vec::new();
+    if !fort_args_include_option(args, "--host")
+        && let Some(host) =
+            settings.host.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        command_args.push("--host".to_owned());
+        command_args.push(host.to_owned());
+    }
+    if !fort_args_include_option(args, "--token-file") {
+        let bootstrap_token = default_fort_bootstrap_token_path(home);
+        if bootstrap_token.is_file() {
+            command_args.push("--token-file".to_owned());
+            command_args.push(bootstrap_token.display().to_string());
+        }
+    }
+    command_args.extend(args.iter().cloned());
+    command_args
+}
+
+fn fort_args_include_option(args: &[String], flag: &str) -> bool {
+    args.iter().any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
 }
 
 fn resolve_fort_program(

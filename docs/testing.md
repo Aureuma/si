@@ -122,8 +122,8 @@ Run the Fort integration matrix:
 This matrix validates:
 - profile-scoped Fort agent auth bootstrap in `si spawn`
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
-- host-side bootstrap admin token resolved from `FORT_BOOTSTRAP_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`)
-- runtime token-path flow in containers via `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`
+- host-side bootstrap admin token resolved from `~/.si/fort/bootstrap/admin.token` and passed to Fort as `--token-file`
+- runtime token-path flow remains file-backed; pass explicit token-file paths to native Fort commands when running through `si fort -- ...`
 - in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
@@ -148,10 +148,10 @@ chmod 700 ~/.si/fort/bootstrap
 Runtime session token file requirements:
 
 ```bash
-$FORT_TOKEN_PATH
-$FORT_REFRESH_TOKEN_PATH
+/path/to/access.token
+/path/to/refresh.token
 
-stat -c "%a %n" "$FORT_TOKEN_PATH" "$FORT_REFRESH_TOKEN_PATH"
+stat -c "%a %n" /path/to/access.token /path/to/refresh.token
 ```
 
 Wrapper reminder:
