@@ -15,6 +15,7 @@
 use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use flate2::Compression;
@@ -33560,7 +33561,7 @@ fn run_fort_program(
     home: &Path,
 ) -> Result<ExitStatus> {
     let mut command = StdCommand::new(program);
-    command.args(build_fort_command_args(args, settings, home));
+    command.args(build_fort_command_args(program, args, settings, home)?);
     command.env_remove("FORT_HOST");
     command.env_remove("FORT_TOKEN_PATH");
     command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
@@ -33570,28 +33571,217 @@ fn run_fort_program(
     Ok(command.status()?)
 }
 
-fn build_fort_command_args(args: &[String], settings: &FortSettings, home: &Path) -> Vec<String> {
+fn build_fort_command_args(
+    program: &Path,
+    args: &[String],
+    settings: &FortSettings,
+    home: &Path,
+) -> Result<Vec<String>> {
     let mut command_args = Vec::new();
+    let resolved_host = fort_option_value(args, "--host").map(ToOwned::to_owned).or_else(|| {
+        settings
+            .host
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    });
     if !fort_args_include_option(args, "--host")
-        && let Some(host) =
-            settings.host.as_deref().map(str::trim).filter(|value| !value.is_empty())
+        && let Some(host) = resolved_host.as_deref()
     {
         command_args.push("--host".to_owned());
         command_args.push(host.to_owned());
     }
     if !fort_args_include_option(args, "--token-file") {
-        let bootstrap_token = default_fort_bootstrap_token_path(home);
-        if bootstrap_token.is_file() {
+        if let Some(token_file) =
+            refresh_fort_bootstrap_access_token(program, args, resolved_host.as_deref(), home)?
+        {
             command_args.push("--token-file".to_owned());
-            command_args.push(bootstrap_token.display().to_string());
+            command_args.push(token_file.display().to_string());
+        } else {
+            let bootstrap_token = default_fort_bootstrap_token_path(home);
+            if bootstrap_token.is_file() {
+                command_args.push("--token-file".to_owned());
+                command_args.push(bootstrap_token.display().to_string());
+            }
         }
     }
     command_args.extend(args.iter().cloned());
-    command_args
+    Ok(command_args)
 }
 
 fn fort_args_include_option(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
+}
+
+fn fort_option_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if arg == flag {
+            return iter.next().map(String::as_str);
+        }
+        let prefix = format!("{flag}=");
+        if let Some(value) = arg.strip_prefix(&prefix) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn fort_command_tokens(args: &[String]) -> Vec<&str> {
+    let mut tokens = Vec::new();
+    let mut index = 0usize;
+    while index < args.len() {
+        let arg = args[index].as_str();
+        if arg == "--" {
+            index += 1;
+            continue;
+        }
+        if arg == "--host" || arg == "--token-file" {
+            index += 2;
+            continue;
+        }
+        if arg.starts_with("--host=") || arg.starts_with("--token-file=") || arg == "--json" {
+            index += 1;
+            continue;
+        }
+        if arg.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        tokens.push(arg);
+        index += 1;
+    }
+    tokens
+}
+
+fn should_auto_refresh_fort_bootstrap_token(args: &[String]) -> bool {
+    let tokens = fort_command_tokens(args);
+    !(tokens.first() == Some(&"auth") && tokens.get(1) == Some(&"session"))
+}
+
+fn refresh_fort_bootstrap_access_token(
+    program: &Path,
+    args: &[String],
+    resolved_host: Option<&str>,
+    home: &Path,
+) -> Result<Option<PathBuf>> {
+    if !should_auto_refresh_fort_bootstrap_token(args) {
+        return Ok(None);
+    }
+    let token_path = default_fort_bootstrap_token_path(home);
+    let refresh_token_path = default_fort_bootstrap_refresh_token_path(home);
+    if !refresh_token_path.is_file() {
+        return Ok(None);
+    }
+    if fort_bootstrap_token_is_fresh(&token_path) {
+        return Ok(Some(token_path));
+    }
+    with_fort_bootstrap_refresh_lock(&default_fort_bootstrap_refresh_lock_path(home), || {
+        if fort_bootstrap_token_is_fresh(&token_path) {
+            return Ok(());
+        }
+        let mut refresh_command = StdCommand::new(program);
+        if let Some(host) = resolved_host {
+            refresh_command.arg("--host").arg(host);
+        }
+        refresh_command
+            .arg("--json")
+            .arg("auth")
+            .arg("session")
+            .arg("refresh")
+            .arg("--refresh-token-file")
+            .arg(&refresh_token_path)
+            .arg("--refresh-token-out")
+            .arg(&refresh_token_path);
+        refresh_command.env_remove("FORT_HOST");
+        refresh_command.env_remove("FORT_TOKEN_PATH");
+        refresh_command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
+        refresh_command.env_remove("FORT_REFRESH_TOKEN_PATH");
+        refresh_command.env_remove("FORT_TOKEN");
+        refresh_command.env_remove("FORT_REFRESH_TOKEN");
+        let output = refresh_command
+            .output()
+            .with_context(|| format!("refresh fort bootstrap session via {}", program.display()))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let detail = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                format!("exit status {}", output.status)
+            };
+            anyhow::bail!("refresh fort bootstrap session: {detail}");
+        }
+        let payload: Value = serde_json::from_slice(&output.stdout)
+            .context("parse fort bootstrap refresh response")?;
+        let access_token = payload["access_token"].as_str().unwrap_or_default().trim();
+        if access_token.is_empty() {
+            anyhow::bail!("fort bootstrap refresh response missing access_token");
+        }
+        write_secret_text_file(&token_path, access_token)?;
+        Ok(())
+    })?;
+    Ok(Some(token_path))
+}
+
+fn fort_bootstrap_token_is_fresh(path: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return false;
+    };
+    let token = raw.trim();
+    let Some(payload) = token.split('.').nth(1) else {
+        return false;
+    };
+    let Ok(decoded) = URL_SAFE_NO_PAD.decode(payload.as_bytes()) else {
+        return false;
+    };
+    let Ok(claims) = serde_json::from_slice::<Value>(&decoded) else {
+        return false;
+    };
+    let Some(exp) = claims["exp"].as_i64() else {
+        return false;
+    };
+    exp > Utc::now().timestamp() + 60
+}
+
+fn with_fort_bootstrap_refresh_lock<T>(
+    lock_path: &Path,
+    action: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let parent = lock_path
+        .parent()
+        .ok_or_else(|| anyhow!("refresh lock path {} has no parent", lock_path.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create dir {}", parent.display()))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(lock_path) {
+            Ok(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if std::time::Instant::now() >= deadline {
+                    return Err(anyhow!(
+                        "timed out waiting for fort bootstrap refresh lock {}",
+                        lock_path.display()
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("create fort refresh lock {}", lock_path.display()));
+            }
+        }
+    }
+    struct RefreshLockGuard(PathBuf);
+    impl Drop for RefreshLockGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+    let _guard = RefreshLockGuard(lock_path.to_path_buf());
+    action()
 }
 
 fn resolve_fort_program(
@@ -33643,6 +33833,31 @@ fn build_fort_binary(repo: PathBuf) -> Result<PathBuf> {
 
 fn default_fort_bootstrap_token_path(home: &Path) -> PathBuf {
     home.join(".si").join("fort").join("bootstrap").join("admin.token")
+}
+
+fn default_fort_bootstrap_refresh_token_path(home: &Path) -> PathBuf {
+    home.join(".si").join("fort").join("bootstrap").join("admin.refresh.token")
+}
+
+fn default_fort_bootstrap_refresh_lock_path(home: &Path) -> PathBuf {
+    home.join(".si").join("fort").join("bootstrap").join("admin.refresh.lock")
+}
+
+fn write_secret_text_file(path: &Path, value: &str) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("secret file path {} has no parent", path.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create dir {}", parent.display()))?;
+    let tmp = parent.join(format!(
+        ".{}.tmp",
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("secret")
+    ));
+    fs::write(&tmp, format!("{value}\n")).with_context(|| format!("write {}", tmp.display()))?;
+    #[cfg(unix)]
+    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", tmp.display()))?;
+    fs::rename(&tmp, path).with_context(|| format!("rename {}", path.display()))?;
+    Ok(())
 }
 
 fn load_settings_document(path: &Path) -> Result<toml::map::Map<String, toml::Value>> {

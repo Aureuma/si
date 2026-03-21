@@ -1,5 +1,8 @@
 use assert_cmd::Command;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD},
+};
 use chrono::Local;
 use serde_json::Value;
 use std::fs;
@@ -489,6 +492,127 @@ fn fort_wrapper_preserves_explicit_native_flags() {
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_TOKEN_PATH="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+}
+
+#[test]
+fn fort_wrapper_refreshes_bootstrap_session_from_file_paths() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let token_path = bootstrap_dir.join("admin.token");
+    let refresh_path = bootstrap_dir.join("admin.refresh.token");
+    fs::write(&token_path, "stale-admin-token\n").expect("write stale admin token");
+    fs::write(&refresh_path, "stale-refresh-token\n").expect("write stale refresh token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&token_path, &refresh_path] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  refresh_out=\"${{10}}\"\n  printf '%s\\n' 'rotated-refresh-token' > \"$refresh_out\"\n  printf '%s\\n' '{{\"access_token\":\"rotated-access-token\",\"refresh_token_file\":\"'\"$refresh_out\"'\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"agent\" ] && [ \"$6\" = \"list\" ]; then\n  test \"$(cat \"$4\")\" = 'rotated-access-token'\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            token = token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "agent", "list"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(args.contains("--json\nauth\nsession\nrefresh\n--refresh-token-file\n"));
+    assert!(args.contains(&format!("--token-file\n{}\nagent\nlist\n", token_path.display())));
+    assert_eq!(
+        fs::read_to_string(&token_path).expect("read refreshed admin token"),
+        "rotated-access-token\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&refresh_path).expect("read rotated refresh token"),
+        "rotated-refresh-token\n"
+    );
+}
+
+#[test]
+fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let token_path = bootstrap_dir.join("admin.token");
+    let refresh_path = bootstrap_dir.join("admin.refresh.token");
+    let payload = format!(
+        "{{\"exp\":{},\"iss\":\"fortd\",\"aud\":[\"fort-api\"]}}",
+        chrono::Utc::now().timestamp() + 3600
+    );
+    let token = format!("header.{}.signature\n", URL_SAFE_NO_PAD.encode(payload.as_bytes()));
+    fs::write(&token_path, token).expect("write fresh admin token");
+    fs::write(&refresh_path, "unused-refresh-token\n").expect("write refresh token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&token_path, &refresh_path] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"agent\" ] && [ \"$6\" = \"list\" ]; then\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            token = token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "agent", "list"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(!args.contains("--json\nauth\nsession\nrefresh\n"));
+    assert!(args.contains(&format!("--token-file\n{}\nagent\nlist\n", token_path.display())));
 }
 
 #[test]
