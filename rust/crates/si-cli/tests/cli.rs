@@ -383,6 +383,162 @@ fn write_executable_shell_script(path: &Path, body: &str) {
 }
 
 #[test]
+fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let env_file = bin_dir.path().join("fort-env.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN=%s\\nFORT_REFRESH_TOKEN=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN:-}}\" \"${{FORT_REFRESH_TOKEN:-}}\" > {}\n",
+            shell_escape_for_test(&args_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env("FORT_TOKEN", "legacy-token")
+        .env("FORT_REFRESH_TOKEN", "legacy-refresh-token")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(args.trim(), "doctor");
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST=https://fort.example.test"));
+    assert!(
+        env.contains(&format!(
+            "FORT_BOOTSTRAP_TOKEN_FILE={}",
+            home.path().join(".si/fort/bootstrap/admin.token").display()
+        )),
+        "missing default bootstrap token path in env: {env}"
+    );
+    assert!(env.contains("FORT_TOKEN="));
+    assert!(env.contains("FORT_REFRESH_TOKEN="));
+}
+
+#[test]
+fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
+
+    let runtime_token = home.path().join("runtime.token");
+    fs::write(&runtime_token, "token\n").expect("write runtime token");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let env_file = bin_dir.path().join("fort-env.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'FORT_TOKEN_PATH=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\n' \"${{FORT_TOKEN_PATH:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" > {}\n",
+            shell_escape_for_test(&args_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--",
+            "--host",
+            "https://override.example.test",
+            "doctor",
+        ])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env("FORT_TOKEN_PATH", runtime_token.to_str().expect("token path"))
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(args, "--host\nhttps://override.example.test\ndoctor\n");
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains(&format!("FORT_TOKEN_PATH={}", runtime_token.display())));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+}
+
+#[test]
+fn fort_config_set_and_show_round_trip_si_settings() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+
+    cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "set",
+            "--repo",
+            "/tmp/fort-repo",
+            "--bin",
+            "/tmp/fort-bin",
+            "--build",
+            "true",
+            "--host",
+            "https://fort.example.test",
+            "--container-host",
+            "http://fort.internal:8088",
+        ])
+        .assert()
+        .success();
+
+    let settings_source =
+        fs::read_to_string(home.path().join(".si/settings.toml")).expect("read settings");
+    let parsed: toml::Value = toml::from_str(&settings_source).expect("parse settings");
+    assert_eq!(parsed["fort"]["repo"].as_str().expect("repo"), "/tmp/fort-repo");
+    assert_eq!(parsed["fort"]["bin"].as_str().expect("bin"), "/tmp/fort-bin");
+    assert_eq!(parsed["fort"]["build"].as_bool().expect("build"), true);
+
+    let output = cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "show",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["repo"], "/tmp/fort-repo");
+    assert_eq!(parsed["bin"], "/tmp/fort-bin");
+    assert_eq!(parsed["build"], true);
+    assert_eq!(parsed["host"], "https://fort.example.test");
+    assert_eq!(parsed["container_host"], "http://fort.internal:8088");
+}
+
+#[test]
 fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
