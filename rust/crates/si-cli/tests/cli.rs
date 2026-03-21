@@ -49,6 +49,53 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
 }
 
 #[test]
+fn surf_and_viva_wrappers_render_help() {
+    for command in ["surf", "viva"] {
+        let output =
+            cargo_bin().args([command, "--help"]).assert().success().get_output().stdout.clone();
+        let rendered = String::from_utf8(output).expect("utf8 help");
+        assert!(rendered.contains("Usage: si"));
+    }
+}
+
+#[test]
+fn viva_wrapper_config_round_trip() {
+    let home = tempdir().expect("home tempdir");
+    cargo_bin()
+        .args([
+            "viva",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "set",
+            "--repo",
+            "/tmp/viva",
+            "--build",
+            "true",
+        ])
+        .assert()
+        .success();
+    let output = cargo_bin()
+        .args([
+            "viva",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "show",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse viva config");
+    assert_eq!(payload.get("repo").and_then(Value::as_str), Some("/tmp/viva"));
+    assert_eq!(payload.get("build").and_then(Value::as_bool), Some(true));
+}
+
+#[test]
 fn build_self_release_assets_writes_archives_and_checksums() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");

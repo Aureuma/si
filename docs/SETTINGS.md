@@ -354,9 +354,9 @@ Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
 - `no_autoupdate` (bool): pass `--no-autoupdate`.
 - `pull_image` (bool): pull image before run.
 - `runtime_dir` (string): host runtime directory for generated files.
-- `vault_env_file` (string): encrypted dotenv file path used by `si vault`.
-- `vault_repo` (string): repo argument passed to `si vault` (default: `viva`).
-- `vault_env` (string): env argument passed to `si vault` (default: `dev`).
+- `vault_env_file` (string): encrypted dotenv file path used by `si fort`.
+- `vault_repo` (string): repo argument passed to `si fort` (default: `viva`).
+- `vault_env` (string): env argument passed to `si fort` (default: `dev`).
 
 ##### `[[viva.tunnel.profiles.<name>.routes]]`
 - `hostname` (string, optional): ingress hostname.

@@ -35,7 +35,7 @@ use si_rs_command_manifest::{
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::runtime::git_repo_root_from;
-use si_rs_config::settings::{FortSettings, Settings};
+use si_rs_config::settings::{FortSettings, Settings, SurfSettings, VivaSettings};
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command,
@@ -309,6 +309,34 @@ enum Command {
     Paths {
         #[command(subcommand)]
         command: PathsCommand,
+    },
+    Surf {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, action = ArgAction::SetTrue)]
+        build: bool,
+        #[arg(long, action = ArgAction::SetTrue)]
+        no_build: bool,
+        #[arg(long)]
+        bin: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    Viva {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, action = ArgAction::SetTrue)]
+        build: bool,
+        #[arg(long, action = ArgAction::SetTrue)]
+        no_build: bool,
+        #[arg(long)]
+        bin: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     Fort {
         #[arg(long)]
@@ -15716,6 +15744,40 @@ enum FortConfigCommand {
         host: Option<String>,
         #[arg(long)]
         container_host: Option<String>,
+    },
+}
+
+#[derive(Debug, Parser)]
+struct VivaConfigCli {
+    #[command(subcommand)]
+    command: VivaConfigCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum VivaConfigCommand {
+    Show {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Set {
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        bin: Option<String>,
+        #[arg(long)]
+        build: Option<bool>,
+    },
+    Tunnel {
+        #[command(subcommand)]
+        command: VivaTunnelConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum VivaTunnelConfigCommand {
+    Show {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -32938,6 +33000,12 @@ fn main() -> Result<()> {
                 show_paths(home, settings_file, format)?
             }
         },
+        Command::Surf { home, settings_file, build, no_build, bin, args } => {
+            run_surf_wrapper(home, settings_file, build, no_build, bin, args)?
+        }
+        Command::Viva { home, settings_file, build, no_build, bin, args } => {
+            run_viva_wrapper(home, settings_file, build, no_build, bin, args)?
+        }
         Command::Fort { home, settings_file, build, no_build, bin, args } => {
             run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
         }
@@ -33321,6 +33389,383 @@ struct FortConfigView {
     container_host: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+struct VivaConfigView {
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+    tunnel_default_profile: String,
+}
+
+fn run_surf_wrapper(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    let args = strip_wrapper_passthrough_marker(args);
+    if args.is_empty() || matches!(args[0].as_str(), "-h" | "--help" | "help") {
+        render_surf_wrapper_help();
+        return Ok(());
+    }
+    run_native_surf_command(home, settings_file, build, no_build, bin, &args)
+}
+
+fn render_surf_wrapper_help() {
+    println!("Usage: si surf [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    println!();
+    println!("Native surf passthrough:");
+    println!("  build | start | status | logs | stop | proxy | config ... | session ...");
+    println!();
+    println!("Wrapper options:");
+    println!("  --home <PATH>");
+    println!("  --settings-file <PATH>");
+    println!("  --build");
+    println!("  --no-build");
+    println!("  --bin <PATH>");
+    println!();
+    println!("Examples:");
+    println!("  si surf build");
+    println!("  si surf start");
+    println!("  si surf config show");
+}
+
+fn run_native_surf_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: &[String],
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let explicit_program = bin.is_some() || !settings.surf.bin.trim().is_empty();
+    let program = resolve_surf_program(&settings.surf, build, no_build, bin.clone())?;
+    let status = match StdCommand::new(&program).args(args).status() {
+        Ok(status) => status,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && !build
+                && !no_build
+                && !explicit_program =>
+        {
+            let fallback = resolve_surf_build_fallback(&settings.surf)?;
+            StdCommand::new(&fallback)
+                .args(args)
+                .status()
+                .with_context(|| format!("run surf wrapper command via {}", fallback.display()))?
+        }
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("run surf wrapper command via {}", program.display()));
+        }
+    };
+    if status.success() {
+        return Ok(());
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn run_viva_wrapper(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    let args = strip_wrapper_passthrough_marker(args);
+    if args.is_empty() || matches!(args[0].as_str(), "-h" | "--help" | "help") {
+        render_viva_wrapper_help();
+        return Ok(());
+    }
+    match args[0].as_str() {
+        "config" => {
+            run_viva_config_command(home, settings_file, args.into_iter().skip(1).collect())
+        }
+        _ => run_native_viva_command(home, settings_file, build, no_build, bin, &args),
+    }
+}
+
+fn render_viva_wrapper_help() {
+    println!("Usage: si viva [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    println!();
+    println!("Wrapper commands:");
+    println!("  config show|set");
+    println!("  config tunnel show");
+    println!();
+    println!("Native viva passthrough:");
+    println!(
+        "  doctor | deploy | backup ... | notify ... | rollback | status | history | serve | tunnel ..."
+    );
+    println!();
+    println!("Wrapper options:");
+    println!("  --home <PATH>");
+    println!("  --settings-file <PATH>");
+    println!("  --build");
+    println!("  --no-build");
+    println!("  --bin <PATH>");
+    println!();
+    println!("Examples:");
+    println!("  si viva config set --repo ~/Development/viva --build true");
+    println!("  si viva config tunnel show --format json");
+    println!("  si viva -- tunnel up --profile dev");
+}
+
+fn run_viva_config_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    let VivaConfigCli { command } =
+        parse_fort_parser(std::iter::once("config".to_owned()).chain(args).collect());
+    match command {
+        VivaConfigCommand::Show { format } => show_viva_config(home, settings_file, format),
+        VivaConfigCommand::Set { repo, bin, build } => {
+            set_viva_config(home, settings_file, repo, bin, build)
+        }
+        VivaConfigCommand::Tunnel { command } => match command {
+            VivaTunnelConfigCommand::Show { format } => {
+                show_viva_tunnel_config(home, settings_file, format)
+            }
+        },
+    }
+}
+
+fn show_viva_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let view = VivaConfigView {
+        repo: non_empty_string(settings.viva.repo),
+        bin: non_empty_string(settings.viva.bin),
+        build: settings.viva.build,
+        tunnel_default_profile: settings.viva.tunnel.default_profile,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("repo={}", render_option_text_value(view.repo.as_deref()));
+            println!("bin={}", render_option_text_value(view.bin.as_deref()));
+            println!(
+                "build={}",
+                view.build.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_owned())
+            );
+            println!(
+                "tunnel.default_profile={}",
+                render_option_text_value(non_empty_str(&view.tunnel_default_profile))
+            );
+        }
+    }
+    Ok(())
+}
+
+fn set_viva_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path =
+        settings_file.unwrap_or_else(|| home.join(".si").join("viva").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    let viva = ensure_toml_table(&mut document, "viva")?;
+    set_toml_string(viva, "repo", repo);
+    set_toml_string(viva, "bin", bin);
+    set_toml_bool(viva, "build", build);
+    if viva.is_empty() {
+        document.remove("viva");
+    }
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn show_viva_tunnel_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&settings.viva.tunnel)?),
+        OutputFormat::Text => {
+            println!(
+                "default_profile={}",
+                render_option_text_value(non_empty_str(&settings.viva.tunnel.default_profile))
+            );
+            if settings.viva.tunnel.profiles.is_empty() {
+                println!("profiles=(none)");
+            } else {
+                println!(
+                    "profiles={}",
+                    settings.viva.tunnel.profiles.keys().cloned().collect::<Vec<_>>().join(", ")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_native_viva_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: &[String],
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let explicit_program = bin.is_some() || !settings.viva.bin.trim().is_empty();
+    let program = resolve_viva_program(&settings.viva, build, no_build, bin.clone())?;
+    let command_args = build_viva_command_args(args, &settings.viva);
+    let status = match StdCommand::new(&program).args(&command_args).status() {
+        Ok(status) => status,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && !build
+                && !no_build
+                && !explicit_program =>
+        {
+            let fallback = resolve_viva_build_fallback(&settings.viva)?;
+            StdCommand::new(&fallback)
+                .args(&command_args)
+                .status()
+                .with_context(|| format!("run viva wrapper command via {}", fallback.display()))?
+        }
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("run viva wrapper command via {}", program.display()));
+        }
+    };
+    if status.success() {
+        return Ok(());
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn build_viva_command_args(args: &[String], settings: &VivaSettings) -> Vec<String> {
+    let mut command_args = args.to_vec();
+    if command_args.first().is_some_and(|value| value == "tunnel")
+        && !command_args.iter().any(|value| value == "--profile")
+        && let Some(default_profile) = non_empty_str(&settings.tunnel.default_profile)
+    {
+        command_args.push("--profile".to_owned());
+        command_args.push(default_profile.to_owned());
+    }
+    command_args
+}
+
+fn resolve_surf_program(
+    settings: &SurfSettings,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+) -> Result<PathBuf> {
+    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
+    if should_build {
+        return build_surf_binary(resolve_surf_repo(settings)?);
+    }
+    Ok(bin.unwrap_or_else(|| {
+        non_empty_str(&settings.bin).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("surf"))
+    }))
+}
+
+fn resolve_surf_build_fallback(settings: &SurfSettings) -> Result<PathBuf> {
+    build_surf_binary(resolve_surf_repo(settings)?)
+}
+
+fn resolve_surf_repo(settings: &SurfSettings) -> Result<PathBuf> {
+    non_empty_str(&settings.repo)
+        .map(PathBuf::from)
+        .or_else(discover_checkout_surf_repo)
+        .ok_or_else(|| {
+            anyhow!("si surf build requires [surf].repo in settings or a sibling surf checkout")
+        })
+}
+
+fn discover_checkout_surf_repo() -> Option<PathBuf> {
+    discover_checkout_repo("surf")
+}
+
+fn build_surf_binary(repo: PathBuf) -> Result<PathBuf> {
+    let status = StdCommand::new("cargo")
+        .arg("build")
+        .arg("--quiet")
+        .arg("--bin")
+        .arg("surf")
+        .current_dir(&repo)
+        .status()
+        .with_context(|| format!("build surf binary in {}", repo.display()))?;
+    if !status.success() {
+        anyhow::bail!("cargo build --bin surf failed in {}", repo.display());
+    }
+    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "surf.exe" } else { "surf" }))
+}
+
+fn resolve_viva_program(
+    settings: &VivaSettings,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+) -> Result<PathBuf> {
+    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
+    if should_build {
+        return build_viva_binary(resolve_viva_repo(settings)?);
+    }
+    Ok(bin.unwrap_or_else(|| {
+        non_empty_str(&settings.bin).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("viva"))
+    }))
+}
+
+fn resolve_viva_build_fallback(settings: &VivaSettings) -> Result<PathBuf> {
+    build_viva_binary(resolve_viva_repo(settings)?)
+}
+
+fn resolve_viva_repo(settings: &VivaSettings) -> Result<PathBuf> {
+    non_empty_str(&settings.repo)
+        .map(PathBuf::from)
+        .or_else(discover_checkout_viva_repo)
+        .ok_or_else(|| {
+            anyhow!("si viva build requires [viva].repo in settings or a sibling viva checkout")
+        })
+}
+
+fn discover_checkout_viva_repo() -> Option<PathBuf> {
+    discover_checkout_repo("viva")
+}
+
+fn discover_checkout_repo(name: &str) -> Option<PathBuf> {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let si_repo = manifest_dir.ancestors().nth(3)?;
+    let repo = si_repo.parent()?.join(name);
+    repo.join("Cargo.toml").exists().then_some(repo)
+}
+
+fn build_viva_binary(repo: PathBuf) -> Result<PathBuf> {
+    let status = StdCommand::new("cargo")
+        .arg("build")
+        .arg("--quiet")
+        .arg("--bin")
+        .arg("viva")
+        .current_dir(&repo)
+        .status()
+        .with_context(|| format!("build viva binary in {}", repo.display()))?;
+    if !status.success() {
+        anyhow::bail!("cargo build --bin viva failed in {}", repo.display());
+    }
+    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "viva.exe" } else { "viva" }))
+}
+
 fn run_fort_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -33368,6 +33813,23 @@ fn render_fort_wrapper_help() {
     println!("  si fort doctor");
     println!("  si fort -- --host https://fort.aureuma.ai doctor");
     println!("  si fort session-state show --path /tmp/session.json");
+}
+
+fn strip_wrapper_passthrough_marker(mut args: Vec<String>) -> Vec<String> {
+    if args.first().is_some_and(|value| value == "--") {
+        args.remove(0);
+    }
+    args
+}
+
+fn non_empty_string(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
+}
+
+fn non_empty_str(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() { None } else { Some(trimmed) }
 }
 
 fn parse_fort_parser<T: Parser>(args: Vec<String>) -> T {
