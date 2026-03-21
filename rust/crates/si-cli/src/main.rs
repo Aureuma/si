@@ -34,7 +34,7 @@ use si_rs_command_manifest::{
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::runtime::git_repo_root_from;
-use si_rs_config::settings::Settings;
+use si_rs_config::settings::{FortSettings, Settings};
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command,
@@ -310,8 +310,18 @@ enum Command {
         command: PathsCommand,
     },
     Fort {
-        #[command(subcommand)]
-        command: FortCommand,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, action = ArgAction::SetTrue)]
+        build: bool,
+        #[arg(long, action = ArgAction::SetTrue)]
+        no_build: bool,
+        #[arg(long)]
+        bin: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
     },
     Warmup {
         #[command(subcommand)]
@@ -15584,16 +15594,10 @@ enum PathsCommand {
     },
 }
 
-#[derive(Debug, Subcommand)]
-enum FortCommand {
-    SessionState {
-        #[command(subcommand)]
-        command: FortSessionStateCommand,
-    },
-    RuntimeAgentState {
-        #[command(subcommand)]
-        command: FortRuntimeAgentStateCommand,
-    },
+#[derive(Debug, Parser)]
+struct FortSessionStateCli {
+    #[command(subcommand)]
+    command: FortSessionStateCommand,
 }
 
 #[derive(Debug, Subcommand)]
@@ -15662,6 +15666,12 @@ enum FortSessionStateCommand {
     },
 }
 
+#[derive(Debug, Parser)]
+struct FortRuntimeAgentStateCli {
+    #[command(subcommand)]
+    command: FortRuntimeAgentStateCommand,
+}
+
 #[derive(Debug, Subcommand)]
 enum FortRuntimeAgentStateCommand {
     Show {
@@ -15679,6 +15689,32 @@ enum FortRuntimeAgentStateCommand {
     Clear {
         #[arg(long)]
         path: PathBuf,
+    },
+}
+
+#[derive(Debug, Parser)]
+struct FortConfigCli {
+    #[command(subcommand)]
+    command: FortConfigCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum FortConfigCommand {
+    Show {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Set {
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        bin: Option<String>,
+        #[arg(long)]
+        build: Option<bool>,
+        #[arg(long)]
+        host: Option<String>,
+        #[arg(long)]
+        container_host: Option<String>,
     },
 }
 
@@ -32901,66 +32937,9 @@ fn main() -> Result<()> {
                 show_paths(home, settings_file, format)?
             }
         },
-        Command::Fort { command } => match command {
-            FortCommand::SessionState { command } => match command {
-                FortSessionStateCommand::Show { path, format } => {
-                    show_fort_session_state(path, format)?
-                }
-                FortSessionStateCommand::Write { path, state_json } => {
-                    write_fort_session_state(path, &state_json)?
-                }
-                FortSessionStateCommand::Clear { path } => clear_fort_session_state(path)?,
-                FortSessionStateCommand::BootstrapView {
-                    path,
-                    profile_id,
-                    access_token_path,
-                    refresh_token_path,
-                    access_token_container_path,
-                    refresh_token_container_path,
-                    format,
-                } => show_fort_session_bootstrap_view(
-                    path,
-                    profile_id,
-                    &access_token_path,
-                    &refresh_token_path,
-                    &access_token_container_path,
-                    &refresh_token_container_path,
-                    format,
-                )?,
-                FortSessionStateCommand::Classify { path, now_unix, format } => {
-                    show_fort_session_state_classification(path, now_unix, format)?
-                }
-                FortSessionStateCommand::RefreshOutcome {
-                    path,
-                    outcome,
-                    now_unix,
-                    access_expires_at_unix,
-                    refresh_expires_at_unix,
-                    format,
-                } => show_fort_session_state_refresh_outcome(
-                    path,
-                    outcome,
-                    now_unix,
-                    access_expires_at_unix,
-                    refresh_expires_at_unix,
-                    format,
-                )?,
-                FortSessionStateCommand::Teardown { path, now_unix, format } => {
-                    show_fort_session_state_teardown(path, now_unix, format)?
-                }
-            },
-            FortCommand::RuntimeAgentState { command } => match command {
-                FortRuntimeAgentStateCommand::Show { path, format } => {
-                    show_fort_runtime_agent_state(path, format)?
-                }
-                FortRuntimeAgentStateCommand::Write { path, state_json } => {
-                    write_fort_runtime_agent_state(path, &state_json)?
-                }
-                FortRuntimeAgentStateCommand::Clear { path } => {
-                    clear_fort_runtime_agent_state(path)?
-                }
-            },
-        },
+        Command::Fort { home, settings_file, build, no_build, bin, args } => {
+            run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
+        }
         Command::Warmup { command } => match command {
             WarmupCommand::AutostartDecision {
                 state_path,
@@ -33308,6 +33287,19 @@ fn show_settings(
             println!("codex.workspace={}", settings.codex.workspace.as_deref().unwrap_or("(none)"));
             println!("codex.workdir={}", settings.codex.workdir.as_deref().unwrap_or("(none)"));
             println!("codex.profile={}", settings.codex.profile.as_deref().unwrap_or("(none)"));
+            println!("fort.repo={}", settings.fort.repo.as_deref().unwrap_or("(none)"));
+            println!("fort.bin={}", settings.fort.bin.as_deref().unwrap_or("(none)"));
+            let fort_build = settings
+                .fort
+                .build
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "(none)".to_owned());
+            println!("fort.build={fort_build}");
+            println!("fort.host={}", settings.fort.host.as_deref().unwrap_or("(none)"));
+            println!(
+                "fort.container_host={}",
+                settings.fort.container_host.as_deref().unwrap_or("(none)")
+            );
             println!("dyad.workspace={}", settings.dyad.workspace.as_deref().unwrap_or("(none)"));
             println!("dyad.configs={}", settings.dyad.configs.as_deref().unwrap_or("(none)"));
         }
@@ -33317,6 +33309,342 @@ fn show_settings(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct FortConfigView {
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+    host: Option<String>,
+    container_host: Option<String>,
+}
+
+fn run_fort_wrapper(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    if args.is_empty() || matches!(args[0].as_str(), "-h" | "--help" | "help") {
+        render_fort_wrapper_help();
+        return Ok(());
+    }
+
+    match args[0].as_str() {
+        "session-state" => run_fort_session_state_command(args.into_iter().skip(1).collect()),
+        "runtime-agent-state" => {
+            run_fort_runtime_agent_state_command(args.into_iter().skip(1).collect())
+        }
+        "config" => {
+            run_fort_config_command(home, settings_file, args.into_iter().skip(1).collect())
+        }
+        _ => run_native_fort_command(home, settings_file, build, no_build, bin, &args),
+    }
+}
+
+fn render_fort_wrapper_help() {
+    println!("Usage: si fort [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    println!();
+    println!("Wrapper commands:");
+    println!("  config show|set");
+    println!("  session-state <show|write|clear|bootstrap-view|classify|refresh-outcome|teardown>");
+    println!("  runtime-agent-state <show|write|clear>");
+    println!();
+    println!("Native fort passthrough:");
+    println!("  doctor | auth ... | get | set | list | batch-get | run | agent ...");
+    println!();
+    println!("Wrapper options:");
+    println!("  --home <PATH>");
+    println!("  --settings-file <PATH>");
+    println!("  --build");
+    println!("  --no-build");
+    println!("  --bin <PATH>");
+    println!();
+    println!("Examples:");
+    println!("  si fort doctor");
+    println!("  si fort -- --host https://fort.aureuma.ai doctor");
+    println!("  si fort session-state show --path /tmp/session.json");
+}
+
+fn parse_fort_parser<T: Parser>(args: Vec<String>) -> T {
+    match T::try_parse_from(args) {
+        Ok(parsed) => parsed,
+        Err(error) => error.exit(),
+    }
+}
+
+fn run_fort_session_state_command(args: Vec<String>) -> Result<()> {
+    let FortSessionStateCli { command } =
+        parse_fort_parser(std::iter::once("session-state".to_owned()).chain(args).collect());
+    match command {
+        FortSessionStateCommand::Show { path, format } => show_fort_session_state(path, format),
+        FortSessionStateCommand::Write { path, state_json } => {
+            write_fort_session_state(path, &state_json)
+        }
+        FortSessionStateCommand::Clear { path } => clear_fort_session_state(path),
+        FortSessionStateCommand::BootstrapView {
+            path,
+            profile_id,
+            access_token_path,
+            refresh_token_path,
+            access_token_container_path,
+            refresh_token_container_path,
+            format,
+        } => show_fort_session_bootstrap_view(
+            path,
+            profile_id,
+            &access_token_path,
+            &refresh_token_path,
+            &access_token_container_path,
+            &refresh_token_container_path,
+            format,
+        ),
+        FortSessionStateCommand::Classify { path, now_unix, format } => {
+            show_fort_session_state_classification(path, now_unix, format)
+        }
+        FortSessionStateCommand::RefreshOutcome {
+            path,
+            outcome,
+            now_unix,
+            access_expires_at_unix,
+            refresh_expires_at_unix,
+            format,
+        } => show_fort_session_state_refresh_outcome(
+            path,
+            outcome,
+            now_unix,
+            access_expires_at_unix,
+            refresh_expires_at_unix,
+            format,
+        ),
+        FortSessionStateCommand::Teardown { path, now_unix, format } => {
+            show_fort_session_state_teardown(path, now_unix, format)
+        }
+    }
+}
+
+fn run_fort_runtime_agent_state_command(args: Vec<String>) -> Result<()> {
+    let FortRuntimeAgentStateCli { command } =
+        parse_fort_parser(std::iter::once("runtime-agent-state".to_owned()).chain(args).collect());
+    match command {
+        FortRuntimeAgentStateCommand::Show { path, format } => {
+            show_fort_runtime_agent_state(path, format)
+        }
+        FortRuntimeAgentStateCommand::Write { path, state_json } => {
+            write_fort_runtime_agent_state(path, &state_json)
+        }
+        FortRuntimeAgentStateCommand::Clear { path } => clear_fort_runtime_agent_state(path),
+    }
+}
+
+fn run_fort_config_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    let FortConfigCli { command } =
+        parse_fort_parser(std::iter::once("config".to_owned()).chain(args).collect());
+    match command {
+        FortConfigCommand::Show { format } => show_fort_config(home, settings_file, format),
+        FortConfigCommand::Set { repo, bin, build, host, container_host } => {
+            set_fort_config(home, settings_file, repo, bin, build, host, container_host)
+        }
+    }
+}
+
+fn show_fort_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let view = FortConfigView {
+        repo: settings.fort.repo,
+        bin: settings.fort.bin,
+        build: settings.fort.build,
+        host: settings.fort.host,
+        container_host: settings.fort.container_host,
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("repo={}", render_option_text_value(view.repo.as_deref()));
+            println!("bin={}", render_option_text_value(view.bin.as_deref()));
+            println!(
+                "build={}",
+                view.build.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_owned())
+            );
+            println!("host={}", render_option_text_value(view.host.as_deref()));
+            println!("container_host={}", render_option_text_value(view.container_host.as_deref()));
+        }
+    }
+
+    Ok(())
+}
+
+fn set_fort_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+    host: Option<String>,
+    container_host: Option<String>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let fort = ensure_toml_table(&mut document, "fort")?;
+    set_toml_string(fort, "repo", repo);
+    set_toml_string(fort, "bin", bin);
+    set_toml_bool(fort, "build", build);
+    set_toml_string(fort, "host", host);
+    set_toml_string(fort, "container_host", container_host);
+    if fort.is_empty() {
+        document.remove("fort");
+    }
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn run_native_fort_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+    args: &[String],
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let program = resolve_fort_program(&settings.fort, build, no_build, bin)?;
+    let mut command = StdCommand::new(&program);
+    command.args(args);
+    command.env_remove("FORT_TOKEN");
+    command.env_remove("FORT_REFRESH_TOKEN");
+    if std::env::var("FORT_HOST").unwrap_or_default().trim().is_empty()
+        && let Some(host) = settings.fort.host.as_deref()
+    {
+        command.env("FORT_HOST", host);
+    }
+    if std::env::var("FORT_TOKEN_PATH").unwrap_or_default().trim().is_empty()
+        && std::env::var("FORT_BOOTSTRAP_TOKEN_FILE").unwrap_or_default().trim().is_empty()
+    {
+        command.env("FORT_BOOTSTRAP_TOKEN_FILE", default_fort_bootstrap_token_path(&home));
+    }
+
+    let status = command
+        .status()
+        .with_context(|| format!("run fort wrapper command via {}", program.display()))?;
+    if status.success() {
+        return Ok(());
+    }
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn resolve_fort_program(
+    settings: &FortSettings,
+    build: bool,
+    no_build: bool,
+    bin: Option<PathBuf>,
+) -> Result<PathBuf> {
+    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
+    if should_build {
+        return build_fort_binary(settings);
+    }
+    Ok(bin.unwrap_or_else(|| {
+        settings.bin.as_deref().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("fort"))
+    }))
+}
+
+fn build_fort_binary(settings: &FortSettings) -> Result<PathBuf> {
+    let repo = settings
+        .repo
+        .as_deref()
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("si fort build requires [fort].repo in settings"))?;
+    let status = StdCommand::new("cargo")
+        .arg("build")
+        .arg("--quiet")
+        .arg("--bin")
+        .arg("fort")
+        .current_dir(&repo)
+        .status()
+        .with_context(|| format!("build fort binary in {}", repo.display()))?;
+    if !status.success() {
+        anyhow::bail!("cargo build --bin fort failed in {}", repo.display());
+    }
+    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "fort.exe" } else { "fort" }))
+}
+
+fn default_fort_bootstrap_token_path(home: &Path) -> PathBuf {
+    home.join(".si").join("fort").join("bootstrap").join("admin.token")
+}
+
+fn load_settings_document(path: &Path) -> Result<toml::map::Map<String, toml::Value>> {
+    if !path.exists() {
+        return Ok(toml::map::Map::new());
+    }
+    let source = fs::read_to_string(path)
+        .with_context(|| format!("read settings file {}", path.display()))?;
+    let parsed = toml::from_str::<toml::Value>(&source)
+        .with_context(|| format!("parse settings file {}", path.display()))?;
+    Ok(parsed.as_table().cloned().unwrap_or_default())
+}
+
+fn write_settings_document(
+    path: &Path,
+    document: &toml::map::Map<String, toml::Value>,
+) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create settings dir {}", parent.display()))?;
+    }
+    let source = toml::to_string_pretty(&toml::Value::Table(document.clone()))?;
+    fs::write(path, source).with_context(|| format!("write settings file {}", path.display()))?;
+    Ok(())
+}
+
+fn ensure_toml_table<'a>(
+    root: &'a mut toml::map::Map<String, toml::Value>,
+    key: &str,
+) -> Result<&'a mut toml::map::Map<String, toml::Value>> {
+    if !root.contains_key(key) {
+        root.insert(key.to_owned(), toml::Value::Table(toml::map::Map::new()));
+    }
+    root.get_mut(key)
+        .and_then(toml::Value::as_table_mut)
+        .ok_or_else(|| anyhow!("settings key {key} must be a table"))
+}
+
+fn set_toml_string(
+    table: &mut toml::map::Map<String, toml::Value>,
+    key: &str,
+    value: Option<String>,
+) {
+    match value.map(|item| item.trim().to_owned()) {
+        Some(value) if !value.is_empty() => {
+            table.insert(key.to_owned(), toml::Value::String(value));
+        }
+        Some(_) => {
+            table.remove(key);
+        }
+        None => {}
+    }
+}
+
+fn set_toml_bool(table: &mut toml::map::Map<String, toml::Value>, key: &str, value: Option<bool>) {
+    if let Some(value) = value {
+        table.insert(key.to_owned(), toml::Value::Boolean(value));
+    }
 }
 
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
