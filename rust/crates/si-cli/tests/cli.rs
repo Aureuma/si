@@ -483,6 +483,56 @@ fn fort_wrapper_prefers_runtime_token_path_and_preserves_passthrough_flags() {
 }
 
 #[test]
+fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let repo = tempdir().expect("fort repo");
+    let args_file = repo.path().join("fort-args.txt");
+    let env_file = repo.path().join("fort-env.txt");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        format!(
+            "schema_version = 1\n[fort]\nrepo = \"{}\"\nhost = \"https://fort.example.test\"\n",
+            repo.path().display()
+        ),
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nif [ \"$1\" != \"build\" ]; then\n  printf 'unexpected cargo command: %s\\n' \"$1\" >&2\n  exit 1\nfi\nmkdir -p \"$PWD/target/debug\"\ncat > \"$PWD/target/debug/fort\" <<'EOF'\n#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" > {env}\nEOF\nchmod +x \"$PWD/target/debug/fort\"\n",
+            args = shell_escape_for_test(&args_file),
+            env = shell_escape_for_test(&env_file),
+        ),
+    );
+    let path_env = format!("{}:/usr/bin:/bin", bin_dir.path().display());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(args.trim(), "doctor");
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST=https://fort.example.test"));
+    assert!(
+        env.contains(&format!(
+            "FORT_BOOTSTRAP_TOKEN_FILE={}",
+            home.path().join(".si/fort/bootstrap/admin.token").display()
+        )),
+        "missing default bootstrap token path in env: {env}"
+    );
+}
+
+#[test]
 fn fort_config_set_and_show_round_trip_si_settings() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -15920,7 +15970,7 @@ where
 
 fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
     let mut response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n",
         body.len()
     );
     for (key, value) in headers {
@@ -15933,7 +15983,7 @@ fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> Str
 
 fn http_xml_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
     let mut response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: application/xml\r\nContent-Length: {}\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: application/xml\r\nContent-Length: {}\r\nConnection: close\r\n",
         body.len()
     );
     for (key, value) in headers {
