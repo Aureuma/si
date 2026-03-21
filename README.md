@@ -154,6 +154,14 @@ Run the full local test stack in one command:
 ./tools/test-all.sh
 ```
 
+Run the Rust host matrix for the direct `si`/`fort`/`surf` chain:
+
+```bash
+./tools/test-rust-host-matrix.sh
+```
+
+Scenario coverage and expected behavior are documented in [`docs/HOST_TEST_MATRIX.md`](docs/HOST_TEST_MATRIX.md).
+
 Run static analysis:
 
 ```bash
