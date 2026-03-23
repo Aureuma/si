@@ -18,6 +18,25 @@ fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
 }
 
+fn write_codex_profile_settings(home: &Path, active_profile: &str, profiles: &[&str]) {
+    let settings_dir = home.join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let mut source = String::from("schema_version = 1\n[codex]\n");
+    source.push_str(&format!("profile = {:?}\n\n", active_profile));
+    source.push_str("[codex.profiles]\n");
+    source.push_str(&format!("active = {:?}\n\n", active_profile));
+    for profile in profiles {
+        source.push_str(&format!("[codex.profiles.entries.{profile}]\n"));
+        source.push_str(&format!("name = {:?}\n", profile));
+        source.push_str(&format!("email = {:?}\n", format!("{profile}@example.com")));
+        source.push_str(&format!(
+            "auth_path = {:?}\n\n",
+            home.join(".si").join("codex").join("profiles").join(profile).join("auth.json")
+        ));
+    }
+    fs::write(settings_dir.join("settings.toml"), source).expect("write codex settings");
+}
+
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -59,15 +78,104 @@ fn surf_and_viva_wrappers_render_help() {
 }
 
 #[test]
+fn surf_wrapper_marks_child_process_as_wrapped() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("surf-args.txt");
+    let env_file = bin_dir.path().join("surf-env.txt");
+    let surf_path = bin_dir.path().join("surf");
+    write_executable_shell_script(
+        &surf_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_SURF_WRAPPED=%s\\n' \"${{SI_SURF_WRAPPED:-}}\" > {}\n",
+            shell_escape_for_test(&args_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+
+    cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--bin",
+            surf_path.to_str().expect("surf path"),
+            "status",
+            "--json",
+        ])
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read surf args");
+    assert_eq!(args, "status\n--json\n");
+    let env = fs::read_to_string(&env_file).expect("read surf env");
+    assert_eq!(env, "SI_SURF_WRAPPED=1\n");
+}
+
+#[test]
 fn google_youtube_help_paths_render_without_flag_collisions() {
-    cargo_bin()
-        .args(["google", "youtube", "caption", "upload", "--help"])
+    cargo_bin().args(["google", "youtube", "caption", "upload", "--help"]).assert().success();
+    cargo_bin().args(["google", "youtube", "support", "categories", "--help"]).assert().success();
+}
+
+#[test]
+fn google_youtube_support_categories_uses_support_region_flag() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /youtube/v3/videoCategories?"));
+        assert!(request.contains("part=snippet"));
+        assert!(request.contains("regionCode=US"));
+        let body = r#"{"items":[{"id":"cat1","snippet":{"title":"Film"}}]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args(["google", "youtube", "support", "categories", "--support-region", "US", "--home"])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
         .assert()
-        .success();
-    cargo_bin()
-        .args(["google", "youtube", "support", "categories", "--help"])
-        .assert()
-        .success();
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let payload: Value = serde_json::from_slice(&output).expect("parse json");
+    assert_eq!(payload["data"]["items"][0]["id"], "cat1");
 }
 
 #[test]
@@ -616,6 +724,277 @@ fn fort_wrapper_refreshes_bootstrap_session_from_file_paths() {
 }
 
 #[test]
+fn fort_wrapper_refreshes_runtime_session_from_file_paths_before_bootstrap() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(bootstrap_dir.join("admin.token"))
+            .expect("stat admin token")
+            .permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(bootstrap_dir.join("admin.token"), perms).expect("chmod admin token");
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let runtime_dir = tempdir().expect("runtime tempdir");
+    let runtime_token_path = runtime_dir.path().join("access.token");
+    let runtime_refresh_path = runtime_dir.path().join("refresh.token");
+    fs::write(&runtime_token_path, "stale-runtime-token\n").expect("write runtime token");
+    fs::write(&runtime_refresh_path, "stale-runtime-refresh\n").expect("write runtime refresh");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&runtime_token_path, &runtime_refresh_path] {
+            let mut perms = fs::metadata(path).expect("stat runtime token").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod runtime token");
+        }
+    }
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ] && [ \"$8\" = \"{refresh}\" ]; then\n  refresh_out=\"${{10}}\"\n  printf '%s\\n' 'rotated-runtime-refresh' > \"$refresh_out\"\n  printf '%s\\n' '{{\"access_token\":\"rotated-runtime-access\",\"refresh_token_file\":\"'\"$refresh_out\"'\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"agent\" ] && [ \"$6\" = \"list\" ]; then\n  test \"$(cat \"$4\")\" = 'rotated-runtime-access'\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            token = runtime_token_path.display(),
+            refresh = runtime_refresh_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "agent", "list"])
+        .env("PATH", path_env)
+        .env("FORT_TOKEN_PATH", runtime_token_path.to_str().expect("runtime token path"))
+        .env(
+            "FORT_REFRESH_TOKEN_PATH",
+            runtime_refresh_path.to_str().expect("runtime refresh path"),
+        )
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(args.contains(&format!(
+        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
+        runtime_refresh_path.display()
+    )));
+    assert!(
+        args.contains(&format!("--token-file\n{}\nagent\nlist\n", runtime_token_path.display()))
+    );
+    assert_eq!(
+        fs::read_to_string(&runtime_token_path).expect("read refreshed runtime token"),
+        "rotated-runtime-access\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&runtime_refresh_path).expect("read rotated runtime refresh"),
+        "rotated-runtime-refresh\n"
+    );
+}
+
+#[test]
+fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si/codex")).expect("mkdir codex dir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let bootstrap_token_path = bootstrap_dir.join("admin.token");
+    let bootstrap_refresh_path = bootstrap_dir.join("admin.refresh.token");
+    fs::write(&bootstrap_token_path, "stale-admin-token\n").expect("write stale admin token");
+    fs::write(&bootstrap_refresh_path, "stale-admin-refresh\n").expect("write stale admin refresh");
+    let profile_fort_dir = home.path().join(".si/codex/profiles/darmstada/fort");
+    fs::create_dir_all(&profile_fort_dir).expect("mkdir profile fort dir");
+    let profile_token_path = profile_fort_dir.join("access.token");
+    let profile_refresh_path = profile_fort_dir.join("refresh.token");
+    fs::write(&profile_token_path, "stale-profile-token\n").expect("write stale profile token");
+    fs::write(&profile_refresh_path, "stale-profile-refresh\n")
+        .expect("write stale profile refresh");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [
+            &bootstrap_token_path,
+            &bootstrap_refresh_path,
+            &profile_token_path,
+            &profile_refresh_path,
+        ] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"darmstada\"\n[codex.profiles]\nactive = \"darmstada\"\n[codex.profiles.entries.darmstada]\nname = \"Darmstada\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ] && [ \"$8\" = \"{bootstrap_refresh}\" ]; then\n  printf 'unexpected bootstrap refresh\\n' >&2\n  exit 1\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ] && [ \"$8\" = \"{profile_refresh}\" ]; then\n  refresh_out=\"${{10}}\"\n  printf '%s\\n' 'rotated-profile-refresh' > \"$refresh_out\"\n  printf '%s\\n' '{{\"access_token\":\"rotated-profile-access\",\"refresh_token_file\":\"'\"$refresh_out\"'\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{profile_token}\" ] && [ \"$5\" = \"list\" ] && [ \"$6\" = \"--repo\" ] && [ \"$7\" = \"safe\" ] && [ \"$8\" = \"--env\" ] && [ \"$9\" = \"dev\" ]; then\n  test \"$(cat \"$4\")\" = 'rotated-profile-access'\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            bootstrap_refresh = bootstrap_refresh_path.display(),
+            profile_refresh = profile_refresh_path.display(),
+            profile_token = profile_token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "list",
+            "--repo",
+            "safe",
+            "--env",
+            "dev",
+        ])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(args.contains(&format!(
+        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
+        profile_refresh_path.display()
+    )));
+    assert!(args.contains(&format!(
+        "--token-file\n{}\nlist\n--repo\nsafe\n--env\ndev\n",
+        profile_token_path.display()
+    )));
+    assert_eq!(
+        fs::read_to_string(&profile_token_path).expect("read refreshed profile token"),
+        "rotated-profile-access\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&profile_refresh_path).expect("read rotated profile refresh"),
+        "rotated-profile-refresh\n"
+    );
+}
+
+#[test]
+fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si/codex")).expect("mkdir codex dir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let bootstrap_token_path = bootstrap_dir.join("admin.token");
+    let bootstrap_refresh_path = bootstrap_dir.join("admin.refresh.token");
+    fs::write(&bootstrap_token_path, "stale-admin-token\n").expect("write stale admin token");
+    fs::write(&bootstrap_refresh_path, "stale-admin-refresh\n").expect("write stale admin refresh");
+    let profile_fort_dir = home.path().join(".si/codex/profiles/darmstada/fort");
+    fs::create_dir_all(&profile_fort_dir).expect("mkdir profile fort dir");
+    let profile_token_path = profile_fort_dir.join("access.token");
+    let profile_refresh_path = profile_fort_dir.join("refresh.token");
+    fs::write(&profile_token_path, "stale-profile-token\n").expect("write stale profile token");
+    fs::write(&profile_refresh_path, "stale-profile-refresh\n")
+        .expect("write stale profile refresh");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [
+            &bootstrap_token_path,
+            &bootstrap_refresh_path,
+            &profile_token_path,
+            &profile_refresh_path,
+        ] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"darmstada\"\n[codex.profiles]\nactive = \"darmstada\"\n[codex.profiles.entries.darmstada]\nname = \"Darmstada\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ] && [ \"$8\" = \"{profile_refresh}\" ]; then\n  printf '%s\\n' 'fort request failed (status=401): unauthorized' >&2\n  exit 1\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ] && [ \"$8\" = \"{bootstrap_refresh}\" ]; then\n  refresh_out=\"${{10}}\"\n  printf '%s\\n' 'rotated-bootstrap-refresh' > \"$refresh_out\"\n  printf '%s\\n' '{{\"access_token\":\"rotated-bootstrap-access\",\"refresh_token_file\":\"'\"$refresh_out\"'\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{bootstrap_token}\" ] && [ \"$5\" = \"list\" ] && [ \"$6\" = \"--repo\" ] && [ \"$7\" = \"safe\" ] && [ \"$8\" = \"--env\" ] && [ \"$9\" = \"dev\" ]; then\n  test \"$(cat \"$4\")\" = 'rotated-bootstrap-access'\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            profile_refresh = profile_refresh_path.display(),
+            bootstrap_refresh = bootstrap_refresh_path.display(),
+            bootstrap_token = bootstrap_token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "list",
+            "--repo",
+            "safe",
+            "--env",
+            "dev",
+        ])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(args.contains(&format!(
+        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
+        profile_refresh_path.display()
+    )));
+    assert!(args.contains(&format!(
+        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
+        bootstrap_refresh_path.display()
+    )));
+    assert!(args.contains(&format!(
+        "--token-file\n{}\nlist\n--repo\nsafe\n--env\ndev\n",
+        bootstrap_token_path.display()
+    )));
+    assert_eq!(
+        fs::read_to_string(&bootstrap_token_path).expect("read refreshed bootstrap token"),
+        "rotated-bootstrap-access\n"
+    );
+    assert_eq!(
+        fs::read_to_string(&bootstrap_refresh_path).expect("read rotated bootstrap refresh"),
+        "rotated-bootstrap-refresh\n"
+    );
+}
+
+#[test]
 fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -672,6 +1051,60 @@ fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert!(!args.contains("--json\nauth\nsession\nrefresh\n"));
     assert!(args.contains(&format!("--token-file\n{}\nagent\nlist\n", token_path.display())));
+}
+
+#[test]
+fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let token_path = bootstrap_dir.join("admin.token");
+    let refresh_path = bootstrap_dir.join("admin.refresh.token");
+    fs::write(&token_path, "stale-admin-token\n").expect("write stale admin token");
+    fs::write(&refresh_path, "stale-refresh-token\n").expect("write stale refresh token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&token_path, &refresh_path] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"doctor\" ]; then\n  exit 0\nfi\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            token = token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(!args.contains("--json\nauth\nsession\nrefresh\n"));
+    assert!(args.contains(&format!("--token-file\n{}\ndoctor\n", token_path.display())));
 }
 
 #[test]
@@ -815,7 +1248,7 @@ fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
         .args([
             "build",
             "npm",
-            "publish-from-vault",
+            "vault",
             "--repo-root",
             repo.path().to_str().expect("repo path"),
             "--dry-run",
@@ -828,7 +1261,7 @@ fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
     assert!(args.contains("vault"));
     assert!(args.contains("run"));
     assert!(args.contains("build"));
-    assert!(args.contains("publish-package"));
+    assert!(args.contains("publish"));
     assert!(args.contains("--dry-run"));
 }
 
@@ -1292,7 +1725,7 @@ fn apple_appstore_doctor_public_runs_rust_probe() {
         spawn_single_response_server("200 OK", "zip")
     );
     let stdout = cargo_bin()
-        .args(["apple", "appstore", "doctor", "--public", "true", "--format", "json"])
+        .args(["apple", "store", "doctor", "--public", "true", "--format", "json"])
         .env("SI_RUST_APPLE_APPSTORE_PUBLIC_PROBE_URL", &url)
         .assert()
         .success()
@@ -3322,7 +3755,242 @@ default_package_name = "com.acme.app"
 
 #[test]
 fn version_matches_go_repo_version() {
-    cargo_bin().arg("version").assert().success().stdout("v0.54.0\n");
+    cargo_bin().arg("version").assert().success().stdout("v0.55.0\n");
+}
+
+#[test]
+fn version_flags_render_root_version() {
+    cargo_bin().arg("--version").assert().success().stdout("v0.55.0\n");
+    cargo_bin().arg("-v").assert().success().stdout("v0.55.0\n");
+}
+
+#[test]
+fn help_output_uses_single_word_operational_subcommands() {
+    let codex_help = String::from_utf8(
+        cargo_bin().args(["codex", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 codex help");
+    assert!(codex_help.contains("spawn"));
+    assert!(codex_help.contains("status"));
+    assert!(codex_help.contains("tmux"));
+    assert!(!codex_help.contains("spawnplan"));
+    assert!(!codex_help.contains("statusread"));
+    assert!(!codex_help.contains("tmuxcommand"));
+
+    let codex_spawn_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "spawn", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex spawn help");
+    assert!(codex_spawn_help.contains("plan"));
+    assert!(codex_spawn_help.contains("spec"));
+    assert!(codex_spawn_help.contains("args"));
+    assert!(codex_spawn_help.contains("start"));
+
+    let dyad_help = String::from_utf8(
+        cargo_bin().args(["dyad", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 dyad help");
+    assert!(dyad_help.contains("spawn"));
+    assert!(dyad_help.contains("peek"));
+    assert!(!dyad_help.contains("spawnplan"));
+    assert!(!dyad_help.contains("peekplan"));
+
+    let dyad_spawn_help = String::from_utf8(
+        cargo_bin()
+            .args(["dyad", "spawn", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 dyad spawn help");
+    assert!(dyad_spawn_help.contains("plan"));
+    assert!(dyad_spawn_help.contains("spec"));
+    assert!(dyad_spawn_help.contains("start"));
+
+    let build_self_help = String::from_utf8(
+        cargo_bin()
+            .args(["build", "self", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 build self help");
+    assert!(build_self_help.contains("assets"));
+    assert!(build_self_help.contains("validate"));
+    assert!(!build_self_help.contains("releaseassets"));
+    assert!(!build_self_help.contains("validatereleaseversion"));
+}
+
+#[test]
+fn help_output_uses_single_word_project_and_session_subcommands() {
+    let github_project_help = String::from_utf8(
+        cargo_bin()
+            .args(["github", "project", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 github project help");
+    assert!(github_project_help.contains("add"));
+    assert!(github_project_help.contains("unarchive"));
+    assert!(!github_project_help.contains("itemadd"));
+    assert!(!github_project_help.contains("item-unarchive"));
+
+    let fort_help =
+        String::from_utf8(cargo_bin().arg("fort").assert().success().get_output().stdout.clone())
+            .expect("utf8 fort help");
+    assert!(fort_help.contains("session"));
+    assert!(fort_help.contains("runtime"));
+    assert!(!fort_help.contains("sessionstate"));
+    assert!(!fort_help.contains("runtimeagentstate"));
+}
+
+#[test]
+fn help_output_uses_single_word_provider_subcommands() {
+    let cloudflare_token_help = String::from_utf8(
+        cargo_bin()
+            .args(["cloudflare", "token", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 cloudflare token help");
+    assert!(cloudflare_token_help.contains("permissions"));
+    assert!(!cloudflare_token_help.contains("permissiongroups"));
+
+    let aws_sts_help = String::from_utf8(
+        cargo_bin().args(["aws", "sts", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 aws sts help");
+    assert!(aws_sts_help.contains("whoami"));
+    assert!(aws_sts_help.contains("assume"));
+    assert!(!aws_sts_help.contains("getcalleridentity"));
+    assert!(!aws_sts_help.contains("assumerole"));
+
+    let aws_bedrock_help = String::from_utf8(
+        cargo_bin()
+            .args(["aws", "bedrock", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 aws bedrock help");
+    assert!(aws_bedrock_help.contains("models"));
+    assert!(aws_bedrock_help.contains("knowledge"));
+    assert!(aws_bedrock_help.contains("assist"));
+    assert!(!aws_bedrock_help.contains("foundationmodel"));
+    assert!(!aws_bedrock_help.contains("knowledgebase"));
+    assert!(!aws_bedrock_help.contains("agentruntime"));
+
+    let gcp_iam_help = String::from_utf8(
+        cargo_bin().args(["gcp", "iam", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 gcp iam help");
+    assert!(gcp_iam_help.contains("account"));
+    assert!(gcp_iam_help.contains("keys"));
+    assert!(!gcp_iam_help.contains("serviceaccount"));
+    assert!(!gcp_iam_help.contains("serviceaccountkey"));
+
+    let google_places_help = String::from_utf8(
+        cargo_bin()
+            .args(["google", "places", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 google places help");
+    assert!(google_places_help.contains("text"));
+    assert!(google_places_help.contains("nearby"));
+    assert!(!google_places_help.contains("searchtext"));
+    assert!(!google_places_help.contains("searchnearby"));
+
+    let openai_project_help = String::from_utf8(
+        cargo_bin()
+            .args(["openai", "project", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 openai project help");
+    assert!(openai_project_help.contains("keys"));
+    assert!(openai_project_help.contains("accounts"));
+    assert!(openai_project_help.contains("limits"));
+    assert!(!openai_project_help.contains("apikey"));
+    assert!(!openai_project_help.contains("serviceaccount"));
+    assert!(!openai_project_help.contains("ratelimit"));
+
+    let oci_network_help = String::from_utf8(
+        cargo_bin()
+            .args(["oci", "network", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 oci network help");
+    assert!(oci_network_help.contains("gateway"));
+    assert!(oci_network_help.contains("routes"));
+    assert!(oci_network_help.contains("security"));
+    assert!(!oci_network_help.contains("internetgateway"));
+    assert!(!oci_network_help.contains("routetable"));
+    assert!(!oci_network_help.contains("securitylist"));
+
+    let github_git_help = String::from_utf8(
+        cargo_bin()
+            .args(["github", "git", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 github git help");
+    assert!(github_git_help.contains("remote"));
+    assert!(github_git_help.contains("clone"));
+    assert!(!github_git_help.contains("remoteauth"));
+    assert!(!github_git_help.contains("cloneauth"));
+}
+
+#[test]
+fn legacy_hyphenated_aliases_still_work_for_help_paths() {
+    cargo_bin().args(["build", "self", "release-assets", "--help"]).assert().success();
+    cargo_bin().args(["dyad", "spawn-plan", "--help"]).assert().success();
+    cargo_bin().args(["codex", "status-read", "--help"]).assert().success();
+    cargo_bin().args(["github", "project", "item-add", "--help"]).assert().success();
+    cargo_bin().args(["fort", "session-state", "refresh-outcome", "--help"]).assert().success();
+    cargo_bin().args(["fort", "runtime-agent-state", "show", "--help"]).assert().success();
+    cargo_bin().args(["cloudflare", "token", "permission-groups", "--help"]).assert().success();
+    cargo_bin().args(["aws", "sts", "get-caller-identity", "--help"]).assert().success();
+    cargo_bin().args(["aws", "bedrock", "foundation-model", "--help"]).assert().success();
+    cargo_bin().args(["gcp", "iam", "service-account", "--help"]).assert().success();
+    cargo_bin().args(["google", "places", "search-text", "--help"]).assert().success();
+    cargo_bin().args(["google", "youtube", "video", "get-rating", "--help"]).assert().success();
+    cargo_bin().args(["openai", "project", "api-key", "--help"]).assert().success();
+    cargo_bin().args(["oci", "network", "internet-gateway", "--help"]).assert().success();
+    cargo_bin().args(["stripe", "sync", "live-to-sandbox", "--help"]).assert().success();
+    cargo_bin().args(["github", "git", "remote-auth", "--help"]).assert().success();
+    cargo_bin().args(["warmup", "marker", "write-autostart", "--help"]).assert().success();
 }
 
 #[test]
@@ -8234,7 +8902,7 @@ project_id = "proj_ops"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["apple", "appstore", "context", "list", "--home"])
+        .args(["apple", "store", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -8281,7 +8949,7 @@ default_platform = "IOS"
         .env("CORE_ISSUER", "issuer_123")
         .env("CORE_KEY", "key_123")
         .env("CORE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
-        .args(["apple", "appstore", "context", "current", "--home"])
+        .args(["apple", "store", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -10465,7 +11133,7 @@ fn gcp_apikey_list_json_fetches_keys() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "list", "--home"])
+        .args(["gcp", "keys", "list", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -10511,7 +11179,7 @@ fn gcp_apikey_get_json_expands_key_id() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "get", "key1", "--home"])
+        .args(["gcp", "keys", "get", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -10549,7 +11217,7 @@ fn gcp_apikey_create_json_posts_payload() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "create", "--home"])
+        .args(["gcp", "keys", "create", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -10593,7 +11261,7 @@ fn gcp_apikey_lookup_json_queries_key_string() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "lookup", "--home"])
+        .args(["gcp", "keys", "lookup", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--key-string", "AIzaLookup", "--format", "json"])
         .assert()
@@ -10630,7 +11298,7 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
 
     cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "delete", "key1", "--home"])
+        .args(["gcp", "keys", "delete", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -10638,7 +11306,7 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "apikey", "delete", "key1", "--home"])
+        .args(["gcp", "keys", "delete", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--force", "--format", "json"])
         .assert()
@@ -11886,7 +12554,7 @@ fn apple_appstore_auth_status_json_reads_local_inputs() {
     fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
 
     let output = cargo_bin()
-        .args(["apple", "appstore", "auth", "status"])
+        .args(["apple", "store", "auth", "status"])
         .args(["--account", "mobile"])
         .args(["--env", "staging"])
         .args(["--project-id", "proj_mobile"])
@@ -11942,7 +12610,7 @@ fn apple_appstore_app_list_json_fetches_apps() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "app",
             "list",
             "--base-url",
@@ -12011,7 +12679,7 @@ fn apple_appstore_app_create_json_creates_bundle_and_app() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "app",
             "create",
             "--base-url",
@@ -12070,7 +12738,7 @@ fn apple_appstore_listing_update_json_updates_localized_metadata() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "listing",
             "update",
             "--base-url",
@@ -12118,7 +12786,7 @@ fn apple_appstore_raw_json_fetches_api_path() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "raw",
             "--base-url",
             &server.base_url,
@@ -12178,7 +12846,7 @@ fn apple_appstore_apply_json_applies_metadata_bundle() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "apply",
             "--base-url",
             &server.base_url,
@@ -12227,7 +12895,7 @@ fn apple_appstore_auth_status_json_verifies_request() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "auth",
             "status",
             "--base-url",
@@ -12274,7 +12942,7 @@ fn apple_appstore_doctor_json_verifies_request() {
     let output = cargo_bin()
         .args([
             "apple",
-            "appstore",
+            "store",
             "doctor",
             "--base-url",
             &server.base_url,
@@ -14704,7 +15372,7 @@ fn fort_session_state_show_reads_and_normalizes_persisted_state() {
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "show", "--path"])
+        .args(["fort", "session", "show", "--path"])
         .arg(&state_path)
         .args(["--format", "json"])
         .assert()
@@ -14742,7 +15410,7 @@ fn fort_session_state_classify_reports_refreshing_state() {
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "classify", "--path"])
+        .args(["fort", "session", "classify", "--path"])
         .arg(&state_path)
         .args(["--now-unix", "100", "--format", "json"])
         .assert()
@@ -14780,7 +15448,7 @@ fn fort_runtime_agent_state_show_reads_and_normalizes_persisted_state() {
         .expect("chmod runtime agent state");
 
     let output = cargo_bin()
-        .args(["fort", "runtime-agent-state", "show", "--path"])
+        .args(["fort", "runtime", "show", "--path"])
         .arg(&state_path)
         .args(["--format", "json"])
         .assert()
@@ -14803,7 +15471,7 @@ fn fort_session_state_write_persists_normalized_json() {
     cargo_bin()
         .args([
             "fort",
-            "session-state",
+            "session",
             "write",
             "--path",
         ])
@@ -14829,7 +15497,7 @@ fn fort_runtime_agent_state_write_persists_normalized_json() {
     let state_path = state_dir.path().join("runtime-agent.json");
 
     cargo_bin()
-        .args(["fort", "runtime-agent-state", "write", "--path"])
+        .args(["fort", "runtime", "write", "--path"])
         .arg(&state_path)
         .args(["--state-json", r#"{"profile_id":" ferma ","pid":4242,"command_path":" /tmp/si "}"#])
         .assert()
@@ -14848,11 +15516,7 @@ fn fort_session_state_clear_removes_persisted_file() {
     let state_path = state_dir.path().join("session.json");
     fs::write(&state_path, "{}\n").expect("write session state");
 
-    cargo_bin()
-        .args(["fort", "session-state", "clear", "--path"])
-        .arg(&state_path)
-        .assert()
-        .success();
+    cargo_bin().args(["fort", "session", "clear", "--path"]).arg(&state_path).assert().success();
 
     assert!(!state_path.exists());
 }
@@ -14876,7 +15540,7 @@ fn fort_session_state_bootstrap_view_normalizes_fallbacks() {
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "bootstrap-view", "--path"])
+        .args(["fort", "session", "bootstrap", "--path"])
         .arg(&state_path)
         .args([
             "--access-token-path",
@@ -14909,11 +15573,7 @@ fn fort_runtime_agent_state_clear_removes_persisted_file() {
     let state_path = state_dir.path().join("runtime-agent.json");
     fs::write(&state_path, "{}\n").expect("write runtime agent state");
 
-    cargo_bin()
-        .args(["fort", "runtime-agent-state", "clear", "--path"])
-        .arg(&state_path)
-        .assert()
-        .success();
+    cargo_bin().args(["fort", "runtime", "clear", "--path"]).arg(&state_path).assert().success();
 
     assert!(!state_path.exists());
 }
@@ -14939,7 +15599,7 @@ fn fort_session_state_refresh_outcome_returns_updated_state_and_classification()
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "refresh-outcome", "--path"])
+        .args(["fort", "session", "refresh", "--path"])
         .arg(&state_path)
         .args([
             "--outcome",
@@ -14986,7 +15646,7 @@ fn fort_session_state_teardown_reports_closed_state() {
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "teardown", "--path"])
+        .args(["fort", "session", "teardown", "--path"])
         .arg(&state_path)
         .args(["--now-unix", "100", "--format", "json"])
         .assert()
@@ -15020,7 +15680,7 @@ fn fort_session_state_refresh_outcome_unauthorized_clears_session_id() {
         .expect("chmod session state");
 
     let output = cargo_bin()
-        .args(["fort", "session-state", "refresh-outcome", "--path"])
+        .args(["fort", "session", "refresh", "--path"])
         .arg(&state_path)
         .args(["--outcome", "unauthorized", "--now-unix", "100", "--format", "json"])
         .assert()
@@ -15112,9 +15772,12 @@ fn vault_trust_lookup_reports_missing_entry() {
 
 #[test]
 fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
-        .args(["codex", "spawn-plan", "--profile-id", "ferma", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-plan", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .assert()
         .success()
@@ -15135,10 +15798,11 @@ fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
 #[test]
 fn codex_spawn_plan_json_includes_repo_pat_env_and_host_mounts() {
     let home = tempdir().expect("tempdir");
-    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    write_codex_profile_settings(home.path(), "darmstada", &["darmstada"]);
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
-        .args(["codex", "spawn-plan", "--name", "darmstada", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-plan", "--profile", "darmstada", "--workspace"])
         .arg(workspace.path())
         .args(["--repo", "acme/repo", "--gh-pat", "token-123", "--home"])
         .arg(home.path())
@@ -15165,11 +15829,11 @@ fn codex_spawn_plan_json_includes_repo_pat_env_and_host_mounts() {
 #[test]
 fn codex_spawn_plan_uses_env_host_context_when_flags_are_omitted() {
     let home = tempdir().expect("tempdir");
-    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    write_codex_profile_settings(home.path(), "einsteina", &["einsteina"]);
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn-plan", "--name", "einsteina", "--workspace"])
+        .args(["codex", "spawn-plan", "--profile", "einsteina", "--workspace"])
         .arg(workspace.path())
         .assert()
         .success()
@@ -15184,9 +15848,12 @@ fn codex_spawn_plan_uses_env_host_context_when_flags_are_omitted() {
 
 #[test]
 fn codex_spawn_spec_json_includes_named_volumes_and_command() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
-        .args(["codex", "spawn-spec", "--name", "ferma", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-spec", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args(["--cmd", "echo hello", "--port", "3000:3000", "--label", "si.codex.profile=ferma"])
         .assert()
@@ -15219,9 +15886,12 @@ fn codex_spawn_spec_json_includes_named_volumes_and_command() {
 
 #[test]
 fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
-        .args(["codex", "spawn-run-args", "--name", "ferma", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-run-args", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args([
             "--cmd",
@@ -15251,6 +15921,8 @@ fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
 
 #[test]
 fn codex_spawn_start_executes_docker_command_from_generated_spec() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
@@ -15264,7 +15936,8 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     );
 
     let output = cargo_bin()
-        .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-start", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args([
             "--cmd",
@@ -15296,7 +15969,10 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
 
 #[test]
 fn codex_remove_plan_json_returns_container_and_volume_names() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "remove-plan", "ferma", "--format", "json"])
         .assert()
         .success()
@@ -15313,6 +15989,8 @@ fn codex_remove_plan_json_returns_container_and_volume_names() {
 
 #[test]
 fn codex_remove_executes_container_and_volume_removal() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15326,6 +16004,7 @@ fn codex_remove_executes_container_and_volume_removal() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15345,6 +16024,8 @@ fn codex_remove_executes_container_and_volume_removal() {
 
 #[test]
 fn codex_remove_json_reports_profile_and_removed_artifacts() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15358,6 +16039,7 @@ fn codex_remove_json_reports_profile_and_removed_artifacts() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "remove", "ferma", "--volumes", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15376,6 +16058,8 @@ fn codex_remove_json_reports_profile_and_removed_artifacts() {
 
 #[test]
 fn codex_start_executes_docker_start_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15388,6 +16072,7 @@ fn codex_start_executes_docker_start_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "start", "ferma", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15404,6 +16089,8 @@ fn codex_start_executes_docker_start_for_container_name() {
 
 #[test]
 fn codex_start_json_reports_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15416,6 +16103,7 @@ fn codex_start_json_reports_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "start", "ferma", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15432,6 +16120,8 @@ fn codex_start_json_reports_container_name() {
 
 #[test]
 fn codex_stop_executes_docker_stop_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15444,6 +16134,7 @@ fn codex_stop_executes_docker_stop_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "stop", "ferma", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15460,6 +16151,8 @@ fn codex_stop_executes_docker_stop_for_container_name() {
 
 #[test]
 fn codex_stop_json_reports_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15472,6 +16165,7 @@ fn codex_stop_json_reports_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "stop", "ferma", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15488,6 +16182,8 @@ fn codex_stop_json_reports_container_name() {
 
 #[test]
 fn codex_clone_json_reports_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15500,6 +16196,7 @@ fn codex_clone_json_reports_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "clone", "ferma", "acme/repo", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15516,6 +16213,8 @@ fn codex_clone_json_reports_container_name() {
 
 #[test]
 fn codex_logs_executes_docker_logs_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15528,6 +16227,7 @@ fn codex_logs_executes_docker_logs_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "logs", "ferma", "--tail", "25", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15544,6 +16244,8 @@ fn codex_logs_executes_docker_logs_for_container_name() {
 
 #[test]
 fn codex_tail_executes_following_docker_logs_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15556,6 +16258,7 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "tail", "ferma", "--tail", "25", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15572,6 +16275,8 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
 
 #[test]
 fn codex_clone_executes_docker_exec_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15584,6 +16289,7 @@ fn codex_clone_executes_docker_exec_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "clone", "ferma", "acme/repo", "--gh-pat", "token-123", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15620,6 +16326,8 @@ fn codex_clone_executes_docker_exec_for_container_name() {
 
 #[test]
 fn codex_exec_executes_docker_exec_for_container_name() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -15632,6 +16340,7 @@ fn codex_exec_executes_docker_exec_for_container_name() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args([
             "codex",
             "exec",
@@ -15679,6 +16388,8 @@ fn codex_exec_executes_docker_exec_for_container_name() {
 
 #[test]
 fn codex_status_read_returns_parsed_app_server_usage() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let input_path = script_dir.path().join("input.txt");
@@ -15737,6 +16448,7 @@ fn codex_status_read_returns_parsed_app_server_usage() {
     );
 
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "status-read", "ferma", "--raw", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15780,6 +16492,8 @@ fn codex_status_read_returns_parsed_app_server_usage() {
 
 #[test]
 fn codex_lifecycle_smoke_works_with_fake_docker() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let state_path = script_dir.path().join("state.txt");
@@ -15837,7 +16551,8 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     );
 
     cargo_bin()
-        .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
+        .env("HOME", home.path())
+        .args(["codex", "spawn-start", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args(["--cmd", "echo hello", "--docker-bin"])
         .arg(&docker_bin)
@@ -15846,6 +16561,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
 
     let status_output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "status-read", "ferma", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15858,6 +16574,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert_eq!(status["model"], "gpt-5.2-codex");
 
     let logs_output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "logs", "ferma", "--tail", "10", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15868,6 +16585,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert!(String::from_utf8(logs_output).expect("utf8 output").contains("log line"));
 
     cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "stop", "ferma", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15875,6 +16593,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert_eq!(fs::read_to_string(&state_path).expect("state"), "stopped\n");
 
     cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "start", "ferma", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15882,6 +16601,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
 
     let clone_output = cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "clone", "ferma", "acme/repo", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15892,6 +16612,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     assert!(String::from_utf8(clone_output).expect("utf8 output").contains("cloned"));
 
     cargo_bin()
+        .env("HOME", home.path())
         .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
@@ -15901,12 +16622,13 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
 
 #[test]
 fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args([
             "codex",
             "respawn-plan",
-            "ferma",
-            "--profile-id",
             "ferma",
             "--profile-container",
             "si-codex-alpha",
@@ -15922,14 +16644,16 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["effective_name"], "ferma");
     assert_eq!(parsed["profile_id"], "ferma");
     assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "ferma"]));
 }
 
 #[test]
 fn codex_tmux_plan_json_uses_bypass_flag_and_start_dir() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args([
             "codex",
             "tmux-plan",
@@ -15962,7 +16686,10 @@ fn codex_tmux_plan_json_uses_bypass_flag_and_start_dir() {
 
 #[test]
 fn codex_tmux_plan_json_includes_resume_command_when_present() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
     let output = cargo_bin()
+        .env("HOME", home.path())
         .args([
             "codex",
             "tmux-plan",
@@ -15995,8 +16722,11 @@ fn codex_tmux_plan_json_includes_resume_command_when_present() {
 
 #[test]
 fn codex_tmux_command_json_uses_bypass_flag() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
     let output = cargo_bin()
-        .args(["codex", "tmux-command", "--container", "abc123", "--format", "json"])
+        .env("HOME", home.path())
+        .args(["codex", "tmux-command", "profile-beta", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -16004,7 +16734,8 @@ fn codex_tmux_command_json_uses_bypass_flag() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["container"], "abc123");
+    assert_eq!(parsed["profile_id"], "profile-beta");
+    assert_eq!(parsed["container"], "si-codex-profile-beta");
     assert!(
         parsed["launch_command"]
             .as_str()
@@ -16012,6 +16743,92 @@ fn codex_tmux_command_json_uses_bypass_flag() {
             .contains("codex --dangerously-bypass-approvals-and-sandbox")
     );
     assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
+}
+
+#[test]
+fn codex_profile_commands_manage_registry_and_active_profile() {
+    let home = tempdir().expect("tempdir");
+
+    cargo_bin()
+        .args([
+            "codex",
+            "profile",
+            "add",
+            "ferma",
+            "--name",
+            "Ferma",
+            "--email",
+            "ferma@example.com",
+            "--activate",
+            "--home",
+        ])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success();
+
+    cargo_bin()
+        .args(["codex", "profile", "add", "einsteina", "--name", "Einsteina", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    cargo_bin()
+        .args(["codex", "profile", "use", "einsteina", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let list_output = cargo_bin()
+        .args(["codex", "profile", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("json output");
+    assert_eq!(listed.as_array().expect("profiles").len(), 2);
+    assert!(
+        listed
+            .as_array()
+            .expect("profiles")
+            .iter()
+            .any(|profile| profile["profile"] == "einsteina" && profile["active"] == true)
+    );
+
+    let show_output = cargo_bin()
+        .args(["codex", "profile", "show", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&show_output).expect("json output");
+    assert_eq!(shown["profile"], "einsteina");
+    assert_eq!(shown["active"], true);
+}
+
+#[test]
+fn codex_spawn_plan_rejects_unconfigured_profile() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    let workspace = tempdir().expect("tempdir");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn-plan", "--profile", "unknown", "--workspace"])
+        .arg(workspace.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("is not configured"));
 }
 
 #[test]

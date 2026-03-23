@@ -21,9 +21,9 @@ si <command> <subcommand> --help
 
 | Domain | Commands |
 | --- | --- |
-| Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
+| Runtime and orchestration | `si dyad`, `si codex` |
 | Secrets and context | `si vault` (`si creds`), `si fort` |
-| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si releasemind` (`si release`) |
+| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple store`, `si stripe`, `si publish`, `si releasemind` (`si release`) |
 | Provider telemetry | `si providers` |
 | Surf browser runtime | `si surf` |
 | Orbit ecosystem | `si orbits` |
@@ -37,7 +37,7 @@ si <command> <subcommand> --help
 
 ```bash
 si build image
-si dyad spawn app-hardening --profile main
+si dyad spawn start --name app-hardening --workspace "$PWD"
 si dyad status app-hardening
 ```
 
@@ -77,7 +77,7 @@ si mintlify broken-links
 ### Release preflight
 
 ```bash
-./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Safety guidance
