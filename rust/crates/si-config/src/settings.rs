@@ -182,11 +182,7 @@ impl Settings {
 
     fn apply_runtime_defaults(&mut self) {
         normalize_option_string(&mut self.paths.workspace_root);
-        normalize_option_string(&mut self.codex.image);
-        normalize_option_string(&mut self.codex.network);
-        normalize_option_string(&mut self.codex.workspace);
-        normalize_option_string(&mut self.codex.workdir);
-        normalize_option_string(&mut self.codex.profile);
+        self.codex.normalize();
         self.fort.normalize();
         self.stripe.normalize();
         self.aws.normalize();
@@ -293,6 +289,59 @@ pub struct CodexSettings {
     pub workspace: Option<String>,
     pub workdir: Option<String>,
     pub profile: Option<String>,
+    #[serde(default)]
+    pub profiles: CodexProfilesSettings,
+}
+
+impl CodexSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.image);
+        normalize_option_string(&mut self.network);
+        normalize_option_string(&mut self.workspace);
+        normalize_option_string(&mut self.workdir);
+        normalize_option_string(&mut self.profile);
+        self.profiles.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CodexProfilesSettings {
+    pub active: Option<String>,
+    #[serde(default)]
+    pub entries: BTreeMap<String, CodexProfileEntry>,
+}
+
+impl CodexProfilesSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.active);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.entries) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.entries = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CodexProfileEntry {
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub auth_path: Option<String>,
+    pub auth_updated: Option<String>,
+}
+
+impl CodexProfileEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.email);
+        normalize_option_string(&mut self.auth_path);
+        normalize_option_string(&mut self.auth_updated);
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -1622,6 +1671,42 @@ configs = "~/Development/si/configs"
         assert_eq!(settings.codex.profile.as_deref(), Some("darmstada"));
         assert_eq!(settings.dyad.workspace.as_deref(), Some("~/Development"));
         assert_eq!(settings.dyad.configs.as_deref(), Some("~/Development/si/configs"));
+    }
+
+    #[test]
+    fn loads_codex_profiles_from_settings_file() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si");
+        fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+        let settings_path = settings_dir.join("settings.toml");
+        fs::write(
+            &settings_path,
+            r#"
+[codex]
+profile = "legacy"
+
+[codex.profiles]
+active = "darmstada"
+
+[codex.profiles.entries.darmstada]
+name = "Darmstada"
+email = "darmstada@example.com"
+auth_path = "~/.si/codex/profiles/darmstada/auth.json"
+auth_updated = "2026-03-23T00:00:00Z"
+"#,
+        )
+        .expect("write settings");
+
+        let settings =
+            Settings::load(home.path(), Some(&settings_path)).expect("settings should load");
+
+        assert_eq!(settings.codex.profile.as_deref(), Some("legacy"));
+        assert_eq!(settings.codex.profiles.active.as_deref(), Some("darmstada"));
+        let entry = settings.codex.profiles.entries.get("darmstada").expect("profile entry");
+        assert_eq!(entry.name.as_deref(), Some("Darmstada"));
+        assert_eq!(entry.email.as_deref(), Some("darmstada@example.com"));
+        assert_eq!(entry.auth_path.as_deref(), Some("~/.si/codex/profiles/darmstada/auth.json"));
+        assert_eq!(entry.auth_updated.as_deref(), Some("2026-03-23T00:00:00Z"));
     }
 
     #[test]

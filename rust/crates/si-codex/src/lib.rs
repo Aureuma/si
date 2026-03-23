@@ -14,8 +14,7 @@ pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnRequest {
-    pub name: Option<String>,
-    pub profile_id: Option<String>,
+    pub profile_id: String,
     pub image: Option<String>,
     pub network_name: Option<String>,
     pub workspace_host: PathBuf,
@@ -65,15 +64,13 @@ pub struct RemoveArtifacts {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RespawnRequest {
-    pub name: String,
-    pub profile_id: Option<String>,
+    pub profile_id: String,
     pub profile_container_names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RespawnPlan {
-    pub effective_name: String,
-    pub profile_id: Option<String>,
+    pub profile_id: String,
     pub remove_targets: Vec<String>,
 }
 
@@ -107,8 +104,8 @@ pub struct SpawnContainerOptions {
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum SpawnPlanError {
-    #[error("spawn name or profile is required")]
-    MissingName,
+    #[error("spawn profile is required")]
+    MissingProfile,
     #[error("workspace host must be an absolute directory")]
     InvalidWorkspace,
 }
@@ -121,8 +118,8 @@ pub enum RemoveArtifactsError {
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum RespawnPlanError {
-    #[error("respawn target name is required")]
-    MissingName,
+    #[error("respawn profile is required")]
+    MissingProfile,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -145,27 +142,11 @@ pub fn build_spawn_plan(
     request: &SpawnRequest,
     host_ctx: &HostMountContext,
 ) -> Result<SpawnPlan, SpawnPlanError> {
-    let Some(mut name) = request
-        .profile_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
-        .or_else(|| {
-            request
-                .name
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned)
-        })
-    else {
-        return Err(SpawnPlanError::MissingName);
-    };
-    if let Some(profile_id) = request.profile_id.as_deref().map(str::trim).filter(|v| !v.is_empty())
-    {
-        name = profile_id.to_owned();
+    let name = request.profile_id.trim();
+    if name.is_empty() {
+        return Err(SpawnPlanError::MissingProfile);
     }
+    let name = name.to_owned();
 
     let workspace_host = request.workspace_host.clone();
     if !workspace_host.is_absolute() || !workspace_host.is_dir() {
@@ -195,6 +176,7 @@ pub fn build_spawn_plan(
         format!("SI_WORKSPACE_PRIMARY={}", workspace_primary_target.display()),
         format!("SI_WORKSPACE_MIRROR={}", workspace_mirror_target.display()),
         format!("SI_WORKSPACE_HOST={}", workspace_host.display()),
+        format!("SI_CODEX_PROFILE_ID={name}"),
     ];
     if let Some(repo) = request.repo.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
         env.push(format!("SI_REPO={repo}"));
@@ -281,18 +263,12 @@ pub fn build_remove_artifacts(name: &str) -> Result<RemoveArtifacts, RemoveArtif
 }
 
 pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
-    let effective_name = request.name.trim();
-    if effective_name.is_empty() {
-        return Err(RespawnPlanError::MissingName);
+    let profile_id = request.profile_id.trim();
+    if profile_id.is_empty() {
+        return Err(RespawnPlanError::MissingProfile);
     }
-    let profile_id = request
-        .profile_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned);
     let mut targets = BTreeSet::new();
-    targets.insert(codex_container_slug(effective_name));
+    targets.insert(codex_container_slug(profile_id));
     for item in &request.profile_container_names {
         let item = codex_container_slug(item);
         if !item.trim().is_empty() {
@@ -300,8 +276,7 @@ pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, Respa
         }
     }
     Ok(RespawnPlan {
-        effective_name: effective_name.to_owned(),
-        profile_id,
+        profile_id: profile_id.to_owned(),
         remove_targets: targets.into_iter().collect(),
     })
 }
@@ -412,6 +387,7 @@ pub fn build_container_spec(
         .user("root")
         .label("si.component", "codex")
         .label("si.name", plan.name.clone())
+        .label("si.codex.profile", plan.name.clone())
         .volume_mount(VolumeMount::new(
             plan.codex_volume.clone(),
             PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex"),
@@ -648,12 +624,11 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn build_spawn_plan_prefers_profile_id_for_name_and_container() {
+    fn build_spawn_plan_uses_profile_for_name_and_container() {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("custom".to_owned()),
-                profile_id: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -676,7 +651,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 workdir: Some("/workspace".to_owned()),
                 detach: true,
@@ -698,7 +673,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 workdir: Some("/custom".to_owned()),
                 detach: false,
@@ -720,7 +695,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 repo: Some("acme/repo".to_owned()),
                 gh_pat: Some("token-123".to_owned()),
@@ -736,6 +711,7 @@ mod tests {
 
         assert!(plan.env.contains(&format!("SI_WORKSPACE_HOST={}", workspace.path().display())));
         assert!(plan.env.contains(&format!("SI_WORKSPACE_MIRROR={}", workspace.path().display())));
+        assert!(plan.env.contains(&"SI_CODEX_PROFILE_ID=ferma".to_owned()));
         assert!(plan.env.contains(&"SI_REPO=acme/repo".to_owned()));
         assert!(plan.env.contains(&"SI_GH_PAT=token-123".to_owned()));
         assert!(plan.env.contains(&"GH_TOKEN=token-123".to_owned()));
@@ -752,7 +728,7 @@ mod tests {
             HostMountContext { home_dir: Some(home.path().to_path_buf()), ssh_auth_sock: None };
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 include_host_si: true,
                 detach: true,
@@ -771,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn build_spawn_plan_rejects_missing_name() {
+    fn build_spawn_plan_rejects_missing_profile() {
         let workspace = tempdir().expect("tempdir");
         let err = build_spawn_plan(
             &SpawnRequest {
@@ -780,16 +756,16 @@ mod tests {
             },
             &HostMountContext::default(),
         )
-        .expect_err("missing name");
+        .expect_err("missing profile");
 
-        assert_eq!(err, SpawnPlanError::MissingName);
+        assert_eq!(err, SpawnPlanError::MissingProfile);
     }
 
     #[test]
     fn build_spawn_plan_rejects_invalid_workspace() {
         let err = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: PathBuf::from("relative"),
                 ..SpawnRequest::default()
             },
@@ -805,7 +781,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 image: Some("ghcr.io/aureuma/si:latest".to_owned()),
                 detach: true,
@@ -847,7 +823,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let mut plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -870,7 +846,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -899,7 +875,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                name: Some("ferma".to_owned()),
+                profile_id: "ferma".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -953,8 +929,7 @@ mod tests {
     #[test]
     fn build_respawn_plan_collects_sorted_unique_remove_targets() {
         let plan = build_respawn_plan(&RespawnRequest {
-            name: "ferma".to_owned(),
-            profile_id: Some("ferma".to_owned()),
+            profile_id: "ferma".to_owned(),
             profile_container_names: vec![
                 "si-codex-ferma".to_owned(),
                 "si-codex-alpha".to_owned(),
@@ -963,16 +938,16 @@ mod tests {
         })
         .expect("respawn plan");
 
-        assert_eq!(plan.effective_name, "ferma");
-        assert_eq!(plan.profile_id.as_deref(), Some("ferma"));
+        assert_eq!(plan.profile_id, "ferma");
         assert_eq!(plan.remove_targets, vec!["alpha".to_owned(), "ferma".to_owned()]);
     }
 
     #[test]
-    fn build_respawn_plan_rejects_empty_name() {
-        let err = build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn name");
+    fn build_respawn_plan_rejects_empty_profile() {
+        let err =
+            build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn profile");
 
-        assert_eq!(err, RespawnPlanError::MissingName);
+        assert_eq!(err, RespawnPlanError::MissingProfile);
     }
 
     #[test]

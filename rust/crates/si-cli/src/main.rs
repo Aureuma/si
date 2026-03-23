@@ -35,7 +35,9 @@ use si_rs_command_manifest::{
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::runtime::git_repo_root_from;
-use si_rs_config::settings::{FortSettings, Settings, SurfSettings, VivaSettings};
+use si_rs_config::settings::{
+    CodexProfileEntry, FortSettings, Settings, SurfSettings, VivaSettings,
+};
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command,
@@ -218,10 +220,18 @@ use std::process::{Command as StdCommand, ExitStatus};
 use tar::Builder as TarBuilder;
 
 #[derive(Debug, Parser)]
-#[command(name = "si-rs", disable_version_flag = true, disable_help_subcommand = true)]
+#[command(
+    name = "si-rs",
+    disable_version_flag = true,
+    disable_help_subcommand = true,
+    arg_required_else_help = true
+)]
 struct Cli {
+    #[arg(short = 'v', long = "version", action = ArgAction::SetTrue)]
+    version_flag: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -506,7 +516,7 @@ enum BuildSelfCommand {
     Upgrade(BuildSelfUpgradeArgs),
     #[command(name = "run")]
     Run(BuildSelfRunArgs),
-    #[command(name = "release-asset")]
+    #[command(name = "asset", alias = "releaseasset", alias = "release-asset")]
     ReleaseAsset {
         #[arg(long)]
         repo_root: Option<PathBuf>,
@@ -521,7 +531,12 @@ enum BuildSelfCommand {
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
     },
-    #[command(name = "release-assets", alias = "release")]
+    #[command(
+        name = "assets",
+        alias = "releaseassets",
+        alias = "release-assets",
+        alias = "release"
+    )]
     ReleaseAssets {
         #[arg(long)]
         repo: Option<PathBuf>,
@@ -530,12 +545,16 @@ enum BuildSelfCommand {
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
     },
-    #[command(name = "validate-release-version")]
+    #[command(
+        name = "validate",
+        alias = "validatereleaseversion",
+        alias = "validate-release-version"
+    )]
     ValidateReleaseVersion {
         #[arg(long)]
         tag: String,
     },
-    #[command(name = "verify-release-assets")]
+    #[command(name = "verify", alias = "verifyreleaseassets", alias = "verify-release-assets")]
     VerifyReleaseAssets {
         #[arg(long)]
         version: String,
@@ -547,7 +566,7 @@ enum BuildSelfCommand {
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum BuildInstallerCommand {
-    #[command(name = "settings-helper")]
+    #[command(name = "settings", alias = "settingshelper", alias = "settings-helper")]
     SettingsHelper {
         #[arg(long = "settings")]
         settings: PathBuf,
@@ -601,19 +620,19 @@ enum BuildInstallerCommand {
         #[arg(long = "no-path-hint", action = ArgAction::SetTrue)]
         no_path_hint: bool,
     },
-    #[command(name = "smoke-host")]
+    #[command(name = "host", alias = "smokehost", alias = "smoke-host")]
     SmokeHost,
-    #[command(name = "smoke-npm")]
+    #[command(name = "npm", alias = "smokenpm", alias = "smoke-npm")]
     SmokeNpm,
-    #[command(name = "smoke-docker")]
+    #[command(name = "docker", alias = "smokedocker", alias = "smoke-docker")]
     SmokeDocker,
-    #[command(name = "smoke-homebrew")]
+    #[command(name = "homebrew", alias = "smokehomebrew", alias = "smoke-homebrew")]
     SmokeHomebrew,
 }
 
 #[derive(Debug, Subcommand)]
 enum BuildNpmCommand {
-    #[command(name = "build-package")]
+    #[command(name = "package", alias = "buildpackage", alias = "build-package")]
     BuildPackage {
         #[arg(long = "repo-root")]
         repo_root: Option<PathBuf>,
@@ -622,7 +641,7 @@ enum BuildNpmCommand {
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
     },
-    #[command(name = "publish-package")]
+    #[command(name = "publish", alias = "publishpackage", alias = "publish-package")]
     PublishPackage {
         #[arg(long = "repo-root")]
         repo_root: Option<PathBuf>,
@@ -635,7 +654,7 @@ enum BuildNpmCommand {
         #[arg(long = "dry-run", action = ArgAction::SetTrue)]
         dry_run: bool,
     },
-    #[command(name = "publish-from-vault")]
+    #[command(name = "vault", alias = "publishfromvault", alias = "publish-from-vault")]
     PublishFromVault {
         #[arg(long = "repo-root")]
         repo_root: Option<PathBuf>,
@@ -654,7 +673,7 @@ enum BuildNpmCommand {
 
 #[derive(Debug, Subcommand)]
 enum BuildHomebrewCommand {
-    #[command(name = "render-core-formula")]
+    #[command(name = "core", alias = "rendercoreformula", alias = "render-core-formula")]
     RenderCoreFormula {
         #[arg(long)]
         version: String,
@@ -663,7 +682,7 @@ enum BuildHomebrewCommand {
         #[arg(long, default_value = "Aureuma/si")]
         repo: String,
     },
-    #[command(name = "render-tap-formula")]
+    #[command(name = "tap", alias = "rendertapformula", alias = "render-tap-formula")]
     RenderTapFormula {
         #[arg(long)]
         version: String,
@@ -674,7 +693,7 @@ enum BuildHomebrewCommand {
         #[arg(long, default_value = "Aureuma/si")]
         repo: String,
     },
-    #[command(name = "update-tap-repo")]
+    #[command(name = "update", alias = "updatetaprepo", alias = "update-tap-repo")]
     UpdateTapRepo {
         #[arg(long)]
         version: String,
@@ -854,6 +873,7 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    #[command(name = "limits", alias = "ratelimit", alias = "rate-limit")]
     RateLimit {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
@@ -1127,6 +1147,7 @@ enum CloudflareTokenCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
     },
+    #[command(name = "permissions", alias = "permissiongroups", alias = "permission-groups")]
     PermissionGroups {
         #[arg(long)]
         json: bool,
@@ -1731,6 +1752,7 @@ enum CloudflareTLSCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    #[command(name = "origin", alias = "origincert", alias = "origin-cert")]
     OriginCert {
         #[command(subcommand)]
         command: CloudflareOriginCertCommand,
@@ -3015,7 +3037,7 @@ enum CloudflareContextCommand {
 
 #[derive(Debug, Subcommand)]
 enum AppleCommand {
-    #[command(name = "appstore")]
+    #[command(name = "store", alias = "appstore")]
     AppStore {
         #[command(subcommand)]
         command: AppleAppStoreCommand,
@@ -3577,6 +3599,7 @@ enum AWSContextCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSStsCommand {
+    #[command(name = "whoami", alias = "getcalleridentity", alias = "get-caller-identity")]
     GetCallerIdentity {
         #[arg(long)]
         account: Option<String>,
@@ -3601,6 +3624,7 @@ enum AWSStsCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    #[command(name = "assume", alias = "assumerole", alias = "assume-role")]
     AssumeRole {
         #[arg(long)]
         role_arn: String,
@@ -3707,6 +3731,7 @@ enum AWSIamUserCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    #[command(name = "attach", alias = "attachpolicy", alias = "attach-policy")]
     AttachPolicy {
         #[arg(long)]
         user: String,
@@ -4644,12 +4669,24 @@ enum AWSCloudWatchCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSBedrockCommand {
-    #[command(alias = "foundation-models", alias = "model", alias = "models")]
+    #[command(
+        name = "models",
+        alias = "foundationmodel",
+        alias = "foundation-model",
+        alias = "foundation-models",
+        alias = "model"
+    )]
     FoundationModel {
         #[command(subcommand)]
         command: AWSBedrockFoundationModelCommand,
     },
-    #[command(alias = "inference-profiles", alias = "profile", alias = "profiles")]
+    #[command(
+        name = "profiles",
+        alias = "inferenceprofile",
+        alias = "inference-profile",
+        alias = "inference-profiles",
+        alias = "profile"
+    )]
     InferenceProfile {
         #[command(subcommand)]
         command: AWSBedrockInferenceProfileCommand,
@@ -4673,12 +4710,18 @@ enum AWSBedrockCommand {
         #[command(subcommand)]
         command: AWSBedrockAgentCommand,
     },
-    #[command(alias = "knowledge-bases", alias = "kb")]
+    #[command(
+        name = "knowledge",
+        alias = "knowledgebase",
+        alias = "knowledge-base",
+        alias = "knowledge-bases",
+        alias = "kb"
+    )]
     KnowledgeBase {
         #[command(subcommand)]
         command: AWSBedrockKnowledgeBaseCommand,
     },
-    #[command(alias = "agentruntime")]
+    #[command(name = "assist", alias = "agentruntime", alias = "agent-runtime")]
     AgentRuntime {
         #[command(subcommand)]
         command: AWSBedrockAgentRuntimeCommand,
@@ -4940,7 +4983,7 @@ enum AWSBedrockRuntimeCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "count", alias = "tokens")]
+    #[command(name = "count", alias = "counttokens", alias = "count-tokens", alias = "tokens")]
     CountTokens {
         #[arg(long)]
         model_id: Option<String>,
@@ -5290,7 +5333,7 @@ enum AWSBedrockKnowledgeBaseCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "datasource", alias = "datasources")]
+    #[command(name = "sources", alias = "datasource", alias = "data-source", alias = "datasources")]
     DataSource {
         #[command(subcommand)]
         command: AWSBedrockKnowledgeBaseDataSourceCommand,
@@ -5359,7 +5402,7 @@ enum AWSBedrockKnowledgeBaseDataSourceCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSBedrockAgentRuntimeCommand {
-    #[command(alias = "invoke")]
+    #[command(name = "invoke", alias = "invokeagent", alias = "invoke-agent")]
     InvokeAgent {
         #[arg(long)]
         agent_id: String,
@@ -5436,7 +5479,12 @@ enum AWSBedrockAgentRuntimeCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "rag")]
+    #[command(
+        name = "answer",
+        alias = "retrieveandgenerate",
+        alias = "retrieve-and-generate",
+        alias = "rag"
+    )]
     RetrieveAndGenerate {
         #[arg(long)]
         knowledge_base_id: Option<String>,
@@ -5851,6 +5899,7 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPServiceCommand,
     },
+    #[command(name = "keys", alias = "apikey", alias = "api-key")]
     Apikey {
         #[command(subcommand)]
         command: GCPAPIKeyCommand,
@@ -6155,12 +6204,26 @@ enum GCPAPIKeyCommand {
 
 #[derive(Debug, Subcommand)]
 enum GCPIAMCommand {
-    #[command(alias = "service-accounts", alias = "sa")]
+    #[command(
+        name = "account",
+        alias = "accounts",
+        alias = "service-account",
+        alias = "service-accounts",
+        alias = "serviceaccount",
+        alias = "sa"
+    )]
     ServiceAccount {
         #[command(subcommand)]
         command: GCPIAMServiceAccountCommand,
     },
-    #[command(alias = "service-account-keys", alias = "sa-key", alias = "key", alias = "keys")]
+    #[command(
+        name = "keys",
+        alias = "serviceaccountkey",
+        alias = "service-account-key",
+        alias = "service-account-keys",
+        alias = "sa-key",
+        alias = "key"
+    )]
     ServiceAccountKey {
         #[command(subcommand)]
         command: GCPIAMServiceAccountKeyCommand,
@@ -6439,7 +6502,7 @@ enum GCPIAMPolicyCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "test")]
+    #[command(name = "test", alias = "testpermissions", alias = "test-permissions")]
     TestPermissions {
         #[arg(long)]
         account: Option<String>,
@@ -6604,7 +6667,7 @@ enum GCPGeminiCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "count")]
+    #[command(name = "count", alias = "counttokens", alias = "count-tokens")]
     CountTokens {
         #[arg(long)]
         account: Option<String>,
@@ -6637,7 +6700,12 @@ enum GCPGeminiCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
-    #[command(alias = "batch", alias = "batch-embed-contents")]
+    #[command(
+        name = "batch",
+        alias = "batchembed",
+        alias = "batch-embed",
+        alias = "batch-embed-contents"
+    )]
     BatchEmbed {
         #[arg(long)]
         account: Option<String>,
@@ -8016,6 +8084,7 @@ enum GooglePlayReleaseCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    #[command(name = "set", alias = "setstatus", alias = "set-status")]
     SetStatus {
         #[arg(long)]
         account: Option<String>,
@@ -8174,6 +8243,7 @@ enum GooglePlacesCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    #[command(name = "text", alias = "searchtext", alias = "search-text")]
     SearchText {
         #[arg(long)]
         account: Option<String>,
@@ -8234,6 +8304,7 @@ enum GooglePlacesCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    #[command(name = "nearby", alias = "searchnearby", alias = "search-nearby")]
     SearchNearby {
         #[arg(long)]
         account: Option<String>,
@@ -8720,6 +8791,7 @@ enum GoogleYouTubeCommand {
         #[command(subcommand)]
         command: GoogleYouTubePlaylistCommand,
     },
+    #[command(name = "items", alias = "playlistitem", alias = "playlist-item")]
     PlaylistItem {
         #[command(subcommand)]
         command: GoogleYouTubePlaylistItemCommand,
@@ -9272,6 +9344,7 @@ enum GoogleYouTubeVideoCommand {
         #[command(flatten)]
         command: GoogleYouTubeVideoRateArgs,
     },
+    #[command(name = "rating", alias = "getrating", alias = "get-rating")]
     GetRating {
         #[command(flatten)]
         command: GoogleYouTubeVideoGetRatingArgs,
@@ -11288,14 +11361,17 @@ enum OpenAIProjectCommand {
         #[arg(long)]
         raw: bool,
     },
+    #[command(name = "keys", alias = "apikey", alias = "api-key")]
     ApiKey {
         #[command(subcommand)]
         command: OpenAIProjectAPIKeyCommand,
     },
+    #[command(name = "accounts", alias = "serviceaccount", alias = "service-account")]
     ServiceAccount {
         #[command(subcommand)]
         command: OpenAIProjectServiceAccountCommand,
     },
+    #[command(name = "limits", alias = "ratelimit", alias = "rate-limit")]
     RateLimit {
         #[command(subcommand)]
         command: OpenAIProjectRateLimitCommand,
@@ -11686,6 +11762,7 @@ enum OciAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciOracularCommand {
+    #[command(name = "cloudinit", alias = "cloud-init")]
     CloudInit {
         #[arg(long, default_value_t = 7129)]
         ssh_port: u16,
@@ -11712,6 +11789,7 @@ enum OciOracularCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciIdentityCommand {
+    #[command(name = "domains", alias = "availabilitydomains", alias = "availability-domains")]
     AvailabilityDomains {
         #[command(subcommand)]
         command: OciIdentityAvailabilityDomainsCommand,
@@ -11792,14 +11870,17 @@ enum OciNetworkCommand {
         #[command(subcommand)]
         command: OciNetworkVCNCommand,
     },
+    #[command(name = "gateway", alias = "internetgateway", alias = "internet-gateway")]
     InternetGateway {
         #[command(subcommand)]
         command: OciNetworkInternetGatewayCommand,
     },
+    #[command(name = "routes", alias = "routetable", alias = "route-table")]
     RouteTable {
         #[command(subcommand)]
         command: OciNetworkRouteTableCommand,
     },
+    #[command(name = "security", alias = "securitylist", alias = "security-list")]
     SecurityList {
         #[command(subcommand)]
         command: OciNetworkSecurityListCommand,
@@ -12012,6 +12093,7 @@ enum OciNetworkSubnetCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciComputeCommand {
+    #[command(name = "domains", alias = "availabilitydomains", alias = "availability-domains")]
     AvailabilityDomains {
         #[arg(long)]
         account: Option<String>,
@@ -12050,6 +12132,7 @@ enum OciComputeCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciComputeImageCommand {
+    #[command(name = "ubuntu", alias = "latestubuntu", alias = "latest-ubuntu")]
     LatestUbuntu {
         #[arg(long)]
         account: Option<String>,
@@ -12379,6 +12462,7 @@ enum StripeObjectCommand {
 
 #[derive(Debug, Subcommand)]
 enum StripeSyncModeCommand {
+    #[command(name = "mirror", alias = "livetosandbox", alias = "live-to-sandbox")]
     LiveToSandbox {
         #[command(subcommand)]
         command: StripeSyncActionCommand,
@@ -13562,6 +13646,7 @@ enum GitHubGitCommand {
         #[arg(long)]
         json: bool,
     },
+    #[command(name = "remote", alias = "remoteauth", alias = "remote-auth")]
     RemoteAuth {
         #[arg(long)]
         root: Option<PathBuf>,
@@ -13582,6 +13667,7 @@ enum GitHubGitCommand {
         #[arg(long)]
         json: bool,
     },
+    #[command(name = "clone", alias = "cloneauth", alias = "clone-auth")]
     CloneAuth {
         repo_source: Option<String>,
         #[arg(long = "repo")]
@@ -14194,7 +14280,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-add")]
+    #[command(name = "add", alias = "itemadd", alias = "item-add")]
     ItemAdd {
         project_ref: Option<String>,
         #[arg(long)]
@@ -14228,7 +14314,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-set")]
+    #[command(name = "set", alias = "itemset", alias = "item-set")]
     ItemSet {
         project_ref: Option<String>,
         item_id: Option<String>,
@@ -14275,7 +14361,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-clear")]
+    #[command(name = "clear", alias = "itemclear", alias = "item-clear")]
     ItemClear {
         project_ref: Option<String>,
         item_id: Option<String>,
@@ -14308,7 +14394,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-archive")]
+    #[command(name = "archive", alias = "itemarchive", alias = "item-archive")]
     ItemArchive {
         project_ref: Option<String>,
         item_id: Option<String>,
@@ -14337,7 +14423,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-unarchive")]
+    #[command(name = "unarchive", alias = "itemunarchive", alias = "item-unarchive")]
     ItemUnarchive {
         project_ref: Option<String>,
         item_id: Option<String>,
@@ -14366,7 +14452,7 @@ enum GitHubProjectCommand {
         #[arg(long)]
         raw: bool,
     },
-    #[command(name = "item-delete")]
+    #[command(name = "delete", alias = "itemdelete", alias = "item-delete")]
     ItemDelete {
         project_ref: Option<String>,
         item_id: Option<String>,
@@ -14991,249 +15077,283 @@ enum GitHubPullRequestCommand {
     },
 }
 
+#[derive(Debug, Args)]
+struct DyadSpawnPlanArgs {
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    actor_image: Option<String>,
+    #[arg(long)]
+    critic_image: Option<String>,
+    #[arg(long)]
+    codex_model: Option<String>,
+    #[arg(long)]
+    codex_effort_actor: Option<String>,
+    #[arg(long)]
+    codex_effort_critic: Option<String>,
+    #[arg(long)]
+    codex_model_low: Option<String>,
+    #[arg(long)]
+    codex_model_medium: Option<String>,
+    #[arg(long)]
+    codex_model_high: Option<String>,
+    #[arg(long)]
+    codex_effort_low: Option<String>,
+    #[arg(long)]
+    codex_effort_medium: Option<String>,
+    #[arg(long)]
+    codex_effort_high: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    configs: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    forward_ports: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long)]
+    profile_id: Option<String>,
+    #[arg(long)]
+    profile_name: Option<String>,
+    #[arg(long)]
+    loop_enabled: Option<bool>,
+    #[arg(long)]
+    loop_goal: Option<String>,
+    #[arg(long)]
+    loop_seed_prompt: Option<String>,
+    #[arg(long)]
+    loop_max_turns: Option<i32>,
+    #[arg(long)]
+    loop_sleep_seconds: Option<i32>,
+    #[arg(long)]
+    loop_startup_delay_seconds: Option<i32>,
+    #[arg(long)]
+    loop_turn_timeout_seconds: Option<i32>,
+    #[arg(long)]
+    loop_retry_max: Option<i32>,
+    #[arg(long)]
+    loop_retry_base_seconds: Option<i32>,
+    #[arg(long)]
+    loop_prompt_lines: Option<i32>,
+    #[arg(long)]
+    loop_allow_mcp_startup: Option<bool>,
+    #[arg(long)]
+    loop_tmux_capture: Option<String>,
+    #[arg(long)]
+    loop_pause_poll_seconds: Option<i32>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct DyadSpawnSpecArgs {
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    actor_image: Option<String>,
+    #[arg(long)]
+    critic_image: Option<String>,
+    #[arg(long)]
+    codex_model: Option<String>,
+    #[arg(long)]
+    codex_effort_actor: Option<String>,
+    #[arg(long)]
+    codex_effort_critic: Option<String>,
+    #[arg(long)]
+    codex_model_low: Option<String>,
+    #[arg(long)]
+    codex_model_medium: Option<String>,
+    #[arg(long)]
+    codex_model_high: Option<String>,
+    #[arg(long)]
+    codex_effort_low: Option<String>,
+    #[arg(long)]
+    codex_effort_medium: Option<String>,
+    #[arg(long)]
+    codex_effort_high: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    configs: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    forward_ports: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long)]
+    profile_id: Option<String>,
+    #[arg(long)]
+    profile_name: Option<String>,
+    #[arg(long)]
+    loop_enabled: Option<bool>,
+    #[arg(long)]
+    loop_goal: Option<String>,
+    #[arg(long)]
+    loop_seed_prompt: Option<String>,
+    #[arg(long)]
+    loop_max_turns: Option<i32>,
+    #[arg(long)]
+    loop_sleep_seconds: Option<i32>,
+    #[arg(long)]
+    loop_startup_delay_seconds: Option<i32>,
+    #[arg(long)]
+    loop_turn_timeout_seconds: Option<i32>,
+    #[arg(long)]
+    loop_retry_max: Option<i32>,
+    #[arg(long)]
+    loop_retry_base_seconds: Option<i32>,
+    #[arg(long)]
+    loop_prompt_lines: Option<i32>,
+    #[arg(long)]
+    loop_allow_mcp_startup: Option<bool>,
+    #[arg(long)]
+    loop_tmux_capture: Option<String>,
+    #[arg(long)]
+    loop_pause_poll_seconds: Option<i32>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct DyadSpawnStartArgs {
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    role: Option<String>,
+    #[arg(long)]
+    actor_image: Option<String>,
+    #[arg(long)]
+    critic_image: Option<String>,
+    #[arg(long)]
+    codex_model: Option<String>,
+    #[arg(long)]
+    codex_effort_actor: Option<String>,
+    #[arg(long)]
+    codex_effort_critic: Option<String>,
+    #[arg(long)]
+    codex_model_low: Option<String>,
+    #[arg(long)]
+    codex_model_medium: Option<String>,
+    #[arg(long)]
+    codex_model_high: Option<String>,
+    #[arg(long)]
+    codex_effort_low: Option<String>,
+    #[arg(long)]
+    codex_effort_medium: Option<String>,
+    #[arg(long)]
+    codex_effort_high: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    configs: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    forward_ports: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long)]
+    profile_id: Option<String>,
+    #[arg(long)]
+    profile_name: Option<String>,
+    #[arg(long)]
+    loop_enabled: Option<bool>,
+    #[arg(long)]
+    loop_goal: Option<String>,
+    #[arg(long)]
+    loop_seed_prompt: Option<String>,
+    #[arg(long)]
+    loop_max_turns: Option<i32>,
+    #[arg(long)]
+    loop_sleep_seconds: Option<i32>,
+    #[arg(long)]
+    loop_startup_delay_seconds: Option<i32>,
+    #[arg(long)]
+    loop_turn_timeout_seconds: Option<i32>,
+    #[arg(long)]
+    loop_retry_max: Option<i32>,
+    #[arg(long)]
+    loop_retry_base_seconds: Option<i32>,
+    #[arg(long)]
+    loop_prompt_lines: Option<i32>,
+    #[arg(long)]
+    loop_allow_mcp_startup: Option<bool>,
+    #[arg(long)]
+    loop_tmux_capture: Option<String>,
+    #[arg(long)]
+    loop_pause_poll_seconds: Option<i32>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long)]
+    docker_bin: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct DyadPeekArgs {
+    name: String,
+    #[arg(long, default_value = "both")]
+    member: String,
+    #[arg(long)]
+    session: Option<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum DyadSpawnCommand {
+    Plan(DyadSpawnPlanArgs),
+    Spec(DyadSpawnSpecArgs),
+    Start(DyadSpawnStartArgs),
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Subcommand)]
 enum DyadCommand {
-    SpawnPlan {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        role: Option<String>,
-        #[arg(long)]
-        actor_image: Option<String>,
-        #[arg(long)]
-        critic_image: Option<String>,
-        #[arg(long)]
-        codex_model: Option<String>,
-        #[arg(long)]
-        codex_effort_actor: Option<String>,
-        #[arg(long)]
-        codex_effort_critic: Option<String>,
-        #[arg(long)]
-        codex_model_low: Option<String>,
-        #[arg(long)]
-        codex_model_medium: Option<String>,
-        #[arg(long)]
-        codex_model_high: Option<String>,
-        #[arg(long)]
-        codex_effort_low: Option<String>,
-        #[arg(long)]
-        codex_effort_medium: Option<String>,
-        #[arg(long)]
-        codex_effort_high: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        configs: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        forward_ports: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        profile_name: Option<String>,
-        #[arg(long)]
-        loop_enabled: Option<bool>,
-        #[arg(long)]
-        loop_goal: Option<String>,
-        #[arg(long)]
-        loop_seed_prompt: Option<String>,
-        #[arg(long)]
-        loop_max_turns: Option<i32>,
-        #[arg(long)]
-        loop_sleep_seconds: Option<i32>,
-        #[arg(long)]
-        loop_startup_delay_seconds: Option<i32>,
-        #[arg(long)]
-        loop_turn_timeout_seconds: Option<i32>,
-        #[arg(long)]
-        loop_retry_max: Option<i32>,
-        #[arg(long)]
-        loop_retry_base_seconds: Option<i32>,
-        #[arg(long)]
-        loop_prompt_lines: Option<i32>,
-        #[arg(long)]
-        loop_allow_mcp_startup: Option<bool>,
-        #[arg(long)]
-        loop_tmux_capture: Option<String>,
-        #[arg(long)]
-        loop_pause_poll_seconds: Option<i32>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
+    Spawn {
+        #[command(subcommand)]
+        command: DyadSpawnCommand,
     },
-    SpawnSpec {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        role: Option<String>,
-        #[arg(long)]
-        actor_image: Option<String>,
-        #[arg(long)]
-        critic_image: Option<String>,
-        #[arg(long)]
-        codex_model: Option<String>,
-        #[arg(long)]
-        codex_effort_actor: Option<String>,
-        #[arg(long)]
-        codex_effort_critic: Option<String>,
-        #[arg(long)]
-        codex_model_low: Option<String>,
-        #[arg(long)]
-        codex_model_medium: Option<String>,
-        #[arg(long)]
-        codex_model_high: Option<String>,
-        #[arg(long)]
-        codex_effort_low: Option<String>,
-        #[arg(long)]
-        codex_effort_medium: Option<String>,
-        #[arg(long)]
-        codex_effort_high: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        configs: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        forward_ports: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        profile_name: Option<String>,
-        #[arg(long)]
-        loop_enabled: Option<bool>,
-        #[arg(long)]
-        loop_goal: Option<String>,
-        #[arg(long)]
-        loop_seed_prompt: Option<String>,
-        #[arg(long)]
-        loop_max_turns: Option<i32>,
-        #[arg(long)]
-        loop_sleep_seconds: Option<i32>,
-        #[arg(long)]
-        loop_startup_delay_seconds: Option<i32>,
-        #[arg(long)]
-        loop_turn_timeout_seconds: Option<i32>,
-        #[arg(long)]
-        loop_retry_max: Option<i32>,
-        #[arg(long)]
-        loop_retry_base_seconds: Option<i32>,
-        #[arg(long)]
-        loop_prompt_lines: Option<i32>,
-        #[arg(long)]
-        loop_allow_mcp_startup: Option<bool>,
-        #[arg(long)]
-        loop_tmux_capture: Option<String>,
-        #[arg(long)]
-        loop_pause_poll_seconds: Option<i32>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
-    SpawnStart {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        role: Option<String>,
-        #[arg(long)]
-        actor_image: Option<String>,
-        #[arg(long)]
-        critic_image: Option<String>,
-        #[arg(long)]
-        codex_model: Option<String>,
-        #[arg(long)]
-        codex_effort_actor: Option<String>,
-        #[arg(long)]
-        codex_effort_critic: Option<String>,
-        #[arg(long)]
-        codex_model_low: Option<String>,
-        #[arg(long)]
-        codex_model_medium: Option<String>,
-        #[arg(long)]
-        codex_model_high: Option<String>,
-        #[arg(long)]
-        codex_effort_low: Option<String>,
-        #[arg(long)]
-        codex_effort_medium: Option<String>,
-        #[arg(long)]
-        codex_effort_high: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        configs: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        forward_ports: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        profile_name: Option<String>,
-        #[arg(long)]
-        loop_enabled: Option<bool>,
-        #[arg(long)]
-        loop_goal: Option<String>,
-        #[arg(long)]
-        loop_seed_prompt: Option<String>,
-        #[arg(long)]
-        loop_max_turns: Option<i32>,
-        #[arg(long)]
-        loop_sleep_seconds: Option<i32>,
-        #[arg(long)]
-        loop_startup_delay_seconds: Option<i32>,
-        #[arg(long)]
-        loop_turn_timeout_seconds: Option<i32>,
-        #[arg(long)]
-        loop_retry_max: Option<i32>,
-        #[arg(long)]
-        loop_retry_base_seconds: Option<i32>,
-        #[arg(long)]
-        loop_prompt_lines: Option<i32>,
-        #[arg(long)]
-        loop_allow_mcp_startup: Option<bool>,
-        #[arg(long)]
-        loop_tmux_capture: Option<String>,
-        #[arg(long)]
-        loop_pause_poll_seconds: Option<i32>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
+    #[command(name = "spawnplan", alias = "spawn-plan", hide = true)]
+    SpawnPlan(DyadSpawnPlanArgs),
+    #[command(name = "spawnspec", alias = "spawn-spec", hide = true)]
+    SpawnSpec(DyadSpawnSpecArgs),
+    #[command(name = "spawnstart", alias = "spawn-start", hide = true)]
+    SpawnStart(DyadSpawnStartArgs),
     Start {
         name: String,
         #[arg(long)]
@@ -15268,15 +15388,8 @@ enum DyadCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    PeekPlan {
-        name: String,
-        #[arg(long, default_value = "both")]
-        member: String,
-        #[arg(long)]
-        session: Option<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
+    #[command(name = "peek", alias = "peekplan", alias = "peek-plan")]
+    Peek(DyadPeekArgs),
     Restart {
         name: String,
         #[arg(long)]
@@ -15304,202 +15417,321 @@ enum DyadCommand {
     },
 }
 
+#[derive(Debug, Args)]
+struct CodexSpawnPlanArgs {
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    gh_volume: Option<String>,
+    #[arg(long)]
+    repo: Option<String>,
+    #[arg(long)]
+    gh_pat: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long, default_value_t = true)]
+    detach: bool,
+    #[arg(long, default_value_t = false)]
+    clean_slate: bool,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long, default_value_t = true)]
+    include_host_si: bool,
+    #[arg(long = "env")]
+    env: Vec<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexSpawnSpecArgs {
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    gh_volume: Option<String>,
+    #[arg(long)]
+    repo: Option<String>,
+    #[arg(long)]
+    gh_pat: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long, default_value_t = true)]
+    detach: bool,
+    #[arg(long, default_value_t = false)]
+    clean_slate: bool,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long, default_value_t = true)]
+    include_host_si: bool,
+    #[arg(long = "env")]
+    env: Vec<String>,
+    #[arg(long = "label")]
+    labels: Vec<String>,
+    #[arg(long = "port")]
+    ports: Vec<String>,
+    #[arg(long)]
+    cmd: Option<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexSpawnArgsArgs {
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    gh_volume: Option<String>,
+    #[arg(long)]
+    repo: Option<String>,
+    #[arg(long)]
+    gh_pat: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long, default_value_t = true)]
+    detach: bool,
+    #[arg(long, default_value_t = false)]
+    clean_slate: bool,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long, default_value_t = true)]
+    include_host_si: bool,
+    #[arg(long = "env")]
+    env: Vec<String>,
+    #[arg(long = "label")]
+    labels: Vec<String>,
+    #[arg(long = "port")]
+    ports: Vec<String>,
+    #[arg(long)]
+    cmd: Option<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexSpawnStartArgs {
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    workspace: PathBuf,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    codex_volume: Option<String>,
+    #[arg(long)]
+    skills_volume: Option<String>,
+    #[arg(long)]
+    gh_volume: Option<String>,
+    #[arg(long)]
+    repo: Option<String>,
+    #[arg(long)]
+    gh_pat: Option<String>,
+    #[arg(long, default_value_t = true)]
+    docker_socket: bool,
+    #[arg(long, default_value_t = true)]
+    detach: bool,
+    #[arg(long, default_value_t = false)]
+    clean_slate: bool,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    ssh_auth_sock: Option<PathBuf>,
+    #[arg(long)]
+    vault_env_file: Option<PathBuf>,
+    #[arg(long, default_value_t = true)]
+    include_host_si: bool,
+    #[arg(long = "env")]
+    env: Vec<String>,
+    #[arg(long = "label")]
+    labels: Vec<String>,
+    #[arg(long = "port")]
+    ports: Vec<String>,
+    #[arg(long)]
+    cmd: Option<String>,
+    #[arg(long)]
+    docker_bin: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+enum CodexSpawnCommand {
+    Plan(CodexSpawnPlanArgs),
+    Spec(CodexSpawnSpecArgs),
+    Args(CodexSpawnArgsArgs),
+    Start(CodexSpawnStartArgs),
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileListArgs {
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileShowArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileAddArgs {
+    profile: String,
+    #[arg(long)]
+    name: Option<String>,
+    #[arg(long)]
+    email: Option<String>,
+    #[arg(long)]
+    auth_path: Option<String>,
+    #[arg(long, default_value_t = false)]
+    activate: bool,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileRemoveArgs {
+    profile: String,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileUseArgs {
+    profile: String,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+enum CodexProfileCommand {
+    List(CodexProfileListArgs),
+    Show(CodexProfileShowArgs),
+    Add(CodexProfileAddArgs),
+    Remove(CodexProfileRemoveArgs),
+    Use(CodexProfileUseArgs),
+}
+
+#[derive(Debug, Args)]
+struct CodexTmuxPlanArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    start_dir: Option<String>,
+    #[arg(long)]
+    resume_session_id: Option<String>,
+    #[arg(long)]
+    resume_profile: Option<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexTmuxLaunchArgs {
+    profile: Option<String>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum CodexTmuxCommand {
+    Plan(CodexTmuxPlanArgs),
+    Launch(CodexTmuxLaunchArgs),
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Subcommand)]
 enum CodexCommand {
-    SpawnPlan {
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        workdir: Option<String>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        gh_volume: Option<String>,
-        #[arg(long)]
-        repo: Option<String>,
-        #[arg(long)]
-        gh_pat: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long, default_value_t = true)]
-        detach: bool,
-        #[arg(long, default_value_t = false)]
-        clean_slate: bool,
-        #[arg(long)]
-        image: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long, default_value_t = true)]
-        include_host_si: bool,
-        #[arg(long = "env")]
-        env: Vec<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
+    #[command(name = "profile", alias = "profiles")]
+    Profile {
+        #[command(subcommand)]
+        command: CodexProfileCommand,
     },
-    SpawnSpec {
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        workdir: Option<String>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        gh_volume: Option<String>,
-        #[arg(long)]
-        repo: Option<String>,
-        #[arg(long)]
-        gh_pat: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long, default_value_t = true)]
-        detach: bool,
-        #[arg(long, default_value_t = false)]
-        clean_slate: bool,
-        #[arg(long)]
-        image: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long, default_value_t = true)]
-        include_host_si: bool,
-        #[arg(long = "env")]
-        env: Vec<String>,
-        #[arg(long = "label")]
-        labels: Vec<String>,
-        #[arg(long = "port")]
-        ports: Vec<String>,
-        #[arg(long)]
-        cmd: Option<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
+    Spawn {
+        #[command(subcommand)]
+        command: CodexSpawnCommand,
     },
-    SpawnRunArgs {
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        workdir: Option<String>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        gh_volume: Option<String>,
-        #[arg(long)]
-        repo: Option<String>,
-        #[arg(long)]
-        gh_pat: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long, default_value_t = true)]
-        detach: bool,
-        #[arg(long, default_value_t = false)]
-        clean_slate: bool,
-        #[arg(long)]
-        image: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long, default_value_t = true)]
-        include_host_si: bool,
-        #[arg(long = "env")]
-        env: Vec<String>,
-        #[arg(long = "label")]
-        labels: Vec<String>,
-        #[arg(long = "port")]
-        ports: Vec<String>,
-        #[arg(long)]
-        cmd: Option<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
-    SpawnStart {
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        profile_id: Option<String>,
-        #[arg(long)]
-        workspace: PathBuf,
-        #[arg(long)]
-        workdir: Option<String>,
-        #[arg(long)]
-        codex_volume: Option<String>,
-        #[arg(long)]
-        skills_volume: Option<String>,
-        #[arg(long)]
-        gh_volume: Option<String>,
-        #[arg(long)]
-        repo: Option<String>,
-        #[arg(long)]
-        gh_pat: Option<String>,
-        #[arg(long, default_value_t = true)]
-        docker_socket: bool,
-        #[arg(long, default_value_t = true)]
-        detach: bool,
-        #[arg(long, default_value_t = false)]
-        clean_slate: bool,
-        #[arg(long)]
-        image: Option<String>,
-        #[arg(long)]
-        network: Option<String>,
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        ssh_auth_sock: Option<PathBuf>,
-        #[arg(long)]
-        vault_env_file: Option<PathBuf>,
-        #[arg(long, default_value_t = true)]
-        include_host_si: bool,
-        #[arg(long = "env")]
-        env: Vec<String>,
-        #[arg(long = "label")]
-        labels: Vec<String>,
-        #[arg(long = "port")]
-        ports: Vec<String>,
-        #[arg(long)]
-        cmd: Option<String>,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
-    RemovePlan {
-        name: String,
+    #[command(name = "spawnplan", alias = "spawn-plan", hide = true)]
+    SpawnPlan(CodexSpawnPlanArgs),
+    #[command(name = "spawnspec", alias = "spawn-spec", hide = true)]
+    SpawnSpec(CodexSpawnSpecArgs),
+    #[command(name = "spawnrunargs", alias = "spawn-run-args", hide = true)]
+    SpawnRunArgs(CodexSpawnArgsArgs),
+    #[command(name = "spawnstart", alias = "spawn-start", hide = true)]
+    SpawnStart(CodexSpawnStartArgs),
+    #[command(name = "artifacts", alias = "removeplan", alias = "remove-plan")]
+    Artifacts {
+        profile: Option<String>,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
     Remove {
-        name: String,
+        profile: Option<String>,
         #[arg(long, default_value_t = false)]
         volumes: bool,
         #[arg(long, default_value = "text")]
@@ -15508,35 +15740,35 @@ enum CodexCommand {
         docker_bin: Option<PathBuf>,
     },
     Start {
-        name: String,
+        profile: Option<String>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
     Stop {
-        name: String,
+        profile: Option<String>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
     Logs {
-        name: String,
+        profile: Option<String>,
         #[arg(long, default_value = "200")]
         tail: String,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
     Tail {
-        name: String,
+        profile: Option<String>,
         #[arg(long, default_value = "200")]
         tail: String,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
     Clone {
-        name: String,
+        profile: String,
         repo: String,
         #[arg(long)]
         gh_pat: Option<String>,
@@ -15546,7 +15778,7 @@ enum CodexCommand {
         docker_bin: Option<PathBuf>,
     },
     Exec {
-        name: String,
+        profile: Option<String>,
         #[arg(long)]
         workdir: Option<PathBuf>,
         #[arg(long, num_args = 1, default_value = "true", value_parser = clap::value_parser!(bool))]
@@ -15568,8 +15800,9 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    StatusRead {
-        name: String,
+    #[command(name = "status", alias = "statusread", alias = "status-read")]
+    Status {
+        profile: Option<String>,
         #[arg(long, default_value_t = false)]
         raw: bool,
         #[arg(long, default_value = "json")]
@@ -15577,31 +15810,22 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    TmuxPlan {
-        name: String,
-        #[arg(long)]
-        start_dir: Option<String>,
-        #[arg(long)]
-        resume_session_id: Option<String>,
-        #[arg(long)]
-        resume_profile: Option<String>,
+    Tmux {
+        #[command(subcommand)]
+        command: CodexTmuxCommand,
+    },
+    #[command(name = "tmuxplan", alias = "tmux-plan", hide = true)]
+    TmuxPlan(CodexTmuxPlanArgs),
+    #[command(name = "tmuxcommand", alias = "tmux-command", hide = true)]
+    TmuxCommand(CodexTmuxLaunchArgs),
+    #[command(name = "report", alias = "reportparse", alias = "report-parse")]
+    Report {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
-    TmuxCommand {
-        #[arg(long)]
-        container: String,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
-    ReportParse {
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
-    RespawnPlan {
-        name: String,
-        #[arg(long)]
-        profile_id: Option<String>,
+    #[command(name = "respawn", alias = "respawnplan", alias = "respawn-plan")]
+    Respawn {
+        profile: Option<String>,
         #[arg(long = "profile-container")]
         profile_containers: Vec<String>,
         #[arg(long, default_value = "json")]
@@ -15645,7 +15869,8 @@ enum FortSessionStateCommand {
         #[arg(long)]
         path: PathBuf,
     },
-    BootstrapView {
+    #[command(name = "bootstrap", alias = "bootstrapview", alias = "bootstrap-view")]
+    Bootstrap {
         #[arg(long)]
         path: PathBuf,
         #[arg(long)]
@@ -15669,7 +15894,8 @@ enum FortSessionStateCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
-    RefreshOutcome {
+    #[command(name = "refresh", alias = "refreshoutcome", alias = "refresh-outcome")]
+    Refresh {
         #[arg(long)]
         path: PathBuf,
         #[arg(long)]
@@ -15781,7 +16007,8 @@ enum VivaTunnelConfigCommand {
 
 #[derive(Debug, Subcommand)]
 enum WarmupCommand {
-    AutostartDecision {
+    #[command(name = "decision", alias = "autostartdecision", alias = "autostart-decision")]
+    Decision {
         #[arg(long)]
         state_path: Option<PathBuf>,
         #[arg(long)]
@@ -15833,11 +16060,13 @@ enum WarmupMarkerCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
-    WriteAutostart {
+    #[command(name = "enable", alias = "writeautostart", alias = "write-autostart")]
+    Enable {
         #[arg(long)]
         path: PathBuf,
     },
-    SetDisabled {
+    #[command(name = "disable", alias = "setdisabled", alias = "set-disabled")]
+    Disable {
         #[arg(long)]
         path: PathBuf,
         #[arg(long)]
@@ -16681,6 +16910,16 @@ struct DyadLabelView {
 }
 
 #[derive(Debug, Serialize)]
+struct CodexProfileView {
+    profile: String,
+    active: bool,
+    name: Option<String>,
+    email: Option<String>,
+    auth_path: Option<String>,
+    auth_updated: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct CodexSpawnPlanView {
     name: String,
     container_name: String,
@@ -16817,9 +17056,7 @@ struct CodexStatusView {
 
 #[derive(Debug, Serialize)]
 struct CodexRespawnPlanView {
-    effective_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    profile_id: Option<String>,
+    profile_id: String,
     remove_targets: Vec<String>,
 }
 
@@ -16834,6 +17071,7 @@ struct CodexTmuxPlanView {
 
 #[derive(Debug, Serialize)]
 struct CodexTmuxCommandView {
+    profile_id: String,
     container: String,
     launch_command: String,
 }
@@ -18559,7 +18797,7 @@ fn run_publish_npm_from_vault(
     let mut nested_args = vec![
         "build".to_owned(),
         "npm".to_owned(),
-        "publish-package".to_owned(),
+        "publish".to_owned(),
         "--repo-root".to_owned(),
         repo_root.display().to_string(),
         "--token-env".to_owned(),
@@ -18989,9 +19227,19 @@ fn execute_public_probe(
 }
 
 fn main() -> Result<()> {
+    configure_sigpipe();
     let cli = Cli::parse();
 
-    match cli.command {
+    if cli.version_flag {
+        println!("{}", si_rs_core::version::current_version());
+        return Ok(());
+    }
+
+    let Some(command) = cli.command else {
+        return Ok(());
+    };
+
+    match command {
         Command::Version => {
             println!("{}", si_rs_core::version::current_version());
         }
@@ -26118,7 +26366,7 @@ fn main() -> Result<()> {
                     } => {
                         let format = if json { OutputFormat::Json } else { format };
                         run_google_play_release_set_status(
-                            "set-status",
+                            "set",
                             account,
                             env,
                             package_name,
@@ -32479,249 +32727,503 @@ fn main() -> Result<()> {
             },
         },
         Command::Dyad { command } => match *command {
-            DyadCommand::SpawnPlan {
-                name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                format,
-            } => run_dyad_spawn_plan(
-                &name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                format,
-            )?,
-            DyadCommand::SpawnSpec {
-                name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                format,
-            } => run_dyad_spawn_spec(
-                &name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                format,
-            )?,
-            DyadCommand::SpawnStart {
-                name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                docker_bin,
-            } => run_dyad_spawn_start(
-                &name,
-                role,
-                actor_image,
-                critic_image,
-                codex_model,
-                codex_effort_actor,
-                codex_effort_critic,
-                codex_model_low,
-                codex_model_medium,
-                codex_model_high,
-                codex_effort_low,
-                codex_effort_medium,
-                codex_effort_high,
-                workspace,
-                configs,
-                vault_env_file,
-                codex_volume,
-                skills_volume,
-                network,
-                forward_ports,
-                docker_socket,
-                profile_id,
-                profile_name,
-                loop_enabled,
-                loop_goal,
-                loop_seed_prompt,
-                loop_max_turns,
-                loop_sleep_seconds,
-                loop_startup_delay_seconds,
-                loop_turn_timeout_seconds,
-                loop_retry_max,
-                loop_retry_base_seconds,
-                loop_prompt_lines,
-                loop_allow_mcp_startup,
-                loop_tmux_capture,
-                loop_pause_poll_seconds,
-                home,
-                ssh_auth_sock,
-                docker_bin,
-            )?,
+            DyadCommand::Spawn { command } => match command {
+                DyadSpawnCommand::Plan(DyadSpawnPlanArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                }) => run_dyad_spawn_plan(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                )?,
+                DyadSpawnCommand::Spec(DyadSpawnSpecArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                }) => run_dyad_spawn_spec(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                )?,
+                DyadSpawnCommand::Start(DyadSpawnStartArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    docker_bin,
+                }) => run_dyad_spawn_start(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    docker_bin,
+                )?,
+            },
+            DyadCommand::SpawnPlan(args) => {
+                let DyadSpawnPlanArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                } = args;
+                run_dyad_spawn_plan(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                )?
+            }
+            DyadCommand::SpawnSpec(args) => {
+                let DyadSpawnSpecArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                } = args;
+                run_dyad_spawn_spec(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    format,
+                )?
+            }
+            DyadCommand::SpawnStart(args) => {
+                let DyadSpawnStartArgs {
+                    name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    docker_bin,
+                } = args;
+                run_dyad_spawn_start(
+                    &name,
+                    role,
+                    actor_image,
+                    critic_image,
+                    codex_model,
+                    codex_effort_actor,
+                    codex_effort_critic,
+                    codex_model_low,
+                    codex_model_medium,
+                    codex_model_high,
+                    codex_effort_low,
+                    codex_effort_medium,
+                    codex_effort_high,
+                    workspace,
+                    configs,
+                    vault_env_file,
+                    codex_volume,
+                    skills_volume,
+                    network,
+                    forward_ports,
+                    docker_socket,
+                    profile_id,
+                    profile_name,
+                    loop_enabled,
+                    loop_goal,
+                    loop_seed_prompt,
+                    loop_max_turns,
+                    loop_sleep_seconds,
+                    loop_startup_delay_seconds,
+                    loop_turn_timeout_seconds,
+                    loop_retry_max,
+                    loop_retry_base_seconds,
+                    loop_prompt_lines,
+                    loop_allow_mcp_startup,
+                    loop_tmux_capture,
+                    loop_pause_poll_seconds,
+                    home,
+                    ssh_auth_sock,
+                    docker_bin,
+                )?
+            }
             DyadCommand::Start { name, docker_bin } => {
                 run_dyad_container_action(&name, ContainerAction::Start, docker_bin)?
             }
@@ -32735,7 +33237,7 @@ fn main() -> Result<()> {
             DyadCommand::Status { name, format, docker_bin } => {
                 run_dyad_status(&name, format, docker_bin)?
             }
-            DyadCommand::PeekPlan { name, member, session, format } => {
+            DyadCommand::Peek(DyadPeekArgs { name, member, session, format }) => {
                 run_dyad_peek_plan(&name, &member, session, format)?
             }
             DyadCommand::Restart { name, docker_bin } => {
@@ -32748,217 +33250,452 @@ fn main() -> Result<()> {
             DyadCommand::Cleanup { docker_bin } => run_dyad_cleanup(docker_bin)?,
         },
         Command::Codex { command } => match *command {
-            CodexCommand::SpawnPlan {
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
+            CodexCommand::Profile { command } => match command {
+                CodexProfileCommand::List(CodexProfileListArgs { home, settings_file, format }) => {
+                    show_codex_profile_list(home, settings_file, format)?
+                }
+                CodexProfileCommand::Show(CodexProfileShowArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    format,
+                }) => show_codex_profile(profile, home, settings_file, format)?,
+                CodexProfileCommand::Add(CodexProfileAddArgs {
+                    profile,
+                    name,
+                    email,
+                    auth_path,
+                    activate,
+                    home,
+                    settings_file,
+                    format,
+                }) => add_codex_profile(
+                    profile,
+                    name,
+                    email,
+                    auth_path,
+                    activate,
+                    home,
+                    settings_file,
+                    format,
+                )?,
+                CodexProfileCommand::Remove(CodexProfileRemoveArgs {
+                    profile,
+                    home,
+                    settings_file,
+                }) => remove_codex_profile(profile, home, settings_file)?,
+                CodexProfileCommand::Use(CodexProfileUseArgs { profile, home, settings_file }) => {
+                    use_codex_profile(profile, home, settings_file)?
+                }
+            },
+            CodexCommand::Spawn { command } => match command {
+                CodexSpawnCommand::Plan(CodexSpawnPlanArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    format,
+                }) => show_codex_spawn_plan(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    format,
+                )?,
+                CodexSpawnCommand::Spec(CodexSpawnSpecArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                }) => show_codex_spawn_spec(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                )?,
+                CodexSpawnCommand::Args(CodexSpawnArgsArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                }) => show_codex_spawn_run_args(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                )?,
+                CodexSpawnCommand::Start(CodexSpawnStartArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    docker_bin,
+                }) => show_codex_spawn_start(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    docker_bin,
+                )?,
+            },
+            CodexCommand::SpawnPlan(args) => {
+                let CodexSpawnPlanArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    format,
+                } = args;
+                show_codex_spawn_plan(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    format,
+                )?
+            }
+            CodexCommand::SpawnSpec(args) => {
+                let CodexSpawnSpecArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                } = args;
+                show_codex_spawn_spec(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                )?
+            }
+            CodexCommand::SpawnRunArgs(args) => {
+                let CodexSpawnArgsArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                } = args;
+                show_codex_spawn_run_args(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    format,
+                )?
+            }
+            CodexCommand::SpawnStart(args) => {
+                let CodexSpawnStartArgs {
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    docker_bin,
+                } = args;
+                show_codex_spawn_start(
+                    profile,
+                    workspace,
+                    workdir,
+                    codex_volume,
+                    skills_volume,
+                    gh_volume,
+                    repo,
+                    gh_pat,
+                    docker_socket,
+                    detach,
+                    clean_slate,
+                    image,
+                    network,
+                    home,
+                    ssh_auth_sock,
+                    vault_env_file,
+                    include_host_si,
+                    env,
+                    labels,
+                    ports,
+                    cmd,
+                    docker_bin,
+                )?
+            }
+            CodexCommand::Artifacts { profile, format } => {
+                let profile_id = resolve_codex_runtime_profile(profile.as_deref(), None, None)?;
+                show_codex_remove_plan(&profile_id, format)?
+            }
+            CodexCommand::Remove { profile, volumes, format, docker_bin } => {
+                run_codex_remove(profile.as_deref(), volumes, format, docker_bin)?
+            }
+            CodexCommand::Start { profile, format, docker_bin } => run_codex_container_action(
+                profile.as_deref(),
+                ContainerAction::Start,
                 format,
-            } => show_codex_spawn_plan(
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                format,
-            )?,
-            CodexCommand::SpawnSpec {
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
-                format,
-            } => show_codex_spawn_spec(
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
-                format,
-            )?,
-            CodexCommand::SpawnRunArgs {
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
-                format,
-            } => show_codex_spawn_run_args(
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
-                format,
-            )?,
-            CodexCommand::SpawnStart {
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
                 docker_bin,
-            } => show_codex_spawn_start(
-                name,
-                profile_id,
-                workspace,
-                workdir,
-                codex_volume,
-                skills_volume,
-                gh_volume,
-                repo,
-                gh_pat,
-                docker_socket,
-                detach,
-                clean_slate,
-                image,
-                network,
-                home,
-                ssh_auth_sock,
-                vault_env_file,
-                include_host_si,
-                env,
-                labels,
-                ports,
-                cmd,
+            )?,
+            CodexCommand::Stop { profile, format, docker_bin } => run_codex_container_action(
+                profile.as_deref(),
+                ContainerAction::Stop,
+                format,
                 docker_bin,
             )?,
-            CodexCommand::RemovePlan { name, format } => show_codex_remove_plan(&name, format)?,
-            CodexCommand::Remove { name, volumes, format, docker_bin } => {
-                run_codex_remove(&name, volumes, format, docker_bin)?
+            CodexCommand::Logs { profile, tail, docker_bin } => {
+                run_codex_container_logs(profile.as_deref(), &tail, false, docker_bin)?
             }
-            CodexCommand::Start { name, format, docker_bin } => {
-                run_codex_container_action(&name, ContainerAction::Start, format, docker_bin)?
+            CodexCommand::Tail { profile, tail, docker_bin } => {
+                run_codex_container_logs(profile.as_deref(), &tail, true, docker_bin)?
             }
-            CodexCommand::Stop { name, format, docker_bin } => {
-                run_codex_container_action(&name, ContainerAction::Stop, format, docker_bin)?
-            }
-            CodexCommand::Logs { name, tail, docker_bin } => {
-                run_codex_container_logs(&name, &tail, false, docker_bin)?
-            }
-            CodexCommand::Tail { name, tail, docker_bin } => {
-                run_codex_container_logs(&name, &tail, true, docker_bin)?
-            }
-            CodexCommand::Clone { name, repo, gh_pat, format, docker_bin } => {
-                run_codex_clone(&name, &repo, gh_pat.as_deref(), format, docker_bin)?
+            CodexCommand::Clone { profile, repo, gh_pat, format, docker_bin } => {
+                run_codex_clone(&profile, &repo, gh_pat.as_deref(), format, docker_bin)?
             }
             CodexCommand::Exec {
-                name,
+                profile,
                 workdir,
                 interactive,
                 tty,
@@ -32966,30 +33703,57 @@ fn main() -> Result<()> {
                 user,
                 docker_bin,
                 command,
-            } => run_codex_exec(&name, workdir, interactive, tty, env, &user, docker_bin, command)?,
+            } => run_codex_exec(
+                profile.as_deref(),
+                workdir,
+                interactive,
+                tty,
+                env,
+                &user,
+                docker_bin,
+                command,
+            )?,
             CodexCommand::List { format, docker_bin } => run_codex_list(format, docker_bin)?,
-            CodexCommand::StatusRead { name, raw, format, docker_bin } => {
-                run_codex_status_read(&name, raw, format, docker_bin)?
+            CodexCommand::Status { profile, raw, format, docker_bin } => {
+                run_codex_status_read(profile.as_deref(), raw, format, docker_bin)?
             }
-            CodexCommand::TmuxPlan {
-                name,
+            CodexCommand::Tmux { command } => match command {
+                CodexTmuxCommand::Plan(CodexTmuxPlanArgs {
+                    profile,
+                    start_dir,
+                    resume_session_id,
+                    resume_profile,
+                    format,
+                }) => run_codex_tmux_plan(
+                    profile.as_deref(),
+                    start_dir.as_deref(),
+                    resume_session_id.as_deref(),
+                    resume_profile.as_deref(),
+                    format,
+                )?,
+                CodexTmuxCommand::Launch(CodexTmuxLaunchArgs { profile, format }) => {
+                    run_codex_tmux_command(profile.as_deref(), format)?
+                }
+            },
+            CodexCommand::TmuxPlan(CodexTmuxPlanArgs {
+                profile,
                 start_dir,
                 resume_session_id,
                 resume_profile,
                 format,
-            } => run_codex_tmux_plan(
-                &name,
+            }) => run_codex_tmux_plan(
+                profile.as_deref(),
                 start_dir.as_deref(),
                 resume_session_id.as_deref(),
                 resume_profile.as_deref(),
                 format,
             )?,
-            CodexCommand::TmuxCommand { container, format } => {
-                run_codex_tmux_command(&container, format)?
+            CodexCommand::TmuxCommand(CodexTmuxLaunchArgs { profile, format }) => {
+                run_codex_tmux_command(profile.as_deref(), format)?
             }
-            CodexCommand::ReportParse { format } => run_codex_report_parse(format)?,
-            CodexCommand::RespawnPlan { name, profile_id, profile_containers, format } => {
-                run_codex_respawn_plan(&name, profile_id, profile_containers, format)?
+            CodexCommand::Report { format } => run_codex_report_parse(format)?,
+            CodexCommand::Respawn { profile, profile_containers, format } => {
+                run_codex_respawn_plan(profile.as_deref(), profile_containers, format)?
             }
         },
         Command::Paths { command } => match command {
@@ -33007,19 +33771,15 @@ fn main() -> Result<()> {
             run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
         }
         Command::Warmup { command } => match command {
-            WarmupCommand::AutostartDecision {
-                state_path,
-                autostart_path,
-                disabled_path,
-                home,
-                format,
-            } => run_warmup_autostart_decision(
-                state_path,
-                autostart_path,
-                disabled_path,
-                home,
-                format,
-            )?,
+            WarmupCommand::Decision { state_path, autostart_path, disabled_path, home, format } => {
+                run_warmup_autostart_decision(
+                    state_path,
+                    autostart_path,
+                    disabled_path,
+                    home,
+                    format,
+                )?
+            }
             WarmupCommand::Status { path, home, format } => run_warmup_status(path, home, format)?,
             WarmupCommand::State { command } => match command {
                 WarmupStateCommand::Write { path, state_json } => {
@@ -33030,10 +33790,8 @@ fn main() -> Result<()> {
                 WarmupMarkerCommand::Show { autostart_path, disabled_path, home, format } => {
                     run_warmup_marker_show(autostart_path, disabled_path, home, format)?
                 }
-                WarmupMarkerCommand::WriteAutostart { path } => {
-                    write_warmup_autostart_marker(path)?
-                }
-                WarmupMarkerCommand::SetDisabled { path, disabled } => {
+                WarmupMarkerCommand::Enable { path } => write_warmup_autostart_marker(path)?,
+                WarmupMarkerCommand::Disable { path, disabled } => {
                     set_warmup_disabled_marker(path, &disabled)?
                 }
             },
@@ -33058,6 +33816,16 @@ fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(unix)]
+fn configure_sigpipe() {
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_sigpipe() {}
 
 fn show_help(command: Option<&str>, format: OutputFormat) -> Result<()> {
     let view = match command {
@@ -33441,7 +34209,7 @@ fn run_native_surf_command(
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let explicit_program = bin.is_some() || !settings.surf.bin.trim().is_empty();
     let program = resolve_surf_program(&settings.surf, build, no_build, bin.clone())?;
-    let status = match StdCommand::new(&program).args(args).status() {
+    let status = match StdCommand::new(&program).env("SI_SURF_WRAPPED", "1").args(args).status() {
         Ok(status) => status,
         Err(error)
             if error.kind() == std::io::ErrorKind::NotFound
@@ -33451,6 +34219,7 @@ fn run_native_surf_command(
         {
             let fallback = resolve_surf_build_fallback(&settings.surf)?;
             StdCommand::new(&fallback)
+                .env("SI_SURF_WRAPPED", "1")
                 .args(args)
                 .status()
                 .with_context(|| format!("run surf wrapper command via {}", fallback.display()))?
@@ -33777,8 +34546,10 @@ fn run_fort_wrapper(
     }
 
     match args[0].as_str() {
-        "session-state" => run_fort_session_state_command(args.into_iter().skip(1).collect()),
-        "runtime-agent-state" => {
+        "session" | "sessionstate" | "session-state" => {
+            run_fort_session_state_command(args.into_iter().skip(1).collect())
+        }
+        "runtime" | "runtimeagentstate" | "runtime-agent-state" => {
             run_fort_runtime_agent_state_command(args.into_iter().skip(1).collect())
         }
         "config" => {
@@ -33793,8 +34564,8 @@ fn render_fort_wrapper_help() {
     println!();
     println!("Wrapper commands:");
     println!("  config show|set");
-    println!("  session-state <show|write|clear|bootstrap-view|classify|refresh-outcome|teardown>");
-    println!("  runtime-agent-state <show|write|clear>");
+    println!("  session <show|write|clear|bootstrap|classify|refresh|teardown>");
+    println!("  runtime <show|write|clear>");
     println!();
     println!("Native fort passthrough:");
     println!("  doctor | auth ... | get | set | list | batch-get | run | agent ...");
@@ -33809,7 +34580,7 @@ fn render_fort_wrapper_help() {
     println!("Examples:");
     println!("  si fort doctor");
     println!("  si fort -- --host https://fort.aureuma.ai doctor");
-    println!("  si fort session-state show --path /tmp/session.json");
+    println!("  si fort session show --path /tmp/session.json");
 }
 
 fn strip_wrapper_passthrough_marker(mut args: Vec<String>) -> Vec<String> {
@@ -33838,14 +34609,14 @@ fn parse_fort_parser<T: Parser>(args: Vec<String>) -> T {
 
 fn run_fort_session_state_command(args: Vec<String>) -> Result<()> {
     let FortSessionStateCli { command } =
-        parse_fort_parser(std::iter::once("session-state".to_owned()).chain(args).collect());
+        parse_fort_parser(std::iter::once("session".to_owned()).chain(args).collect());
     match command {
         FortSessionStateCommand::Show { path, format } => show_fort_session_state(path, format),
         FortSessionStateCommand::Write { path, state_json } => {
             write_fort_session_state(path, &state_json)
         }
         FortSessionStateCommand::Clear { path } => clear_fort_session_state(path),
-        FortSessionStateCommand::BootstrapView {
+        FortSessionStateCommand::Bootstrap {
             path,
             profile_id,
             access_token_path,
@@ -33865,7 +34636,7 @@ fn run_fort_session_state_command(args: Vec<String>) -> Result<()> {
         FortSessionStateCommand::Classify { path, now_unix, format } => {
             show_fort_session_state_classification(path, now_unix, format)
         }
-        FortSessionStateCommand::RefreshOutcome {
+        FortSessionStateCommand::Refresh {
             path,
             outcome,
             now_unix,
@@ -33888,7 +34659,7 @@ fn run_fort_session_state_command(args: Vec<String>) -> Result<()> {
 
 fn run_fort_runtime_agent_state_command(args: Vec<String>) -> Result<()> {
     let FortRuntimeAgentStateCli { command } =
-        parse_fort_parser(std::iter::once("runtime-agent-state".to_owned()).chain(args).collect());
+        parse_fort_parser(std::iter::once("runtime".to_owned()).chain(args).collect());
     match command {
         FortRuntimeAgentStateCommand::Show { path, format } => {
             show_fort_runtime_agent_state(path, format)
@@ -33987,7 +34758,7 @@ fn run_native_fort_command(
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let explicit_program = bin.is_some() || settings.fort.bin.is_some();
     let program = resolve_fort_program(&settings.fort, build, no_build, bin.clone())?;
-    let status = match run_fort_program(&program, args, &settings.fort, &home) {
+    let status = match run_fort_program(&program, args, &settings, &home) {
         Ok(status) => status,
         Err(error)
             if error
@@ -33998,7 +34769,7 @@ fn run_native_fort_command(
                 && !explicit_program =>
         {
             let fallback = resolve_fort_build_fallback(&settings.fort)?;
-            run_fort_program(&fallback, args, &settings.fort, &home)
+            run_fort_program(&fallback, args, &settings, &home)
                 .with_context(|| format!("run fort wrapper command via {}", fallback.display()))?
         }
         Err(error) => {
@@ -34016,7 +34787,7 @@ fn run_native_fort_command(
 fn run_fort_program(
     program: &Path,
     args: &[String],
-    settings: &FortSettings,
+    settings: &Settings,
     home: &Path,
 ) -> Result<ExitStatus> {
     let mut command = StdCommand::new(program);
@@ -34033,12 +34804,13 @@ fn run_fort_program(
 fn build_fort_command_args(
     program: &Path,
     args: &[String],
-    settings: &FortSettings,
+    settings: &Settings,
     home: &Path,
 ) -> Result<Vec<String>> {
     let mut command_args = Vec::new();
     let resolved_host = fort_option_value(args, "--host").map(ToOwned::to_owned).or_else(|| {
         settings
+            .fort
             .host
             .as_deref()
             .map(str::trim)
@@ -34052,21 +34824,26 @@ fn build_fort_command_args(
         command_args.push(host.to_owned());
     }
     if !fort_args_include_option(args, "--token-file") {
-        if let Some(token_file) =
-            refresh_fort_bootstrap_access_token(program, args, resolved_host.as_deref(), home)?
-        {
+        if let Some(token_file) = resolve_fort_default_token_file(
+            program,
+            args,
+            resolved_host.as_deref(),
+            settings,
+            home,
+        )? {
             command_args.push("--token-file".to_owned());
             command_args.push(token_file.display().to_string());
-        } else {
-            let bootstrap_token = default_fort_bootstrap_token_path(home);
-            if bootstrap_token.is_file() {
-                command_args.push("--token-file".to_owned());
-                command_args.push(bootstrap_token.display().to_string());
-            }
         }
     }
     command_args.extend(args.iter().cloned());
     Ok(command_args)
+}
+
+#[derive(Clone, Debug)]
+struct FortTokenFileAuth {
+    token_path: PathBuf,
+    refresh_token_path: Option<PathBuf>,
+    refresh_lock_path: PathBuf,
 }
 
 fn fort_args_include_option(args: &[String], flag: &str) -> bool {
@@ -34116,28 +34893,151 @@ fn fort_command_tokens(args: &[String]) -> Vec<&str> {
 
 fn should_auto_refresh_fort_bootstrap_token(args: &[String]) -> bool {
     let tokens = fort_command_tokens(args);
+    if tokens.is_empty() {
+        return false;
+    }
+    if matches!(tokens.first(), Some(&"doctor") | Some(&"version")) {
+        return false;
+    }
     !(tokens.first() == Some(&"auth") && tokens.get(1) == Some(&"session"))
 }
 
-fn refresh_fort_bootstrap_access_token(
+fn resolve_fort_default_token_file(
     program: &Path,
     args: &[String],
     resolved_host: Option<&str>,
+    settings: &Settings,
     home: &Path,
 ) -> Result<Option<PathBuf>> {
-    if !should_auto_refresh_fort_bootstrap_token(args) {
-        return Ok(None);
+    let mut last_error = None;
+    for auth in resolve_fort_default_auths(settings, home) {
+        match refresh_fort_access_token(program, args, resolved_host, &auth) {
+            Ok(Some(path)) => return Ok(Some(path)),
+            Ok(None) => continue,
+            Err(error) => last_error = Some(error),
+        }
     }
+    if let Some(error) = last_error {
+        return Err(error);
+    }
+    Ok(None)
+}
+
+fn resolve_fort_default_auths(settings: &Settings, home: &Path) -> Vec<FortTokenFileAuth> {
+    let mut auths = Vec::new();
+    if let Some(auth) = resolve_fort_env_runtime_auth() {
+        auths.push(auth);
+    }
+    if let Some(auth) = resolve_fort_profile_runtime_auth(settings, home) {
+        auths.push(auth);
+    }
+    if let Some(auth) = resolve_fort_bootstrap_auth(home) {
+        auths.push(auth);
+    }
+    auths
+}
+
+fn resolve_fort_env_runtime_auth() -> Option<FortTokenFileAuth> {
+    let runtime_token_path = std::env::var("FORT_TOKEN_PATH").ok().and_then(|value| {
+        let value = value.trim();
+        (!value.is_empty()).then(|| PathBuf::from(value))
+    });
+    let runtime_refresh_token_path =
+        std::env::var("FORT_REFRESH_TOKEN_PATH").ok().and_then(|value| {
+            let value = value.trim();
+            (!value.is_empty()).then(|| PathBuf::from(value))
+        });
+    if let Some(token_path) = runtime_token_path {
+        let refresh_lock_path = runtime_refresh_token_path
+            .as_deref()
+            .map(default_fort_refresh_lock_path_for)
+            .unwrap_or_else(|| default_fort_refresh_lock_path_for(&token_path));
+        return Some(FortTokenFileAuth {
+            token_path,
+            refresh_token_path: runtime_refresh_token_path,
+            refresh_lock_path,
+        });
+    }
+    None
+}
+
+fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
     let token_path = default_fort_bootstrap_token_path(home);
     let refresh_token_path = default_fort_bootstrap_refresh_token_path(home);
+    if token_path.is_file() || refresh_token_path.is_file() {
+        return Some(FortTokenFileAuth {
+            token_path,
+            refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path.clone()),
+            refresh_lock_path: default_fort_bootstrap_refresh_lock_path(home),
+        });
+    }
+    None
+}
+
+fn resolve_fort_profile_runtime_auth(
+    settings: &Settings,
+    home: &Path,
+) -> Option<FortTokenFileAuth> {
+    let profile_id = resolve_fort_active_profile_id(settings, home)?;
+    let profile_dir =
+        SiPaths::from_settings(home, settings).codex_profiles_dir.join(profile_id).join("fort");
+    let session_path = profile_dir.join("session.json");
+    let default_token_path = profile_dir.join("access.token");
+    let default_refresh_path = profile_dir.join("refresh.token");
+    let state = fs::read_to_string(&session_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<PersistedSessionState>(&raw).ok())
+        .map(|value| value.normalized());
+    let token_path = state
+        .as_ref()
+        .and_then(|value| {
+            let path = value.access_token_path.trim();
+            (!path.is_empty()).then(|| PathBuf::from(path))
+        })
+        .unwrap_or(default_token_path);
+    let refresh_token_path = state
+        .as_ref()
+        .and_then(|value| {
+            let path = value.refresh_token_path.trim();
+            (!path.is_empty()).then(|| PathBuf::from(path))
+        })
+        .unwrap_or(default_refresh_path);
+    if token_path.is_file() || refresh_token_path.is_file() {
+        return Some(FortTokenFileAuth {
+            token_path,
+            refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path),
+            refresh_lock_path: profile_dir.join("runtime.lock"),
+        });
+    }
+    None
+}
+
+fn resolve_fort_active_profile_id(settings: &Settings, home: &Path) -> Option<String> {
+    let _ = home;
+    resolve_codex_active_profile_id(settings)
+}
+
+fn refresh_fort_access_token(
+    program: &Path,
+    args: &[String],
+    resolved_host: Option<&str>,
+    auth: &FortTokenFileAuth,
+) -> Result<Option<PathBuf>> {
+    if !should_auto_refresh_fort_bootstrap_token(args) {
+        return Ok(auth.token_path.is_file().then_some(auth.token_path.clone()));
+    }
+    let token_path = &auth.token_path;
+    let Some(refresh_token_path) = auth.refresh_token_path.as_ref() else {
+        return Ok(token_path.is_file().then_some(token_path.clone()));
+    };
     if !refresh_token_path.is_file() {
-        return Ok(None);
+        return Ok(token_path.is_file().then_some(token_path.clone()));
     }
-    if fort_bootstrap_token_is_fresh(&token_path) {
-        return Ok(Some(token_path));
+    if fort_access_token_is_fresh(token_path) {
+        return Ok(Some(token_path.clone()));
     }
-    with_fort_bootstrap_refresh_lock(&default_fort_bootstrap_refresh_lock_path(home), || {
-        if fort_bootstrap_token_is_fresh(&token_path) {
+    with_fort_bootstrap_refresh_lock(&auth.refresh_lock_path, || {
+        if fort_access_token_is_fresh(token_path) {
             return Ok(());
         }
         let mut refresh_command = StdCommand::new(program);
@@ -34180,13 +35080,13 @@ fn refresh_fort_bootstrap_access_token(
         if access_token.is_empty() {
             anyhow::bail!("fort bootstrap refresh response missing access_token");
         }
-        write_secret_text_file(&token_path, access_token)?;
+        write_secret_text_file(token_path, access_token)?;
         Ok(())
     })?;
-    Ok(Some(token_path))
+    Ok(Some(token_path.clone()))
 }
 
-fn fort_bootstrap_token_is_fresh(path: &Path) -> bool {
+fn fort_access_token_is_fresh(path: &Path) -> bool {
     let Ok(raw) = fs::read_to_string(path) else {
         return false;
     };
@@ -34302,6 +35202,10 @@ fn default_fort_bootstrap_refresh_lock_path(home: &Path) -> PathBuf {
     home.join(".si").join("fort").join("bootstrap").join("admin.refresh.lock")
 }
 
+fn default_fort_refresh_lock_path_for(path: &Path) -> PathBuf {
+    path.with_extension("lock")
+}
+
 fn write_secret_text_file(path: &Path, value: &str) -> Result<()> {
     let parent = path
         .parent()
@@ -34375,6 +35279,279 @@ fn set_toml_bool(table: &mut toml::map::Map<String, toml::Value>, key: &str, val
     if let Some(value) = value {
         table.insert(key.to_owned(), toml::Value::Boolean(value));
     }
+}
+
+fn resolve_codex_active_profile_id(settings: &Settings) -> Option<String> {
+    settings
+        .codex
+        .profiles
+        .active
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            settings
+                .codex
+                .profile
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        })
+}
+
+fn resolve_codex_requested_profile(settings: &Settings, profile: Option<&str>) -> Result<String> {
+    if let Some(profile) = profile.map(str::trim).filter(|value| !value.is_empty()) {
+        if settings.codex.profiles.entries.contains_key(profile) {
+            return Ok(profile.to_owned());
+        }
+        anyhow::bail!(
+            "codex profile {profile:?} is not configured; use `si codex profile add {profile}`"
+        );
+    }
+
+    let Some(active_profile) = resolve_codex_active_profile_id(settings) else {
+        anyhow::bail!(
+            "codex profile is required; configure one with `si codex profile add <profile>` and `si codex profile use <profile>`"
+        )
+    };
+    if settings.codex.profiles.entries.contains_key(active_profile.as_str()) {
+        return Ok(active_profile);
+    }
+    anyhow::bail!(
+        "active codex profile {:?} is not configured under [codex.profiles.entries]",
+        active_profile
+    );
+}
+
+fn default_codex_profile_auth_path(paths: &SiPaths, profile: &str) -> String {
+    paths.codex_profiles_dir.join(profile).join("auth.json").display().to_string()
+}
+
+fn codex_profile_view(
+    paths: &SiPaths,
+    active_profile: Option<&str>,
+    profile_id: &str,
+    entry: &CodexProfileEntry,
+) -> CodexProfileView {
+    CodexProfileView {
+        profile: profile_id.to_owned(),
+        active: active_profile.is_some_and(|value| value == profile_id),
+        name: entry.name.clone(),
+        email: entry.email.clone(),
+        auth_path: entry
+            .auth_path
+            .clone()
+            .or_else(|| Some(default_codex_profile_auth_path(paths, profile_id))),
+        auth_updated: entry.auth_updated.clone(),
+    }
+}
+
+fn show_codex_profile_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let active = resolve_codex_active_profile_id(&settings);
+    let mut profiles = settings
+        .codex
+        .profiles
+        .entries
+        .iter()
+        .map(|(profile_id, entry)| codex_profile_view(&paths, active.as_deref(), profile_id, entry))
+        .collect::<Vec<_>>();
+    profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&profiles)?),
+        OutputFormat::Text => {
+            if profiles.is_empty() {
+                println!("profiles=(none)");
+            } else {
+                for profile in profiles {
+                    println!(
+                        "{}\t{}\t{}\t{}",
+                        profile.profile,
+                        if profile.active { "active" } else { "inactive" },
+                        render_option_text_value(profile.email.as_deref()),
+                        render_option_text_value(profile.auth_path.as_deref())
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn show_codex_profile(
+    profile: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let entry = settings
+        .codex
+        .profiles
+        .entries
+        .get(profile_id.as_str())
+        .cloned()
+        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+    let view = codex_profile_view(
+        &paths,
+        resolve_codex_active_profile_id(&settings).as_deref(),
+        &profile_id,
+        &entry,
+    );
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("profile={}", view.profile);
+            println!("active={}", view.active);
+            println!("name={}", render_option_text_value(view.name.as_deref()));
+            println!("email={}", render_option_text_value(view.email.as_deref()));
+            println!("auth_path={}", render_option_text_value(view.auth_path.as_deref()));
+            println!("auth_updated={}", render_option_text_value(view.auth_updated.as_deref()));
+        }
+    }
+
+    Ok(())
+}
+
+fn add_codex_profile(
+    profile: String,
+    name: Option<String>,
+    email: Option<String>,
+    auth_path: Option<String>,
+    activate: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home, Some(&settings_path))?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = profile.trim();
+    if profile_id.is_empty() {
+        anyhow::bail!("profile is required");
+    }
+
+    let resolved_auth_path = auth_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| default_codex_profile_auth_path(&paths, profile_id));
+    if let Some(parent) = Path::new(&resolved_auth_path).parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create codex profile dir {}", parent.display()))?;
+    }
+
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    let profiles = ensure_toml_table(codex, "profiles")?;
+    let entries = ensure_toml_table(profiles, "entries")?;
+    let entry_table = ensure_toml_table(entries, profile_id)?;
+    set_toml_string(entry_table, "name", name);
+    set_toml_string(entry_table, "email", email);
+    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path));
+    if activate {
+        set_toml_string(profiles, "active", Some(profile_id.to_owned()));
+        set_toml_string(codex, "profile", Some(profile_id.to_owned()));
+    }
+    write_settings_document(&settings_path, &document)?;
+
+    show_codex_profile(Some(profile_id.to_owned()), Some(home), Some(settings_path), format)
+}
+
+fn remove_codex_profile(
+    profile: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    let profile_id = profile.trim();
+    if profile_id.is_empty() {
+        anyhow::bail!("profile is required");
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
+        if let Some(entries) = profiles.get_mut("entries").and_then(toml::Value::as_table_mut) {
+            entries.remove(profile_id);
+            if entries.is_empty() {
+                profiles.remove("entries");
+            }
+        }
+        if profiles.get("active").and_then(toml::Value::as_str) == Some(profile_id) {
+            profiles.remove("active");
+        }
+        if profiles.is_empty() {
+            codex.remove("profiles");
+        }
+    }
+    if codex.get("profile").and_then(toml::Value::as_str) == Some(profile_id) {
+        codex.remove("profile");
+    }
+    if codex.is_empty() {
+        document.remove("codex");
+    }
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn use_codex_profile(
+    profile: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home, Some(&settings_path))?;
+    let profile_id = resolve_codex_requested_profile(&settings, Some(profile.as_str()))?;
+
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    let profiles = ensure_toml_table(codex, "profiles")?;
+    set_toml_string(profiles, "active", Some(profile_id.clone()));
+    set_toml_string(codex, "profile", Some(profile_id));
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn load_codex_runtime_settings(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<(PathBuf, Settings)> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    Ok((home, settings))
+}
+
+fn resolve_codex_runtime_profile(
+    profile: Option<&str>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<String> {
+    let (_, settings) = load_codex_runtime_settings(home, settings_file)?;
+    resolve_codex_requested_profile(&settings, profile)
 }
 
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
@@ -45336,13 +46513,13 @@ fn run_google_youtube_video_get_rating(
     params: Vec<String>,
 ) -> Result<()> {
     let Some(ids) = parse_google_youtube_ids_csv(ids) else {
-        anyhow::bail!("video get-rating requires --id <video-id[,video-id]>");
+        anyhow::bail!("video rating requires --id <video-id[,video-id]>");
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), ids);
     run_google_youtube_oauth_request(
         command,
-        "video get-rating",
+        "video rating",
         "GET",
         "/youtube/v3/videos/getRating",
         params,
@@ -45500,7 +46677,7 @@ fn run_google_youtube_playlist_item_add(
                 video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
             let (Some(playlist_id), Some(video_id)) = (playlist_id, video_id) else {
                 anyhow::bail!(
-                    "playlist-item add requires --playlist-id <id> --video-id <id> or --body <json|@file>"
+                    "items add requires --playlist-id <id> --video-id <id> or --body <json|@file>"
                 );
             };
             let mut payload = serde_json::json!({
@@ -45524,7 +46701,7 @@ fn run_google_youtube_playlist_item_add(
     params.insert("part".to_owned(), part.trim().to_owned());
     run_google_youtube_oauth_request(
         command,
-        "playlist-item add",
+        "items add",
         "POST",
         "/youtube/v3/playlistItems",
         params,
@@ -45540,13 +46717,13 @@ fn run_google_youtube_playlist_item_update(
 ) -> Result<()> {
     let body = parse_google_youtube_body(body)?;
     if body.trim().is_empty() {
-        anyhow::bail!("playlist-item update requires --body <json|@file>");
+        anyhow::bail!("items update requires --body <json|@file>");
     }
     let mut params = parse_google_youtube_params(params)?;
     params.insert("part".to_owned(), part.trim().to_owned());
     run_google_youtube_oauth_request(
         command,
-        "playlist-item update",
+        "items update",
         "PUT",
         "/youtube/v3/playlistItems",
         params,
@@ -45561,13 +46738,13 @@ fn run_google_youtube_playlist_item_remove(
 ) -> Result<()> {
     let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
     let Some(id) = id else {
-        anyhow::bail!("playlist-item remove requires --id <playlist-item-id>");
+        anyhow::bail!("items remove requires --id <playlist-item-id>");
     };
     let mut params = parse_google_youtube_params(params)?;
     params.insert("id".to_owned(), id);
     run_google_youtube_oauth_request(
         command,
-        "playlist-item remove",
+        "items remove",
         "DELETE",
         "/youtube/v3/playlistItems",
         params,
@@ -46049,11 +47226,8 @@ fn run_google_youtube_caption_upload(
     let file = file.ok_or_else(|| anyhow::anyhow!("caption upload requires --file <path>"))?;
     let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
     require_google_youtube_oauth(&runtime, "caption upload")?;
-    let language = if runtime.language_code.trim().is_empty() {
-        "en"
-    } else {
-        runtime.language_code.trim()
-    };
+    let language =
+        if runtime.language_code.trim().is_empty() { "en" } else { runtime.language_code.trim() };
     let metadata = serde_json::json!({
         "snippet": {
             "videoId": video_id,
@@ -47459,7 +48633,7 @@ fn resolve_google_places_field_mask(
         ("autocomplete", "" | "autocomplete-basic") => {
             "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.queryPrediction.text.text"
         }
-        ("search-text", "" | "search-basic") | ("search-nearby", "" | "search-basic") => {
+        ("text", "" | "search-basic") | ("nearby", "" | "search-basic") => {
             "places.id,places.displayName.text,places.formattedAddress,nextPageToken"
         }
         ("details", "" | "details-basic") => "id,displayName.text,formattedAddress,googleMapsUri",
@@ -47772,7 +48946,7 @@ fn run_google_places_search_text(
     }
     let params = parse_google_places_params(params)?;
     let field_mask = resolve_google_places_field_mask(
-        "search-text",
+        "text",
         field_mask,
         field_preset,
         true,
@@ -47895,7 +49069,7 @@ fn run_google_places_search_nearby(
     }
     let params = parse_google_places_params(params)?;
     let field_mask = resolve_google_places_field_mask(
-        "search-nearby",
+        "nearby",
         field_mask,
         field_preset,
         true,
@@ -48162,7 +49336,7 @@ fn run_google_places_doctor(
                 "regionCode": runtime.region_code
             })),
             field_mask: resolve_google_places_field_mask(
-                "search-text",
+                "text",
                 None,
                 "search-basic".to_owned(),
                 true,
@@ -48180,7 +49354,7 @@ fn run_google_places_doctor(
             "error": autocomplete.as_ref().err().cloned().unwrap_or_default(),
         }),
         serde_json::json!({
-            "name": "search-text",
+            "name": "text",
             "ok": search_text.is_ok(),
             "request_id": search_text.as_ref().ok().map(|value| value.request_id.clone()).unwrap_or_default(),
             "status_code": search_text.as_ref().ok().map(|value| value.status_code).unwrap_or_default(),
@@ -60471,7 +61645,7 @@ fn run_github_git_remote_auth(
         println!("{}", serde_json::to_string_pretty(&result)?);
         if result.repos_errored > 0 {
             return Err(anyhow::Error::msg(format!(
-                "remote-auth encountered {} errors",
+                "remote encountered {} errors",
                 result.repos_errored
             )));
         }
@@ -60494,7 +61668,7 @@ fn run_github_git_remote_auth(
     }
     if result.repos_errored > 0 {
         return Err(anyhow::Error::msg(format!(
-            "remote-auth encountered {} errors",
+            "remote encountered {} errors",
             result.repos_errored
         )));
     }
@@ -62653,8 +63827,7 @@ fn dyad_container_spec_view(spec: &si_rs_docker::ContainerSpec) -> DyadContainer
 
 #[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_plan(
-    name: Option<String>,
-    profile_id: Option<String>,
+    profile: Option<String>,
     workspace: PathBuf,
     workdir: Option<String>,
     codex_volume: Option<String>,
@@ -62674,16 +63847,17 @@ fn show_codex_spawn_plan(
     env: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
+    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
-        host_ctx.home_dir = home;
+        host_ctx.home_dir = Some(settings_home);
     }
     if ssh_auth_sock.is_some() {
         host_ctx.ssh_auth_sock = ssh_auth_sock;
     }
     let plan = build_spawn_plan(
         &SpawnRequest {
-            name,
             profile_id,
             image,
             network_name: network,
@@ -62759,8 +63933,7 @@ fn show_codex_spawn_plan(
 
 #[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_spec(
-    name: Option<String>,
-    profile_id: Option<String>,
+    profile: Option<String>,
     workspace: PathBuf,
     workdir: Option<String>,
     codex_volume: Option<String>,
@@ -62783,16 +63956,17 @@ fn show_codex_spawn_spec(
     cmd: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
+    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
-        host_ctx.home_dir = home;
+        host_ctx.home_dir = Some(settings_home);
     }
     if ssh_auth_sock.is_some() {
         host_ctx.ssh_auth_sock = ssh_auth_sock;
     }
     let plan = build_spawn_plan(
         &SpawnRequest {
-            name,
             profile_id,
             image,
             network_name: network,
@@ -62885,8 +64059,7 @@ fn show_codex_spawn_spec(
 
 #[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_run_args(
-    name: Option<String>,
-    profile_id: Option<String>,
+    profile: Option<String>,
     workspace: PathBuf,
     workdir: Option<String>,
     codex_volume: Option<String>,
@@ -62909,16 +64082,17 @@ fn show_codex_spawn_run_args(
     cmd: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
+    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
-        host_ctx.home_dir = home;
+        host_ctx.home_dir = Some(settings_home);
     }
     if ssh_auth_sock.is_some() {
         host_ctx.ssh_auth_sock = ssh_auth_sock;
     }
     let plan = build_spawn_plan(
         &SpawnRequest {
-            name,
             profile_id,
             image,
             network_name: network,
@@ -62950,8 +64124,7 @@ fn show_codex_spawn_run_args(
 
 #[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_start(
-    name: Option<String>,
-    profile_id: Option<String>,
+    profile: Option<String>,
     workspace: PathBuf,
     workdir: Option<String>,
     codex_volume: Option<String>,
@@ -62974,16 +64147,17 @@ fn show_codex_spawn_start(
     cmd: Option<String>,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
+    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
+    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
-        host_ctx.home_dir = home;
+        host_ctx.home_dir = Some(settings_home);
     }
     if ssh_auth_sock.is_some() {
         host_ctx.ssh_auth_sock = ssh_auth_sock;
     }
     let plan = build_spawn_plan(
         &SpawnRequest {
-            name,
             profile_id,
             image,
             network_name: network,
@@ -63017,8 +64191,8 @@ fn show_codex_spawn_start(
     Ok(())
 }
 
-fn show_codex_remove_plan(name: &str, format: OutputFormat) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+fn show_codex_remove_plan(profile_id: &str, format: OutputFormat) -> Result<()> {
+    let artifacts = build_remove_artifacts(profile_id)?;
     let view = CodexRemovePlanView {
         name: artifacts.name,
         container_name: artifacts.container_name,
@@ -63061,12 +64235,13 @@ fn inspect_codex_profile_label(
 }
 
 fn run_codex_remove(
-    name: &str,
+    profile: Option<&str>,
     volumes: bool,
     format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let docker_program_str = docker_program.display().to_string();
@@ -63115,12 +64290,13 @@ fn run_codex_remove(
 }
 
 fn run_codex_container_action(
-    name: &str,
+    profile: Option<&str>,
     action: ContainerAction,
     format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let command = docker_container_action_command(
@@ -63138,7 +64314,7 @@ fn run_codex_container_action(
         OutputFormat::Json => {
             let view = CodexContainerActionView {
                 action: action.as_str().to_owned(),
-                name: name.trim().to_owned(),
+                name: profile_id,
                 container_name: artifacts.container_name,
                 output: rendered,
             };
@@ -63150,12 +64326,13 @@ fn run_codex_container_action(
 }
 
 fn run_codex_container_logs(
-    name: &str,
+    profile: Option<&str>,
     tail: &str,
     follow: bool,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let command = docker_container_logs_command(
@@ -63174,13 +64351,14 @@ fn run_codex_container_logs(
 }
 
 fn run_codex_clone(
-    name: &str,
+    profile: &str,
     repo: &str,
     gh_pat: Option<&str>,
     format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(Some(profile), None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let repo = repo.trim();
     if repo.is_empty() {
         anyhow::bail!("repo is required");
@@ -63204,7 +64382,7 @@ fn run_codex_clone(
     match format {
         OutputFormat::Json => {
             let view = CodexCloneResultView {
-                name: name.trim().to_owned(),
+                name: profile_id,
                 repo: repo.trim().to_owned(),
                 container_name: artifacts.container_name,
                 output: rendered,
@@ -63218,7 +64396,7 @@ fn run_codex_clone(
 
 #[allow(clippy::too_many_arguments)]
 fn run_codex_exec(
-    name: &str,
+    profile: Option<&str>,
     workdir: Option<PathBuf>,
     interactive: bool,
     tty: bool,
@@ -63227,7 +64405,8 @@ fn run_codex_exec(
     docker_bin: Option<PathBuf>,
     command: Vec<String>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     if command.is_empty() {
         anyhow::bail!("exec command is required");
     }
@@ -63310,12 +64489,13 @@ fn run_codex_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<(
 }
 
 fn run_codex_status_read(
-    name: &str,
+    profile: Option<&str>,
     raw: bool,
     format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let command = docker_container_exec_command(
@@ -63359,13 +64539,14 @@ fn run_codex_status_read(
 }
 
 fn run_codex_tmux_plan(
-    name: &str,
+    profile: Option<&str>,
     start_dir: Option<&str>,
     resume_session_id: Option<&str>,
     resume_profile: Option<&str>,
     format: OutputFormat,
 ) -> Result<()> {
-    let artifacts = build_remove_artifacts(name)?;
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
     let plan = build_tmux_plan(
         &artifacts.container_name,
         start_dir.unwrap_or(""),
@@ -63392,13 +64573,15 @@ fn run_codex_tmux_plan(
     Ok(())
 }
 
-fn run_codex_tmux_command(container: &str, format: OutputFormat) -> Result<()> {
-    let container = container.trim();
-    let launch_command = build_tmux_command_for_container(container)?;
-    let view = CodexTmuxCommandView { container: container.to_owned(), launch_command };
+fn run_codex_tmux_command(profile: Option<&str>, format: OutputFormat) -> Result<()> {
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let container = build_remove_artifacts(&profile_id)?.container_name;
+    let launch_command = build_tmux_command_for_container(&container)?;
+    let view = CodexTmuxCommandView { profile_id, container, launch_command };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => {
+            println!("profile_id={}", view.profile_id);
             println!("container={}", view.container);
             println!("launch_command={}", view.launch_command);
         }
@@ -63440,28 +64623,21 @@ fn run_codex_report_parse(format: OutputFormat) -> Result<()> {
 }
 
 fn run_codex_respawn_plan(
-    name: &str,
-    profile_id: Option<String>,
+    profile: Option<&str>,
     profile_containers: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
     let plan = build_respawn_plan(&RespawnRequest {
-        name: name.trim().to_owned(),
         profile_id,
         profile_container_names: profile_containers,
     })?;
-    let view = CodexRespawnPlanView {
-        effective_name: plan.effective_name,
-        profile_id: plan.profile_id,
-        remove_targets: plan.remove_targets,
-    };
+    let view =
+        CodexRespawnPlanView { profile_id: plan.profile_id, remove_targets: plan.remove_targets };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => {
-            println!("effective_name={}", view.effective_name);
-            if let Some(profile_id) = view.profile_id {
-                println!("profile_id={profile_id}");
-            }
+            println!("profile_id={}", view.profile_id);
             for target in view.remove_targets {
                 println!("remove_target={target}");
             }

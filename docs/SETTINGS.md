@@ -38,11 +38,13 @@ Warmup runtime files are also stored under `~/.si`:
 Warmup scheduling is auto-enabled once SI sees cached codex auth for a profile, and it is also triggered by `si login` or explicit `si warmup enable`.
 
 ### `[codex]`
-Defaults for Codex container commands (spawn/respawn/login/run).
-- `codex.image` (string): docker image for `si spawn` (default: `aureuma/si:local`)
+Defaults for `si codex` profile-bound container commands.
+- Every `si codex` container must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
+- `si codex profile add|show|list|use|remove` manages the profile registry in `~/.si/settings.toml`.
+- `codex.image` (string): docker image for `si codex spawn` (default: `aureuma/si:local`)
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind.
-  - If unset, `si spawn` resolves from `--workspace` or current directory.
+  - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `codex.workdir` (string): container working directory
 - `codex.repo` (string): default repo in `Org/Repo` form
@@ -51,7 +53,7 @@ Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
 - `codex.gh_volume` (string): override GitHub config volume name
 - `codex.docker_socket` (bool): mount host Docker socket into codex containers (default: `true`)
-- `codex.profile` (string): default profile ID/email
+- `codex.profile` (string): legacy/default active profile ID. `codex.profiles.active` is preferred and `si codex profile use` keeps them aligned.
 - `codex.detach` (bool): default detach behavior
 - `codex.clean_slate` (bool): default clean-slate behavior
 
@@ -76,7 +78,7 @@ Defaults for one-off `si run` (alias `si exec`).
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
-- `codex.profiles.active` (string): the last profile used for login
+- `codex.profiles.active` (string): active/default profile for `si codex` and profile-scoped Fort runtime auth
 
 ##### `[codex.profiles.entries.<id>]`
 Per-profile entry keyed by profile ID (for example `america`). These entries are updated on successful `si login`.
@@ -97,7 +99,10 @@ CLI and runtime behavior:
 - `si fort config show` reads these values.
 - `si fort config set ...` writes these values to settings.
 - `si fort` injects `--host` from `[fort].host` when no explicit native `--host` flag is passed.
-- `si fort` injects `--token-file ~/.si/fort/bootstrap/admin.token` when that file exists and no explicit native `--token-file` flag is passed.
+- `si fort` prefers runtime file-path auth from `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` when those paths are set in the caller environment, and refreshes that session in place when possible.
+- `si fort` otherwise prefers the active Codex profile Fort session under `paths.codex_profiles_dir/<profile>/fort/` and refreshes that file-backed session in place when possible.
+- `si fort` only falls back to the host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` when no runtime session is available or runtime refresh fails.
+- Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files.
 - Runtime container token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
 ### `[dyad]`
@@ -114,7 +119,7 @@ Defaults for dyad spawns.
 - `dyad.codex_effort_medium` (string)
 - `dyad.codex_effort_high` (string)
 - `dyad.workspace` (string): host path for workspace bind.
-  - If unset, `si dyad spawn` resolves from `--workspace` or current directory.
+  - If unset, `si dyad spawn` commands resolve from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `dyad.configs` (string): host path for configs.
   - If unset, SI prefers a source-tree `configs/` near the selected workspace and otherwise materializes managed defaults under `~/.si/configs`.

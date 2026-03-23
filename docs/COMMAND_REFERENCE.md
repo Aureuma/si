@@ -20,7 +20,7 @@ si <command> <subcommand> --help
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
 | `si dyad` | Manage actor/critic pairs | `spawn`, `list`, `status`, `peek`, `exec`, `logs`, `start`, `stop`, `restart`, `remove`, `cleanup` | [Dyad](./DYAD) |
-| codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
+| `si codex` | Manage profile-bound Codex containers and profile registry state | `profile`, `spawn`, `start`, `stop`, `logs`, `status`, `tmux`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
@@ -42,7 +42,7 @@ si <command> <subcommand> --help
 | Stripe | `si stripe ...` | `si stripe auth status`, `si stripe doctor` | [Stripe](./STRIPE) |
 | Social APIs | `si social ...` | `si social <platform> auth status`, `doctor` | [Social](./SOCIAL) |
 | WorkOS | `si workos ...` | `si workos auth status`, `si workos doctor` | [WorkOS](./WORKOS) |
-| Apple App Store Connect | `si apple appstore ...` | `si apple appstore auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
+| Apple App Store Connect | `si apple store ...` | `si apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
 | Publish flows | `si publish ...` | `si publish catalog list` | [Publish](./PUBLISH) |
 | Provider telemetry | `si providers ...` | `si providers characteristics`, `si providers health` | [Providers](./PROVIDERS) |
 
@@ -52,7 +52,7 @@ si <command> <subcommand> --help
 | --- | --- | --- |
 | `si build image` | Build local runtime image | `si build image` |
 | `si-rs build self` | Build or upgrade `si` binary | `si-rs build self` |
-| `si-rs build self release-assets` | Build all release archives + `checksums.txt` locally | `si-rs build self release-assets --version vX.Y.Z` |
+| `si-rs build self assets` | Build all release archives + `checksums.txt` locally | `si-rs build self assets --version vX.Y.Z` |
 | `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
 | `si analyze` (`si lint`) | Static analysis and validation lanes | `si analyze` |
 | `si docker` | Raw Docker passthrough | `si docker ps` |
@@ -82,7 +82,7 @@ si cloudflare doctor --json
 ### 3. Release maintainer preflight
 
 ```bash
-si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Guardrails
