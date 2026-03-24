@@ -73,7 +73,7 @@ si cloudflare tls set --zone-id <zone_id> --setting min_tls_version --value 1.2
 si cloudflare ssl get --zone-id <zone_id> --setting ssl
 si cloudflare tls cert list --zone-id <zone_id>
 si cloudflare cert list --zone-id <zone_id>
-si cloudflare tls origin-cert list
+si cloudflare tls origin list
 si cloudflare origin list
 
 si cloudflare cache purge --zone-id <zone_id> --everything --force
@@ -82,7 +82,7 @@ si cloudflare cache settings get --zone-id <zone_id> --setting cache_level
 si cloudflare waf list --zone-id <zone_id>
 si cloudflare ruleset list --zone-id <zone_id>
 si cloudflare firewall list --zone-id <zone_id>
-si cloudflare ratelimit list --zone-id <zone_id>
+si cloudflare limits list --zone-id <zone_id>
 ```
 
 ## Workers + Pages
@@ -137,7 +137,7 @@ si cloudflare email settings enable --zone-id <zone_id> --force
 
 si cloudflare token verify
 si cloudflare token list
-si cloudflare token permission-groups
+si cloudflare token permissions
 ```
 
 ## Analytics + Logs + Reports

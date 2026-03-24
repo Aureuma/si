@@ -56,8 +56,8 @@ si openai key list --json
 si openai key create --name "ci-automation" --json
 si openai key delete key_xxx --force --json
 
-si openai project api-key list --project-id proj_xxx --json
-si openai project service-account list --project-id proj_xxx --json
+si openai project keys list --project-id proj_xxx --json
+si openai project accounts list --project-id proj_xxx --json
 ```
 
 ## Usage and monitoring

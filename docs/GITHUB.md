@@ -87,7 +87,7 @@ si github git credential get
 When you need explicit PAT-authenticated remotes (for CI/dev environments that do not use git credential helpers), use:
 
 ```bash
-si github git remote-auth \
+si github git remote \
   --root ~/Development \
   --owner Aureuma \
   --vault-key GH_PAT_AUREUMA_VANGUARDA
@@ -109,12 +109,12 @@ Useful flags:
 To clone a new repository directly with PAT URL auth sourced from vault:
 
 ```bash
-si github git clone-auth Aureuma/GitHubProj \
+si github git clone Aureuma/GitHubProj \
   --root ~/Development \
   --vault-key GH_PAT_AUREUMA_VANGUARDA
 ```
 
-`clone-auth` supports either `owner/repo` or full GitHub URL input, rewrites both fetch/push URLs with PAT auth, and sets upstream tracking for plain `git push` / `git pull`.
+`clone` supports either `owner/repo` or full GitHub URL input, rewrites both fetch/push URLs with PAT auth, and sets upstream tracking for plain `git push` / `git pull`.
 
 ### Troubleshooting Git App Access
 
@@ -192,25 +192,25 @@ si github project fields Aureuma/7
 si github project items Aureuma/7 --include-archived
 
 # add an existing issue to project
-si github project item-add Aureuma/7 --repo Aureuma/GHPSandbox --issue 123
+si github project add Aureuma/7 --repo Aureuma/GHPSandbox --issue 123
 
 # update project item status by field/option names
-si github project item-set Aureuma/7 PVTI_xxx --field Status --single-select "In Progress"
+si github project set Aureuma/7 PVTI_xxx --field Status --single-select "In Progress"
 
 # update scalar field values
-si github project item-set Aureuma/7 PVTI_xxx --field Estimate --number 3
-si github project item-set Aureuma/7 PVTI_xxx --field DueDate --date 2026-02-28
+si github project set Aureuma/7 PVTI_xxx --field Estimate --number 3
+si github project set Aureuma/7 PVTI_xxx --field DueDate --date 2026-02-28
 
 # clear/archive/delete item state
-si github project item-clear Aureuma/7 PVTI_xxx --field Estimate
-si github project item-archive Aureuma/7 PVTI_xxx
-si github project item-unarchive Aureuma/7 PVTI_xxx
-si github project item-delete Aureuma/7 PVTI_xxx
+si github project clear Aureuma/7 PVTI_xxx --field Estimate
+si github project archive Aureuma/7 PVTI_xxx
+si github project unarchive Aureuma/7 PVTI_xxx
+si github project delete Aureuma/7 PVTI_xxx
 ```
 
 Notes:
 
-- `item-set` accepts exactly one value update at a time: `--text`, `--number`, `--date`, `--single-select-option-id`, `--single-select`, `--iteration-id`, or `--iteration`.
+- `set` accepts exactly one value update at a time: `--text`, `--number`, `--date`, `--single-select-option-id`, `--single-select`, `--iteration-id`, or `--iteration`.
 - `--single-select` and `--iteration` resolve IDs from project field metadata automatically.
 - OAuth/PAT auth for Projects v2 needs project permissions (`read:project` for read/list/get/fields/items and `project` write scope for item mutations). Issue-linked operations also need repo issue permissions on the target repository.
 

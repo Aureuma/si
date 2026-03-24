@@ -5,6 +5,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "${ROOT}"
 BIN="${ROOT}/.artifacts/cargo-target/release/si-rs"
 if [[ -x "${BIN}" ]]; then
-  exec "${BIN}" build npm publish-from-vault "$@"
+  exec "${BIN}" build npm vault "$@"
 fi
-exec cargo run --locked --release -q -p si-rs-cli -- build npm publish-from-vault "$@"
+exec cargo run --locked --release -q -p si-rs-cli -- build npm vault "$@"

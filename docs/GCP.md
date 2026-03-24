@@ -30,10 +30,10 @@ si gcp service list --project <project_id> --filter state:ENABLED
 ## IAM
 
 ```bash
-si gcp iam service-account list --project <project_id>
-si gcp iam service-account get <email> --project <project_id>
-si gcp iam service-account create --project <project_id> --account-id app-bot --display-name "App Bot"
-si gcp iam service-account-key list --project <project_id> --service-account <email>
+si gcp iam account list --project <project_id>
+si gcp iam account get <email> --project <project_id>
+si gcp iam account create --project <project_id> --account-id app-bot --display-name "App Bot"
+si gcp iam keys list --project <project_id> --service-account <email>
 si gcp iam policy get --project <project_id>
 si gcp iam role list
 ```
@@ -41,11 +41,11 @@ si gcp iam role list
 ## API keys
 
 ```bash
-si gcp apikey list --project <project_id>
-si gcp apikey get <key_id> --project <project_id>
-si gcp apikey create --project <project_id> --display-name "gemini-client"
-si gcp apikey update <key_id> --project <project_id> --display-name "gemini-client-v2"
-si gcp apikey delete <key_id> --project <project_id> --force
+si gcp keys list --project <project_id>
+si gcp keys get <key_id> --project <project_id>
+si gcp keys create --project <project_id> --display-name "gemini-client"
+si gcp keys update <key_id> --project <project_id> --display-name "gemini-client-v2"
+si gcp keys delete <key_id> --project <project_id> --force
 ```
 
 ## Gemini text and embeddings
@@ -55,8 +55,8 @@ si gcp gemini models list --api-key $GEMINI_API_KEY
 si gcp gemini models get gemini-2.5-flash --api-key $GEMINI_API_KEY
 si gcp gemini generate --api-key $GEMINI_API_KEY --model gemini-2.5-flash --prompt "Draft release notes"
 si gcp gemini embed --api-key $GEMINI_API_KEY --model text-embedding-004 --text "search phrase"
-si gcp gemini count-tokens --api-key $GEMINI_API_KEY --model gemini-2.5-flash --text "hello world"
-si gcp gemini batch-embed --api-key $GEMINI_API_KEY --model text-embedding-004 --text "one" --text "two"
+si gcp gemini count --api-key $GEMINI_API_KEY --model gemini-2.5-flash --text "hello world"
+si gcp gemini batch --api-key $GEMINI_API_KEY --model text-embedding-004 --text "one" --text "two"
 ```
 
 ## Gemini image generation

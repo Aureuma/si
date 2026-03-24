@@ -38,108 +38,10 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "spawn",
+        name: "codex",
         aliases: &[],
         category: CommandCategory::Codex,
-        summary: "Start or attach to a codex runtime container.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "respawn",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Recreate a codex runtime container with the current profile context.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "list",
-        aliases: &["ps"],
-        category: CommandCategory::Codex,
-        summary: "List codex runtimes and their profile bindings.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "status",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Show codex profile or runtime status.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "report",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Collect a codex runtime report.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "login",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Authenticate a codex profile.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "logout",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Clear codex profile auth state.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "swap",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Swap host codex auth to a configured profile.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "exec",
-        aliases: &["run"],
-        category: CommandCategory::Codex,
-        summary: "Execute commands in an existing or one-off codex runtime.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "logs",
-        aliases: &["tail"],
-        category: CommandCategory::Codex,
-        summary: "Read codex runtime logs.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "clone",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Clone a repository into a codex runtime.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "remove",
-        aliases: &["rm", "delete"],
-        category: CommandCategory::Codex,
-        summary: "Remove codex runtimes and optional volumes.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "stop",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Stop a codex runtime.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "start",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Start a codex runtime.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "warmup",
-        aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Manage codex warmup scheduling and reconciliation.",
+        summary: "Manage profile-bound Codex containers and profile registry state.",
         hidden: false,
     },
     CommandSpec {
@@ -388,7 +290,8 @@ mod tests {
     fn aliases_resolve_to_primary_command() {
         assert_eq!(find_root_command("cf"), find_root_command("cloudflare"));
         assert_eq!(find_root_command("release").unwrap().name, "releasemind");
-        assert_eq!(find_root_command("rm").unwrap().name, "remove");
+        assert_eq!(find_root_command("creds").unwrap().name, "vault");
+        assert_eq!(find_root_command("rc").unwrap().name, "remote-control");
         assert_eq!(find_root_command("github").unwrap().name, "github");
     }
 }

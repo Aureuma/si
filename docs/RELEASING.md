@@ -67,7 +67,7 @@ Update release version metadata:
 ./tools/test-install-si-npm.sh
 ./tools/test-install-si-homebrew.sh
 ./tools/test-install-si-docker.sh
-./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml
 git commit -m "Bump version to vX.Y.Z"

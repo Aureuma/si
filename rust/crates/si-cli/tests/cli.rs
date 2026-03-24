@@ -37,6 +37,56 @@ fn write_codex_profile_settings(home: &Path, active_profile: &str, profiles: &[&
     fs::write(settings_dir.join("settings.toml"), source).expect("write codex settings");
 }
 
+fn write_named_codex_profile_settings(
+    home: &Path,
+    active_profile: &str,
+    profiles: &[(&str, &str, &str)],
+) {
+    let settings_dir = home.join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let mut source = String::from("schema_version = 1\n[codex]\n");
+    source.push_str(&format!("profile = {:?}\n\n", active_profile));
+    source.push_str("[codex.profiles]\n");
+    source.push_str(&format!("active = {:?}\n\n", active_profile));
+    for (profile, name, email) in profiles {
+        source.push_str(&format!("[codex.profiles.entries.{profile}]\n"));
+        source.push_str(&format!("name = \"{}\"\n", name));
+        source.push_str(&format!("email = \"{}\"\n", email));
+        source.push_str(&format!(
+            "auth_path = {:?}\n\n",
+            home.join(".si").join("codex").join("profiles").join(profile).join("auth.json")
+        ));
+    }
+    fs::write(settings_dir.join("settings.toml"), source).expect("write named codex settings");
+}
+
+fn fake_jwt(payload: &Value) -> String {
+    format!(
+        "header.{}.signature",
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(payload).expect("serialize jwt payload"))
+    )
+}
+
+fn write_codex_auth(home: &Path, profile: &str, email: &str) {
+    let profile_dir = home.join(".si").join("codex").join("profiles").join(profile);
+    fs::create_dir_all(&profile_dir).expect("mkdir codex profile dir");
+    let auth = serde_json::json!({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "access_token": fake_jwt(&serde_json::json!({
+                "https://api.openai.com/profile": {
+                    "email": email
+                }
+            }))
+        }
+    });
+    fs::write(
+        profile_dir.join("auth.json"),
+        serde_json::to_string_pretty(&auth).expect("serialize auth"),
+    )
+    .expect("write auth");
+}
+
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -3755,13 +3805,13 @@ default_package_name = "com.acme.app"
 
 #[test]
 fn version_matches_go_repo_version() {
-    cargo_bin().arg("version").assert().success().stdout("v0.55.0\n");
+    cargo_bin().arg("version").assert().success().stdout("v0.55.2\n");
 }
 
 #[test]
 fn version_flags_render_root_version() {
-    cargo_bin().arg("--version").assert().success().stdout("v0.55.0\n");
-    cargo_bin().arg("-v").assert().success().stdout("v0.55.0\n");
+    cargo_bin().arg("--version").assert().success().stdout("v0.55.2\n");
+    cargo_bin().arg("-v").assert().success().stdout("v0.55.2\n");
 }
 
 #[test]
@@ -4007,7 +4057,8 @@ fn help_json_lists_known_root_commands() {
     let commands = parsed["commands"].as_array().expect("commands array should be present");
 
     assert!(commands.iter().any(|entry| entry["name"] == "github"));
-    assert!(commands.iter().any(|entry| entry["name"] == "spawn"));
+    assert!(commands.iter().any(|entry| entry["name"] == "codex"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "spawn"));
     assert!(!commands.iter().any(|entry| entry["name"] == "__fort-runtime-agent"));
 }
 
@@ -16810,6 +16861,324 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
     let shown: Value = serde_json::from_slice(&show_output).expect("json output");
     assert_eq!(shown["profile"], "einsteina");
     assert_eq!(shown["active"], true);
+}
+
+#[test]
+fn codex_profile_list_text_renders_table_without_auth_paths() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "darmstada",
+        &[
+            ("america", "🗽 America", "maps-android.5t@icloud.com"),
+            ("darmstada", "🐦‍🔥 Darmstada", "bacon.trace.5e@icloud.com"),
+        ],
+    );
+    write_codex_auth(home.path(), "darmstada", "bacon.trace.5e@icloud.com");
+    write_codex_auth(home.path(), "america", "wrong@example.com");
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "list", "--home"])
+        .arg(home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output).expect("utf8 output");
+    assert!(rendered.contains("Profile"));
+    assert!(rendered.contains("Name"));
+    assert!(rendered.contains("Email"));
+    assert!(rendered.contains("america"));
+    assert!(rendered.contains("🗽 America"));
+    assert!(rendered.contains("🐦‍🔥 Darmstada"));
+    assert!(rendered.contains("Logged-In"));
+    assert!(rendered.contains("Missing"));
+    assert!(!rendered.contains("auth.json"));
+    assert!(!rendered.contains("auth_path"));
+}
+
+#[test]
+fn codex_profile_show_text_resolves_display_name_query() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "darmstada",
+        &[
+            ("america", "🗽 America", "maps-android.5t@icloud.com"),
+            ("darmstada", "🐦‍🔥 Darmstada", "bacon.trace.5e@icloud.com"),
+        ],
+    );
+    write_codex_auth(home.path(), "america", "wrong@example.com");
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "show", "America", "--home"])
+        .arg(home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output).expect("utf8 output");
+    assert!(rendered.contains("america"));
+    assert!(rendered.contains("🗽 America"));
+    assert!(rendered.contains("maps-android.5t@icloud.com"));
+    assert!(rendered.contains("Missing"));
+    assert!(!rendered.contains("auth_path"));
+}
+
+#[test]
+fn codex_profile_use_accepts_fuzzy_profile_query() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "america",
+        &[
+            ("america", "🗽 America", "maps-android.5t@icloud.com"),
+            ("cadma", "💜 Cadma", "calypso.bard-05@icloud.com"),
+        ],
+    );
+
+    cargo_bin()
+        .args(["codex", "profile", "use", "cad", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let show_output = cargo_bin()
+        .args(["codex", "profile", "show", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&show_output).expect("json output");
+    assert_eq!(shown["profile"], "cadma");
+    assert_eq!(shown["active"], true);
+}
+
+#[test]
+fn codex_profile_login_runs_codex_and_caches_auth_json() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("codex-args.txt");
+    let env_file = bin_dir.path().join("codex-env.txt");
+    let codex_path = bin_dir.path().join("codex");
+    let token = fake_jwt(&serde_json::json!({
+        "https://api.openai.com/profile": {
+            "email": "ferma@example.com"
+        }
+    }));
+    let auth_json = serde_json::json!({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "access_token": token.clone()
+        }
+    })
+    .to_string();
+    write_executable_shell_script(
+        &codex_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" > {args_file}
+printf 'CODEX_HOME=%s\n' "${{CODEX_HOME:-}}" > {env_file}
+if [ "${{1:-}}" = "login" ]; then
+  mkdir -p "${{CODEX_HOME}}"
+  printf '%s\n' '{auth_json}' > "${{CODEX_HOME}}/auth.json"
+  exit 0
+fi
+echo "unexpected args: $*" >&2
+exit 2
+"#,
+            args_file = shell_escape_for_test(&args_file),
+            env_file = shell_escape_for_test(&env_file),
+            auth_json = auth_json,
+        ),
+    );
+
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path_env)
+        .args(["codex", "profile", "login", "ferma", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(shown["profile"], "ferma");
+    assert_eq!(shown["active"], true);
+    assert_eq!(shown["state"], "Logged-In");
+    assert_eq!(
+        shown["auth_path"],
+        home.path().join(".si/codex/profiles/ferma/auth.json").display().to_string()
+    );
+    assert!(shown["auth_updated"].as_str().expect("auth_updated string").starts_with("20"));
+
+    let cached_auth = home.path().join(".si/codex/profiles/ferma/auth.json");
+    let cached_auth_json: Value =
+        serde_json::from_str(&fs::read_to_string(&cached_auth).expect("read cached auth"))
+            .expect("parse cached auth");
+    assert_eq!(cached_auth_json["tokens"]["access_token"].as_str().expect("access token"), token);
+    let args = fs::read_to_string(&args_file).expect("read args");
+    assert_eq!(args, "login\n--device-auth\n");
+    let env = fs::read_to_string(&env_file).expect("read env");
+    assert_eq!(
+        env,
+        format!("CODEX_HOME={}\n", home.path().join(".si/codex/profiles/ferma").display())
+    );
+
+    let settings =
+        fs::read_to_string(home.path().join(".si/settings.toml")).expect("read settings");
+    assert!(settings.contains("auth_updated = "));
+    assert!(settings.contains("auth_path = "));
+}
+
+#[test]
+fn codex_profile_login_rejects_wrong_account_for_profile() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "ferma",
+        &[("ferma", "🏰 Ferma", "lily-gusts.1e@icloud.com")],
+    );
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let codex_path = bin_dir.path().join("codex");
+    let wrong_token = fake_jwt(&serde_json::json!({
+        "https://api.openai.com/profile": {
+            "email": "wrong@example.com"
+        }
+    }));
+    let wrong_auth_json = serde_json::json!({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "access_token": wrong_token
+        }
+    })
+    .to_string();
+    write_executable_shell_script(
+        &codex_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+if [ "${{1:-}}" = "login" ]; then
+  mkdir -p "${{CODEX_HOME}}"
+  printf '%s\n' '{wrong_auth_json}' > "${{CODEX_HOME}}/auth.json"
+  exit 0
+fi
+exit 2
+"#,
+            wrong_auth_json = wrong_auth_json,
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path_env)
+        .args(["codex", "profile", "login", "ferma", "--home"])
+        .arg(home.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("expected \"lily-gusts.1e@icloud.com\""));
+    assert!(!home.path().join(".si/codex/profiles/ferma/auth.json").exists());
+}
+
+#[test]
+fn codex_profile_swap_resets_host_codex_home_and_uses_selected_profile() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "cadma",
+        &[
+            ("america", "🗽 America", "maps-android.5t@icloud.com"),
+            ("cadma", "💟 Cadma", "calypso.bard-05@icloud.com"),
+        ],
+    );
+    write_codex_auth(home.path(), "america", "maps-android.5t@icloud.com");
+
+    let host_codex_home = home.path().join(".codex");
+    fs::create_dir_all(host_codex_home.join("tmp")).expect("mkdir host codex tmp");
+    fs::write(host_codex_home.join("config.toml"), "model = \"gpt-5\"\n").expect("write config");
+    fs::write(host_codex_home.join("auth.json"), "{\"stale\":true}\n").expect("write stale auth");
+    fs::write(host_codex_home.join("models_cache.json"), "{\"stale\":true}\n")
+        .expect("write models cache");
+    fs::write(host_codex_home.join("tmp").join("junk.txt"), "junk\n").expect("write junk");
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "swap", "america", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(shown["profile"], "america");
+    assert_eq!(shown["state"], "Logged-In");
+    assert_eq!(shown["active"], true);
+
+    let profile_auth = fs::read_to_string(home.path().join(".si/codex/profiles/america/auth.json"))
+        .expect("read profile auth");
+    let host_auth = fs::read_to_string(host_codex_home.join("auth.json")).expect("read host auth");
+    assert_eq!(host_auth, profile_auth);
+    assert_eq!(
+        fs::read_to_string(host_codex_home.join("config.toml")).expect("read config"),
+        "model = \"gpt-5\"\n"
+    );
+    assert!(!host_codex_home.join("models_cache.json").exists());
+    assert!(!host_codex_home.join("tmp").exists());
+
+    let settings =
+        fs::read_to_string(home.path().join(".si/settings.toml")).expect("read settings");
+    assert!(settings.contains("active = \"america\""));
+    assert!(settings.contains("profile = \"america\""));
+}
+
+#[test]
+fn codex_profile_swap_requires_logged_in_profile() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "cadma",
+        &[("cadma", "💟 Cadma", "calypso.bard-05@icloud.com")],
+    );
+    let host_codex_home = home.path().join(".codex");
+    fs::create_dir_all(&host_codex_home).expect("mkdir host codex home");
+    fs::write(host_codex_home.join("config.toml"), "model = \"gpt-5\"\n").expect("write config");
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "swap", "cadma", "--home"])
+        .arg(home.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("is not Logged-In"));
+    assert_eq!(
+        fs::read_to_string(host_codex_home.join("config.toml")).expect("read config"),
+        "model = \"gpt-5\"\n"
+    );
+    assert!(!host_codex_home.join("auth.json").exists());
 }
 
 #[test]

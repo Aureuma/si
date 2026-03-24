@@ -20,7 +20,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 ## What si covers
 
 - Dyads: actor + critic paired containers, closed-loop execution, status/log/exec workflows.
-- Codex containers: profile-scoped container lifecycle (`spawn`, `status`, `run`, `report`, `clone`, `remove`, `warmup`).
+- Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `exec`, `report`, `clone`, `remove`, `respawn`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider bridges: Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, Social, WorkOS, AWS, GCP, OpenAI, OCI.
 - Orbitals: namespaced integration catalog + install/enable/doctor lifecycle (`si orbits ...`).
@@ -79,7 +79,7 @@ cargo build --release --locked --bin si-rs
 Dyad lifecycle:
 
 ```bash
-./si dyad spawn <name> --profile <profile>
+./si dyad spawn start --name <name> --workspace "$PWD"
 ./si dyad status <name>
 ./si dyad logs <name>
 ./si dyad exec --member actor <name> -- bash
@@ -109,7 +109,7 @@ Mintlify docs tooling:
 
 ## Command map
 
-- `si dyad ...` / codex lifecycle commands: agent runtime operations.
+- `si dyad ...` / `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
 - `si providers ...`: provider characteristics + health surfaces.
 - `si orbits ...`: Orbitals and integration onboarding.
@@ -181,7 +181,7 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:
-- `./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
+- `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
 - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 ## License

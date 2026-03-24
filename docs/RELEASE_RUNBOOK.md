@@ -48,7 +48,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 ## 5.5 Local release-assets preflight
 
 - Run:
-  - `./.artifacts/cargo-target/release/si-rs build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
+  - `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
   - `tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight`
 - Confirms archive packaging/checksum generation before publishing a GitHub Release.
 
@@ -68,7 +68,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
   - `si build image`
   - `docker run --rm aureuma/si:local si version`
 - Dyad smoke:
-  - `HOME=/home/<user> si dyad spawn <name> --skip-auth`
+  - `HOME=/home/<user> si dyad spawn start --name <name> --workspace "$PWD"`
   - `HOME=/home/<user> si dyad status <name>`
   - `HOME=/home/<user> si dyad remove <name>`
 - Release assets:

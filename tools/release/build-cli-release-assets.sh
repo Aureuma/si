@@ -11,6 +11,6 @@ if si_artifact_is_fresh "${BIN}" \
   "${ROOT}/rust" \
   "${ROOT}/tools/release/build-cli-release-assets.sh" \
   "${ROOT}/tools/lib/artifact-fresh.sh"; then
-  exec "${BIN}" build self release-assets "$@"
+  exec "${BIN}" build self assets "$@"
 fi
-exec cargo run --locked --release -q -p si-rs-cli -- build self release-assets "$@"
+exec cargo run --locked --release -q -p si-rs-cli -- build self assets "$@"

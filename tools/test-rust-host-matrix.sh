@@ -154,7 +154,7 @@ path.write_text(path.read_text().replace("__STATE__", state))
 PY
   chmod +x "${docker_bin}"
 
-  cargo run --quiet --bin si-rs -- dyad spawn-start \
+  cargo run --quiet --bin si-rs -- dyad spawn start \
     --name alpha \
     --workspace "${workspace}" \
     --configs "${configs}" \

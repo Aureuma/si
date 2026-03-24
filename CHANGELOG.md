@@ -12,6 +12,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.55.2] - 2026-03-24
+### Changed
+- Changed the main operational CLI surface to prefer single-word command names such as `spawnplan`, `releaseassets`, `statusread`, and `itemadd`, while keeping the previous hyphenated forms as compatibility aliases.
+- Changed repo-owned release helpers, installer wrappers, host-matrix scripts, and docs to use the normalized single-word command names by default.
+
+### Fixed
+- Fixed root `si -v` and `si --version` handling so the installed binary reports the current release version directly.
+
+## [v0.55.0] - 2026-03-21
+### Added
+- Added broad Rust-native parity coverage for provider, codex, dyad, fort, installer, release, and host-matrix workflows across the SI CLI surface.
+
+### Changed
+- Changed SI to a Rust-only workspace for build, test, runtime, wrapper, and release flows, with `si-rs` now serving as the primary shipped CLI binary.
+- Changed installer, npm, Homebrew, release-asset, and image-build paths to use the Rust-owned self-build and packaging surfaces by default.
+- Changed Fort, Codex, and Dyad runtime coordination to use the Rust-owned planning, session, and file-backed auth flows throughout the standard operator path.
+
+### Fixed
+- Fixed stable-image compatibility for SI runtime tools and agents.
+- Fixed remaining host-wrapper execution and sibling-wrapper fallback issues after the Rust cutover.
+- Fixed Google YouTube CLI flag collisions in the caption upload and support categories command paths.
+
 ## [v0.54.0] - 2026-03-14
 ### Added
 - Added a profile-scoped Fort runtime refresher that owns steady-state access-token rotation for spawned SI runtimes.

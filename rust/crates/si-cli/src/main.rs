@@ -18,6 +18,9 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use comfy_table::modifiers::UTF8_ROUND_CORNERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Attribute, Cell, Color, ColumnConstraint, ContentArrangement, Table, Width};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use regex::Regex;
@@ -209,10 +212,11 @@ use si_rs_warmup::{
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt;
 use std::fs;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -15628,7 +15632,7 @@ struct CodexProfileShowArgs {
     home: Option<PathBuf>,
     #[arg(long)]
     settings_file: Option<PathBuf>,
-    #[arg(long, default_value = "json")]
+    #[arg(long, default_value = "text")]
     format: OutputFormat,
 }
 
@@ -15653,7 +15657,7 @@ struct CodexProfileAddArgs {
 
 #[derive(Debug, Args)]
 struct CodexProfileRemoveArgs {
-    profile: String,
+    profile: Option<String>,
     #[arg(long)]
     home: Option<PathBuf>,
     #[arg(long)]
@@ -15662,11 +15666,35 @@ struct CodexProfileRemoveArgs {
 
 #[derive(Debug, Args)]
 struct CodexProfileUseArgs {
-    profile: String,
+    profile: Option<String>,
     #[arg(long)]
     home: Option<PathBuf>,
     #[arg(long)]
     settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileLoginArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    codex_bin: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexProfileSwapArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
 }
 
 #[derive(Debug, Subcommand)]
@@ -15676,6 +15704,8 @@ enum CodexProfileCommand {
     Add(CodexProfileAddArgs),
     Remove(CodexProfileRemoveArgs),
     Use(CodexProfileUseArgs),
+    Login(CodexProfileLoginArgs),
+    Swap(CodexProfileSwapArgs),
 }
 
 #[derive(Debug, Args)]
@@ -16909,14 +16939,21 @@ struct DyadLabelView {
     value: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct CodexProfileView {
     profile: String,
     active: bool,
+    state: String,
     name: Option<String>,
     email: Option<String>,
     auth_path: Option<String>,
     auth_updated: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum CodexProfileSelectionMode {
+    PreferActiveOnMissing,
+    PromptOnMissing,
 }
 
 #[derive(Debug, Serialize)]
@@ -33287,6 +33324,19 @@ fn main() -> Result<()> {
                 CodexProfileCommand::Use(CodexProfileUseArgs { profile, home, settings_file }) => {
                     use_codex_profile(profile, home, settings_file)?
                 }
+                CodexProfileCommand::Login(CodexProfileLoginArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    codex_bin,
+                    format,
+                }) => login_codex_profile(profile, home, settings_file, codex_bin, format)?,
+                CodexProfileCommand::Swap(CodexProfileSwapArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    format,
+                }) => swap_codex_profile(profile, home, settings_file, format)?,
             },
             CodexCommand::Spawn { command } => match command {
                 CodexSpawnCommand::Plan(CodexSpawnPlanArgs {
@@ -35301,32 +35351,345 @@ fn resolve_codex_active_profile_id(settings: &Settings) -> Option<String> {
         })
 }
 
-fn resolve_codex_requested_profile(settings: &Settings, profile: Option<&str>) -> Result<String> {
-    if let Some(profile) = profile.map(str::trim).filter(|value| !value.is_empty()) {
-        if settings.codex.profiles.entries.contains_key(profile) {
-            return Ok(profile.to_owned());
+fn codex_profile_display_name(profile: &CodexProfileView) -> &str {
+    profile
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(profile.profile.as_str())
+}
+
+fn codex_profile_matches_exact(profile: &CodexProfileView, query: &str) -> bool {
+    let lowered = query.trim().to_lowercase();
+    if lowered.is_empty() {
+        return false;
+    }
+    profile.profile.eq_ignore_ascii_case(&lowered)
+        || codex_profile_display_name(profile).to_lowercase() == lowered
+        || profile
+            .email
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_some_and(|value| value.to_lowercase() == lowered)
+}
+
+fn codex_profile_matches_fuzzy(profile: &CodexProfileView, query: &str) -> bool {
+    let lowered = query.trim().to_lowercase();
+    if lowered.is_empty() {
+        return false;
+    }
+    profile.profile.to_lowercase().contains(&lowered)
+        || codex_profile_display_name(profile).to_lowercase().contains(&lowered)
+        || profile
+            .email
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_some_and(|value| value.to_lowercase().contains(&lowered))
+}
+
+fn find_codex_profile_candidates(profiles: &[CodexProfileView], query: &str) -> Vec<usize> {
+    let exact = profiles
+        .iter()
+        .enumerate()
+        .filter_map(|(index, profile)| codex_profile_matches_exact(profile, query).then_some(index))
+        .collect::<Vec<_>>();
+    if !exact.is_empty() {
+        return exact;
+    }
+    profiles
+        .iter()
+        .enumerate()
+        .filter_map(|(index, profile)| codex_profile_matches_fuzzy(profile, query).then_some(index))
+        .collect()
+}
+
+fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_truncation_indicator("…");
+    if let Some(width) = env::var("COLUMNS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .filter(|width| *width > 20)
+    {
+        table.set_width(width);
+    }
+
+    let mut header = Vec::new();
+    if include_index {
+        header.push(Cell::new("#").fg(Color::DarkGrey).add_attribute(Attribute::Bold));
+    }
+    header.push(Cell::new("Profile").fg(Color::Cyan).add_attribute(Attribute::Bold));
+    header.push(Cell::new("Name").fg(Color::Magenta).add_attribute(Attribute::Bold));
+    header.push(Cell::new("Email").fg(Color::Blue).add_attribute(Attribute::Bold));
+    header.push(Cell::new("State").fg(Color::Green).add_attribute(Attribute::Bold));
+    table.set_header(header);
+    if include_index {
+        table.set_constraints(vec![
+            ColumnConstraint::Absolute(Width::Fixed(3)),
+            ColumnConstraint::UpperBoundary(Width::Fixed(12)),
+            ColumnConstraint::UpperBoundary(Width::Fixed(16)),
+            ColumnConstraint::UpperBoundary(Width::Fixed(30)),
+            ColumnConstraint::Absolute(Width::Fixed(12)),
+        ]);
+    } else {
+        table.set_constraints(vec![
+            ColumnConstraint::UpperBoundary(Width::Fixed(12)),
+            ColumnConstraint::UpperBoundary(Width::Fixed(16)),
+            ColumnConstraint::UpperBoundary(Width::Fixed(30)),
+            ColumnConstraint::Absolute(Width::Fixed(12)),
+        ]);
+    }
+
+    for (index, profile) in profiles.iter().enumerate() {
+        let mut row = Vec::new();
+        if include_index {
+            row.push(Cell::new((index + 1).to_string()).fg(Color::DarkGrey));
+        }
+        row.push(Cell::new(&profile.profile).fg(Color::Cyan));
+        row.push(Cell::new(codex_profile_display_name(profile)).fg(Color::Magenta));
+        row.push(Cell::new(render_option_text_value(profile.email.as_deref())).fg(Color::Blue));
+        let state_color = match profile.state.as_str() {
+            "Logged-In" => Color::Green,
+            _ => Color::Yellow,
+        };
+        row.push(Cell::new(&profile.state).fg(state_color));
+        table.add_row(row);
+    }
+
+    table.to_string()
+}
+
+fn codex_profile_prompt_available() -> bool {
+    io::stdin().is_terminal() && io::stdout().is_terminal()
+}
+
+fn prompt_for_codex_profile(
+    purpose: &str,
+    profiles: &[CodexProfileView],
+    default_profile: Option<&str>,
+) -> Result<String> {
+    if profiles.is_empty() {
+        anyhow::bail!("no codex profiles are configured");
+    }
+
+    println!("Select codex profile for {purpose}:");
+    println!("{}", render_codex_profile_table(profiles, true));
+    if let Some(default_profile) = default_profile {
+        println!("Press Enter to keep {default_profile}.");
+    }
+    print!("Enter number or profile: ");
+    io::stdout().flush().context("flush codex profile prompt")?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).context("read codex profile selection")?;
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        if let Some(default_profile) = default_profile {
+            return Ok(default_profile.to_owned());
+        }
+        anyhow::bail!("codex profile selection is required");
+    }
+    if let Ok(index) = trimmed.parse::<usize>() {
+        if let Some(profile) = profiles.get(index.saturating_sub(1)) {
+            return Ok(profile.profile.clone());
+        }
+        anyhow::bail!("invalid profile number {index}");
+    }
+    let candidates = find_codex_profile_candidates(profiles, trimmed);
+    if candidates.len() == 1 {
+        return Ok(profiles[candidates[0]].profile.clone());
+    }
+    anyhow::bail!("could not resolve codex profile from {:?}", trimmed)
+}
+
+fn codex_profile_resolution_error(query: &str, profiles: &[CodexProfileView]) -> anyhow::Error {
+    let available = profiles.iter().map(|profile| profile.profile.as_str()).collect::<Vec<_>>();
+    anyhow!(
+        "codex profile {:?} is not configured; available profiles: {}",
+        query,
+        if available.is_empty() { "(none)".to_owned() } else { available.join(", ") }
+    )
+}
+
+fn resolve_codex_profile_with_mode(
+    settings: &Settings,
+    paths: &SiPaths,
+    profile: Option<&str>,
+    mode: CodexProfileSelectionMode,
+    purpose: &str,
+) -> Result<String> {
+    let active = resolve_codex_active_profile_id(settings);
+    let mut profiles = settings
+        .codex
+        .profiles
+        .entries
+        .iter()
+        .map(|(profile_id, entry)| codex_profile_view(paths, active.as_deref(), profile_id, entry))
+        .collect::<Vec<_>>();
+    profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+
+    if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
+        let candidates = find_codex_profile_candidates(&profiles, query);
+        return match candidates.as_slice() {
+            [index] => Ok(profiles[*index].profile.clone()),
+            [] => {
+                if codex_profile_prompt_available() {
+                    prompt_for_codex_profile(purpose, &profiles, active.as_deref())
+                } else {
+                    Err(codex_profile_resolution_error(query, &profiles))
+                }
+            }
+            _ => {
+                if codex_profile_prompt_available() {
+                    let filtered =
+                        candidates.iter().map(|index| profiles[*index].clone()).collect::<Vec<_>>();
+                    prompt_for_codex_profile(purpose, &filtered, None)
+                } else {
+                    Err(anyhow!("codex profile {:?} matched multiple configured profiles", query))
+                }
+            }
+        };
+    }
+
+    if matches!(mode, CodexProfileSelectionMode::PreferActiveOnMissing)
+        && let Some(active_profile) = active
+    {
+        if settings.codex.profiles.entries.contains_key(active_profile.as_str()) {
+            return Ok(active_profile);
         }
         anyhow::bail!(
-            "codex profile {profile:?} is not configured; use `si codex profile add {profile}`"
+            "active codex profile {:?} is not configured under [codex.profiles.entries]",
+            active_profile
         );
     }
 
-    let Some(active_profile) = resolve_codex_active_profile_id(settings) else {
-        anyhow::bail!(
-            "codex profile is required; configure one with `si codex profile add <profile>` and `si codex profile use <profile>`"
-        )
-    };
-    if settings.codex.profiles.entries.contains_key(active_profile.as_str()) {
-        return Ok(active_profile);
+    if profiles.len() == 1 {
+        return Ok(profiles[0].profile.clone());
     }
+
+    if codex_profile_prompt_available() {
+        return prompt_for_codex_profile(purpose, &profiles, active.as_deref());
+    }
+
     anyhow::bail!(
-        "active codex profile {:?} is not configured under [codex.profiles.entries]",
-        active_profile
-    );
+        "codex profile is required; configure one with `si codex profile add <profile>` and `si codex profile use <profile>`"
+    )
+}
+
+fn resolve_codex_requested_profile(
+    settings: &Settings,
+    paths: &SiPaths,
+    profile: Option<&str>,
+) -> Result<String> {
+    resolve_codex_profile_with_mode(
+        settings,
+        paths,
+        profile,
+        CodexProfileSelectionMode::PreferActiveOnMissing,
+        "codex",
+    )
 }
 
 fn default_codex_profile_auth_path(paths: &SiPaths, profile: &str) -> String {
     paths.codex_profiles_dir.join(profile).join("auth.json").display().to_string()
+}
+
+fn host_codex_home_dir(home: &Path) -> PathBuf {
+    home.join(".codex")
+}
+
+fn decode_jwt_payload_claims(token: &str) -> Option<Value> {
+    let payload = token.trim().split('.').nth(1)?;
+    let decoded = URL_SAFE_NO_PAD.decode(payload.as_bytes()).ok()?;
+    serde_json::from_slice::<Value>(&decoded).ok()
+}
+
+fn codex_auth_email_from_file(path: &Path) -> Option<String> {
+    let raw = fs::read_to_string(path).ok()?;
+    let auth = serde_json::from_str::<Value>(&raw).ok()?;
+    let tokens = auth.get("tokens")?;
+
+    let access_email = tokens
+        .get("access_token")
+        .and_then(Value::as_str)
+        .and_then(decode_jwt_payload_claims)
+        .and_then(|claims| {
+            claims.get("https://api.openai.com/profile")?.get("email")?.as_str().map(str::to_owned)
+        });
+    if let Some(email) =
+        access_email.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        return Some(email);
+    }
+
+    tokens
+        .get("id_token")
+        .and_then(Value::as_str)
+        .and_then(decode_jwt_payload_claims)
+        .and_then(|claims| claims.get("email")?.as_str().map(str::to_owned))
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+fn codex_profile_auth_state_label(auth_path: &str, expected_email: Option<&str>) -> &'static str {
+    let path = Path::new(auth_path);
+    if !path.is_file() {
+        return "Missing";
+    }
+    let Some(actual_email) = codex_auth_email_from_file(path) else {
+        return "Missing";
+    };
+    let Some(expected_email) = expected_email.map(str::trim).filter(|value| !value.is_empty())
+    else {
+        return "Logged-In";
+    };
+    if actual_email.eq_ignore_ascii_case(expected_email) { "Logged-In" } else { "Missing" }
+}
+
+fn reset_host_codex_home(codex_home: &Path) -> Result<()> {
+    let mut preserved = Vec::new();
+    for file_name in ["config.toml", "configs.toml"] {
+        let path = codex_home.join(file_name);
+        if path.is_file() {
+            preserved.push((file_name.to_owned(), fs::read(&path)?));
+        }
+    }
+
+    fs::create_dir_all(codex_home)
+        .with_context(|| format!("create codex home {}", codex_home.display()))?;
+    for entry in
+        fs::read_dir(codex_home).with_context(|| format!("read {}", codex_home.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        if preserved.iter().any(|(name, _)| file_name == name.as_str()) {
+            continue;
+        }
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() && !file_type.is_symlink() {
+            fs::remove_dir_all(&path).with_context(|| format!("remove dir {}", path.display()))?;
+        } else {
+            fs::remove_file(&path).with_context(|| format!("remove file {}", path.display()))?;
+        }
+    }
+
+    for (file_name, contents) in preserved {
+        let path = codex_home.join(file_name);
+        fs::write(&path, contents).with_context(|| format!("restore {}", path.display()))?;
+        #[cfg(unix)]
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("chmod {}", path.display()))?;
+    }
+
+    Ok(())
 }
 
 fn codex_profile_view(
@@ -35335,15 +35698,17 @@ fn codex_profile_view(
     profile_id: &str,
     entry: &CodexProfileEntry,
 ) -> CodexProfileView {
+    let auth_path = entry
+        .auth_path
+        .clone()
+        .unwrap_or_else(|| default_codex_profile_auth_path(paths, profile_id));
     CodexProfileView {
         profile: profile_id.to_owned(),
         active: active_profile.is_some_and(|value| value == profile_id),
+        state: codex_profile_auth_state_label(&auth_path, entry.email.as_deref()).to_owned(),
         name: entry.name.clone(),
         email: entry.email.clone(),
-        auth_path: entry
-            .auth_path
-            .clone()
-            .or_else(|| Some(default_codex_profile_auth_path(paths, profile_id))),
+        auth_path: Some(auth_path),
         auth_updated: entry.auth_updated.clone(),
     }
 }
@@ -35370,17 +35735,9 @@ fn show_codex_profile_list(
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&profiles)?),
         OutputFormat::Text => {
             if profiles.is_empty() {
-                println!("profiles=(none)");
+                println!("No codex profiles configured.");
             } else {
-                for profile in profiles {
-                    println!(
-                        "{}\t{}\t{}\t{}",
-                        profile.profile,
-                        if profile.active { "active" } else { "inactive" },
-                        render_option_text_value(profile.email.as_deref()),
-                        render_option_text_value(profile.auth_path.as_deref())
-                    );
-                }
+                println!("{}", render_codex_profile_table(&profiles, false));
             }
         }
     }
@@ -35397,7 +35754,17 @@ fn show_codex_profile(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile.as_deref(),
+        if profile.is_some() || codex_profile_prompt_available() {
+            CodexProfileSelectionMode::PromptOnMissing
+        } else {
+            CodexProfileSelectionMode::PreferActiveOnMissing
+        },
+        "show",
+    )?;
     let entry = settings
         .codex
         .profiles
@@ -35414,14 +35781,7 @@ fn show_codex_profile(
 
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("profile={}", view.profile);
-            println!("active={}", view.active);
-            println!("name={}", render_option_text_value(view.name.as_deref()));
-            println!("email={}", render_option_text_value(view.email.as_deref()));
-            println!("auth_path={}", render_option_text_value(view.auth_path.as_deref()));
-            println!("auth_updated={}", render_option_text_value(view.auth_updated.as_deref()));
-        }
+        OutputFormat::Text => println!("{}", render_codex_profile_table(&[view], false)),
     }
 
     Ok(())
@@ -35478,33 +35838,38 @@ fn add_codex_profile(
 }
 
 fn remove_codex_profile(
-    profile: String,
+    profile: Option<String>,
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home, Some(&settings_path))?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile.as_deref(),
+        CodexProfileSelectionMode::PromptOnMissing,
+        "remove",
+    )?;
     let mut document = load_settings_document(&settings_path)?;
-    let profile_id = profile.trim();
-    if profile_id.is_empty() {
-        anyhow::bail!("profile is required");
-    }
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
         if let Some(entries) = profiles.get_mut("entries").and_then(toml::Value::as_table_mut) {
-            entries.remove(profile_id);
+            entries.remove(profile_id.as_str());
             if entries.is_empty() {
                 profiles.remove("entries");
             }
         }
-        if profiles.get("active").and_then(toml::Value::as_str) == Some(profile_id) {
+        if profiles.get("active").and_then(toml::Value::as_str) == Some(profile_id.as_str()) {
             profiles.remove("active");
         }
         if profiles.is_empty() {
             codex.remove("profiles");
         }
     }
-    if codex.get("profile").and_then(toml::Value::as_str) == Some(profile_id) {
+    if codex.get("profile").and_then(toml::Value::as_str) == Some(profile_id.as_str()) {
         codex.remove("profile");
     }
     if codex.is_empty() {
@@ -35515,14 +35880,21 @@ fn remove_codex_profile(
 }
 
 fn use_codex_profile(
-    profile: String,
+    profile: Option<String>,
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
-    let profile_id = resolve_codex_requested_profile(&settings, Some(profile.as_str()))?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile.as_deref(),
+        CodexProfileSelectionMode::PromptOnMissing,
+        "use",
+    )?;
 
     let mut document = load_settings_document(&settings_path)?;
     if !document.contains_key("schema_version") {
@@ -35534,6 +35906,160 @@ fn use_codex_profile(
     set_toml_string(codex, "profile", Some(profile_id));
     write_settings_document(&settings_path, &document)?;
     Ok(())
+}
+
+fn login_codex_profile(
+    profile: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    codex_bin: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home, Some(&settings_path))?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile.as_deref(),
+        CodexProfileSelectionMode::PromptOnMissing,
+        "login",
+    )?;
+    let entry = settings
+        .codex
+        .profiles
+        .entries
+        .get(profile_id.as_str())
+        .cloned()
+        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+    let resolved_auth_path = entry
+        .auth_path
+        .clone()
+        .unwrap_or_else(|| default_codex_profile_auth_path(&paths, &profile_id));
+    if let Some(parent) = Path::new(&resolved_auth_path).parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create codex profile dir {}", parent.display()))?;
+    }
+    let codex_bin = codex_bin.unwrap_or_else(|| PathBuf::from("codex"));
+    let codex_home = Path::new(&resolved_auth_path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| paths.codex_profiles_dir.join(&profile_id));
+    fs::create_dir_all(&codex_home)
+        .with_context(|| format!("create codex home {}", codex_home.display()))?;
+    let host_auth_path = codex_home.join("auth.json");
+
+    let mut command = StdCommand::new(&codex_bin);
+    command.env("HOME", &home).env("CODEX_HOME", &codex_home).arg("login").arg("--device-auth");
+    let status = command.status().with_context(|| format!("run {} login", codex_bin.display()))?;
+    if !status.success() {
+        anyhow::bail!("codex login failed: {}", status);
+    }
+
+    if !host_auth_path.exists() {
+        anyhow::bail!("expected codex auth at {} after login", host_auth_path.display());
+    }
+    if let Some(expected_email) =
+        entry.email.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        let actual_email = codex_auth_email_from_file(&host_auth_path);
+        if !actual_email.as_deref().is_some_and(|value| value.eq_ignore_ascii_case(expected_email))
+        {
+            let _ = fs::remove_file(&host_auth_path);
+            anyhow::bail!(
+                "codex login saved auth for {:?}, expected {:?} for profile {}",
+                actual_email.as_deref().unwrap_or("unknown"),
+                expected_email,
+                profile_id
+            );
+        }
+    }
+    if Path::new(&resolved_auth_path) != host_auth_path {
+        fs::copy(&host_auth_path, &resolved_auth_path).with_context(|| {
+            format!("copy codex auth from {} to {}", host_auth_path.display(), resolved_auth_path)
+        })?;
+    }
+    #[cfg(unix)]
+    fs::set_permissions(&resolved_auth_path, fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", resolved_auth_path))?;
+
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    let profiles = ensure_toml_table(codex, "profiles")?;
+    let entries = ensure_toml_table(profiles, "entries")?;
+    let entry_table = ensure_toml_table(entries, profile_id.as_str())?;
+    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path));
+    set_toml_string(
+        entry_table,
+        "auth_updated",
+        Some(Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+    );
+    write_settings_document(&settings_path, &document)?;
+
+    show_codex_profile(Some(profile_id), Some(home), Some(settings_path), format)
+}
+
+fn swap_codex_profile(
+    profile: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home, Some(&settings_path))?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile.as_deref(),
+        CodexProfileSelectionMode::PromptOnMissing,
+        "swap",
+    )?;
+    let entry = settings
+        .codex
+        .profiles
+        .entries
+        .get(profile_id.as_str())
+        .cloned()
+        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+    let resolved_auth_path = entry
+        .auth_path
+        .clone()
+        .unwrap_or_else(|| default_codex_profile_auth_path(&paths, &profile_id));
+    if codex_profile_auth_state_label(&resolved_auth_path, entry.email.as_deref()) != "Logged-In" {
+        anyhow::bail!(
+            "codex profile {} is not Logged-In; run `si codex profile login {}` first",
+            profile_id,
+            profile_id
+        );
+    }
+
+    let host_codex_home = host_codex_home_dir(&home);
+    reset_host_codex_home(&host_codex_home)?;
+    let host_auth_path = host_codex_home.join("auth.json");
+    fs::copy(&resolved_auth_path, &host_auth_path).with_context(|| {
+        format!("copy codex auth from {} to {}", resolved_auth_path, host_auth_path.display())
+    })?;
+    #[cfg(unix)]
+    fs::set_permissions(&host_auth_path, fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", host_auth_path.display()))?;
+
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    let profiles = ensure_toml_table(codex, "profiles")?;
+    set_toml_string(profiles, "active", Some(profile_id.clone()));
+    set_toml_string(codex, "profile", Some(profile_id.clone()));
+    write_settings_document(&settings_path, &document)?;
+
+    show_codex_profile(Some(profile_id), Some(home), Some(settings_path), format)
 }
 
 fn load_codex_runtime_settings(
@@ -35550,8 +36076,9 @@ fn resolve_codex_runtime_profile(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
 ) -> Result<String> {
-    let (_, settings) = load_codex_runtime_settings(home, settings_file)?;
-    resolve_codex_requested_profile(&settings, profile)
+    let (home, settings) = load_codex_runtime_settings(home, settings_file)?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    resolve_codex_requested_profile(&settings, &paths, profile)
 }
 
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
@@ -63848,7 +64375,8 @@ fn show_codex_spawn_plan(
     format: OutputFormat,
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let paths = SiPaths::from_settings(&settings_home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
         host_ctx.home_dir = Some(settings_home);
@@ -63957,7 +64485,8 @@ fn show_codex_spawn_spec(
     format: OutputFormat,
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let paths = SiPaths::from_settings(&settings_home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
         host_ctx.home_dir = Some(settings_home);
@@ -64083,7 +64612,8 @@ fn show_codex_spawn_run_args(
     format: OutputFormat,
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let paths = SiPaths::from_settings(&settings_home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
         host_ctx.home_dir = Some(settings_home);
@@ -64148,7 +64678,8 @@ fn show_codex_spawn_start(
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let profile_id = resolve_codex_requested_profile(&settings, profile.as_deref())?;
+    let paths = SiPaths::from_settings(&settings_home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
         host_ctx.home_dir = Some(settings_home);

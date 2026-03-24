@@ -39,8 +39,8 @@ For SI runtime containers, use `si fort ...` for secret access.
 ### STS and IAM
 
 ```bash
-si aws sts get-caller-identity --json
-si aws sts assume-role --role-arn arn:aws:iam::123456789012:role/Deploy --session-name si-session --json
+si aws sts whoami --json
+si aws sts assume --role-arn arn:aws:iam::123456789012:role/Deploy --session-name si-session --json
 si aws iam user list --json
 si aws iam role list --json
 ```
@@ -100,7 +100,7 @@ Use raw mode when a higher-level resource command is not yet available.
 
 ## Safety guidance
 
-- Always verify caller identity before writes (`si aws sts get-caller-identity`).
+- Always verify caller identity before writes (`si aws sts whoami`).
 - Prefer explicit `--region` in automation.
 - Keep destructive operations behind `--force` in scripted flows.
 - Treat assumed-role credentials as short-lived; avoid persisting session secrets.
