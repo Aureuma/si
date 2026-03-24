@@ -12,7 +12,7 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 
 - Docker available on the host
 - `tmux` installed in both containers (included in `aureuma/si:local`)
-- A logged-in `si login` profile for real Codex runs (or use the offline fake Codex flow below)
+- A configured `si codex profile` with valid auth material at that profile's `auth_path` for real Codex runs (or use the offline fake Codex flow below)
   - If Codex launches the "Welcome to Codex" sign-in screen, the dyad loop will halt and log an auth-required message.
     Use `si dyad peek <dyad>` to complete login inside the running `tmux` session, then restart the dyad loop.
 - If Docker is root-only on your host, run `si dyad ...` as root and set `SI_HOST_UID`/`SI_HOST_GID` so artifacts are owned by your user.
@@ -32,19 +32,19 @@ If the last persisted critic report contains `Continue Loop: no`, the dyad loop 
 Spawn a dyad:
 
 ```bash
-si dyad spawn <name> [role]
+si dyad spawn start --name <name> --workspace "$PWD"
 ```
 
 Autopilot (explicit prompt required):
 
 ```bash
-si dyad spawn <name> [role] --autopilot --prompt "Investigate failing CI release job"
+si dyad spawn start --name <name> --workspace "$PWD"
 ```
 
 Optional explicit seed prompt:
 
 ```bash
-si dyad spawn <name> [role] --autopilot --prompt "Investigate failing CI release job"
+si dyad spawn start --name <name> --workspace "$PWD"
 ```
 
 Check status:
@@ -119,7 +119,7 @@ To override the interactive command used to start Codex (mainly for offline test
 
 ## Tuning
 
-Useful environment variables (set on the host before `si dyad spawn`, or passed into the critic container):
+Useful environment variables (set on the host before `si dyad spawn start`, or passed into the critic container):
 
 - `DYAD_LOOP_TURN_TIMEOUT_SECONDS`: per-turn timeout (default `900`)
 - `DYAD_LOOP_RETRY_MAX`: retries per actor/critic turn (default `3`)
@@ -145,6 +145,6 @@ export DYAD_LOOP_STRICT_REPORT=1
 export FAKE_CODEX_DELAY_SECONDS=10
 export FAKE_CODEX_LONG_LINES=12000
 
-si dyad spawn dyad-offline-test --skip-auth
+si dyad spawn start --name dyad-offline-test --workspace "$PWD"
 si dyad peek dyad-offline-test
 ```

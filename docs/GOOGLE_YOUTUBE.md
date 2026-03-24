@@ -60,7 +60,7 @@ si google youtube doctor --account core --mode oauth
 si google youtube search list --query "engineering vlog" --type video
 si google youtube support languages
 si google youtube support regions
-si google youtube support categories --region US
+si google youtube support categories --support-region US
 
 # resources
 si google youtube channel list --id <channel_id>
@@ -69,7 +69,7 @@ si google youtube video list --id <video_id>
 si google youtube video upload --mode oauth --file ./clip.mp4 --title "Demo" --privacy unlisted
 si google youtube video rate --mode oauth --id <video_id> --rating like
 si google youtube playlist create --mode oauth --title "Sandbox"
-si google youtube playlist-item add --mode oauth --playlist-id <playlist_id> --video-id <video_id>
+si google youtube items add --mode oauth --playlist-id <playlist_id> --video-id <video_id>
 si google youtube subscription list --mode oauth --mine
 si google youtube comment thread create --mode oauth --video-id <video_id> --text "Nice work"
 si google youtube caption upload --mode oauth --video-id <video_id> --file ./captions.vtt --language en

@@ -53,7 +53,7 @@ Supported credential sources (highest priority first):
 # releases
 ./si google play release upload --account core --package com.example.app --aab ./app-release.aab --track internal
 ./si google play release promote --account core --package com.example.app --from internal --to production --status completed
-./si google play release set-status --account core --package com.example.app --track production --status halted
+./si google play release set --account core --package com.example.app --track production --status halted
 
 # raw fallback
 ./si google play raw --account core --method GET \
@@ -92,6 +92,6 @@ Supported `imageType` values:
 - `si google play listing get|list|update`
 - `si google play details get|update`
 - `si google play asset list|upload|clear`
-- `si google play release upload|status|promote|set-status`
+- `si google play release upload|status|promote|set`
 - `si google play raw`
 - `si google play apply`

@@ -6,7 +6,7 @@
 ~/.si/settings.toml
 ```
 
-This file is created automatically on first use. It is also updated when you log in with `si login` so that profile metadata (auth path/timestamps) are tracked in one place.
+This file is created automatically on first use. `si codex profile ...` writes Codex profile metadata here so profile registry state, Fort profile binding, and default runtime selection all share one source of truth.
 
 ## Precedence
 When supported by a command, values resolve in this order:
@@ -25,7 +25,7 @@ The file is a standard TOML document. `schema_version` is reserved for future mi
 ### `[paths]`
 Reference paths for the local `.si` directory layout.
 - `paths.root` (string): default `~/.si`
-- `paths.settings` (string): default `~/.si/settings.toml`
+- `paths.settings_file` (string): default `~/.si/settings.toml`
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
 - `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si github git ...`, `si remote-control`, and `si viva node bootstrap` when flags are omitted.
 
@@ -35,7 +35,7 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/disabled.v1` (warmup scheduler disabled marker)
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
-Warmup scheduling is auto-enabled once SI sees cached codex auth for a profile, and it is also triggered by `si login` or explicit `si warmup enable`.
+Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si warmup ...`.
 
 ### `[codex]`
 Defaults for `si codex` profile-bound container commands.
@@ -47,41 +47,15 @@ Defaults for `si codex` profile-bound container commands.
   - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `codex.workdir` (string): container working directory
-- `codex.repo` (string): default repo in `Org/Repo` form
-- `codex.gh_pat` (string): optional PAT (stored in settings; keep file permissions restrictive)
-- `codex.codex_volume` (string): override codex volume name
-- `codex.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
-- `codex.gh_volume` (string): override GitHub config volume name
-- `codex.docker_socket` (bool): mount host Docker socket into codex containers (default: `true`)
 - `codex.profile` (string): legacy/default active profile ID. `codex.profiles.active` is preferred and `si codex profile use` keeps them aligned.
-- `codex.detach` (bool): default detach behavior
-- `codex.clean_slate` (bool): default clean-slate behavior
-
-#### `[codex.login]`
-Defaults for `si login`.
-- `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
-- `codex.login.open_url` (bool): open the login URL in a browser after it is printed
-- `codex.login.open_url_command` (string): command to open the login URL. Use `{url}` to inject the URL, otherwise it is appended. Supported placeholders: `{url}`, `{profile}`, `{profile_id}`, `{profile_name}`, `{profile_email}`. Special values: `safari-profile` and `chrome-profile`.
-- `codex.login.default_browser` (string): browser-aware launcher used when `open_url_command` is unset. Supported: `safari`, `chrome`. On macOS default is `safari`; elsewhere default is `chrome`.
-Notes:
-- In non-headless environments, `si login` detects one-time device codes and copies them to the clipboard (macOS: `pbcopy`, Linux: `wl-copy`, `xclip`, or `xsel`).
-- In headless environments (for example Linux without `DISPLAY`/`WAYLAND_DISPLAY`), `si login` skips URL/device-code parsing and clipboard copy.
-- macOS Safari profile windows (`open_url_command = "safari-profile"` or `default_browser = "safari"`) require Accessibility permission because SI uses AppleScript + `System Events` UI automation to click `File > New Window > <Profile>`.
-  - Why: Safari does not provide a direct command-line/profile flag equivalent for opening a URL into a specific Safari profile window, so SI must automate the Safari menu.
-  - If permission is not granted: SI warns clearly and falls back to opening Safari without profile selection.
-  - Grant/review: `System Settings > Privacy & Security > Accessibility` and allow the app/terminal running `si`.
-
-#### `[codex.exec]`
-Defaults for one-off `si run` (alias `si exec`).
-- `codex.exec.model` (string): default model
-- `codex.exec.effort` (string): default reasoning effort
+- Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime/container behavior stays under `si codex ...`.
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
 - `codex.profiles.active` (string): active/default profile for `si codex` and profile-scoped Fort runtime auth
 
 ##### `[codex.profiles.entries.<id>]`
-Per-profile entry keyed by profile ID (for example `america`). These entries are updated on successful `si login`.
+Per-profile entry keyed by profile ID (for example `america`). These entries are created and updated by `si codex profile add` and any later profile metadata sync flows.
 - `name` (string): profile display name
 - `email` (string): profile email
 - `auth_path` (string): path to auth.json
@@ -368,7 +342,7 @@ Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
 - `service` (string, required): upstream service URL or `http_status:404`.
 
 ### `[shell.prompt]`
-Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
+Prompt rendering for `si codex exec` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
 - `shell.prompt.git_enabled` (bool): include git branch when available
 - `shell.prompt.prefix_template` (string): template for profile prefix. Use `{profile}` placeholder.
@@ -406,19 +380,7 @@ image = "aureuma/si:local"
 network = "si"
 workspace = "/path/to/your/repo"
 workdir = "/workspace"
-docker_socket = true
 profile = "america"
-detach = true
-clean_slate = false
-
-[codex.login]
-device_auth = true
-open_url = false
-default_browser = "safari"
-
-[codex.exec]
-model = "gpt-5.2-codex"
-effort = "medium"
 
 [codex.profiles]
 active = "america"

@@ -65,16 +65,16 @@ si google places session end <token>
 
 ```bash
 si google places autocomplete --input "coffee" --session <token>
-si google places search-text --query "coffee near downtown" --field-mask places.id,places.displayName,places.formattedAddress
-si google places search-nearby --center 37.7749,-122.4194 --radius 1200 --included-type cafe --field-mask places.id,places.displayName,places.formattedAddress
+si google places text --query "coffee near downtown" --field-mask places.id,places.displayName,places.formattedAddress
+si google places nearby --center 37.7749,-122.4194 --radius 1200 --included-type cafe --field-mask places.id,places.displayName,places.formattedAddress
 si google places details <place_id_or_name> --session <token> --field-mask id,name,displayName,formattedAddress
 ```
 
 Pagination helpers:
 
 ```bash
-si google places search-text --query "coffee" --all --max-pages 4 --field-mask places.id,places.displayName
-si google places search-nearby --center 37.77,-122.41 --radius 2000 --all --field-mask places.id,places.displayName
+si google places text --query "coffee" --all --max-pages 4 --field-mask places.id,places.displayName
+si google places nearby --center 37.77,-122.41 --radius 2000 --all --field-mask places.id,places.displayName
 ```
 
 ## Photos
@@ -105,7 +105,7 @@ si google places raw --method POST --path /v1/places:searchText --body '{"textQu
 
 ## Field Mask Policy
 
-- `search-text`, `search-nearby`, and `details` require field masks.
+- `text`, `nearby`, and `details` require field masks.
 - Presets are available via `--field-preset` (`search-basic`, `details-basic`, etc.).
 - Wildcard `*` is blocked unless `--allow-wildcard-mask` is explicitly set.
 - Human mode prints a field-mask cost hint (`low|medium|high`).

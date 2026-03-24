@@ -25,13 +25,19 @@ Architecture boundary:
 ## `si fort` Wrapper Contract
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
-- Host bootstrap/admin auth for `si spawn` agent provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
+- Host bootstrap/admin auth for `si codex spawn ...` and `si dyad spawn ...` provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
 - Runtime container sessions use file-backed token paths for the short-lived access token and rotating refresh token.
 - Wrapper behavior:
+  - prefers caller-supplied runtime token paths (`FORT_TOKEN_PATH`, `FORT_REFRESH_TOKEN_PATH`) and refreshes those file-backed sessions in place when possible
+  - otherwise prefers the active profile-scoped Fort session under `~/.si/codex/profiles/<profile>/fort/` and refreshes that file-backed session in place when possible
+  - only falls back to bootstrap/admin auth when no runtime session is available or runtime refresh fails
   - runtime refresh is owned by the profile-scoped Fort refresher
   - passes explicit token-file auth to native `fort` when default files are available (no bearer token argv injection)
   - rejects deprecated token-value env vars (`FORT_TOKEN`, `FORT_REFRESH_TOKEN`)
   - strips legacy token env entries from child process env if present
+- Operational guidance:
+  - keep `~/.si/fort/bootstrap/*` for break-glass recovery only
+  - keep routine Fort access in `~/.si/codex/profiles/<profile>/fort/access.token` and `refresh.token`
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 

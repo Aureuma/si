@@ -25,7 +25,7 @@ This page is the canonical map of SI integration families.
 | OpenAI | `si openai ...` | [OpenAI](./OPENAI) |
 | Oracle Cloud Infrastructure | `si oci ...` | [OCI](./OCI) |
 | WorkOS | `si workos ...` | [WorkOS](./WORKOS) |
-| Apple App Store | `si apple appstore ...` | [Apple App Store](./APPLE_APPSTORE) |
+| Apple App Store | `si apple store ...` | [Apple App Store](./APPLE_APPSTORE) |
 | Publish bridge | `si publish ...` | [Publish](./PUBLISH) |
 | Provider meta-health | `si providers ...` | [Providers](./PROVIDERS) |
 | Surf browser runtime | `si surf ...` | [Browser Runtime](./BROWSER) |

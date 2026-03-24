@@ -5,6 +5,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "${ROOT}"
 BIN="${ROOT}/.artifacts/cargo-target/release/si-rs"
 if [[ -x "${BIN}" ]]; then
-  exec "${BIN}" build homebrew render-tap-formula "$@"
+  exec "${BIN}" build homebrew tap "$@"
 fi
-exec cargo run --locked --release -q -p si-rs-cli -- build homebrew render-tap-formula "$@"
+exec cargo run --locked --release -q -p si-rs-cli -- build homebrew tap "$@"

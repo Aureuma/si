@@ -10,7 +10,7 @@ Use this workflow for day-to-day dyad operations.
 ## Spawn and inspect
 
 ```bash
-si dyad spawn <name> [role]
+si dyad spawn start --name <name> --workspace "$PWD"
 si dyad status <name>
 si dyad logs --member actor <name> --tail 200
 si dyad logs --member critic <name> --tail 200
@@ -41,7 +41,7 @@ For deterministic tests without Codex auth:
 export DYAD_CODEX_START_CMD='cd /workspace && exec /workspace/tools/dyad/fake-codex.sh'
 export DYAD_LOOP_ENABLED=1
 export DYAD_LOOP_MAX_TURNS=1
-si dyad spawn <name> --skip-auth
+si dyad spawn start --name <name> --workspace "$PWD"
 ```
 
 ## Guardrails

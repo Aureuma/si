@@ -11,6 +11,6 @@ if si_artifact_is_fresh "${BIN}" \
   "${ROOT}/rust" \
   "${ROOT}/tools/release/npm/publish-npm-package.sh" \
   "${ROOT}/tools/lib/artifact-fresh.sh"; then
-  exec "${BIN}" build npm publish-package "$@"
+  exec "${BIN}" build npm publish "$@"
 fi
-exec cargo run --locked --release -q -p si-rs-cli -- build npm publish-package "$@"
+exec cargo run --locked --release -q -p si-rs-cli -- build npm publish "$@"
