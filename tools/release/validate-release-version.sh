@@ -11,6 +11,6 @@ if si_artifact_is_fresh "${BIN}" \
   "${ROOT}/rust" \
   "${ROOT}/tools/release/validate-release-version.sh" \
   "${ROOT}/tools/lib/artifact-fresh.sh"; then
-  exec "${BIN}" build self validate-release-version "$@"
+  exec "${BIN}" build self validate "$@"
 fi
-exec cargo run --locked --release -q -p si-rs-cli -- build self validate-release-version "$@"
+exec cargo run --locked --release -q -p si-rs-cli -- build self validate "$@"

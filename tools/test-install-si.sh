@@ -11,6 +11,6 @@ if si_artifact_is_fresh "${BIN}" \
   "${ROOT}/rust" \
   "${ROOT}/tools/test-install-si.sh" \
   "${ROOT}/tools/lib/artifact-fresh.sh"; then
-  exec "${BIN}" build installer smoke-host "$@"
+  exec "${BIN}" build installer smokehost "$@"
 fi
-exec cargo run -q -p si-rs-cli -- build installer smoke-host "$@"
+exec cargo run -q -p si-rs-cli -- build installer smokehost "$@"

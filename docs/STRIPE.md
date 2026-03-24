@@ -54,9 +54,9 @@ si stripe report balance-overview
 
 ## Live-to-Sandbox Sync
 ```bash
-si stripe sync live-to-sandbox plan --account core
-si stripe sync live-to-sandbox apply --account core --dry-run
-si stripe sync live-to-sandbox apply --account core --only products --only prices --force
+si stripe sync mirror plan --account core
+si stripe sync mirror apply --account core --dry-run
+si stripe sync mirror apply --account core --only products --only prices --force
 ```
 
 Supported sync families:

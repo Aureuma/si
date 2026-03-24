@@ -11,6 +11,6 @@ if si_artifact_is_fresh "${BIN}" \
   "${ROOT}/rust" \
   "${ROOT}/tools/test-install-si-homebrew.sh" \
   "${ROOT}/tools/lib/artifact-fresh.sh"; then
-  exec "${BIN}" build installer smoke-homebrew "$@"
+  exec "${BIN}" build installer smokehomebrew "$@"
 fi
-exec cargo run -q -p si-rs-cli -- build installer smoke-homebrew "$@"
+exec cargo run -q -p si-rs-cli -- build installer smokehomebrew "$@"
