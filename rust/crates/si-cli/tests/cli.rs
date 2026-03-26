@@ -9,13 +9,22 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::thread;
 use tar::Archive;
 use tempfile::tempdir;
 
 fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
+}
+
+fn repo_root_for_test() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .expect("canonical repo root")
 }
 
 fn write_codex_profile_settings(home: &Path, active_profile: &str, profiles: &[&str]) {
@@ -3805,13 +3814,13 @@ default_package_name = "com.acme.app"
 
 #[test]
 fn version_matches_go_repo_version() {
-    cargo_bin().arg("version").assert().success().stdout("v0.55.2\n");
+    cargo_bin().arg("version").assert().success().stdout("v0.55.7\n");
 }
 
 #[test]
 fn version_flags_render_root_version() {
-    cargo_bin().arg("--version").assert().success().stdout("v0.55.2\n");
-    cargo_bin().arg("-v").assert().success().stdout("v0.55.2\n");
+    cargo_bin().arg("--version").assert().success().stdout("v0.55.7\n");
+    cargo_bin().arg("-v").assert().success().stdout("v0.55.7\n");
 }
 
 #[test]
@@ -3823,9 +3832,12 @@ fn help_output_uses_single_word_operational_subcommands() {
     assert!(codex_help.contains("spawn"));
     assert!(codex_help.contains("status"));
     assert!(codex_help.contains("tmux"));
+    assert!(codex_help.contains("warmup"));
     assert!(!codex_help.contains("spawnplan"));
     assert!(!codex_help.contains("statusread"));
     assert!(!codex_help.contains("tmuxcommand"));
+    assert!(!codex_help.contains("launch"));
+    assert!(!codex_help.contains("plan"));
 
     let codex_spawn_help = String::from_utf8(
         cargo_bin()
@@ -3837,10 +3849,26 @@ fn help_output_uses_single_word_operational_subcommands() {
             .clone(),
     )
     .expect("utf8 codex spawn help");
-    assert!(codex_spawn_help.contains("plan"));
-    assert!(codex_spawn_help.contains("spec"));
-    assert!(codex_spawn_help.contains("args"));
-    assert!(codex_spawn_help.contains("start"));
+    assert!(codex_spawn_help.contains("--workspace"));
+    assert!(codex_spawn_help.contains("--profile"));
+    assert!(!codex_spawn_help.contains("plan"));
+    assert!(!codex_spawn_help.contains("spec"));
+    assert!(!codex_spawn_help.contains("args"));
+    assert!(!codex_spawn_help.contains("Commands:"));
+
+    let codex_tmux_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "tmux", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex tmux help");
+    assert!(codex_tmux_help.contains("[PROFILE]"));
+    assert!(!codex_tmux_help.contains("launch"));
+    assert!(!codex_tmux_help.contains("plan"));
 
     let dyad_help = String::from_utf8(
         cargo_bin().args(["dyad", "--help"]).assert().success().get_output().stdout.clone(),
@@ -3879,6 +3907,117 @@ fn help_output_uses_single_word_operational_subcommands() {
     assert!(build_self_help.contains("validate"));
     assert!(!build_self_help.contains("releaseassets"));
     assert!(!build_self_help.contains("validatereleaseversion"));
+
+    let build_help = String::from_utf8(
+        cargo_bin().args(["build", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 build help");
+    assert!(build_help.contains("image"));
+}
+
+#[test]
+fn help_output_renders_root_command_summaries() {
+    let root_help =
+        String::from_utf8(cargo_bin().arg("--help").assert().success().get_output().stdout.clone())
+            .expect("utf8 root help");
+
+    assert!(root_help.contains("SI CLI for providers, runtimes, and build flows."));
+    assert!(root_help.contains("codex       Manage Codex profiles and containers."));
+    assert!(root_help.contains("build       Build images, binaries, and release assets."));
+    assert!(root_help.contains("providers   Inspect provider capabilities."));
+}
+
+#[test]
+fn help_output_renders_nested_command_summaries() {
+    let codex_warmup_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "warmup", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex warmup help");
+
+    assert!(codex_warmup_help.contains("Inspect Codex warmup state."));
+    assert!(codex_warmup_help.contains("decision  Decide whether warmup should run."));
+    assert!(codex_warmup_help.contains("run       Warm configured Codex profiles."));
+    assert!(codex_warmup_help.contains("status    Show warmup status."));
+    assert!(codex_warmup_help.contains("state     Warmup state file commands."));
+    assert!(codex_warmup_help.contains("marker    Warmup marker file commands."));
+
+    let codex_warmup_run_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "warmup", "run", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex warmup run help");
+    assert!(codex_warmup_run_help.contains("Warm configured Codex profiles."));
+
+    let aws_s3_help = String::from_utf8(
+        cargo_bin().args(["aws", "s3", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 aws s3 help");
+
+    assert!(aws_s3_help.contains("AWS S3 commands."));
+    assert!(aws_s3_help.contains("bucket  AWS S3 Bucket commands."));
+    assert!(aws_s3_help.contains("object  AWS S3 Object commands."));
+}
+
+#[test]
+fn help_output_supports_forced_color_palette() {
+    let root_help = String::from_utf8(
+        cargo_bin()
+            .env("SI_CLI_COLOR", "always")
+            .arg("--help")
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 root help");
+
+    assert!(root_help.contains("\u{1b}["));
+    assert!(root_help.contains("SI CLI for providers, runtimes, and build flows."));
+}
+
+#[test]
+fn wrapper_help_and_paths_text_support_forced_color_palette() {
+    let surf_help = String::from_utf8(
+        cargo_bin()
+            .env("SI_CLI_COLOR", "always")
+            .args(["surf", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 surf help");
+    assert!(surf_help.contains("\u{1b}["));
+    assert!(surf_help.contains("Usage:"));
+
+    let home = tempdir().expect("tempdir");
+    let paths_output = String::from_utf8(
+        cargo_bin()
+            .env("SI_CLI_COLOR", "always")
+            .args(["paths", "show", "--home"])
+            .arg(home.path())
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 paths output");
+    assert!(paths_output.contains("\u{1b}["));
+    assert!(paths_output.contains("root"));
 }
 
 #[test]
@@ -4040,7 +4179,7 @@ fn legacy_hyphenated_aliases_still_work_for_help_paths() {
     cargo_bin().args(["oci", "network", "internet-gateway", "--help"]).assert().success();
     cargo_bin().args(["stripe", "sync", "live-to-sandbox", "--help"]).assert().success();
     cargo_bin().args(["github", "git", "remote-auth", "--help"]).assert().success();
-    cargo_bin().args(["warmup", "marker", "write-autostart", "--help"]).assert().success();
+    cargo_bin().args(["codex", "warmup", "marker", "write-autostart", "--help"]).assert().success();
 }
 
 #[test]
@@ -4168,7 +4307,7 @@ fn warmup_status_json_reads_and_upgrades_legacy_state() {
     .expect("write state");
 
     let output = cargo_bin()
-        .args(["warmup", "status", "--home"])
+        .args(["codex", "warmup", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4189,7 +4328,7 @@ fn warmup_status_text_reports_empty_state() {
     let home = tempdir().expect("tempdir");
 
     let output = cargo_bin()
-        .args(["warmup", "status", "--home"])
+        .args(["codex", "warmup", "status", "--home"])
         .arg(home.path())
         .assert()
         .success()
@@ -4206,7 +4345,7 @@ fn warmup_state_write_persists_normalized_json() {
     let state_path = state_dir.path().join("state.json");
 
     cargo_bin()
-        .args(["warmup", "state", "write", "--path"])
+        .args(["codex", "warmup", "state", "write", "--path"])
         .arg(&state_path)
         .args([
             "--state-json",
@@ -4232,7 +4371,7 @@ fn warmup_marker_show_reports_disabled_and_autostart() {
     fs::write(warmup_dir.join("disabled.v1"), "disabled\n").expect("write disabled");
 
     let output = cargo_bin()
-        .args(["warmup", "marker", "show", "--home"])
+        .args(["codex", "warmup", "marker", "show", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4253,12 +4392,12 @@ fn warmup_marker_write_and_set_disabled_update_files() {
     let disabled_path = state_dir.path().join("disabled.v1");
 
     cargo_bin()
-        .args(["warmup", "marker", "write-autostart", "--path"])
+        .args(["codex", "warmup", "marker", "write-autostart", "--path"])
         .arg(&autostart_path)
         .assert()
         .success();
     cargo_bin()
-        .args(["warmup", "marker", "set-disabled", "--path"])
+        .args(["codex", "warmup", "marker", "set-disabled", "--path"])
         .arg(&disabled_path)
         .args(["--disabled=true"])
         .assert()
@@ -4267,7 +4406,7 @@ fn warmup_marker_write_and_set_disabled_update_files() {
     assert!(disabled_path.exists());
 
     cargo_bin()
-        .args(["warmup", "marker", "set-disabled", "--path"])
+        .args(["codex", "warmup", "marker", "set-disabled", "--path"])
         .arg(&disabled_path)
         .args(["--disabled=false"])
         .assert()
@@ -4287,7 +4426,7 @@ fn warmup_autostart_decision_prefers_disabled_and_legacy_state() {
     .expect("write state");
 
     let output = cargo_bin()
-        .args(["warmup", "autostart-decision", "--home"])
+        .args(["codex", "warmup", "autostart-decision", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4301,7 +4440,7 @@ fn warmup_autostart_decision_prefers_disabled_and_legacy_state() {
 
     fs::write(warmup_dir.join("disabled.v1"), "disabled\n").expect("write disabled");
     let output = cargo_bin()
-        .args(["warmup", "autostart-decision", "--home"])
+        .args(["codex", "warmup", "autostart-decision", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -15822,155 +15961,6 @@ fn vault_trust_lookup_reports_missing_entry() {
 }
 
 #[test]
-fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let workspace = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-plan", "--profile", "ferma", "--workspace"])
-        .arg(workspace.path())
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["name"], "ferma");
-    assert_eq!(parsed["container_name"], "si-codex-ferma");
-    assert_eq!(parsed["workspace_mirror_target"], path_string(workspace.path()));
-    assert_eq!(parsed["workdir"], path_string(workspace.path()));
-    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
-    assert_eq!(parsed["skills_volume"], "si-codex-skills");
-    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
-}
-
-#[test]
-fn codex_spawn_plan_json_includes_repo_pat_env_and_host_mounts() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "darmstada", &["darmstada"]);
-    let workspace = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-plan", "--profile", "darmstada", "--workspace"])
-        .arg(workspace.path())
-        .args(["--repo", "acme/repo", "--gh-pat", "token-123", "--home"])
-        .arg(home.path())
-        .args(["--env", "EXTRA=1"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    let env = parsed["env"].as_array().expect("env array");
-    assert!(env.iter().any(|value| value == "SI_REPO=acme/repo"));
-    assert!(env.iter().any(|value| value == "SI_GH_PAT=token-123"));
-    assert!(env.iter().any(|value| value == "GH_TOKEN=token-123"));
-    assert!(env.iter().any(|value| value == "GITHUB_TOKEN=token-123"));
-    assert!(env.iter().any(|value| value == "EXTRA=1"));
-
-    let mounts = parsed["mounts"].as_array().expect("mounts array");
-    assert!(mounts.iter().any(|mount| mount["target"] == "/workspace"));
-    assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
-}
-
-#[test]
-fn codex_spawn_plan_uses_env_host_context_when_flags_are_omitted() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "einsteina", &["einsteina"]);
-    let workspace = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-plan", "--profile", "einsteina", "--workspace"])
-        .arg(workspace.path())
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    let mounts = parsed["mounts"].as_array().expect("mounts array");
-    assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
-}
-
-#[test]
-fn codex_spawn_spec_json_includes_named_volumes_and_command() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let workspace = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-spec", "--profile", "ferma", "--workspace"])
-        .arg(workspace.path())
-        .args(["--cmd", "echo hello", "--port", "3000:3000", "--label", "si.codex.profile=ferma"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    let command = parsed["command"].as_array().expect("command array");
-    assert_eq!(command[0], "bash");
-    assert_eq!(command[2], "echo hello");
-    assert_eq!(parsed["user"], "root");
-    assert_eq!(parsed["detach"], true);
-    assert_eq!(parsed["auto_remove"], false);
-    let labels = parsed["labels"].as_array().expect("labels array");
-    assert!(labels.iter().any(|label| label["key"] == "si.component" && label["value"] == "codex"));
-    assert!(
-        labels.iter().any(|label| label["key"] == "si.codex.profile" && label["value"] == "ferma")
-    );
-    let published_ports = parsed["published_ports"].as_array().expect("published ports");
-    assert_eq!(published_ports[0]["host_ip"], "127.0.0.1");
-    assert_eq!(published_ports[0]["host_port"], "3000");
-    assert_eq!(published_ports[0]["container_port"], 3000);
-    let volume_mounts = parsed["volume_mounts"].as_array().expect("volume mounts");
-    assert_eq!(volume_mounts.len(), 3);
-    assert!(volume_mounts.iter().any(|mount| mount["target"] == "/home/si/.codex"));
-    assert_eq!(parsed["restart_policy"], "unless-stopped");
-}
-
-#[test]
-fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let workspace = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-run-args", "--profile", "ferma", "--workspace"])
-        .arg(workspace.path())
-        .args([
-            "--cmd",
-            "echo hello",
-            "--port",
-            "3000:3000",
-            "--label",
-            "si.codex.profile=ferma",
-            "--format",
-            "text",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let text = String::from_utf8(output).expect("utf8 output");
-    assert!(text.contains("run"));
-    assert!(text.contains("-d"));
-    assert!(text.contains("--user root"));
-    assert!(text.contains("--label si.component=codex"));
-    assert!(text.contains("--label si.codex.profile=ferma"));
-    assert!(text.contains("-p 127.0.0.1:3000:3000"));
-    assert!(text.contains("bash -lc echo hello"));
-}
-
-#[test]
 fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
@@ -15988,7 +15978,7 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn-start", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args([
             "--cmd",
@@ -16019,23 +16009,176 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
 }
 
 #[test]
-fn codex_remove_plan_json_returns_container_and_volume_names() {
+fn codex_spawn_uses_current_dir_when_workspace_is_omitted() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'container-id-123'\n",
+            args_path.display()
+        ),
+    );
+
     let output = cargo_bin()
+        .current_dir(workspace.path())
         .env("HOME", home.path())
-        .args(["codex", "remove-plan", "ferma", "--format", "json"])
+        .args(["codex", "spawn", "--profile", "ferma", "--docker-bin"])
+        .arg(&docker_bin)
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
 
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["container_name"], "si-codex-ferma");
-    assert_eq!(parsed["slug"], "ferma");
-    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
-    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("container-id-123"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains(workspace.path().to_string_lossy().as_ref()));
+}
+
+#[test]
+fn codex_spawn_uses_codex_settings_defaults_when_flags_are_omitted() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        format!(
+            concat!(
+                "schema_version = 1\n",
+                "[codex]\n",
+                "profile = \"ferma\"\n",
+                "image = \"ghcr.io/example/si:test\"\n",
+                "network = \"si-dev\"\n",
+                "workdir = \"/custom/workdir\"\n\n",
+                "[codex.profiles]\n",
+                "active = \"ferma\"\n\n",
+                "[codex.profiles.entries.ferma]\n",
+                "name = \"ferma\"\n",
+                "email = \"ferma@example.com\"\n",
+                "auth_path = {:?}\n",
+            ),
+            home.path().join(".si").join("codex").join("profiles").join("ferma").join("auth.json")
+        ),
+    )
+    .expect("write settings");
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'container-id-123'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("container-id-123"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("--network\nsi-dev\n"));
+    assert!(args.contains("-w\n/custom/workdir\n"));
+    assert!(args.contains("ghcr.io/example/si:test\n"));
+}
+
+#[test]
+fn codex_spawn_reports_missing_default_runtime_image_clearly() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        r#"#!/bin/sh
+set -eu
+cat >&2 <<'EOF'
+Unable to find image 'aureuma/si:local' locally
+docker: Error response from daemon: pull access denied for aureuma/si, repository does not exist or may require 'docker login'
+EOF
+exit 1
+"#,
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("docker image \"aureuma/si:local\" is not available locally"));
+    assert!(stderr.contains("si build image"));
+    assert!(stderr.contains("--image"));
+    assert!(stderr.contains("codex.image"));
+}
+
+#[test]
+fn build_image_uses_repo_root_and_buildx_by_default() {
+    let repo_root = repo_root_for_test();
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("docker-args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+if [ "${{1:-}}" = "buildx" ] && [ "${{2:-}}" = "version" ]; then
+  exit 0
+fi
+exit 0
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+    let path =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("PATH", path)
+        .current_dir(&repo_root)
+        .args(["build", "image", "--skip-preflight"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 stdout");
+    assert!(stdout.contains("built runtime image: aureuma/si:local"));
+
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("buildx\nversion\n--\n"));
+    assert!(args.contains("buildx\nbuild\n--load\n-t\naureuma/si:local\n"));
+    assert!(args.contains("-f\n"));
+    assert!(args.contains("tools/si-image/Dockerfile"));
 }
 
 #[test]
@@ -16105,6 +16248,98 @@ fn codex_remove_json_reports_profile_and_removed_artifacts() {
     assert_eq!(parsed["codex_volume"], "si-codex-ferma");
     assert_eq!(parsed["gh_volume"], "si-gh-ferma");
     assert!(parsed["output"].as_str().expect("output string").contains("removed"));
+}
+
+#[test]
+fn codex_remove_all_prompts_and_removes_all_listed_containers() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+if [ "${{1:-}}" = "ps" ]; then
+  printf '%s\n' 'si-codex-america	running	aureuma/si:local	america'
+  printf '%s\n' 'si-codex-ferma	exited	aureuma/si:local	ferma'
+  exit 0
+fi
+printf '%s\n' 'removed'
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "remove", "--all", "--volumes", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .write_stdin("remove all\n")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["aborted"], false);
+    let removed = parsed["removed"].as_array().expect("removed array");
+    assert_eq!(removed.len(), 2);
+    assert_eq!(removed[0]["container_name"], "si-codex-america");
+    assert_eq!(removed[0]["profile_id"], "america");
+    assert_eq!(removed[1]["container_name"], "si-codex-ferma");
+    assert_eq!(removed[1]["profile_id"], "ferma");
+
+    let args = fs::read_to_string(args_path).expect("read args");
+    assert!(args.contains("ps\n"));
+    assert!(args.contains("rm\n-f\nsi-codex-america\n"));
+    assert!(args.contains("rm\n-f\nsi-codex-ferma\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-codex-america\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-gh-america\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-codex-ferma\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-gh-ferma\n"));
+}
+
+#[test]
+fn codex_remove_all_decline_skips_removal() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+if [ "${{1:-}}" = "ps" ]; then
+  printf '%s\n' 'si-codex-america	running	aureuma/si:local	america'
+  exit 0
+fi
+printf '%s\n' 'removed'
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "remove", "--all", "--docker-bin"])
+        .arg(&docker_bin)
+        .write_stdin("nope\n")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert_eq!(String::from_utf8(output).expect("utf8 output"), "aborted\n");
+
+    let args = fs::read_to_string(args_path).expect("read args");
+    assert!(args.contains("ps\n"));
+    assert!(!args.contains("\nrm\n"));
+    assert!(!args.contains("\nvolume\nrm\n"));
 }
 
 #[test]
@@ -16232,37 +16467,6 @@ fn codex_stop_json_reports_container_name() {
 }
 
 #[test]
-fn codex_clone_json_reports_container_name() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let script_dir = tempdir().expect("tempdir");
-    let args_path = script_dir.path().join("args.txt");
-    let docker_bin = script_dir.path().join("docker");
-    write_executable_script(
-        &docker_bin,
-        &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'cloned'\n",
-            args_path.display()
-        ),
-    );
-
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "clone", "ferma", "acme/repo", "--format", "json", "--docker-bin"])
-        .arg(&docker_bin)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["repo"], "acme/repo");
-    assert_eq!(parsed["container_name"], "si-codex-ferma");
-    assert!(parsed["output"].as_str().expect("output string").contains("cloned"));
-}
-
-#[test]
 fn codex_logs_executes_docker_logs_for_container_name() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
@@ -16322,57 +16526,6 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
     assert!(text.contains("tail line"));
     let args = fs::read_to_string(args_path).expect("args file");
     assert_eq!(args.lines().collect::<Vec<_>>(), ["logs", "-f", "--tail", "25", "si-codex-ferma"]);
-}
-
-#[test]
-fn codex_clone_executes_docker_exec_for_container_name() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let script_dir = tempdir().expect("tempdir");
-    let args_path = script_dir.path().join("args.txt");
-    let docker_bin = script_dir.path().join("docker");
-    write_executable_script(
-        &docker_bin,
-        &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'cloned'\n",
-            args_path.display()
-        ),
-    );
-
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "clone", "ferma", "acme/repo", "--gh-pat", "token-123", "--docker-bin"])
-        .arg(&docker_bin)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let text = String::from_utf8(output).expect("utf8 output");
-    assert!(text.contains("cloned"));
-    let args = fs::read_to_string(args_path).expect("args file");
-    assert_eq!(
-        args.lines().collect::<Vec<_>>(),
-        [
-            "exec",
-            "--user",
-            "si",
-            "-e",
-            "SI_REPO=acme/repo",
-            "-e",
-            "SI_GH_PAT=token-123",
-            "-e",
-            "GH_TOKEN=token-123",
-            "-e",
-            "GITHUB_TOKEN=token-123",
-            "si-codex-ferma",
-            "/usr/local/bin/si-entrypoint",
-            "bash",
-            "-lc",
-            "true",
-        ]
-    );
 }
 
 #[test]
@@ -16603,7 +16756,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
 
     cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn-start", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
         .arg(workspace.path())
         .args(["--cmd", "echo hello", "--docker-bin"])
         .arg(&docker_bin)
@@ -16651,17 +16804,6 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
         .success();
     assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
 
-    let clone_output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "clone", "ferma", "acme/repo", "--docker-bin"])
-        .arg(&docker_bin)
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    assert!(String::from_utf8(clone_output).expect("utf8 output").contains("cloned"));
-
     cargo_bin()
         .env("HOME", home.path())
         .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
@@ -16700,84 +16842,16 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
 }
 
 #[test]
-fn codex_tmux_plan_json_uses_bypass_flag_and_start_dir() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args([
-            "codex",
-            "tmux-plan",
-            "profile-beta",
-            "--start-dir",
-            "/home/ubuntu/Development/si",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["session_name"], "si-codex-pane-profile-beta");
-    assert_eq!(parsed["target"], "si-codex-pane-profile-beta:0.0");
-    assert!(
-        parsed["launch_command"]
-            .as_str()
-            .unwrap_or("")
-            .contains("codex --dangerously-bypass-approvals-and-sandbox")
-    );
-    assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
-    assert!(
-        parsed["launch_command"].as_str().unwrap_or("").contains("/home/ubuntu/Development/si")
-    );
-}
-
-#[test]
-fn codex_tmux_plan_json_includes_resume_command_when_present() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args([
-            "codex",
-            "tmux-plan",
-            "profile-beta",
-            "--start-dir",
-            "/workspace/app",
-            "--resume-session-id",
-            "sess-123",
-            "--resume-profile",
-            "profile-beta",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert!(parsed["resume_command"].as_str().unwrap_or("").contains("codex resume"));
-    assert!(parsed["resume_command"].as_str().unwrap_or("").contains("sess-123"));
-    assert!(
-        parsed["resume_command"]
-            .as_str()
-            .unwrap_or("")
-            .contains("tmux session unavailable; attempting codex resume")
-    );
-}
-
-#[test]
 fn codex_tmux_command_json_uses_bypass_flag() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "profile-beta", &["profile-beta"]);
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-beta",
+        &[("profile-beta", "🧪 Profile Beta", "profile-beta@example.com")],
+    );
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "tmux-command", "profile-beta", "--format", "json"])
+        .args(["codex", "tmux", "profile-beta", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -16787,6 +16861,7 @@ fn codex_tmux_command_json_uses_bypass_flag() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["profile_id"], "profile-beta");
     assert_eq!(parsed["container"], "si-codex-profile-beta");
+    assert_eq!(parsed["session_name"], "si-codex-pane-profile-beta 🧪 Profile Beta");
     assert!(
         parsed["launch_command"]
             .as_str()
@@ -16794,6 +16869,48 @@ fn codex_tmux_command_json_uses_bypass_flag() {
             .contains("codex --dangerously-bypass-approvals-and-sandbox")
     );
     assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
+}
+
+#[test]
+fn codex_tmux_executes_local_tmux_attach_flow() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-beta",
+        &[("profile-beta", "🧪 Profile Beta", "profile-beta@example.com")],
+    );
+    let script_dir = tempdir().expect("tempdir");
+    let args_file = script_dir.path().join("tmux-args.txt");
+    let tmux_path = script_dir.path().join("tmux");
+    write_executable_shell_script(
+        &tmux_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"has-session\" ]; then exit 1; fi\nexit 0\n",
+            args = shell_escape_for_test(&args_file)
+        ),
+    );
+
+    let path =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path)
+        .args(["codex", "tmux", "profile-beta"])
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read tmux args");
+    assert!(args.contains("has-session\n-t\nsi-codex-pane-profile-beta 🧪 Profile Beta\n"));
+    assert!(args.contains("has-session\n-t\nsi-codex-pane-profile-beta\n"));
+    assert!(args.contains("new-session\n-d\n-s\nsi-codex-pane-profile-beta 🧪 Profile Beta\n"));
+    assert!(
+        args.contains("set-option\n-t\nsi-codex-pane-profile-beta 🧪 Profile Beta\nmouse\non\n")
+    );
+    assert!(args.contains(
+        "set-option\n-t\nsi-codex-pane-profile-beta 🧪 Profile Beta\nhistory-limit\n200000\n"
+    ));
+    assert!(args.contains("attach-session\n-t\nsi-codex-pane-profile-beta 🧪 Profile Beta\n"));
+    assert!(args.contains("docker exec -it --user 'si' 'si-codex-profile-beta'"));
 }
 
 #[test]
@@ -16824,12 +16941,6 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
         .assert()
         .success();
 
-    cargo_bin()
-        .args(["codex", "profile", "use", "einsteina", "--home"])
-        .arg(home.path())
-        .assert()
-        .success();
-
     let list_output = cargo_bin()
         .args(["codex", "profile", "list", "--home"])
         .arg(home.path())
@@ -16846,11 +16957,11 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
             .as_array()
             .expect("profiles")
             .iter()
-            .any(|profile| profile["profile"] == "einsteina" && profile["active"] == true)
+            .any(|profile| profile["profile"] == "ferma" && profile["active"] == true)
     );
 
     let show_output = cargo_bin()
-        .args(["codex", "profile", "show", "--home"])
+        .args(["codex", "profile", "show", "einsteina", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -16860,7 +16971,7 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
         .clone();
     let shown: Value = serde_json::from_slice(&show_output).expect("json output");
     assert_eq!(shown["profile"], "einsteina");
-    assert_eq!(shown["active"], true);
+    assert_eq!(shown["active"], false);
 }
 
 #[test]
@@ -16928,25 +17039,91 @@ fn codex_profile_show_text_resolves_display_name_query() {
 }
 
 #[test]
-fn codex_profile_use_accepts_fuzzy_profile_query() {
+fn codex_profile_list_includes_live_quota_fields_for_running_container() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "america",
-        &[
-            ("america", "🗽 America", "maps-android.5t@icloud.com"),
-            ("cadma", "💜 Cadma", "calypso.bard-05@icloud.com"),
-        ],
+        "ferma",
+        &[("ferma", "🏰 Ferma", "ferma@example.com")],
     );
+    write_codex_auth(home.path(), "ferma", "ferma@example.com");
 
-    cargo_bin()
-        .args(["codex", "profile", "use", "cad", "--home"])
-        .arg(home.path())
-        .assert()
-        .success();
+    let script_dir = tempdir().expect("tempdir");
+    let docker_path = script_dir.path().join("docker");
+    let primary_reset = Local::now().timestamp() + 3600;
+    let secondary_reset = Local::now().timestamp() + 7200;
+    let rate_json = serde_json::json!({
+        "id": 2,
+        "result": {
+            "rateLimits": {
+                "primary": {
+                    "usedPercent": 25,
+                    "windowDurationMins": 300,
+                    "resetsAt": primary_reset,
+                },
+                "secondary": {
+                    "usedPercent": 12,
+                    "windowDurationMins": 10080,
+                    "resetsAt": secondary_reset,
+                }
+            }
+        }
+    })
+    .to_string();
+    let account_json = serde_json::json!({
+        "id": 3,
+        "result": {
+            "account": {
+                "type": "chatgpt",
+                "email": "ferma@example.com",
+                "planType": "pro"
+            }
+        }
+    })
+    .to_string();
+    let config_json = serde_json::json!({
+        "id": 4,
+        "result": {
+            "config": {
+                "model": "gpt-5.2-codex",
+                "model_reasoning_effort": "medium"
+            }
+        }
+    })
+    .to_string();
+    write_executable_shell_script(
+        &docker_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+cmd="${{1:-}}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-ferma	running	aureuma/si:local	ferma'
+    ;;
+  exec)
+    cat >/dev/null
+    printf '%s\n' '{rate_json}' '{account_json}' '{config_json}'
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+            rate_json = rate_json,
+            account_json = account_json,
+            config_json = config_json,
+        ),
+    );
+    let path_env =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
-    let show_output = cargo_bin()
-        .args(["codex", "profile", "show", "--home"])
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path_env)
+        .args(["codex", "profile", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -16954,9 +17131,222 @@ fn codex_profile_use_accepts_fuzzy_profile_query() {
         .get_output()
         .stdout
         .clone();
-    let shown: Value = serde_json::from_slice(&show_output).expect("json output");
-    assert_eq!(shown["profile"], "cadma");
-    assert_eq!(shown["active"], true);
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let profile = parsed.as_array().and_then(|profiles| profiles.first()).expect("profile entry");
+    assert_eq!(profile["profile"], "ferma");
+    assert_eq!(profile["account_plan"], "pro");
+    assert_eq!(profile["five_hour_left_pct"], 75.0);
+    assert_eq!(profile["weekly_left_pct"], 88.0);
+}
+
+#[test]
+fn codex_warmup_run_warms_profiles_and_updates_state() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "ferma",
+        &[
+            ("ferma", "🏰 Ferma", "ferma@example.com"),
+            ("america", "🗽 America", "america@example.com"),
+        ],
+    );
+    write_codex_auth(home.path(), "ferma", "ferma@example.com");
+    write_codex_auth(home.path(), "america", "america@example.com");
+
+    let workspace = tempdir().expect("workspace");
+    let script_dir = tempdir().expect("tempdir");
+    let state_file = script_dir.path().join("docker-state.txt");
+    let args_file = script_dir.path().join("docker-args.txt");
+    let docker_path = script_dir.path().join("docker");
+    let warmup_state = script_dir.path().join("warmup-state.json");
+    let primary_reset = Local::now().timestamp() + 3600;
+    let secondary_reset = Local::now().timestamp() + 7200;
+    let rate_json = serde_json::json!({
+        "id": 2,
+        "result": {
+            "rateLimits": {
+                "primary": {
+                    "usedPercent": 25,
+                    "windowDurationMins": 300,
+                    "resetsAt": primary_reset,
+                },
+                "secondary": {
+                    "usedPercent": 12,
+                    "windowDurationMins": 10080,
+                    "resetsAt": secondary_reset,
+                }
+            }
+        }
+    })
+    .to_string();
+    let account_json = serde_json::json!({
+        "id": 3,
+        "result": {
+            "account": {
+                "type": "chatgpt",
+                "email": "ferma@example.com",
+                "planType": "pro"
+            }
+        }
+    })
+    .to_string();
+    let config_json = serde_json::json!({
+        "id": 4,
+        "result": {
+            "config": {
+                "model": "gpt-5.2-codex",
+                "model_reasoning_effort": "medium"
+            }
+        }
+    })
+    .to_string();
+    write_executable_shell_script(
+        &docker_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+STATE={state_file}
+ARGS={args_file}
+printf '%s\n' "$@" >> "$ARGS"
+cmd="${{1:-}}"
+shift || true
+case "$cmd" in
+  ps)
+    if [ -f "$STATE" ]; then
+      sort "$STATE" | while IFS= read -r profile; do
+        [ -n "$profile" ] || continue
+        printf 'si-codex-%s\trunning\taureuma/si:local\t%s\n' "$profile" "$profile"
+      done
+    fi
+    ;;
+  run)
+    profile=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --label)
+          shift
+          case "${{1:-}}" in
+            si.codex.profile=*)
+              profile="${{1#si.codex.profile=}}"
+              ;;
+          esac
+          ;;
+      esac
+      shift || true
+    done
+    [ -n "$profile" ] || profile="unknown"
+    touch "$STATE"
+    if ! grep -Fxq "$profile" "$STATE" 2>/dev/null; then
+      printf '%s\n' "$profile" >> "$STATE"
+    fi
+    printf 'container-%s\n' "$profile"
+    ;;
+  start)
+    printf '%s\n' "$1"
+    ;;
+  exec)
+    cat >/dev/null
+    container=""
+    for arg in "$@"; do
+      case "$arg" in
+        si-codex-*)
+          container="$arg"
+          break
+          ;;
+      esac
+    done
+    case "$container" in
+      si-codex-america)
+        printf '%s\n' '{rate_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"america@example.com","planType":"plus"}}}}}}' '{config_json}'
+        ;;
+      *)
+        printf '%s\n' '{rate_json}' '{account_json}' '{config_json}'
+        ;;
+    esac
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+            state_file = shell_escape_for_test(&state_file),
+            args_file = shell_escape_for_test(&args_file),
+            rate_json = rate_json,
+            account_json = account_json,
+            config_json = config_json,
+        ),
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "warmup", "run", "--all", "--home"])
+        .arg(home.path())
+        .args(["--workspace"])
+        .arg(workspace.path())
+        .args(["--path"])
+        .arg(&warmup_state)
+        .args(["--docker-bin"])
+        .arg(&docker_path)
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let profiles = parsed["profiles"].as_array().expect("profiles array");
+    assert_eq!(profiles.len(), 2);
+    assert!(profiles.iter().any(|profile| {
+        profile["profile_id"] == "ferma"
+            && profile["result"] == "warmed"
+            && profile["five_hour_left_pct"] == 75.0
+            && profile["weekly_left_pct"] == 88.0
+            && profile["account_plan"] == "pro"
+    }));
+    assert!(profiles.iter().any(|profile| {
+        profile["profile_id"] == "america"
+            && profile["result"] == "warmed"
+            && profile["account_plan"] == "plus"
+    }));
+
+    let state: Value =
+        serde_json::from_str(&fs::read_to_string(&warmup_state).expect("read warmup state"))
+            .expect("parse warmup state");
+    assert_eq!(state["profiles"]["ferma"]["last_result"], "warmed");
+    assert_eq!(state["profiles"]["ferma"]["last_weekly_used_ok"], true);
+    assert_eq!(state["profiles"]["america"]["last_result"], "warmed");
+
+    let args = fs::read_to_string(&args_file).expect("docker args");
+    assert!(args.contains("ps"));
+    assert!(args.contains("run"));
+    assert!(args.contains("codex\napp-server\n"));
+}
+
+#[test]
+fn codex_profile_show_requires_explicit_profile_outside_tty() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "america",
+        &[
+            ("america", "🗽 America", "maps-android.5t@icloud.com"),
+            ("cadma", "💟 Cadma", "calypso.bard-05@icloud.com"),
+        ],
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "show", "--home"])
+        .arg(home.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("codex profile is required"));
+    assert!(stderr.contains("run in a TTY"));
 }
 
 #[test]
@@ -17179,25 +17569,6 @@ fn codex_profile_swap_requires_logged_in_profile() {
         "model = \"gpt-5\"\n"
     );
     assert!(!host_codex_home.join("auth.json").exists());
-}
-
-#[test]
-fn codex_spawn_plan_rejects_unconfigured_profile() {
-    let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
-    let workspace = tempdir().expect("tempdir");
-
-    let output = cargo_bin()
-        .env("HOME", home.path())
-        .args(["codex", "spawn-plan", "--profile", "unknown", "--workspace"])
-        .arg(workspace.path())
-        .assert()
-        .failure()
-        .get_output()
-        .stderr
-        .clone();
-    let stderr = String::from_utf8(output).expect("utf8 stderr");
-    assert!(stderr.contains("is not configured"));
 }
 
 #[test]

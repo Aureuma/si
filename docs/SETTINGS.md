@@ -16,6 +16,28 @@ When supported by a command, values resolve in this order:
 3. Environment variables
 4. Built-in defaults
 
+## CLI color output
+
+SI CLI help and text-mode output share one semantic color palette:
+
+- section headings: cyan
+- commands/examples: magenta
+- flags/prompts: yellow
+- labels: blue
+- success: green
+- warnings: yellow
+- errors: red
+- muted text: gray
+
+Color control is environment-driven:
+
+- `SI_CLI_COLOR=always`: force color
+- `SI_CLI_COLOR=auto`: default behavior
+- `SI_CLI_COLOR=never`: disable color
+- `NO_COLOR=1`: disable color
+
+Structured JSON output remains uncolored.
+
 ## Schema
 The file is a standard TOML document. `schema_version` is reserved for future migrations.
 
@@ -35,24 +57,24 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/disabled.v1` (warmup scheduler disabled marker)
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
-Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si warmup ...`.
+Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
 
 ### `[codex]`
 Defaults for `si codex` profile-bound container commands.
 - Every `si codex` container must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
-- `si codex profile add|show|list|use|remove` manages the profile registry in `~/.si/settings.toml`.
+- `si codex profile add|show|list|login|swap|remove` manages the profile registry in `~/.si/settings.toml`.
 - `codex.image` (string): docker image for `si codex spawn` (default: `aureuma/si:local`)
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind.
   - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `codex.workdir` (string): container working directory
-- `codex.profile` (string): legacy/default active profile ID. `codex.profiles.active` is preferred and `si codex profile use` keeps them aligned.
+- `codex.profile` (string): legacy compatibility field for the most recently selected Codex profile.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime/container behavior stays under `si codex ...`.
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
-- `codex.profiles.active` (string): active/default profile for `si codex` and profile-scoped Fort runtime auth
+- `codex.profiles.active` (string): the most recently swapped/selected profile for profile-scoped Fort runtime auth and related host state
 
 ##### `[codex.profiles.entries.<id>]`
 Per-profile entry keyed by profile ID (for example `america`). These entries are created and updated by `si codex profile add` and any later profile metadata sync flows.
