@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use si_tools::{
-    collect_git_safe_directories, ensure_git_safe_directories, shell_escape, sync_codex_skills,
-    write_codex_config,
+    collect_git_safe_directories, ensure_git_safe_directories, shell_escape, sync_codex_auth,
+    sync_codex_skills, write_codex_config,
 };
 
 fn main() -> ExitCode {
@@ -31,6 +31,12 @@ fn run() -> Result<(), String> {
     if is_root() {
         apply_host_ids()?;
         maybe_clone_repo()?;
+        sync_codex_auth(
+            env::var("SI_CODEX_PROFILE_ID").ok().as_deref(),
+            Path::new("/home/si/.si"),
+            Path::new("/home/si/.codex"),
+        )
+        .map_err(|err| format!("sync auth: {err}"))?;
         sync_codex_skills(Path::new("/opt/si/codex-skills"), Path::new("/home/si/.codex/skills"))
             .map_err(|err| format!("sync skills: {err}"))?;
         let template_path = env::var("CODEX_CONFIG_TEMPLATE")

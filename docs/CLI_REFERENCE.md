@@ -17,6 +17,34 @@ si <command> --help
 si <command> <subcommand> --help
 ```
 
+## CLI color system
+
+SI text output uses a small semantic palette instead of per-command ad hoc colors:
+
+| Role | Meaning | Color |
+| --- | --- | --- |
+| Section headings | usage blocks, help sections, command-group titles | cyan |
+| Commands and examples | command names, runnable examples, selected profiles | magenta |
+| Flags and operator prompts | options, warnings, confirmation prompts | yellow |
+| Labels | `key=value` keys, field names, probe labels | blue |
+| Success | ready, ok, warmed, healthy state | green |
+| Warning | degraded or operator-attention state | yellow |
+| Error | failed, invalid, destructive/error state | red |
+| Muted | indexes, separators, filler text | gray |
+
+Rules:
+
+- JSON output stays uncolored.
+- Text output uses the semantic palette above when color is enabled.
+- `si --help` and nested `--help` output use the same palette as runtime text output.
+
+Color control:
+
+- `SI_CLI_COLOR=always`: force color even when stdout is not a TTY
+- `SI_CLI_COLOR=auto`: default behavior
+- `SI_CLI_COLOR=never`: disable CLI colors
+- `NO_COLOR=1`: disable CLI colors
+
 ## Top-level command families
 
 | Domain | Commands |

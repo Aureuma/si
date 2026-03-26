@@ -8,6 +8,6 @@ mod tests {
 
     #[test]
     fn returns_repo_version() {
-        assert_eq!(current_version(), "v0.55.2");
+        assert_eq!(current_version(), "v0.55.7");
     }
 }

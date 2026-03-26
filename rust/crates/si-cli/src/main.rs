@@ -17,7 +17,10 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{TimeZone, Utc};
-use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use clap::builder::styling::{AnsiColor, Effects, Styles};
+use clap::{
+    ArgAction, Args, ColorChoice, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum,
+};
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Attribute, Cell, Color, ColumnConstraint, ContentArrangement, Table, Width};
@@ -29,9 +32,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use si_rs_codex::{
-    RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
+    DEFAULT_IMAGE, RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
     build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_command_for_container,
-    build_tmux_plan, parse_report_capture,
+    codex_tmux_session_name, parse_report_capture,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -43,9 +46,8 @@ use si_rs_config::settings::{
 };
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
-    docker_container_exec_command, docker_container_list_command,
-    docker_container_list_with_format_command, docker_container_logs_command,
-    docker_container_remove_command, docker_volume_remove_command,
+    docker_container_exec_command, docker_container_list_with_format_command,
+    docker_container_logs_command, docker_container_remove_command, docker_volume_remove_command,
 };
 use si_rs_dyad::{
     SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
@@ -366,10 +368,6 @@ enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
-    Warmup {
-        #[command(subcommand)]
-        command: WarmupCommand,
-    },
     Vault {
         #[command(subcommand)]
         command: VaultCommand,
@@ -450,6 +448,8 @@ enum SettingsCommand {
 
 #[derive(Debug, Subcommand)]
 enum BuildCommand {
+    #[command(name = "image")]
+    Image(BuildImageArgs),
     #[command(name = "self")]
     Self_ {
         #[command(flatten)]
@@ -470,6 +470,16 @@ enum BuildCommand {
         #[command(subcommand)]
         command: BuildHomebrewCommand,
     },
+}
+
+#[derive(Debug, Args)]
+struct BuildImageArgs {
+    #[arg(long = "repo-root")]
+    repo_root: Option<PathBuf>,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long = "skip-preflight", action = ArgAction::SetTrue)]
+    skip_preflight: bool,
 }
 
 #[derive(Debug, Args)]
@@ -15422,149 +15432,11 @@ enum DyadCommand {
 }
 
 #[derive(Debug, Args)]
-struct CodexSpawnPlanArgs {
-    #[arg(long)]
-    profile: Option<String>,
-    #[arg(long)]
-    workspace: PathBuf,
-    #[arg(long)]
-    workdir: Option<String>,
-    #[arg(long)]
-    codex_volume: Option<String>,
-    #[arg(long)]
-    skills_volume: Option<String>,
-    #[arg(long)]
-    gh_volume: Option<String>,
-    #[arg(long)]
-    repo: Option<String>,
-    #[arg(long)]
-    gh_pat: Option<String>,
-    #[arg(long, default_value_t = true)]
-    docker_socket: bool,
-    #[arg(long, default_value_t = true)]
-    detach: bool,
-    #[arg(long, default_value_t = false)]
-    clean_slate: bool,
-    #[arg(long)]
-    image: Option<String>,
-    #[arg(long)]
-    network: Option<String>,
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long)]
-    ssh_auth_sock: Option<PathBuf>,
-    #[arg(long)]
-    vault_env_file: Option<PathBuf>,
-    #[arg(long, default_value_t = true)]
-    include_host_si: bool,
-    #[arg(long = "env")]
-    env: Vec<String>,
-    #[arg(long, default_value = "json")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
-struct CodexSpawnSpecArgs {
-    #[arg(long)]
-    profile: Option<String>,
-    #[arg(long)]
-    workspace: PathBuf,
-    #[arg(long)]
-    workdir: Option<String>,
-    #[arg(long)]
-    codex_volume: Option<String>,
-    #[arg(long)]
-    skills_volume: Option<String>,
-    #[arg(long)]
-    gh_volume: Option<String>,
-    #[arg(long)]
-    repo: Option<String>,
-    #[arg(long)]
-    gh_pat: Option<String>,
-    #[arg(long, default_value_t = true)]
-    docker_socket: bool,
-    #[arg(long, default_value_t = true)]
-    detach: bool,
-    #[arg(long, default_value_t = false)]
-    clean_slate: bool,
-    #[arg(long)]
-    image: Option<String>,
-    #[arg(long)]
-    network: Option<String>,
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long)]
-    ssh_auth_sock: Option<PathBuf>,
-    #[arg(long)]
-    vault_env_file: Option<PathBuf>,
-    #[arg(long, default_value_t = true)]
-    include_host_si: bool,
-    #[arg(long = "env")]
-    env: Vec<String>,
-    #[arg(long = "label")]
-    labels: Vec<String>,
-    #[arg(long = "port")]
-    ports: Vec<String>,
-    #[arg(long)]
-    cmd: Option<String>,
-    #[arg(long, default_value = "json")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
-struct CodexSpawnArgsArgs {
-    #[arg(long)]
-    profile: Option<String>,
-    #[arg(long)]
-    workspace: PathBuf,
-    #[arg(long)]
-    workdir: Option<String>,
-    #[arg(long)]
-    codex_volume: Option<String>,
-    #[arg(long)]
-    skills_volume: Option<String>,
-    #[arg(long)]
-    gh_volume: Option<String>,
-    #[arg(long)]
-    repo: Option<String>,
-    #[arg(long)]
-    gh_pat: Option<String>,
-    #[arg(long, default_value_t = true)]
-    docker_socket: bool,
-    #[arg(long, default_value_t = true)]
-    detach: bool,
-    #[arg(long, default_value_t = false)]
-    clean_slate: bool,
-    #[arg(long)]
-    image: Option<String>,
-    #[arg(long)]
-    network: Option<String>,
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long)]
-    ssh_auth_sock: Option<PathBuf>,
-    #[arg(long)]
-    vault_env_file: Option<PathBuf>,
-    #[arg(long, default_value_t = true)]
-    include_host_si: bool,
-    #[arg(long = "env")]
-    env: Vec<String>,
-    #[arg(long = "label")]
-    labels: Vec<String>,
-    #[arg(long = "port")]
-    ports: Vec<String>,
-    #[arg(long)]
-    cmd: Option<String>,
-    #[arg(long, default_value = "json")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
 struct CodexSpawnStartArgs {
     #[arg(long)]
     profile: Option<String>,
     #[arg(long)]
-    workspace: PathBuf,
+    workspace: Option<PathBuf>,
     #[arg(long)]
     workdir: Option<String>,
     #[arg(long)]
@@ -15605,14 +15477,6 @@ struct CodexSpawnStartArgs {
     cmd: Option<String>,
     #[arg(long)]
     docker_bin: Option<PathBuf>,
-}
-
-#[derive(Debug, Subcommand)]
-enum CodexSpawnCommand {
-    Plan(CodexSpawnPlanArgs),
-    Spec(CodexSpawnSpecArgs),
-    Args(CodexSpawnArgsArgs),
-    Start(CodexSpawnStartArgs),
 }
 
 #[derive(Debug, Args)]
@@ -15665,15 +15529,6 @@ struct CodexProfileRemoveArgs {
 }
 
 #[derive(Debug, Args)]
-struct CodexProfileUseArgs {
-    profile: Option<String>,
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long)]
-    settings_file: Option<PathBuf>,
-}
-
-#[derive(Debug, Args)]
 struct CodexProfileLoginArgs {
     profile: Option<String>,
     #[arg(long)]
@@ -15703,35 +15558,15 @@ enum CodexProfileCommand {
     Show(CodexProfileShowArgs),
     Add(CodexProfileAddArgs),
     Remove(CodexProfileRemoveArgs),
-    Use(CodexProfileUseArgs),
     Login(CodexProfileLoginArgs),
     Swap(CodexProfileSwapArgs),
 }
 
 #[derive(Debug, Args)]
-struct CodexTmuxPlanArgs {
+struct CodexTmuxArgs {
     profile: Option<String>,
     #[arg(long)]
-    start_dir: Option<String>,
-    #[arg(long)]
-    resume_session_id: Option<String>,
-    #[arg(long)]
-    resume_profile: Option<String>,
-    #[arg(long, default_value = "json")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
-struct CodexTmuxLaunchArgs {
-    profile: Option<String>,
-    #[arg(long, default_value = "json")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Subcommand)]
-enum CodexTmuxCommand {
-    Plan(CodexTmuxPlanArgs),
-    Launch(CodexTmuxLaunchArgs),
+    format: Option<OutputFormat>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -15742,26 +15577,11 @@ enum CodexCommand {
         #[command(subcommand)]
         command: CodexProfileCommand,
     },
-    Spawn {
-        #[command(subcommand)]
-        command: CodexSpawnCommand,
-    },
-    #[command(name = "spawnplan", alias = "spawn-plan", hide = true)]
-    SpawnPlan(CodexSpawnPlanArgs),
-    #[command(name = "spawnspec", alias = "spawn-spec", hide = true)]
-    SpawnSpec(CodexSpawnSpecArgs),
-    #[command(name = "spawnrunargs", alias = "spawn-run-args", hide = true)]
-    SpawnRunArgs(CodexSpawnArgsArgs),
-    #[command(name = "spawnstart", alias = "spawn-start", hide = true)]
-    SpawnStart(CodexSpawnStartArgs),
-    #[command(name = "artifacts", alias = "removeplan", alias = "remove-plan")]
-    Artifacts {
-        profile: Option<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
+    Spawn(CodexSpawnStartArgs),
     Remove {
         profile: Option<String>,
+        #[arg(long, default_value_t = false, conflicts_with = "profile")]
+        all: bool,
         #[arg(long, default_value_t = false)]
         volumes: bool,
         #[arg(long, default_value = "text")]
@@ -15794,16 +15614,6 @@ enum CodexCommand {
         profile: Option<String>,
         #[arg(long, default_value = "200")]
         tail: String,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
-    Clone {
-        profile: String,
-        repo: String,
-        #[arg(long)]
-        gh_pat: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -15840,14 +15650,11 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    Tmux {
+    Tmux(CodexTmuxArgs),
+    Warmup {
         #[command(subcommand)]
-        command: CodexTmuxCommand,
+        command: WarmupCommand,
     },
-    #[command(name = "tmuxplan", alias = "tmux-plan", hide = true)]
-    TmuxPlan(CodexTmuxPlanArgs),
-    #[command(name = "tmuxcommand", alias = "tmux-command", hide = true)]
-    TmuxCommand(CodexTmuxLaunchArgs),
     #[command(name = "report", alias = "reportparse", alias = "report-parse")]
     Report {
         #[arg(long, default_value = "json")]
@@ -16037,6 +15844,7 @@ enum VivaTunnelConfigCommand {
 
 #[derive(Debug, Subcommand)]
 enum WarmupCommand {
+    Run(WarmupRunArgs),
     #[command(name = "decision", alias = "autostartdecision", alias = "autostart-decision")]
     Decision {
         #[arg(long)]
@@ -16066,6 +15874,29 @@ enum WarmupCommand {
         #[command(subcommand)]
         command: WarmupMarkerCommand,
     },
+}
+
+#[derive(Debug, Args)]
+struct WarmupRunArgs {
+    profile: Option<String>,
+    #[arg(long, default_value_t = false, conflicts_with = "profile")]
+    all: bool,
+    #[arg(long)]
+    path: Option<PathBuf>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    workspace: Option<PathBuf>,
+    #[arg(long)]
+    image: Option<String>,
+    #[arg(long)]
+    network: Option<String>,
+    #[arg(long)]
+    docker_bin: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
 }
 
 #[derive(Debug, Subcommand)]
@@ -16946,81 +16777,29 @@ struct CodexProfileView {
     state: String,
     name: Option<String>,
     email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_reset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_reset: Option<String>,
     auth_path: Option<String>,
     auth_updated: Option<String>,
 }
 
 #[derive(Clone, Copy)]
 enum CodexProfileSelectionMode {
-    PreferActiveOnMissing,
     PromptOnMissing,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexSpawnPlanView {
-    name: String,
-    container_name: String,
-    image: String,
-    network_name: String,
-    workspace_host: String,
-    workspace_primary_target: String,
-    workspace_mirror_target: String,
-    workdir: String,
-    codex_volume: String,
-    skills_volume: String,
-    gh_volume: String,
-    docker_socket: bool,
-    clean_slate: bool,
-    detach: bool,
-    env: Vec<String>,
-    mounts: Vec<CodexBindMountView>,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexBindMountView {
-    source: String,
-    target: String,
-    read_only: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexVolumeMountView {
-    source: String,
-    target: String,
-    read_only: bool,
 }
 
 #[derive(Debug, Serialize)]
 struct CodexEnvVarView {
     key: String,
     value: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexSpawnSpecView {
-    image: String,
-    name: Option<String>,
-    network: Option<String>,
-    restart_policy: Option<String>,
-    working_dir: Option<String>,
-    command: Vec<String>,
-    env: Vec<CodexEnvVarView>,
-    bind_mounts: Vec<CodexBindMountView>,
-    volume_mounts: Vec<CodexVolumeMountView>,
-    labels: Vec<CodexEnvVarView>,
-    published_ports: Vec<CodexPublishedPortView>,
-    user: Option<String>,
-    detach: bool,
-    auto_remove: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexRemovePlanView {
-    name: String,
-    container_name: String,
-    slug: String,
-    codex_volume: String,
-    gh_volume: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -17042,14 +16821,6 @@ struct CodexContainerActionView {
 }
 
 #[derive(Debug, Serialize)]
-struct CodexCloneResultView {
-    name: String,
-    repo: String,
-    container_name: String,
-    output: String,
-}
-
-#[derive(Debug, Serialize)]
 struct CodexPublishedPortView {
     host_ip: String,
     host_port: String,
@@ -17061,6 +16832,20 @@ struct CodexListEntryView {
     name: String,
     state: String,
     image: String,
+}
+
+#[derive(Debug)]
+struct CodexContainerListItem {
+    name: String,
+    state: String,
+    image: String,
+    profile_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexRemoveAllResultView {
+    aborted: bool,
+    removed: Vec<CodexRemoveResultView>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -17098,19 +16883,39 @@ struct CodexRespawnPlanView {
 }
 
 #[derive(Debug, Serialize)]
-struct CodexTmuxPlanView {
-    session_name: String,
-    target: String,
-    launch_command: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    resume_command: String,
-}
-
-#[derive(Debug, Serialize)]
 struct CodexTmuxCommandView {
     profile_id: String,
     container: String,
+    session_name: String,
     launch_command: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexWarmupRunView {
+    updated_at: String,
+    state_path: String,
+    profiles: Vec<CodexWarmupRunProfileView>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexWarmupRunProfileView {
+    profile_id: String,
+    action: String,
+    result: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_reset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_reset: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -18696,6 +18501,28 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     Ok(())
 }
 
+fn run_build_image(
+    repo_root: Option<PathBuf>,
+    image: Option<String>,
+    skip_preflight: bool,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    if !skip_preflight {
+        let preflight = repo_root.join("tools").join("si-image").join("preflight-codex-upgrade.sh");
+        run_command_checked(&repo_root, "bash", [preflight.to_str().unwrap_or_default()])?;
+    }
+
+    let image =
+        image.as_deref().map(str::trim).filter(|value| !value.is_empty()).unwrap_or(DEFAULT_IMAGE);
+    docker_build_image(
+        image,
+        &repo_root.join("tools").join("si-image").join("Dockerfile"),
+        &repo_root,
+    )?;
+    println!("built runtime image: {image}");
+    Ok(())
+}
+
 fn docker_build_image(image: &str, dockerfile: &Path, context: &Path) -> Result<()> {
     if StdCommand::new("docker")
         .arg("buildx")
@@ -19251,10 +19078,28 @@ fn execute_public_probe(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
         OutputFormat::Text => {
-            println!("{label} doctor: {}", if ok { "ok" } else { "issues found" });
-            println!("Public probe: {} {} (unauthenticated)", payload.method, payload.path);
-            println!("Base URL: {}", payload.base_url);
-            println!("  {:<3} {:<12} {}", if ok { "OK" } else { "ERR" }, "public.probe", detail,);
+            println!(
+                "{} {}",
+                stdout_text(&format!("{label} doctor:"), CliTone::Section),
+                stdout_text(
+                    if ok { "ok" } else { "issues found" },
+                    if ok { CliTone::Success } else { CliTone::Warning },
+                )
+            );
+            print_cli_kv(
+                "public_probe",
+                format!("{} {} (unauthenticated)", payload.method, payload.path),
+            );
+            print_cli_kv("base_url", &payload.base_url);
+            println!(
+                "  {:<3} {:<12} {}",
+                stdout_text(
+                    if ok { "OK" } else { "ERR" },
+                    if ok { CliTone::Success } else { CliTone::Danger }
+                ),
+                stdout_text("public.probe", CliTone::Label),
+                detail,
+            );
         }
     }
     if !ok {
@@ -19265,7 +19110,7 @@ fn execute_public_probe(
 
 fn main() -> Result<()> {
     configure_sigpipe();
-    let cli = Cli::parse();
+    let cli = parse_cli();
 
     if cli.version_flag {
         println!("{}", si_rs_core::version::current_version());
@@ -19282,6 +19127,9 @@ fn main() -> Result<()> {
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Build { command } => match command {
+            BuildCommand::Image(BuildImageArgs { repo_root, image, skip_preflight }) => {
+                run_build_image(repo_root, image, skip_preflight)?
+            }
             BuildCommand::Self_ { args } => match args.command {
                 Some(BuildSelfCommand::Build(BuildSelfBuildArgs {
                     repo,
@@ -33321,9 +33169,6 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                 }) => remove_codex_profile(profile, home, settings_file)?,
-                CodexProfileCommand::Use(CodexProfileUseArgs { profile, home, settings_file }) => {
-                    use_codex_profile(profile, home, settings_file)?
-                }
                 CodexProfileCommand::Login(CodexProfileLoginArgs {
                     profile,
                     home,
@@ -33338,390 +33183,55 @@ fn main() -> Result<()> {
                     format,
                 }) => swap_codex_profile(profile, home, settings_file, format)?,
             },
-            CodexCommand::Spawn { command } => match command {
-                CodexSpawnCommand::Plan(CodexSpawnPlanArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    format,
-                }) => show_codex_spawn_plan(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    format,
-                )?,
-                CodexSpawnCommand::Spec(CodexSpawnSpecArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                }) => show_codex_spawn_spec(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                )?,
-                CodexSpawnCommand::Args(CodexSpawnArgsArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                }) => show_codex_spawn_run_args(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                )?,
-                CodexSpawnCommand::Start(CodexSpawnStartArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    docker_bin,
-                }) => show_codex_spawn_start(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    docker_bin,
-                )?,
-            },
-            CodexCommand::SpawnPlan(args) => {
-                let CodexSpawnPlanArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    format,
-                } = args;
-                show_codex_spawn_plan(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    format,
-                )?
-            }
-            CodexCommand::SpawnSpec(args) => {
-                let CodexSpawnSpecArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                } = args;
-                show_codex_spawn_spec(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                )?
-            }
-            CodexCommand::SpawnRunArgs(args) => {
-                let CodexSpawnArgsArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                } = args;
-                show_codex_spawn_run_args(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    format,
-                )?
-            }
-            CodexCommand::SpawnStart(args) => {
-                let CodexSpawnStartArgs {
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    docker_bin,
-                } = args;
-                show_codex_spawn_start(
-                    profile,
-                    workspace,
-                    workdir,
-                    codex_volume,
-                    skills_volume,
-                    gh_volume,
-                    repo,
-                    gh_pat,
-                    docker_socket,
-                    detach,
-                    clean_slate,
-                    image,
-                    network,
-                    home,
-                    ssh_auth_sock,
-                    vault_env_file,
-                    include_host_si,
-                    env,
-                    labels,
-                    ports,
-                    cmd,
-                    docker_bin,
-                )?
-            }
-            CodexCommand::Artifacts { profile, format } => {
-                let profile_id = resolve_codex_runtime_profile(profile.as_deref(), None, None)?;
-                show_codex_remove_plan(&profile_id, format)?
-            }
-            CodexCommand::Remove { profile, volumes, format, docker_bin } => {
-                run_codex_remove(profile.as_deref(), volumes, format, docker_bin)?
+            CodexCommand::Spawn(CodexSpawnStartArgs {
+                profile,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                labels,
+                ports,
+                cmd,
+                docker_bin,
+            }) => show_codex_spawn_start(
+                profile,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                labels,
+                ports,
+                cmd,
+                docker_bin,
+            )?,
+            CodexCommand::Remove { profile, all, volumes, format, docker_bin } => {
+                run_codex_remove(profile.as_deref(), all, volumes, format, docker_bin)?
             }
             CodexCommand::Start { profile, format, docker_bin } => run_codex_container_action(
                 profile.as_deref(),
@@ -33740,9 +33250,6 @@ fn main() -> Result<()> {
             }
             CodexCommand::Tail { profile, tail, docker_bin } => {
                 run_codex_container_logs(profile.as_deref(), &tail, true, docker_bin)?
-            }
-            CodexCommand::Clone { profile, repo, gh_pat, format, docker_bin } => {
-                run_codex_clone(&profile, &repo, gh_pat.as_deref(), format, docker_bin)?
             }
             CodexCommand::Exec {
                 profile,
@@ -33767,40 +33274,64 @@ fn main() -> Result<()> {
             CodexCommand::Status { profile, raw, format, docker_bin } => {
                 run_codex_status_read(profile.as_deref(), raw, format, docker_bin)?
             }
-            CodexCommand::Tmux { command } => match command {
-                CodexTmuxCommand::Plan(CodexTmuxPlanArgs {
-                    profile,
-                    start_dir,
-                    resume_session_id,
-                    resume_profile,
-                    format,
-                }) => run_codex_tmux_plan(
-                    profile.as_deref(),
-                    start_dir.as_deref(),
-                    resume_session_id.as_deref(),
-                    resume_profile.as_deref(),
-                    format,
-                )?,
-                CodexTmuxCommand::Launch(CodexTmuxLaunchArgs { profile, format }) => {
-                    run_codex_tmux_command(profile.as_deref(), format)?
-                }
-            },
-            CodexCommand::TmuxPlan(CodexTmuxPlanArgs {
-                profile,
-                start_dir,
-                resume_session_id,
-                resume_profile,
-                format,
-            }) => run_codex_tmux_plan(
-                profile.as_deref(),
-                start_dir.as_deref(),
-                resume_session_id.as_deref(),
-                resume_profile.as_deref(),
-                format,
-            )?,
-            CodexCommand::TmuxCommand(CodexTmuxLaunchArgs { profile, format }) => {
+            CodexCommand::Tmux(CodexTmuxArgs { profile, format }) => {
                 run_codex_tmux_command(profile.as_deref(), format)?
             }
+            CodexCommand::Warmup { command } => match command {
+                WarmupCommand::Decision {
+                    state_path,
+                    autostart_path,
+                    disabled_path,
+                    home,
+                    format,
+                } => run_warmup_autostart_decision(
+                    state_path,
+                    autostart_path,
+                    disabled_path,
+                    home,
+                    format,
+                )?,
+                WarmupCommand::Run(WarmupRunArgs {
+                    profile,
+                    all,
+                    path,
+                    home,
+                    settings_file,
+                    workspace,
+                    image,
+                    network,
+                    docker_bin,
+                    format,
+                }) => run_codex_warmup(
+                    profile,
+                    all,
+                    path,
+                    home,
+                    settings_file,
+                    workspace,
+                    image,
+                    network,
+                    docker_bin,
+                    format,
+                )?,
+                WarmupCommand::Status { path, home, format } => {
+                    run_warmup_status(path, home, format)?
+                }
+                WarmupCommand::State { command } => match command {
+                    WarmupStateCommand::Write { path, state_json } => {
+                        write_warmup_state(path, &state_json)?
+                    }
+                },
+                WarmupCommand::Marker { command } => match command {
+                    WarmupMarkerCommand::Show { autostart_path, disabled_path, home, format } => {
+                        run_warmup_marker_show(autostart_path, disabled_path, home, format)?
+                    }
+                    WarmupMarkerCommand::Enable { path } => write_warmup_autostart_marker(path)?,
+                    WarmupMarkerCommand::Disable { path, disabled } => {
+                        set_warmup_disabled_marker(path, &disabled)?
+                    }
+                },
+            },
             CodexCommand::Report { format } => run_codex_report_parse(format)?,
             CodexCommand::Respawn { profile, profile_containers, format } => {
                 run_codex_respawn_plan(profile.as_deref(), profile_containers, format)?
@@ -33820,32 +33351,6 @@ fn main() -> Result<()> {
         Command::Fort { home, settings_file, build, no_build, bin, args } => {
             run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
         }
-        Command::Warmup { command } => match command {
-            WarmupCommand::Decision { state_path, autostart_path, disabled_path, home, format } => {
-                run_warmup_autostart_decision(
-                    state_path,
-                    autostart_path,
-                    disabled_path,
-                    home,
-                    format,
-                )?
-            }
-            WarmupCommand::Status { path, home, format } => run_warmup_status(path, home, format)?,
-            WarmupCommand::State { command } => match command {
-                WarmupStateCommand::Write { path, state_json } => {
-                    write_warmup_state(path, &state_json)?
-                }
-            },
-            WarmupCommand::Marker { command } => match command {
-                WarmupMarkerCommand::Show { autostart_path, disabled_path, home, format } => {
-                    run_warmup_marker_show(autostart_path, disabled_path, home, format)?
-                }
-                WarmupMarkerCommand::Enable { path } => write_warmup_autostart_marker(path)?,
-                WarmupMarkerCommand::Disable { path, disabled } => {
-                    set_warmup_disabled_marker(path, &disabled)?
-                }
-            },
-        },
         Command::Vault { command } => match command {
             VaultCommand::Trust { command } => match command {
                 VaultTrustCommand::Lookup { path, repo_root, file, fingerprint, format } => {
@@ -33865,6 +33370,531 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn parse_cli() -> Cli {
+    let mut command = build_cli_help_command();
+    let mut matches = command.try_get_matches_from_mut(std::env::args_os()).unwrap_or_else(|err| {
+        err.exit();
+    });
+    Cli::from_arg_matches_mut(&mut matches).unwrap_or_else(|err| {
+        err.exit();
+    })
+}
+
+fn build_cli_help_command() -> clap::Command {
+    annotate_command_help(Cli::command().styles(cli_help_styles()).color(cli_color_choice()), &[])
+}
+
+fn annotate_command_help(mut command: clap::Command, parent_path: &[String]) -> clap::Command {
+    let name = command.get_name().to_owned();
+    let mut path = parent_path.to_vec();
+    if name != "si" && name != "si-rs" {
+        path.push(name);
+    }
+
+    let summary = command_help_summary(&path, command.has_subcommands());
+    if command.get_about().is_none() {
+        command = command.about(summary.clone());
+    }
+    if command.get_long_about().is_none() {
+        command = command.long_about(summary);
+    }
+
+    command.mut_subcommands(|subcommand| annotate_command_help(subcommand, &path))
+}
+
+fn command_help_summary(path: &[String], has_subcommands: bool) -> String {
+    let path_refs: Vec<&str> = path.iter().map(String::as_str).collect();
+    if let Some(summary) = command_help_override(&path_refs) {
+        return summary.to_owned();
+    }
+
+    if path.is_empty() {
+        return "SI CLI for providers, runtimes, and build flows.".to_owned();
+    }
+
+    if path.len() == 1 {
+        if let Some(spec) = find_root_command(path[0].as_str()) {
+            return ensure_sentence_period(spec.summary);
+        }
+    }
+
+    if has_subcommands {
+        return format!("{} commands.", command_subject(path));
+    }
+
+    leaf_command_help_summary(path)
+}
+
+fn command_help_override(path: &[&str]) -> Option<&'static str> {
+    match path {
+        [] => Some("SI CLI for providers, runtimes, and build flows."),
+        ["help"] => Some("Show SI command help."),
+        ["version"] => Some("Print the current SI version."),
+        ["commands"] => Some("List visible SI root commands."),
+        ["settings"] => Some("Show resolved SI settings."),
+        ["providers"] => Some("Inspect provider capabilities."),
+        ["build"] => Some("Build images, binaries, and release assets."),
+        ["build", "image"] => Some("Build the local SI runtime image."),
+        ["build", "self"] => Some("Build, upgrade, or run the SI CLI."),
+        ["build", "self", "build"] => Some("Build the SI CLI."),
+        ["build", "self", "upgrade"] => Some("Install the freshly built SI CLI."),
+        ["build", "self", "run"] => Some("Build and run the SI CLI."),
+        ["build", "self", "asset"] => Some("Build one release asset."),
+        ["build", "self", "assets"] => Some("Build all release assets."),
+        ["build", "self", "validate"] => Some("Validate a release version tag."),
+        ["build", "self", "verify"] => Some("Verify release assets."),
+        ["codex"] => Some("Manage Codex profiles and containers."),
+        ["codex", "profile"] => Some("Manage Codex profiles."),
+        ["codex", "spawn"] => Some("Plan and start a Codex container."),
+        ["codex", "remove"] => Some("Remove a Codex container or volume set."),
+        ["codex", "start"] => Some("Start a Codex container."),
+        ["codex", "stop"] => Some("Stop a Codex container."),
+        ["codex", "logs"] => Some("Show Codex container logs."),
+        ["codex", "tail"] => Some("Tail Codex container logs."),
+        ["codex", "exec"] => Some("Run a command in a Codex container."),
+        ["codex", "list"] => Some("List Codex containers."),
+        ["codex", "status"] => Some("Show Codex container status."),
+        ["codex", "tmux"] => Some("Attach to a Codex tmux session."),
+        ["codex", "warmup"] => Some("Inspect Codex warmup state."),
+        ["codex", "warmup", "run"] => Some("Warm configured Codex profiles."),
+        ["codex", "report"] => Some("Parse a Codex report capture."),
+        ["codex", "respawn"] => Some("Plan replacement Codex containers."),
+        ["codex", "warmup", "decision"] => Some("Decide whether warmup should run."),
+        ["codex", "warmup", "status"] => Some("Show warmup status."),
+        ["codex", "warmup", "state"] => Some("Warmup state file commands."),
+        ["codex", "warmup", "marker"] => Some("Warmup marker file commands."),
+        ["codex", "warmup", "marker", "show"] => Some("Show warmup marker state."),
+        ["codex", "warmup", "marker", "enable"] => Some("Write the autostart marker."),
+        ["codex", "warmup", "marker", "disable"] => Some("Set the disabled marker."),
+        ["dyad"] => Some("Manage actor and critic dyad runtimes."),
+        ["dyad", "spawn"] => Some("Plan or start Dyad containers."),
+        ["dyad", "start"] => Some("Start a Dyad container set."),
+        ["dyad", "stop"] => Some("Stop a Dyad container set."),
+        ["dyad", "logs"] => Some("Show Dyad container logs."),
+        ["dyad", "list"] => Some("List Dyad runtimes."),
+        ["dyad", "status"] => Some("Show Dyad runtime status."),
+        ["dyad", "peek"] => Some("Preview the Dyad spawn plan."),
+        ["dyad", "restart"] => Some("Restart a Dyad container set."),
+        ["dyad", "remove"] => Some("Remove a Dyad container set."),
+        ["dyad", "exec"] => Some("Run a command in a Dyad container."),
+        ["dyad", "cleanup"] => Some("Remove stopped Dyad containers."),
+        ["paths"] => Some("Show resolved SI paths."),
+        ["vault"] => Some("Vault secret and trust commands."),
+        ["vault", "trust"] => Some("Verify trusted vault inputs."),
+        ["image"] => Some("Image provider commands."),
+        ["apple", "store"] => Some("App Store Connect commands."),
+        _ => None,
+    }
+}
+
+fn leaf_command_help_summary(path: &[String]) -> String {
+    let name = path.last().expect("leaf command path");
+    if let Some((verb, remainder)) = parse_action_name(name) {
+        return render_action_summary(verb, remainder.as_deref(), &path[..path.len() - 1]);
+    }
+
+    match name.as_str() {
+        "raw" => format!("Run raw {} requests.", command_subject(&path[..path.len() - 1])),
+        "doctor" => format!("Check {}.", command_subject(&path[..path.len() - 1])),
+        "report" => format!("Generate {}.", command_subject(&path[..path.len() - 1])),
+        _ => {
+            let current = command_subject_sentence(path);
+            if path.len() > 1 {
+                format!("Manage {} for {}.", current, command_subject(&path[..path.len() - 1]))
+            } else {
+                format!("{current} command.")
+            }
+        }
+    }
+}
+
+fn parse_action_name(name: &str) -> Option<(&str, Option<String>)> {
+    let mut parts = name.split('-');
+    let first = parts.next()?;
+    if !is_action_word(first) {
+        return None;
+    }
+    let remainder = parts.collect::<Vec<_>>();
+    if remainder.is_empty() {
+        Some((first, None))
+    } else {
+        Some((first, Some(humanize_identifier(&remainder.join("-"), WordStyle::Sentence))))
+    }
+}
+
+fn render_action_summary(verb: &str, remainder: Option<&str>, parent_path: &[String]) -> String {
+    let subject = command_subject(parent_path);
+    let object = remainder
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| default_action_object(verb, &subject));
+
+    let phrase = match verb {
+        "add" => "Add",
+        "apply" => "Apply",
+        "archive" => "Archive",
+        "bootstrap" => "Bootstrap",
+        "build" => "Build",
+        "cancel" => "Cancel",
+        "classify" => "Classify",
+        "cleanup" => "Clean up",
+        "clear" => "Clear",
+        "comment" => "Comment on",
+        "copy" => "Copy",
+        "create" => "Create",
+        "delete" => "Delete",
+        "disable" => "Disable",
+        "dispatch" => "Dispatch",
+        "download" => "Download",
+        "enable" => "Enable",
+        "exec" => "Run",
+        "generate" => "Generate",
+        "get" => "Get",
+        "list" => "List",
+        "login" => "Log in to",
+        "lookup" => "Look up",
+        "logs" => "Show",
+        "move" => "Move",
+        "peek" => "Preview",
+        "protect" => "Protect",
+        "publish" => "Publish",
+        "refresh" => "Refresh",
+        "remove" => "Remove",
+        "report" => "Generate",
+        "restart" => "Restart",
+        "respawn" => "Respawn",
+        "run" => "Run",
+        "search" => "Search",
+        "set" => "Set",
+        "show" => "Show",
+        "start" => "Start",
+        "status" => "Show",
+        "stop" => "Stop",
+        "swap" => "Switch",
+        "tail" => "Tail",
+        "teardown" => "Tear down",
+        "trust" => "Trust",
+        "unarchive" => "Unarchive",
+        "unprotect" => "Unprotect",
+        "update" => "Update",
+        "upload" => "Upload",
+        "validate" => "Validate",
+        "verify" => "Verify",
+        "write" => "Write",
+        _ => "Run",
+    };
+
+    format!("{phrase} {object}.")
+}
+
+fn default_action_object(verb: &str, subject: &str) -> String {
+    match verb {
+        "list" | "search" => pluralize_phrase(subject),
+        "logs" => format!("{subject} logs"),
+        "status" => format!("{subject} status"),
+        "tail" => format!("{subject} logs"),
+        _ => subject.to_owned(),
+    }
+}
+
+fn is_action_word(word: &str) -> bool {
+    matches!(
+        word,
+        "add"
+            | "apply"
+            | "archive"
+            | "bootstrap"
+            | "build"
+            | "cancel"
+            | "classify"
+            | "cleanup"
+            | "clear"
+            | "comment"
+            | "copy"
+            | "create"
+            | "delete"
+            | "disable"
+            | "dispatch"
+            | "download"
+            | "enable"
+            | "exec"
+            | "generate"
+            | "get"
+            | "list"
+            | "login"
+            | "lookup"
+            | "logs"
+            | "move"
+            | "peek"
+            | "protect"
+            | "publish"
+            | "refresh"
+            | "remove"
+            | "report"
+            | "restart"
+            | "respawn"
+            | "run"
+            | "search"
+            | "set"
+            | "show"
+            | "start"
+            | "status"
+            | "stop"
+            | "swap"
+            | "tail"
+            | "teardown"
+            | "trust"
+            | "unarchive"
+            | "unprotect"
+            | "update"
+            | "upload"
+            | "validate"
+            | "verify"
+            | "write"
+    )
+}
+
+fn command_subject(path: &[String]) -> String {
+    command_subject_with_style(path, WordStyle::Title)
+}
+
+fn command_subject_sentence(path: &[String]) -> String {
+    command_subject_with_style(path, WordStyle::Sentence)
+}
+
+fn command_subject_with_style(path: &[String], style: WordStyle) -> String {
+    if path.is_empty() {
+        return "SI".to_owned();
+    }
+
+    if path.first().is_some_and(|segment| segment == "build") && path.len() == 2 {
+        return match path[1].as_str() {
+            "self" => "SI CLI".to_owned(),
+            "image" => "runtime image".to_owned(),
+            other => format_command_segment(other, style),
+        };
+    }
+
+    let start = if path.len() <= 2 {
+        0
+    } else if is_contextual_segment(path.last().expect("command path")) {
+        path.len().saturating_sub(3)
+    } else {
+        path.len().saturating_sub(2)
+    };
+
+    path[start..]
+        .iter()
+        .map(|segment| format_command_segment(segment, style))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn is_contextual_segment(segment: &str) -> bool {
+    matches!(
+        segment,
+        "access"
+            | "agent"
+            | "alias"
+            | "api-key"
+            | "app"
+            | "asset"
+            | "auth"
+            | "batch"
+            | "branch"
+            | "broadcast"
+            | "bucket"
+            | "cache"
+            | "caption"
+            | "chat"
+            | "comment"
+            | "context"
+            | "details"
+            | "directory"
+            | "domain"
+            | "email"
+            | "endpoint"
+            | "env"
+            | "function"
+            | "git"
+            | "group"
+            | "guardrail"
+            | "image"
+            | "instance"
+            | "invitation"
+            | "issue"
+            | "item"
+            | "job"
+            | "key"
+            | "knowledge-base"
+            | "listing"
+            | "live"
+            | "marker"
+            | "migration"
+            | "model"
+            | "network"
+            | "object"
+            | "operation"
+            | "parameter"
+            | "pages"
+            | "pipeline"
+            | "playlist"
+            | "policy"
+            | "profile"
+            | "project"
+            | "pull-request"
+            | "release"
+            | "repo"
+            | "report"
+            | "repository"
+            | "resource"
+            | "role"
+            | "run"
+            | "runtime"
+            | "secret"
+            | "service"
+            | "service-account"
+            | "session"
+            | "settings"
+            | "state"
+            | "stream"
+            | "subscription"
+            | "support"
+            | "table"
+            | "thumbnail"
+            | "token"
+            | "trust"
+            | "tunnel"
+            | "types"
+            | "video"
+            | "workflow"
+            | "workers"
+    )
+}
+
+fn format_command_segment(segment: &str, style: WordStyle) -> String {
+    match segment {
+        "api-key" | "apikey" => "API key".to_owned(),
+        "appstore" => "App Store".to_owned(),
+        "aws" => "AWS".to_owned(),
+        "cloudwatch" => "CloudWatch".to_owned(),
+        "codex" => "Codex".to_owned(),
+        "d1" => "D1".to_owned(),
+        "dynamodb" => "DynamoDB".to_owned(),
+        "dyad" => "Dyad".to_owned(),
+        "ecr" => "ECR".to_owned(),
+        "ec2" => "EC2".to_owned(),
+        "gcp" => "GCP".to_owned(),
+        "github" => "GitHub".to_owned(),
+        "iam" => "IAM".to_owned(),
+        "json" => "JSON".to_owned(),
+        "kms" => "KMS".to_owned(),
+        "kv" => "KV".to_owned(),
+        "lb" => "load balancer".to_owned(),
+        "oci" => "OCI".to_owned(),
+        "openai" => "OpenAI".to_owned(),
+        "r2" => "R2".to_owned(),
+        "s3" => "S3".to_owned(),
+        "service-account" => "service account".to_owned(),
+        "ssh" => "SSH".to_owned(),
+        "ssm" => "SSM".to_owned(),
+        "sts" => "STS".to_owned(),
+        "tls" => "TLS".to_owned(),
+        "tmux" => "tmux".to_owned(),
+        "ui" => "UI".to_owned(),
+        "url" => "URL".to_owned(),
+        "workos" => "WorkOS".to_owned(),
+        "youtube" => "YouTube".to_owned(),
+        other => humanize_identifier(other, style),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum WordStyle {
+    Title,
+    Sentence,
+}
+
+fn humanize_identifier(identifier: &str, style: WordStyle) -> String {
+    identifier
+        .split(['-', '_'])
+        .filter(|word| !word.is_empty())
+        .enumerate()
+        .map(|(index, word)| format_help_word(word, style, index))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn format_help_word(word: &str, style: WordStyle, index: usize) -> String {
+    match word {
+        "api" => "API".to_owned(),
+        "aws" => "AWS".to_owned(),
+        "cli" => "CLI".to_owned(),
+        "codex" => "Codex".to_owned(),
+        "gcp" => "GCP".to_owned(),
+        "gh" => "GitHub".to_owned(),
+        "github" => "GitHub".to_owned(),
+        "iam" => "IAM".to_owned(),
+        "id" => "ID".to_owned(),
+        "json" => "JSON".to_owned(),
+        "oci" => "OCI".to_owned(),
+        "openai" => "OpenAI".to_owned(),
+        "ssh" => "SSH".to_owned(),
+        "tmux" => "tmux".to_owned(),
+        "ui" => "UI".to_owned(),
+        "url" => "URL".to_owned(),
+        "workos" => "WorkOS".to_owned(),
+        "youtube" => "YouTube".to_owned(),
+        value => match style {
+            WordStyle::Title => capitalize_ascii(value),
+            WordStyle::Sentence if index == 0 => value.to_owned(),
+            WordStyle::Sentence => value.to_owned(),
+        },
+    }
+}
+
+fn capitalize_ascii(value: &str) -> String {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let mut output = String::new();
+    output.push(first.to_ascii_uppercase());
+    output.push_str(chars.as_str());
+    output
+}
+
+fn pluralize_phrase(phrase: &str) -> String {
+    if let Some((prefix, last)) = phrase.rsplit_once(' ') {
+        format!("{prefix} {}", pluralize_word(last))
+    } else {
+        pluralize_word(phrase)
+    }
+}
+
+fn pluralize_word(word: &str) -> String {
+    let lower = word.to_ascii_lowercase();
+    if lower.ends_with('y')
+        && !matches!(lower.chars().rev().nth(1), Some('a' | 'e' | 'i' | 'o' | 'u'))
+    {
+        return format!("{}ies", &word[..word.len() - 1]);
+    }
+    if lower.ends_with('s')
+        || lower.ends_with('x')
+        || lower.ends_with('z')
+        || lower.ends_with("ch")
+        || lower.ends_with("sh")
+    {
+        return format!("{word}es");
+    }
+    format!("{word}s")
+}
+
+fn ensure_sentence_period(summary: &str) -> String {
+    let trimmed = summary.trim();
+    if trimmed.ends_with('.') { trimmed.to_owned() } else { format!("{trimmed}.") }
 }
 
 #[cfg(unix)]
@@ -33897,14 +33927,14 @@ fn render_help(view: HelpView, format: OutputFormat) -> Result<()> {
         }
         OutputFormat::Text => {
             for command in view.commands {
-                println!("{}", command.name);
-                println!("  category={}", format_category(command.category));
+                println!("{}", stdout_text(&command.name, CliTone::Command));
+                print_cli_kv("category", format_category(command.category));
                 if command.aliases.is_empty() {
-                    println!("  aliases=(none)");
+                    print_cli_kv("aliases", "(none)");
                 } else {
-                    println!("  aliases={}", command.aliases.join(", "));
+                    print_cli_kv("aliases", command.aliases.join(", "));
                 }
-                println!("  summary={}", command.summary);
+                print_cli_kv("summary", command.summary);
             }
         }
     }
@@ -33917,6 +33947,121 @@ enum ImageProvider {
     Unsplash,
     Pexels,
     Pixabay,
+}
+
+#[derive(Clone, Copy)]
+enum CliStream {
+    Stdout,
+    Stderr,
+}
+
+#[derive(Clone, Copy)]
+enum CliTone {
+    Heading,
+    Section,
+    Command,
+    Flag,
+    Label,
+    Success,
+    Warning,
+    Danger,
+    Muted,
+    Info,
+}
+
+fn cli_color_choice() -> ColorChoice {
+    if let Some(value) = env::var("SI_CLI_COLOR").ok() {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "always" => return ColorChoice::Always,
+            "never" => return ColorChoice::Never,
+            "auto" => {}
+            _ => {}
+        }
+    }
+    if env::var_os("NO_COLOR").is_some() { ColorChoice::Never } else { ColorChoice::Auto }
+}
+
+fn cli_stream_supports_color(stream: CliStream) -> bool {
+    match cli_color_choice() {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => match stream {
+            CliStream::Stdout => io::stdout().is_terminal(),
+            CliStream::Stderr => io::stderr().is_terminal(),
+        },
+    }
+}
+
+fn cli_ansi_code(tone: CliTone) -> &'static str {
+    match tone {
+        CliTone::Heading | CliTone::Section => "1;36",
+        CliTone::Command => "1;35",
+        CliTone::Flag | CliTone::Warning => "1;33",
+        CliTone::Label => "1;34",
+        CliTone::Success => "1;32",
+        CliTone::Danger => "1;31",
+        CliTone::Muted => "0;90",
+        CliTone::Info => "0;36",
+    }
+}
+
+fn style_cli_text(text: &str, tone: CliTone, stream: CliStream) -> String {
+    if text.is_empty() || !cli_stream_supports_color(stream) {
+        text.to_owned()
+    } else {
+        format!("\u{1b}[{}m{}\u{1b}[0m", cli_ansi_code(tone), text)
+    }
+}
+
+fn stdout_text(text: &str, tone: CliTone) -> String {
+    style_cli_text(text, tone, CliStream::Stdout)
+}
+
+fn stderr_text(text: &str, tone: CliTone) -> String {
+    style_cli_text(text, tone, CliStream::Stderr)
+}
+
+fn print_cli_kv(key: &str, value: impl fmt::Display) {
+    println!("{}={value}", stdout_text(key, CliTone::Label));
+}
+
+fn print_help_usage(command_line: &str) {
+    println!(
+        "{} {}",
+        stdout_text("Usage:", CliTone::Heading),
+        stdout_text(command_line, CliTone::Command)
+    );
+}
+
+fn print_help_section(title: &str) {
+    println!("{}", stdout_text(title, CliTone::Section));
+}
+
+fn print_help_item(text: &str, tone: CliTone) {
+    println!("  {}", stdout_text(text, tone));
+}
+
+fn cli_table_color(tone: CliTone) -> Color {
+    match tone {
+        CliTone::Heading | CliTone::Section | CliTone::Info => Color::Cyan,
+        CliTone::Command => Color::Magenta,
+        CliTone::Flag | CliTone::Warning => Color::DarkYellow,
+        CliTone::Label => Color::Blue,
+        CliTone::Success => Color::Green,
+        CliTone::Danger => Color::Red,
+        CliTone::Muted => Color::DarkGrey,
+    }
+}
+
+fn cli_help_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+        .usage(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+        .literal(AnsiColor::Magenta.on_default().effects(Effects::BOLD))
+        .placeholder(AnsiColor::Yellow.on_default())
+        .valid(AnsiColor::Green.on_default().effects(Effects::BOLD))
+        .invalid(AnsiColor::Red.on_default().effects(Effects::BOLD))
+        .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
 }
 
 fn run_image_command(provider: ImageProvider, command: ImageProviderCommand) -> Result<()> {
@@ -34132,9 +34277,9 @@ fn show_paths(
 
     match format {
         OutputFormat::Text => {
-            println!("root={}", view.root);
-            println!("settings_file={}", view.settings_file);
-            println!("codex_profiles_dir={}", view.codex_profiles_dir);
+            print_cli_kv("root", view.root);
+            print_cli_kv("settings_file", view.settings_file);
+            print_cli_kv("codex_profiles_dir", view.codex_profiles_dir);
         }
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&view)?);
@@ -34154,38 +34299,41 @@ fn show_settings(
 
     match format {
         OutputFormat::Text => {
-            println!("schema_version={}", settings.schema_version);
-            println!("paths.root={}", settings.paths.root.as_deref().unwrap_or("(none)"));
-            println!(
-                "paths.settings_file={}",
-                settings.paths.settings_file.as_deref().unwrap_or("(none)")
+            print_cli_kv("schema_version", settings.schema_version);
+            print_cli_kv("paths.root", settings.paths.root.as_deref().unwrap_or("(none)"));
+            print_cli_kv(
+                "paths.settings_file",
+                settings.paths.settings_file.as_deref().unwrap_or("(none)"),
             );
-            println!(
-                "paths.codex_profiles_dir={}",
-                settings.paths.codex_profiles_dir.as_deref().unwrap_or("(none)")
+            print_cli_kv(
+                "paths.codex_profiles_dir",
+                settings.paths.codex_profiles_dir.as_deref().unwrap_or("(none)"),
             );
-            println!(
-                "paths.workspace_root={}",
-                settings.paths.workspace_root.as_deref().unwrap_or("(none)")
+            print_cli_kv(
+                "paths.workspace_root",
+                settings.paths.workspace_root.as_deref().unwrap_or("(none)"),
             );
-            println!("codex.workspace={}", settings.codex.workspace.as_deref().unwrap_or("(none)"));
-            println!("codex.workdir={}", settings.codex.workdir.as_deref().unwrap_or("(none)"));
-            println!("codex.profile={}", settings.codex.profile.as_deref().unwrap_or("(none)"));
-            println!("fort.repo={}", settings.fort.repo.as_deref().unwrap_or("(none)"));
-            println!("fort.bin={}", settings.fort.bin.as_deref().unwrap_or("(none)"));
+            print_cli_kv(
+                "codex.workspace",
+                settings.codex.workspace.as_deref().unwrap_or("(none)"),
+            );
+            print_cli_kv("codex.workdir", settings.codex.workdir.as_deref().unwrap_or("(none)"));
+            print_cli_kv("codex.profile", settings.codex.profile.as_deref().unwrap_or("(none)"));
+            print_cli_kv("fort.repo", settings.fort.repo.as_deref().unwrap_or("(none)"));
+            print_cli_kv("fort.bin", settings.fort.bin.as_deref().unwrap_or("(none)"));
             let fort_build = settings
                 .fort
                 .build
                 .map(|value| value.to_string())
                 .unwrap_or_else(|| "(none)".to_owned());
-            println!("fort.build={fort_build}");
-            println!("fort.host={}", settings.fort.host.as_deref().unwrap_or("(none)"));
-            println!(
-                "fort.container_host={}",
-                settings.fort.container_host.as_deref().unwrap_or("(none)")
+            print_cli_kv("fort.build", fort_build);
+            print_cli_kv("fort.host", settings.fort.host.as_deref().unwrap_or("(none)"));
+            print_cli_kv(
+                "fort.container_host",
+                settings.fort.container_host.as_deref().unwrap_or("(none)"),
             );
-            println!("dyad.workspace={}", settings.dyad.workspace.as_deref().unwrap_or("(none)"));
-            println!("dyad.configs={}", settings.dyad.configs.as_deref().unwrap_or("(none)"));
+            print_cli_kv("dyad.workspace", settings.dyad.workspace.as_deref().unwrap_or("(none)"));
+            print_cli_kv("dyad.configs", settings.dyad.configs.as_deref().unwrap_or("(none)"));
         }
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&settings)?);
@@ -34229,22 +34377,25 @@ fn run_surf_wrapper(
 }
 
 fn render_surf_wrapper_help() {
-    println!("Usage: si surf [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    print_help_usage("si surf [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
     println!();
-    println!("Native surf passthrough:");
-    println!("  build | start | status | logs | stop | proxy | config ... | session ...");
+    print_help_section("Native surf passthrough");
+    print_help_item(
+        "build | start | status | logs | stop | proxy | config ... | session ...",
+        CliTone::Command,
+    );
     println!();
-    println!("Wrapper options:");
-    println!("  --home <PATH>");
-    println!("  --settings-file <PATH>");
-    println!("  --build");
-    println!("  --no-build");
-    println!("  --bin <PATH>");
+    print_help_section("Wrapper options");
+    print_help_item("--home <PATH>", CliTone::Flag);
+    print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--build", CliTone::Flag);
+    print_help_item("--no-build", CliTone::Flag);
+    print_help_item("--bin <PATH>", CliTone::Flag);
     println!();
-    println!("Examples:");
-    println!("  si surf build");
-    println!("  si surf start");
-    println!("  si surf config show");
+    print_help_section("Examples");
+    print_help_item("si surf build", CliTone::Command);
+    print_help_item("si surf start", CliTone::Command);
+    print_help_item("si surf config show", CliTone::Command);
 }
 
 fn run_native_surf_command(
@@ -34307,28 +34458,29 @@ fn run_viva_wrapper(
 }
 
 fn render_viva_wrapper_help() {
-    println!("Usage: si viva [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    print_help_usage("si viva [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
     println!();
-    println!("Wrapper commands:");
-    println!("  config show|set");
-    println!("  config tunnel show");
+    print_help_section("Wrapper commands");
+    print_help_item("config show|set", CliTone::Command);
+    print_help_item("config tunnel show", CliTone::Command);
     println!();
-    println!("Native viva passthrough:");
-    println!(
-        "  doctor | deploy | backup ... | notify ... | rollback | status | history | serve | tunnel ..."
+    print_help_section("Native viva passthrough");
+    print_help_item(
+        "doctor | deploy | backup ... | notify ... | rollback | status | history | serve | tunnel ...",
+        CliTone::Command,
     );
     println!();
-    println!("Wrapper options:");
-    println!("  --home <PATH>");
-    println!("  --settings-file <PATH>");
-    println!("  --build");
-    println!("  --no-build");
-    println!("  --bin <PATH>");
+    print_help_section("Wrapper options");
+    print_help_item("--home <PATH>", CliTone::Flag);
+    print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--build", CliTone::Flag);
+    print_help_item("--no-build", CliTone::Flag);
+    print_help_item("--bin <PATH>", CliTone::Flag);
     println!();
-    println!("Examples:");
-    println!("  si viva config set --repo ~/Development/viva --build true");
-    println!("  si viva config tunnel show --format json");
-    println!("  si viva -- tunnel up --profile dev");
+    print_help_section("Examples");
+    print_help_item("si viva config set --repo ~/Development/viva --build true", CliTone::Command);
+    print_help_item("si viva config tunnel show --format json", CliTone::Command);
+    print_help_item("si viva -- tunnel up --profile dev", CliTone::Command);
 }
 
 fn run_viva_config_command(
@@ -34367,15 +34519,15 @@ fn show_viva_config(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => {
-            println!("repo={}", render_option_text_value(view.repo.as_deref()));
-            println!("bin={}", render_option_text_value(view.bin.as_deref()));
-            println!(
-                "build={}",
-                view.build.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_owned())
+            print_cli_kv("repo", render_option_text_value(view.repo.as_deref()));
+            print_cli_kv("bin", render_option_text_value(view.bin.as_deref()));
+            print_cli_kv(
+                "build",
+                view.build.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_owned()),
             );
-            println!(
-                "tunnel.default_profile={}",
-                render_option_text_value(non_empty_str(&view.tunnel_default_profile))
+            print_cli_kv(
+                "tunnel.default_profile",
+                render_option_text_value(non_empty_str(&view.tunnel_default_profile)),
             );
         }
     }
@@ -34414,16 +34566,16 @@ fn show_viva_tunnel_config(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&settings.viva.tunnel)?),
         OutputFormat::Text => {
-            println!(
-                "default_profile={}",
-                render_option_text_value(non_empty_str(&settings.viva.tunnel.default_profile))
+            print_cli_kv(
+                "default_profile",
+                render_option_text_value(non_empty_str(&settings.viva.tunnel.default_profile)),
             );
             if settings.viva.tunnel.profiles.is_empty() {
-                println!("profiles=(none)");
+                print_cli_kv("profiles", "(none)");
             } else {
-                println!(
-                    "profiles={}",
-                    settings.viva.tunnel.profiles.keys().cloned().collect::<Vec<_>>().join(", ")
+                print_cli_kv(
+                    "profiles",
+                    settings.viva.tunnel.profiles.keys().cloned().collect::<Vec<_>>().join(", "),
                 );
             }
         }
@@ -34610,27 +34762,33 @@ fn run_fort_wrapper(
 }
 
 fn render_fort_wrapper_help() {
-    println!("Usage: si fort [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    print_help_usage("si fort [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
     println!();
-    println!("Wrapper commands:");
-    println!("  config show|set");
-    println!("  session <show|write|clear|bootstrap|classify|refresh|teardown>");
-    println!("  runtime <show|write|clear>");
+    print_help_section("Wrapper commands");
+    print_help_item("config show|set", CliTone::Command);
+    print_help_item(
+        "session <show|write|clear|bootstrap|classify|refresh|teardown>",
+        CliTone::Command,
+    );
+    print_help_item("runtime <show|write|clear>", CliTone::Command);
     println!();
-    println!("Native fort passthrough:");
-    println!("  doctor | auth ... | get | set | list | batch-get | run | agent ...");
+    print_help_section("Native fort passthrough");
+    print_help_item(
+        "doctor | auth ... | get | set | list | batch-get | run | agent ...",
+        CliTone::Command,
+    );
     println!();
-    println!("Wrapper options:");
-    println!("  --home <PATH>");
-    println!("  --settings-file <PATH>");
-    println!("  --build");
-    println!("  --no-build");
-    println!("  --bin <PATH>");
+    print_help_section("Wrapper options");
+    print_help_item("--home <PATH>", CliTone::Flag);
+    print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--build", CliTone::Flag);
+    print_help_item("--no-build", CliTone::Flag);
+    print_help_item("--bin <PATH>", CliTone::Flag);
     println!();
-    println!("Examples:");
-    println!("  si fort doctor");
-    println!("  si fort -- --host https://fort.aureuma.ai doctor");
-    println!("  si fort session show --path /tmp/session.json");
+    print_help_section("Examples");
+    print_help_item("si fort doctor", CliTone::Command);
+    print_help_item("si fort -- --host https://fort.aureuma.ai doctor", CliTone::Command);
+    print_help_item("si fort session show --path /tmp/session.json", CliTone::Command);
 }
 
 fn strip_wrapper_passthrough_marker(mut args: Vec<String>) -> Vec<String> {
@@ -35407,6 +35565,10 @@ fn find_codex_profile_candidates(profiles: &[CodexProfileView], query: &str) -> 
 }
 
 fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
+    let show_plan = profiles.iter().any(|profile| profile.account_plan.is_some());
+    let show_five_hour = profiles.iter().any(|profile| profile.five_hour_left_pct.is_some());
+    let show_weekly = profiles.iter().any(|profile| profile.weekly_left_pct.is_some());
+
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -35423,41 +35585,93 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
 
     let mut header = Vec::new();
     if include_index {
-        header.push(Cell::new("#").fg(Color::DarkGrey).add_attribute(Attribute::Bold));
+        header.push(
+            Cell::new("#").fg(cli_table_color(CliTone::Muted)).add_attribute(Attribute::Bold),
+        );
     }
-    header.push(Cell::new("Profile").fg(Color::Cyan).add_attribute(Attribute::Bold));
-    header.push(Cell::new("Name").fg(Color::Magenta).add_attribute(Attribute::Bold));
-    header.push(Cell::new("Email").fg(Color::Blue).add_attribute(Attribute::Bold));
-    header.push(Cell::new("State").fg(Color::Green).add_attribute(Attribute::Bold));
+    header.push(
+        Cell::new("Profile").fg(cli_table_color(CliTone::Section)).add_attribute(Attribute::Bold),
+    );
+    header.push(
+        Cell::new("Name").fg(cli_table_color(CliTone::Command)).add_attribute(Attribute::Bold),
+    );
+    header.push(
+        Cell::new("Email").fg(cli_table_color(CliTone::Label)).add_attribute(Attribute::Bold),
+    );
+    if show_plan {
+        header.push(
+            Cell::new("Plan").fg(cli_table_color(CliTone::Flag)).add_attribute(Attribute::Bold),
+        );
+    }
+    if show_five_hour {
+        header.push(
+            Cell::new("5h Left").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
+        );
+    }
+    if show_weekly {
+        header.push(
+            Cell::new("Week Left")
+                .fg(cli_table_color(CliTone::Info))
+                .add_attribute(Attribute::Bold),
+        );
+    }
+    header.push(
+        Cell::new("State").fg(cli_table_color(CliTone::Success)).add_attribute(Attribute::Bold),
+    );
     table.set_header(header);
+    let mut constraints = Vec::new();
     if include_index {
-        table.set_constraints(vec![
-            ColumnConstraint::Absolute(Width::Fixed(3)),
-            ColumnConstraint::UpperBoundary(Width::Fixed(12)),
-            ColumnConstraint::UpperBoundary(Width::Fixed(16)),
-            ColumnConstraint::UpperBoundary(Width::Fixed(30)),
-            ColumnConstraint::Absolute(Width::Fixed(12)),
-        ]);
-    } else {
-        table.set_constraints(vec![
-            ColumnConstraint::UpperBoundary(Width::Fixed(12)),
-            ColumnConstraint::UpperBoundary(Width::Fixed(16)),
-            ColumnConstraint::UpperBoundary(Width::Fixed(30)),
-            ColumnConstraint::Absolute(Width::Fixed(12)),
-        ]);
+        constraints.push(ColumnConstraint::Absolute(Width::Fixed(3)));
     }
+    constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(12)));
+    constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(16)));
+    constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(30)));
+    if show_plan {
+        constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(10)));
+    }
+    if show_five_hour {
+        constraints.push(ColumnConstraint::Absolute(Width::Fixed(9)));
+    }
+    if show_weekly {
+        constraints.push(ColumnConstraint::Absolute(Width::Fixed(11)));
+    }
+    constraints.push(ColumnConstraint::Absolute(Width::Fixed(12)));
+    table.set_constraints(constraints);
 
     for (index, profile) in profiles.iter().enumerate() {
         let mut row = Vec::new();
         if include_index {
-            row.push(Cell::new((index + 1).to_string()).fg(Color::DarkGrey));
+            row.push(Cell::new((index + 1).to_string()).fg(cli_table_color(CliTone::Muted)));
         }
-        row.push(Cell::new(&profile.profile).fg(Color::Cyan));
-        row.push(Cell::new(codex_profile_display_name(profile)).fg(Color::Magenta));
-        row.push(Cell::new(render_option_text_value(profile.email.as_deref())).fg(Color::Blue));
+        row.push(Cell::new(&profile.profile).fg(cli_table_color(CliTone::Section)));
+        row.push(
+            Cell::new(codex_profile_display_name(profile)).fg(cli_table_color(CliTone::Command)),
+        );
+        row.push(
+            Cell::new(render_option_text_value(profile.email.as_deref()))
+                .fg(cli_table_color(CliTone::Label)),
+        );
+        if show_plan {
+            row.push(
+                Cell::new(render_option_text_value(profile.account_plan.as_deref()))
+                    .fg(cli_table_color(CliTone::Flag)),
+            );
+        }
+        if show_five_hour {
+            row.push(
+                Cell::new(render_option_percent_value(profile.five_hour_left_pct))
+                    .fg(cli_table_color(CliTone::Info)),
+            );
+        }
+        if show_weekly {
+            row.push(
+                Cell::new(render_option_percent_value(profile.weekly_left_pct))
+                    .fg(cli_table_color(CliTone::Info)),
+            );
+        }
         let state_color = match profile.state.as_str() {
-            "Logged-In" => Color::Green,
-            _ => Color::Yellow,
+            "Logged-In" => cli_table_color(CliTone::Success),
+            _ => cli_table_color(CliTone::Warning),
         };
         row.push(Cell::new(&profile.state).fg(state_color));
         table.add_row(row);
@@ -35466,34 +35680,32 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     table.to_string()
 }
 
+fn render_option_percent_value(value: Option<f64>) -> String {
+    value.map(|value| format!("{value:.1}%")).unwrap_or_else(|| "-".to_owned())
+}
+
 fn codex_profile_prompt_available() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-fn prompt_for_codex_profile(
-    purpose: &str,
-    profiles: &[CodexProfileView],
-    default_profile: Option<&str>,
-) -> Result<String> {
+fn prompt_for_codex_profile(purpose: &str, profiles: &[CodexProfileView]) -> Result<String> {
     if profiles.is_empty() {
         anyhow::bail!("no codex profiles are configured");
     }
 
-    println!("Select codex profile for {purpose}:");
+    println!(
+        "{} {}:",
+        stdout_text("Select codex profile for", CliTone::Section),
+        stdout_text(purpose, CliTone::Command),
+    );
     println!("{}", render_codex_profile_table(profiles, true));
-    if let Some(default_profile) = default_profile {
-        println!("Press Enter to keep {default_profile}.");
-    }
-    print!("Enter number or profile: ");
+    print!("{} ", stdout_text("Enter number or profile:", CliTone::Heading));
     io::stdout().flush().context("flush codex profile prompt")?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input).context("read codex profile selection")?;
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        if let Some(default_profile) = default_profile {
-            return Ok(default_profile.to_owned());
-        }
         anyhow::bail!("codex profile selection is required");
     }
     if let Ok(index) = trimmed.parse::<usize>() {
@@ -35522,7 +35734,7 @@ fn resolve_codex_profile_with_mode(
     settings: &Settings,
     paths: &SiPaths,
     profile: Option<&str>,
-    mode: CodexProfileSelectionMode,
+    _mode: CodexProfileSelectionMode,
     purpose: &str,
 ) -> Result<String> {
     let active = resolve_codex_active_profile_id(settings);
@@ -35539,47 +35751,17 @@ fn resolve_codex_profile_with_mode(
         let candidates = find_codex_profile_candidates(&profiles, query);
         return match candidates.as_slice() {
             [index] => Ok(profiles[*index].profile.clone()),
-            [] => {
-                if codex_profile_prompt_available() {
-                    prompt_for_codex_profile(purpose, &profiles, active.as_deref())
-                } else {
-                    Err(codex_profile_resolution_error(query, &profiles))
-                }
-            }
-            _ => {
-                if codex_profile_prompt_available() {
-                    let filtered =
-                        candidates.iter().map(|index| profiles[*index].clone()).collect::<Vec<_>>();
-                    prompt_for_codex_profile(purpose, &filtered, None)
-                } else {
-                    Err(anyhow!("codex profile {:?} matched multiple configured profiles", query))
-                }
-            }
+            [] => Err(codex_profile_resolution_error(query, &profiles)),
+            _ => Err(anyhow!("codex profile {:?} matched multiple configured profiles", query)),
         };
     }
 
-    if matches!(mode, CodexProfileSelectionMode::PreferActiveOnMissing)
-        && let Some(active_profile) = active
-    {
-        if settings.codex.profiles.entries.contains_key(active_profile.as_str()) {
-            return Ok(active_profile);
-        }
-        anyhow::bail!(
-            "active codex profile {:?} is not configured under [codex.profiles.entries]",
-            active_profile
-        );
-    }
-
-    if profiles.len() == 1 {
-        return Ok(profiles[0].profile.clone());
-    }
-
     if codex_profile_prompt_available() {
-        return prompt_for_codex_profile(purpose, &profiles, active.as_deref());
+        return prompt_for_codex_profile(purpose, &profiles);
     }
 
     anyhow::bail!(
-        "codex profile is required; configure one with `si codex profile add <profile>` and `si codex profile use <profile>`"
+        "codex profile is required; pass one explicitly or run in a TTY to choose from the configured profiles"
     )
 }
 
@@ -35592,7 +35774,7 @@ fn resolve_codex_requested_profile(
         settings,
         paths,
         profile,
-        CodexProfileSelectionMode::PreferActiveOnMissing,
+        CodexProfileSelectionMode::PromptOnMissing,
         "codex",
     )
 }
@@ -35708,8 +35890,50 @@ fn codex_profile_view(
         state: codex_profile_auth_state_label(&auth_path, entry.email.as_deref()).to_owned(),
         name: entry.name.clone(),
         email: entry.email.clone(),
+        account_plan: None,
+        five_hour_left_pct: None,
+        five_hour_reset: None,
+        weekly_left_pct: None,
+        weekly_reset: None,
         auth_path: Some(auth_path),
         auth_updated: entry.auth_updated.clone(),
+    }
+}
+
+fn apply_codex_status_to_profile(view: &mut CodexProfileView, status: &CodexStatusView) {
+    if view.email.as_deref().is_none_or(|value| value.trim().is_empty()) {
+        view.email = status.account_email.clone();
+    }
+    view.account_plan = status.account_plan.clone();
+    view.five_hour_left_pct = status.five_hour_left_pct;
+    view.five_hour_reset = status.five_hour_reset.clone();
+    view.weekly_left_pct = status.weekly_left_pct;
+    view.weekly_reset = status.weekly_reset.clone();
+}
+
+fn enrich_codex_profiles_with_live_status(
+    profiles: &mut [CodexProfileView],
+    docker_bin: Option<PathBuf>,
+) {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let Ok(containers) = read_codex_containers(Some(docker_program.clone())) else {
+        return;
+    };
+    let container_by_profile = containers
+        .into_iter()
+        .filter(|item| item.state.eq_ignore_ascii_case("running"))
+        .filter_map(|item| item.profile_id.map(|profile_id| (profile_id, item.name)))
+        .collect::<BTreeMap<_, _>>();
+    for profile in profiles {
+        let Some(container_name) = container_by_profile.get(profile.profile.as_str()) else {
+            continue;
+        };
+        if let Ok(status) =
+            read_codex_status_for_container_name(container_name, false, docker_program.as_path())
+        {
+            apply_codex_status_to_profile(profile, &status);
+        }
     }
 }
 
@@ -35730,6 +35954,7 @@ fn show_codex_profile_list(
         .map(|(profile_id, entry)| codex_profile_view(&paths, active.as_deref(), profile_id, entry))
         .collect::<Vec<_>>();
     profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+    enrich_codex_profiles_with_live_status(&mut profiles, None);
 
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&profiles)?),
@@ -35758,11 +35983,7 @@ fn show_codex_profile(
         &settings,
         &paths,
         profile.as_deref(),
-        if profile.is_some() || codex_profile_prompt_available() {
-            CodexProfileSelectionMode::PromptOnMissing
-        } else {
-            CodexProfileSelectionMode::PreferActiveOnMissing
-        },
+        CodexProfileSelectionMode::PromptOnMissing,
         "show",
     )?;
     let entry = settings
@@ -35778,6 +35999,9 @@ fn show_codex_profile(
         &profile_id,
         &entry,
     );
+    let mut profiles = vec![view];
+    enrich_codex_profiles_with_live_status(&mut profiles, None);
+    let view = profiles.pop().expect("single codex profile view");
 
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
@@ -35875,35 +36099,6 @@ fn remove_codex_profile(
     if codex.is_empty() {
         document.remove("codex");
     }
-    write_settings_document(&settings_path, &document)?;
-    Ok(())
-}
-
-fn use_codex_profile(
-    profile: Option<String>,
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-) -> Result<()> {
-    let home = home.unwrap_or_else(default_home_dir);
-    let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
-    let settings = Settings::load(&home, Some(&settings_path))?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "use",
-    )?;
-
-    let mut document = load_settings_document(&settings_path)?;
-    if !document.contains_key("schema_version") {
-        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
-    }
-    let codex = ensure_toml_table(&mut document, "codex")?;
-    let profiles = ensure_toml_table(codex, "profiles")?;
-    set_toml_string(profiles, "active", Some(profile_id.clone()));
-    set_toml_string(codex, "profile", Some(profile_id));
     write_settings_document(&settings_path, &document)?;
     Ok(())
 }
@@ -64353,309 +64548,9 @@ fn dyad_container_spec_view(spec: &si_rs_docker::ContainerSpec) -> DyadContainer
 }
 
 #[allow(clippy::too_many_arguments)]
-fn show_codex_spawn_plan(
-    profile: Option<String>,
-    workspace: PathBuf,
-    workdir: Option<String>,
-    codex_volume: Option<String>,
-    skills_volume: Option<String>,
-    gh_volume: Option<String>,
-    repo: Option<String>,
-    gh_pat: Option<String>,
-    docker_socket: bool,
-    detach: bool,
-    clean_slate: bool,
-    image: Option<String>,
-    network: Option<String>,
-    home: Option<PathBuf>,
-    ssh_auth_sock: Option<PathBuf>,
-    vault_env_file: Option<PathBuf>,
-    include_host_si: bool,
-    env: Vec<String>,
-    format: OutputFormat,
-) -> Result<()> {
-    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
-    let mut host_ctx = HostMountContext::from_env();
-    if home.is_some() {
-        host_ctx.home_dir = Some(settings_home);
-    }
-    if ssh_auth_sock.is_some() {
-        host_ctx.ssh_auth_sock = ssh_auth_sock;
-    }
-    let plan = build_spawn_plan(
-        &SpawnRequest {
-            profile_id,
-            image,
-            network_name: network,
-            workspace_host: workspace,
-            workdir,
-            codex_volume,
-            skills_volume,
-            gh_volume,
-            repo,
-            gh_pat,
-            docker_socket,
-            clean_slate,
-            detach,
-            container_home: None,
-            host_vault_env_file: vault_env_file,
-            include_host_si,
-            additional_env: env,
-        },
-        &host_ctx,
-    )?;
-
-    let view = CodexSpawnPlanView {
-        name: plan.name,
-        container_name: plan.container_name,
-        image: plan.image,
-        network_name: plan.network_name,
-        workspace_host: plan.workspace_host.display().to_string(),
-        workspace_primary_target: plan.workspace_primary_target.display().to_string(),
-        workspace_mirror_target: plan.workspace_mirror_target.display().to_string(),
-        workdir: plan.workdir.display().to_string(),
-        codex_volume: plan.codex_volume,
-        skills_volume: plan.skills_volume,
-        gh_volume: plan.gh_volume,
-        docker_socket: plan.docker_socket,
-        clean_slate: plan.clean_slate,
-        detach: plan.detach,
-        env: plan.env,
-        mounts: plan
-            .mounts
-            .into_iter()
-            .map(|mount| CodexBindMountView {
-                source: mount.source().display().to_string(),
-                target: mount.target().display().to_string(),
-                read_only: mount.is_read_only(),
-            })
-            .collect(),
-    };
-
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("name={}", view.name);
-            println!("container_name={}", view.container_name);
-            println!("image={}", view.image);
-            println!("network_name={}", view.network_name);
-            println!("workspace_host={}", view.workspace_host);
-            println!("workspace_primary_target={}", view.workspace_primary_target);
-            println!("workspace_mirror_target={}", view.workspace_mirror_target);
-            println!("workdir={}", view.workdir);
-            println!("codex_volume={}", view.codex_volume);
-            println!("skills_volume={}", view.skills_volume);
-            println!("gh_volume={}", view.gh_volume);
-            println!("docker_socket={}", view.docker_socket);
-            println!("clean_slate={}", view.clean_slate);
-            println!("detach={}", view.detach);
-            println!("env={}", view.env.join(","));
-            println!("mounts={}", view.mounts.len());
-        }
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn show_codex_spawn_spec(
-    profile: Option<String>,
-    workspace: PathBuf,
-    workdir: Option<String>,
-    codex_volume: Option<String>,
-    skills_volume: Option<String>,
-    gh_volume: Option<String>,
-    repo: Option<String>,
-    gh_pat: Option<String>,
-    docker_socket: bool,
-    detach: bool,
-    clean_slate: bool,
-    image: Option<String>,
-    network: Option<String>,
-    home: Option<PathBuf>,
-    ssh_auth_sock: Option<PathBuf>,
-    vault_env_file: Option<PathBuf>,
-    include_host_si: bool,
-    env: Vec<String>,
-    labels: Vec<String>,
-    ports: Vec<String>,
-    cmd: Option<String>,
-    format: OutputFormat,
-) -> Result<()> {
-    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
-    let mut host_ctx = HostMountContext::from_env();
-    if home.is_some() {
-        host_ctx.home_dir = Some(settings_home);
-    }
-    if ssh_auth_sock.is_some() {
-        host_ctx.ssh_auth_sock = ssh_auth_sock;
-    }
-    let plan = build_spawn_plan(
-        &SpawnRequest {
-            profile_id,
-            image,
-            network_name: network,
-            workspace_host: workspace,
-            workdir,
-            codex_volume,
-            skills_volume,
-            gh_volume,
-            repo,
-            gh_pat,
-            docker_socket,
-            clean_slate,
-            detach,
-            container_home: None,
-            host_vault_env_file: vault_env_file,
-            include_host_si,
-            additional_env: env,
-        },
-        &host_ctx,
-    )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
-    let view = CodexSpawnSpecView {
-        image: spec.image().to_owned(),
-        name: spec.name_ref().map(str::to_owned),
-        network: spec.network_ref().map(str::to_owned),
-        restart_policy: spec.restart_policy_ref().map(str::to_owned),
-        working_dir: spec.working_dir().map(|path| path.display().to_string()),
-        command: spec.command_args().to_vec(),
-        env: spec
-            .env_vars()
-            .iter()
-            .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
-            .collect(),
-        labels: spec
-            .labels()
-            .iter()
-            .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
-            .collect(),
-        published_ports: spec
-            .published_ports()
-            .iter()
-            .map(|port| CodexPublishedPortView {
-                host_ip: port.host_ip_ref().to_owned(),
-                host_port: port.host_port().to_owned(),
-                container_port: port.container_port(),
-            })
-            .collect(),
-        bind_mounts: spec
-            .bind_mounts()
-            .iter()
-            .map(|mount| CodexBindMountView {
-                source: mount.source().display().to_string(),
-                target: mount.target().display().to_string(),
-                read_only: mount.is_read_only(),
-            })
-            .collect(),
-        volume_mounts: spec
-            .volume_mounts()
-            .iter()
-            .map(|mount| CodexVolumeMountView {
-                source: mount.source().to_owned(),
-                target: mount.target().display().to_string(),
-                read_only: mount.is_read_only(),
-            })
-            .collect(),
-        user: spec.user_ref().map(str::to_owned),
-        detach: spec.detach_enabled(),
-        auto_remove: spec.auto_remove_enabled(),
-    };
-
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("image={}", view.image);
-            println!("name={}", view.name.as_deref().unwrap_or("-"));
-            println!("network={}", view.network.as_deref().unwrap_or("-"));
-            println!("restart_policy={}", view.restart_policy.as_deref().unwrap_or("-"));
-            println!("working_dir={}", view.working_dir.as_deref().unwrap_or("-"));
-            println!("command={}", view.command.join(" "));
-            println!("env={}", view.env.len());
-            println!("labels={}", view.labels.len());
-            println!("published_ports={}", view.published_ports.len());
-            println!("bind_mounts={}", view.bind_mounts.len());
-            println!("volume_mounts={}", view.volume_mounts.len());
-        }
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn show_codex_spawn_run_args(
-    profile: Option<String>,
-    workspace: PathBuf,
-    workdir: Option<String>,
-    codex_volume: Option<String>,
-    skills_volume: Option<String>,
-    gh_volume: Option<String>,
-    repo: Option<String>,
-    gh_pat: Option<String>,
-    docker_socket: bool,
-    detach: bool,
-    clean_slate: bool,
-    image: Option<String>,
-    network: Option<String>,
-    home: Option<PathBuf>,
-    ssh_auth_sock: Option<PathBuf>,
-    vault_env_file: Option<PathBuf>,
-    include_host_si: bool,
-    env: Vec<String>,
-    labels: Vec<String>,
-    ports: Vec<String>,
-    cmd: Option<String>,
-    format: OutputFormat,
-) -> Result<()> {
-    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
-    let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
-    let mut host_ctx = HostMountContext::from_env();
-    if home.is_some() {
-        host_ctx.home_dir = Some(settings_home);
-    }
-    if ssh_auth_sock.is_some() {
-        host_ctx.ssh_auth_sock = ssh_auth_sock;
-    }
-    let plan = build_spawn_plan(
-        &SpawnRequest {
-            profile_id,
-            image,
-            network_name: network,
-            workspace_host: workspace,
-            workdir,
-            codex_volume,
-            skills_volume,
-            gh_volume,
-            repo,
-            gh_pat,
-            docker_socket,
-            clean_slate,
-            detach,
-            container_home: None,
-            host_vault_env_file: vault_env_file,
-            include_host_si,
-            additional_env: env,
-        },
-        &host_ctx,
-    )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
-    let args = spec.docker_run_args()?;
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&args)?),
-        OutputFormat::Text => println!("{}", args.join(" ")),
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_start(
     profile: Option<String>,
-    workspace: PathBuf,
+    workspace: Option<PathBuf>,
     workdir: Option<String>,
     codex_volume: Option<String>,
     skills_volume: Option<String>,
@@ -64680,6 +64575,10 @@ fn show_codex_spawn_start(
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
     let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
+    let workspace = resolve_codex_workspace(workspace, &settings)?;
+    let image = resolve_codex_spawn_option(image, settings.codex.image.as_deref());
+    let network = resolve_codex_spawn_option(network, settings.codex.network.as_deref());
+    let workdir = resolve_codex_spawn_option(workdir, settings.codex.workdir.as_deref());
     let mut host_ctx = HostMountContext::from_env();
     if home.is_some() {
         host_ctx.home_dir = Some(settings_home);
@@ -64716,32 +64615,65 @@ fn show_codex_spawn_start(
     let output = ProcessRunner.run(&command, &RunOptions::default())?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("docker run failed: {}", stderr.trim());
+        return Err(codex_spawn_docker_run_error(plan.image.as_str(), stderr.trim()));
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 
-fn show_codex_remove_plan(profile_id: &str, format: OutputFormat) -> Result<()> {
-    let artifacts = build_remove_artifacts(profile_id)?;
-    let view = CodexRemovePlanView {
-        name: artifacts.name,
-        container_name: artifacts.container_name,
-        slug: artifacts.slug,
-        codex_volume: artifacts.codex_volume,
-        gh_volume: artifacts.gh_volume,
-    };
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("name={}", view.name);
-            println!("container_name={}", view.container_name);
-            println!("slug={}", view.slug);
-            println!("codex_volume={}", view.codex_volume);
-            println!("gh_volume={}", view.gh_volume);
+fn resolve_codex_spawn_option(
+    cli_value: Option<String>,
+    configured_value: Option<&str>,
+) -> Option<String> {
+    cli_value.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()).or_else(|| {
+        configured_value.map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned)
+    })
+}
+
+fn codex_spawn_docker_run_error(image: &str, stderr: &str) -> anyhow::Error {
+    if image == DEFAULT_IMAGE
+        && stderr.contains("Unable to find image")
+        && stderr.contains("pull access denied")
+    {
+        return anyhow!(
+            "docker image {:?} is not available locally; run `si build image` from the repo root, or override it with `--image` / `codex.image`",
+            image,
+        );
+    }
+    anyhow!("docker run failed: {}", stderr)
+}
+
+fn resolve_codex_workspace(workspace: Option<PathBuf>, settings: &Settings) -> Result<PathBuf> {
+    if let Some(path) = workspace {
+        return resolve_codex_workspace_path(path);
+    }
+    if let Some(configured) = settings.codex.workspace.as_deref() {
+        let trimmed = configured.trim();
+        if !trimmed.is_empty() {
+            return resolve_codex_workspace_path(PathBuf::from(trimmed));
         }
     }
-    Ok(())
+    std::env::current_dir().context("read current dir for codex workspace")
+}
+
+fn resolve_codex_workspace_path(path: PathBuf) -> Result<PathBuf> {
+    let path = expand_home_path(path);
+    if path.is_absolute() {
+        Ok(path)
+    } else {
+        Ok(std::env::current_dir().context("read current dir for codex workspace")?.join(path))
+    }
+}
+
+fn expand_home_path(path: PathBuf) -> PathBuf {
+    let path_str = path.to_string_lossy();
+    if path_str == "~" {
+        return default_home_dir();
+    }
+    if let Some(suffix) = path_str.strip_prefix("~/") {
+        return default_home_dir().join(suffix);
+    }
+    path
 }
 
 fn inspect_codex_profile_label(
@@ -64765,20 +64697,85 @@ fn inspect_codex_profile_label(
     Ok(Some(value))
 }
 
-fn run_codex_remove(
-    profile: Option<&str>,
-    volumes: bool,
-    format: OutputFormat,
-    docker_bin: Option<PathBuf>,
-) -> Result<()> {
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
-    let artifacts = build_remove_artifacts(&profile_id)?;
+fn read_codex_containers(docker_bin: Option<PathBuf>) -> Result<Vec<CodexContainerListItem>> {
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let docker_program_str = docker_program.display().to_string();
-    let profile_id = inspect_codex_profile_label(&docker_program_str, &artifacts.container_name)?;
+    let command = docker_container_list_with_format_command(
+        docker_program.display().to_string(),
+        "si.component=codex",
+        true,
+        "{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Label \"si.codex.profile\"}}",
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker ps failed: {}", stderr.trim());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut items = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(4, '\t');
+        let name = parts.next().unwrap_or("").trim();
+        let state = parts.next().unwrap_or("").trim();
+        let image = parts.next().unwrap_or("").trim();
+        let profile_id = parts.next().unwrap_or("").trim();
+        if name.is_empty() {
+            continue;
+        }
+        items.push(CodexContainerListItem {
+            name: name.to_owned(),
+            state: state.to_owned(),
+            image: image.to_owned(),
+            profile_id: if profile_id.is_empty() || profile_id == "<no value>" {
+                None
+            } else {
+                Some(profile_id.to_owned())
+            },
+        });
+    }
+    Ok(items)
+}
+
+fn prompt_codex_remove_all(items: &[CodexContainerListItem], volumes: bool) -> Result<bool> {
+    eprintln!(
+        "{}",
+        stderr_text(
+            &format!(
+                "Remove all {} codex containers{}?",
+                items.len(),
+                if volumes { " and profile volumes" } else { "" }
+            ),
+            CliTone::Warning,
+        )
+    );
+    for item in items {
+        let label = item.profile_id.as_deref().unwrap_or(item.name.as_str());
+        eprintln!(
+            "{} {} ({})",
+            stderr_text("-", CliTone::Muted),
+            stderr_text(label, CliTone::Command),
+            item.name
+        );
+    }
+    eprint!("{} ", stderr_text("Type 'remove all' to confirm:", CliTone::Heading));
+    io::stderr().flush().context("flush codex remove-all prompt")?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).context("read codex remove-all confirmation")?;
+    Ok(input.trim() == "remove all")
+}
+
+fn remove_codex_artifacts(
+    docker_program: &str,
+    artifacts: &si_rs_codex::RemoveArtifacts,
+    profile_id: Option<String>,
+    volumes: bool,
+) -> Result<CodexRemoveResultView> {
     let remove_container = docker_container_remove_command(
-        docker_program_str.clone(),
+        docker_program.to_owned(),
         artifacts.container_name.clone(),
         true,
     )?;
@@ -64790,11 +64787,8 @@ fn run_codex_remove(
     let mut rendered = String::from_utf8_lossy(&output.stdout).into_owned();
     if volumes {
         for volume_name in [&artifacts.codex_volume, &artifacts.gh_volume] {
-            let remove_volume = docker_volume_remove_command(
-                docker_program_str.clone(),
-                volume_name.clone(),
-                true,
-            )?;
+            let remove_volume =
+                docker_volume_remove_command(docker_program.to_owned(), volume_name.clone(), true)?;
             let output = ProcessRunner.run(&remove_volume, &RunOptions::default())?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -64803,19 +64797,93 @@ fn run_codex_remove(
             rendered.push_str(&String::from_utf8_lossy(&output.stdout));
         }
     }
-    match format {
-        OutputFormat::Json => {
-            let view = CodexRemoveResultView {
-                name: artifacts.name,
-                container_name: artifacts.container_name,
-                profile_id,
-                codex_volume: volumes.then_some(artifacts.codex_volume),
-                gh_volume: volumes.then_some(artifacts.gh_volume),
-                output: rendered,
-            };
-            println!("{}", serde_json::to_string_pretty(&view)?);
+    Ok(CodexRemoveResultView {
+        name: artifacts.name.clone(),
+        container_name: artifacts.container_name.clone(),
+        profile_id,
+        codex_volume: volumes.then_some(artifacts.codex_volume.clone()),
+        gh_volume: volumes.then_some(artifacts.gh_volume.clone()),
+        output: rendered,
+    })
+}
+
+fn run_codex_remove(
+    profile: Option<&str>,
+    all: bool,
+    volumes: bool,
+    format: OutputFormat,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let docker_program_str = docker_program.display().to_string();
+    if all {
+        let items = read_codex_containers(Some(docker_program.clone()))?;
+        if items.is_empty() {
+            match format {
+                OutputFormat::Json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexRemoveAllResultView {
+                        aborted: false,
+                        removed: Vec::new(),
+                    })?
+                ),
+                OutputFormat::Text => println!("no codex containers found"),
+            }
+            return Ok(());
         }
-        OutputFormat::Text => print!("{rendered}"),
+        let confirmed = prompt_codex_remove_all(&items, volumes)?;
+        if !confirmed {
+            match format {
+                OutputFormat::Json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexRemoveAllResultView {
+                        aborted: true,
+                        removed: Vec::new(),
+                    })?
+                ),
+                OutputFormat::Text => println!("aborted"),
+            }
+            return Ok(());
+        }
+
+        let mut removed = Vec::with_capacity(items.len());
+        for item in items {
+            let profile_key = item.profile_id.clone().unwrap_or_else(|| {
+                item.name.trim().strip_prefix("si-codex-").unwrap_or(item.name.as_str()).to_owned()
+            });
+            let artifacts = build_remove_artifacts(&profile_key)?;
+            removed.push(remove_codex_artifacts(
+                &docker_program_str,
+                &artifacts,
+                item.profile_id.clone(),
+                volumes,
+            )?);
+        }
+        match format {
+            OutputFormat::Json => println!(
+                "{}",
+                serde_json::to_string_pretty(&CodexRemoveAllResultView {
+                    aborted: false,
+                    removed,
+                })?
+            ),
+            OutputFormat::Text => {
+                for item in removed {
+                    print!("{}", item.output);
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let artifacts = build_remove_artifacts(&profile_id)?;
+    let profile_id = inspect_codex_profile_label(&docker_program_str, &artifacts.container_name)?;
+    let view = remove_codex_artifacts(&docker_program_str, &artifacts, profile_id, volumes)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => print!("{}", view.output),
     }
     Ok(())
 }
@@ -64881,50 +64949,6 @@ fn run_codex_container_logs(
     Ok(())
 }
 
-fn run_codex_clone(
-    profile: &str,
-    repo: &str,
-    gh_pat: Option<&str>,
-    format: OutputFormat,
-    docker_bin: Option<PathBuf>,
-) -> Result<()> {
-    let profile_id = resolve_codex_runtime_profile(Some(profile), None, None)?;
-    let artifacts = build_remove_artifacts(&profile_id)?;
-    let repo = repo.trim();
-    if repo.is_empty() {
-        anyhow::bail!("repo is required");
-    }
-    let docker_program =
-        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let mut spec = ContainerExecSpec::new(artifacts.container_name.clone())
-        .user("si")
-        .env("SI_REPO", repo)
-        .command(["/usr/local/bin/si-entrypoint", "bash", "-lc", "true"]);
-    if let Some(gh_pat) = gh_pat.map(str::trim).filter(|value| !value.is_empty()) {
-        spec = spec.env("SI_GH_PAT", gh_pat).env("GH_TOKEN", gh_pat).env("GITHUB_TOKEN", gh_pat);
-    }
-    let command = docker_container_exec_command(docker_program.display().to_string(), &spec)?;
-    let output = ProcessRunner.run(&command, &RunOptions::default())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("docker exec failed: {}", stderr.trim());
-    }
-    let rendered = String::from_utf8_lossy(&output.stdout).into_owned();
-    match format {
-        OutputFormat::Json => {
-            let view = CodexCloneResultView {
-                name: profile_id,
-                repo: repo.trim().to_owned(),
-                container_name: artifacts.container_name,
-                output: rendered,
-            };
-            println!("{}", serde_json::to_string_pretty(&view)?);
-        }
-        OutputFormat::Text => print!("{rendered}"),
-    }
-    Ok(())
-}
-
 #[allow(clippy::too_many_arguments)]
 fn run_codex_exec(
     profile: Option<&str>,
@@ -64976,38 +65000,10 @@ fn run_codex_exec(
 }
 
 fn run_codex_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<()> {
-    let docker_program =
-        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let command = docker_container_list_command(
-        docker_program.display().to_string(),
-        "si.component=codex",
-        true,
-    )?;
-    let output = ProcessRunner.run(&command, &RunOptions::default())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("docker ps failed: {}", stderr.trim());
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut items = Vec::new();
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut parts = line.splitn(3, '\t');
-        let name = parts.next().unwrap_or("").trim();
-        let state = parts.next().unwrap_or("").trim();
-        let image = parts.next().unwrap_or("").trim();
-        if name.is_empty() {
-            continue;
-        }
-        items.push(CodexListEntryView {
-            name: name.to_owned(),
-            state: state.to_owned(),
-            image: image.to_owned(),
-        });
-    }
+    let items = read_codex_containers(docker_bin)?
+        .into_iter()
+        .map(|item| CodexListEntryView { name: item.name, state: item.state, image: item.image })
+        .collect::<Vec<_>>();
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&items)?),
         OutputFormat::Text => {
@@ -65025,13 +65021,34 @@ fn run_codex_status_read(
     format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
+    let status = read_codex_status(profile, raw, docker_bin)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
+    }
+    Ok(())
+}
+
+fn read_codex_status(
+    profile: Option<&str>,
+    raw: bool,
+    docker_bin: Option<PathBuf>,
+) -> Result<CodexStatusView> {
     let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
     let artifacts = build_remove_artifacts(&profile_id)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    read_codex_status_for_container_name(&artifacts.container_name, raw, docker_program.as_path())
+}
+
+fn read_codex_status_for_container_name(
+    container_name: &str,
+    raw: bool,
+    docker_program: &Path,
+) -> Result<CodexStatusView> {
     let command = docker_container_exec_command(
         docker_program.display().to_string(),
-        &ContainerExecSpec::new(artifacts.container_name)
+        &ContainerExecSpec::new(container_name)
             .user("si")
             .interactive(true)
             .env("HOME", "/home/si")
@@ -65062,62 +65079,444 @@ fn run_codex_status_read(
     if raw {
         status.raw = Some(combined);
     }
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
-        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
-    }
-    Ok(())
+    Ok(status)
 }
 
-fn run_codex_tmux_plan(
-    profile: Option<&str>,
-    start_dir: Option<&str>,
-    resume_session_id: Option<&str>,
-    resume_profile: Option<&str>,
+fn spawn_codex_container_for_profile(
+    profile_id: &str,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+    image: Option<String>,
+    network: Option<String>,
+    docker_bin: Option<PathBuf>,
+) -> Result<String> {
+    let (settings_home, settings) = load_codex_runtime_settings(home, settings_file)?;
+    let workspace = resolve_codex_workspace(workspace, &settings)?;
+    let image = resolve_codex_spawn_option(image, settings.codex.image.as_deref());
+    let network = resolve_codex_spawn_option(network, settings.codex.network.as_deref());
+    let workdir = resolve_codex_spawn_option(None, settings.codex.workdir.as_deref());
+    let mut host_ctx = HostMountContext::from_env();
+    host_ctx.home_dir = Some(settings_home);
+
+    let plan = build_spawn_plan(
+        &SpawnRequest {
+            profile_id: profile_id.to_owned(),
+            image,
+            network_name: network,
+            workspace_host: workspace,
+            workdir,
+            codex_volume: None,
+            skills_volume: None,
+            gh_volume: None,
+            repo: None,
+            gh_pat: None,
+            docker_socket: true,
+            clean_slate: false,
+            detach: true,
+            container_home: None,
+            host_vault_env_file: None,
+            include_host_si: true,
+            additional_env: Vec::new(),
+        },
+        &host_ctx,
+    )?;
+    let spec = build_container_spec(
+        &plan,
+        &SpawnContainerOptions { command: None, labels: Vec::new(), ports: Vec::new() },
+    )?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = spec.docker_run_command(docker_program.display().to_string())?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(codex_spawn_docker_run_error(plan.image.as_str(), stderr.trim()));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn ensure_codex_container_running(
+    profile_id: &str,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+    image: Option<String>,
+    network: Option<String>,
+    docker_bin: Option<PathBuf>,
+) -> Result<String> {
+    let artifacts = build_remove_artifacts(profile_id)?;
+    let docker_program =
+        docker_bin.clone().unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let existing = read_codex_containers(Some(docker_program.clone()))?
+        .into_iter()
+        .find(|item| item.name == artifacts.container_name);
+    if let Some(item) = existing {
+        if item.state.eq_ignore_ascii_case("running") {
+            return Ok("already-running".to_owned());
+        }
+        let command = docker_container_action_command(
+            docker_program.display().to_string(),
+            ContainerAction::Start,
+            artifacts.container_name,
+        )?;
+        let output = ProcessRunner.run(&command, &RunOptions::default())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("docker start failed: {}", stderr.trim());
+        }
+        return Ok("started".to_owned());
+    }
+
+    let output = spawn_codex_container_for_profile(
+        profile_id,
+        home,
+        settings_file,
+        workspace,
+        image,
+        network,
+        docker_bin,
+    )?;
+    if output.is_empty() { Ok("spawned".to_owned()) } else { Ok("spawned".to_owned()) }
+}
+
+fn read_codex_status_with_retry(
+    container_name: &str,
+    docker_program: &Path,
+) -> Result<CodexStatusView> {
+    let mut last_error: Option<anyhow::Error> = None;
+    for attempt in 0..10 {
+        match read_codex_status_for_container_name(container_name, false, docker_program) {
+            Ok(status) => return Ok(status),
+            Err(err) => {
+                last_error = Some(err);
+                if attempt < 9 {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow!("codex status did not become ready")))
+}
+
+fn run_codex_warmup(
+    profile: Option<String>,
+    all: bool,
+    path: Option<PathBuf>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    workspace: Option<PathBuf>,
+    image: Option<String>,
+    network: Option<String>,
+    docker_bin: Option<PathBuf>,
     format: OutputFormat,
 ) -> Result<()> {
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
-    let artifacts = build_remove_artifacts(&profile_id)?;
-    let plan = build_tmux_plan(
-        &artifacts.container_name,
-        start_dir.unwrap_or(""),
-        resume_session_id.unwrap_or(""),
-        resume_profile.unwrap_or(""),
-    )?;
-    let view = CodexTmuxPlanView {
-        session_name: plan.session_name,
-        target: plan.target,
-        launch_command: plan.launch_command,
-        resume_command: plan.resume_command,
+    let home_dir = home.clone().unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home_dir, settings_file.as_deref())?;
+    let paths = SiPaths::from_settings(&home_dir, &settings);
+    let state_path = match path {
+        Some(path) => path,
+        None => default_warmup_state_path(Some(home_dir.as_path()))?,
+    };
+    let mut state = load_warmup_state(&state_path)?;
+    let updated_at = chrono::Utc::now();
+    let profile_ids = if let Some(profile) =
+        profile.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        vec![resolve_codex_requested_profile(&settings, &paths, Some(profile))?]
+    } else if all || profile.is_none() {
+        let mut items = settings.codex.profiles.entries.keys().cloned().collect::<Vec<_>>();
+        items.sort();
+        items
+    } else {
+        Vec::new()
+    };
+    if profile_ids.is_empty() {
+        anyhow::bail!("no codex profiles are configured");
+    }
+
+    let docker_program =
+        docker_bin.clone().unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let mut results = Vec::with_capacity(profile_ids.len());
+
+    for profile_id in profile_ids {
+        let previous = state.profiles.get(profile_id.as_str()).cloned();
+        let last_weekly_used_pct =
+            previous.as_ref().map(|row| row.last_weekly_used_pct).unwrap_or(0.0);
+        let last_weekly_used_ok = previous.as_ref().is_some_and(|row| row.last_weekly_used_ok);
+        let entry = state.profiles.entry(profile_id.clone()).or_default();
+        entry.profile_id = profile_id.clone();
+        entry.last_attempt = updated_at.to_rfc3339();
+
+        match ensure_codex_container_running(
+            &profile_id,
+            home.clone(),
+            settings_file.clone(),
+            workspace.clone(),
+            image.clone(),
+            network.clone(),
+            docker_bin.clone(),
+        ) {
+            Ok(action) => {
+                let artifacts = build_remove_artifacts(&profile_id)?;
+                match read_codex_status_with_retry(
+                    &artifacts.container_name,
+                    docker_program.as_path(),
+                ) {
+                    Ok(status) => {
+                        let weekly_used_pct =
+                            status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
+                        entry.last_result = "warmed".to_owned();
+                        entry.last_error.clear();
+                        entry.last_weekly_used_pct = weekly_used_pct;
+                        entry.last_weekly_used_ok = status.weekly_left_pct.is_some();
+                        entry.last_weekly_reset = status.weekly_reset.clone().unwrap_or_default();
+                        entry.last_warmed_reset = status.weekly_reset.clone().unwrap_or_default();
+                        entry.last_usage_delta = if last_weekly_used_ok {
+                            weekly_used_pct - last_weekly_used_pct
+                        } else {
+                            0.0
+                        };
+                        entry.next_due = status
+                            .five_hour_reset
+                            .clone()
+                            .or_else(|| status.weekly_reset.clone())
+                            .unwrap_or_default();
+                        entry.failure_count = 0;
+                        entry.paused = false;
+                        results.push(CodexWarmupRunProfileView {
+                            profile_id,
+                            action,
+                            result: "warmed".to_owned(),
+                            error: None,
+                            account_email: status.account_email,
+                            account_plan: status.account_plan,
+                            five_hour_left_pct: status.five_hour_left_pct,
+                            five_hour_reset: status.five_hour_reset,
+                            weekly_left_pct: status.weekly_left_pct,
+                            weekly_reset: status.weekly_reset,
+                        });
+                    }
+                    Err(err) => {
+                        entry.last_result = "failed".to_owned();
+                        entry.last_error = err.to_string();
+                        entry.failure_count += 1;
+                        results.push(CodexWarmupRunProfileView {
+                            profile_id,
+                            action,
+                            result: "failed".to_owned(),
+                            error: Some(entry.last_error.clone()),
+                            account_email: None,
+                            account_plan: None,
+                            five_hour_left_pct: None,
+                            five_hour_reset: None,
+                            weekly_left_pct: None,
+                            weekly_reset: None,
+                        });
+                    }
+                }
+            }
+            Err(err) => {
+                entry.last_result = "failed".to_owned();
+                entry.last_error = err.to_string();
+                entry.failure_count += 1;
+                results.push(CodexWarmupRunProfileView {
+                    profile_id,
+                    action: "failed".to_owned(),
+                    result: "failed".to_owned(),
+                    error: Some(entry.last_error.clone()),
+                    account_email: None,
+                    account_plan: None,
+                    five_hour_left_pct: None,
+                    five_hour_reset: None,
+                    weekly_left_pct: None,
+                    weekly_reset: None,
+                });
+            }
+        }
+    }
+
+    state.version = si_rs_warmup::WARMUP_STATE_VERSION;
+    state.updated_at = updated_at.to_rfc3339();
+    save_warmup_state(&state_path, &state)?;
+
+    let view = CodexWarmupRunView {
+        updated_at: state.updated_at,
+        state_path: state_path.display().to_string(),
+        profiles: results,
     };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => {
-            println!("session_name={}", view.session_name);
-            println!("target={}", view.target);
-            println!("launch_command={}", view.launch_command);
-            if !view.resume_command.is_empty() {
-                println!("resume_command={}", view.resume_command);
+            print_cli_kv("updated_at", &view.updated_at);
+            print_cli_kv("state_path", &view.state_path);
+            for profile in view.profiles {
+                println!(
+                    "{}\taction={}\tresult={}\tfive_hour_left={}\tweekly_left={}\terror={}",
+                    stdout_text(&profile.profile_id, CliTone::Command),
+                    stdout_text(&profile.action, CliTone::Info),
+                    stdout_text(
+                        &profile.result,
+                        if profile.result == "warmed" { CliTone::Success } else { CliTone::Danger },
+                    ),
+                    render_option_percent_value(profile.five_hour_left_pct),
+                    render_option_percent_value(profile.weekly_left_pct),
+                    profile
+                        .error
+                        .map(|value| stdout_text(&value, CliTone::Danger))
+                        .unwrap_or_else(|| stdout_text("-", CliTone::Muted))
+                );
             }
         }
     }
     Ok(())
 }
 
-fn run_codex_tmux_command(profile: Option<&str>, format: OutputFormat) -> Result<()> {
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -> Result<()> {
+    let (home, settings) = load_codex_runtime_settings(None, None)?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile)?;
+    let profile_display_name = settings
+        .codex
+        .profiles
+        .entries
+        .get(profile_id.as_str())
+        .and_then(|entry| entry.name.as_deref())
+        .filter(|name| name.trim() != profile_id);
     let container = build_remove_artifacts(&profile_id)?.container_name;
+    let legacy_session_name = codex_tmux_session_name(&container);
+    let session_name = codex_tmux_session_name_for_profile(&container, profile_display_name);
     let launch_command = build_tmux_command_for_container(&container)?;
-    let view = CodexTmuxCommandView { profile_id, container, launch_command };
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("profile_id={}", view.profile_id);
-            println!("container={}", view.container);
-            println!("launch_command={}", view.launch_command);
+    let view = CodexTmuxCommandView {
+        profile_id,
+        container,
+        launch_command,
+        session_name: session_name.clone(),
+    };
+    if let Some(format) = format {
+        match format {
+            OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+            OutputFormat::Text => {
+                print_cli_kv("profile_id", &view.profile_id);
+                print_cli_kv("container", &view.container);
+                print_cli_kv("session_name", &view.session_name);
+                print_cli_kv("launch_command", &view.launch_command);
+            }
+        }
+        return Ok(());
+    }
+
+    let tmux_bin = "tmux";
+    let term = env::var("TERM").unwrap_or_default();
+    let tmux_term = if term.trim().is_empty() || term.trim() == "dumb" {
+        "xterm-256color"
+    } else {
+        term.trim()
+    };
+    let has_session = tmux_session_exists(tmux_bin, tmux_term, &session_name)?;
+    if !has_session {
+        if session_name != legacy_session_name
+            && tmux_session_exists(tmux_bin, tmux_term, &legacy_session_name)?
+        {
+            let status = std::process::Command::new(tmux_bin)
+                .env("TERM", tmux_term)
+                .args(["rename-session", "-t", &legacy_session_name, &session_name])
+                .status()
+                .with_context(|| {
+                    format!("rename tmux session {} -> {}", legacy_session_name, session_name)
+                })?;
+            if !status.success() {
+                anyhow::bail!(
+                    "tmux failed to rename session {} -> {}",
+                    legacy_session_name,
+                    session_name
+                );
+            }
+        } else {
+            let status = std::process::Command::new(tmux_bin)
+                .env("TERM", tmux_term)
+                .args(["new-session", "-d", "-s", &session_name, &view.launch_command])
+                .status()
+                .with_context(|| format!("create tmux session {}", session_name))?;
+            if !status.success() {
+                anyhow::bail!("tmux failed to create session {}", session_name);
+            }
         }
     }
+    apply_codex_tmux_session_defaults(tmux_bin, tmux_term, &session_name);
+
+    let tmux_env = env::var_os("TMUX");
+    let attach_args = if tmux_env.is_some() {
+        vec!["switch-client", "-t", session_name.as_str()]
+    } else {
+        vec!["attach-session", "-t", session_name.as_str()]
+    };
+    let status = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(&attach_args)
+        .status()
+        .with_context(|| format!("attach tmux session {}", session_name))?;
+    if !status.success() {
+        anyhow::bail!("tmux failed to attach to session {}", session_name);
+    }
     Ok(())
+}
+
+fn codex_tmux_session_name_for_profile(
+    container_name: &str,
+    profile_display_name: Option<&str>,
+) -> String {
+    let base = codex_tmux_session_name(container_name);
+    let Some(label) = profile_display_name.and_then(sanitize_codex_tmux_profile_label) else {
+        return base;
+    };
+    format!("{base} {label}")
+}
+
+fn sanitize_codex_tmux_profile_label(raw: &str) -> Option<String> {
+    let mut out = String::new();
+    let mut last_was_space = false;
+    for ch in raw.chars() {
+        if matches!(ch, ':' | '\n' | '\r' | '\0') {
+            continue;
+        }
+        if ch.is_whitespace() {
+            if !out.is_empty() && !last_was_space {
+                out.push(' ');
+                last_was_space = true;
+            }
+            continue;
+        }
+        out.push(ch);
+        last_was_space = false;
+    }
+    let trimmed = out.trim();
+    if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
+}
+
+fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> Result<bool> {
+    let mut command = std::process::Command::new(tmux_bin);
+    command
+        .env("TERM", tmux_term)
+        .args(["has-session", "-t", session_name])
+        .stderr(std::process::Stdio::null());
+    let status =
+        command.status().with_context(|| format!("check tmux session {}", session_name))?;
+    Ok(status.success())
+}
+
+fn apply_codex_tmux_session_defaults(tmux_bin: &str, tmux_term: &str, session_name: &str) {
+    if session_name.trim().is_empty() {
+        return;
+    }
+    let _ = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(["set-option", "-t", session_name, "mouse", "on"])
+        .status();
+    let _ = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(["set-option", "-t", session_name, "history-limit", "200000"])
+        .status();
 }
 
 fn run_codex_report_parse(format: OutputFormat) -> Result<()> {
