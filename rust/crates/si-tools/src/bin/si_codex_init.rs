@@ -5,7 +5,7 @@ use std::process::{Command, ExitCode};
 
 use si_tools::{
     browser_mcp_url_from_env, collect_git_safe_directories, ensure_git_safe_directories,
-    sync_codex_skills, write_codex_config,
+    sync_codex_auth, sync_codex_skills, write_codex_config,
 };
 
 const USAGE: &str = r#"Usage: si-codex-init [--quiet] [--exec <cmd> [args...]]
@@ -54,7 +54,10 @@ fn run() -> Result<ExitCode, String> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .map(PathBuf::from);
+    let profile_id = env::var("SI_CODEX_PROFILE_ID").ok();
 
+    sync_codex_auth(profile_id.as_deref(), &home.join(".si"), &codex_home)
+        .map_err(|err| format!("sync auth: {err}"))?;
     sync_codex_skills(Path::new("/opt/si/codex-skills"), &codex_home.join("skills"))
         .map_err(|err| format!("sync skills: {err}"))?;
     write_codex_config(&config_dir.join("config.toml"), template_path.as_deref())

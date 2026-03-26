@@ -85,9 +85,42 @@ pub fn sync_codex_skills(src: &Path, dest: &Path) -> io::Result<()> {
         return Ok(());
     }
     if dest.exists() {
-        fs::remove_dir_all(dest)?;
+        clear_dir(dest)?;
     }
     copy_tree(src, dest)
+}
+
+pub fn sync_codex_auth(
+    profile_id: Option<&str>,
+    si_dir: &Path,
+    codex_home: &Path,
+) -> io::Result<()> {
+    let Some(profile_id) = profile_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(());
+    };
+    let source = si_dir.join("codex").join("profiles").join(profile_id).join("auth.json");
+    let dest = codex_home.join("auth.json");
+    if !source.exists() {
+        if dest.exists() {
+            fs::remove_file(dest)?;
+        }
+        return Ok(());
+    }
+    copy_file(&source, &dest, 0o600)
+}
+
+fn clear_dir(path: &Path) -> io::Result<()> {
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            fs::remove_dir_all(entry_path)?;
+        } else {
+            fs::remove_file(entry_path)?;
+        }
+    }
+    Ok(())
 }
 
 fn copy_tree(src: &Path, dest: &Path) -> io::Result<()> {
@@ -357,5 +390,52 @@ SPACE_KEY = value
     #[test]
     fn decode_mount_field_unescapes_octal() {
         assert_eq!(decode_mount_field("/workspace/foo\\040bar"), "/workspace/foo bar");
+    }
+
+    #[test]
+    fn sync_codex_skills_replaces_existing_contents_without_removing_root() {
+        let src = tempfile::tempdir().expect("src tempdir");
+        let dest_parent = tempfile::tempdir().expect("dest parent");
+        let dest = dest_parent.path().join("skills");
+        std::fs::create_dir_all(src.path().join("alpha")).expect("mkdir src alpha");
+        std::fs::write(src.path().join("alpha").join("SKILL.md"), "alpha\n")
+            .expect("write src skill");
+        std::fs::create_dir_all(dest.join("stale")).expect("mkdir stale");
+        std::fs::write(dest.join("stale").join("SKILL.md"), "stale\n").expect("write stale skill");
+
+        sync_codex_skills(src.path(), &dest).expect("sync skills");
+
+        assert!(dest.exists());
+        assert!(dest.join("alpha").join("SKILL.md").exists());
+        assert!(!dest.join("stale").exists());
+    }
+
+    #[test]
+    fn sync_codex_auth_copies_selected_profile_into_codex_home() {
+        let home = tempfile::tempdir().expect("home tempdir");
+        let codex_home = home.path().join(".codex");
+        let si_dir = home.path().join(".si");
+        let source = si_dir.join("codex").join("profiles").join("america").join("auth.json");
+        std::fs::create_dir_all(source.parent().expect("source parent")).expect("mkdir source");
+        std::fs::write(&source, "{\"tokens\":{\"access_token\":\"abc\"}}\n").expect("write auth");
+
+        sync_codex_auth(Some("america"), &si_dir, &codex_home).expect("sync auth");
+
+        assert_eq!(
+            std::fs::read_to_string(codex_home.join("auth.json")).expect("read synced auth"),
+            "{\"tokens\":{\"access_token\":\"abc\"}}\n"
+        );
+    }
+
+    #[test]
+    fn sync_codex_auth_removes_stale_auth_when_selected_profile_is_missing() {
+        let home = tempfile::tempdir().expect("home tempdir");
+        let codex_home = home.path().join(".codex");
+        std::fs::create_dir_all(&codex_home).expect("mkdir codex home");
+        std::fs::write(codex_home.join("auth.json"), "stale\n").expect("write stale auth");
+
+        sync_codex_auth(Some("america"), &home.path().join(".si"), &codex_home).expect("sync auth");
+
+        assert!(!codex_home.join("auth.json").exists());
     }
 }
