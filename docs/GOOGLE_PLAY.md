@@ -1,8 +1,8 @@
-# Google Play (`si google play`)
+# Google Play (`si orbit google play`)
 
 ![Google Play](/docs/images/integrations/google-play.svg)
 
-`si google play` provides direct Google Play automation through the Google Play Developer API (and Play Custom App API for app creation).
+`si orbit google play` provides direct Google Play automation through the Google Play Developer API (and Play Custom App API for app creation).
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -37,26 +37,26 @@ Supported credential sources (highest priority first):
 
 ```bash
 # auth + context
-./si google play auth status --account core --verify-package com.example.app
-./si google play context use --account core --env prod --package com.example.app --service-account-file ~/.secrets/play-sa.json
+./si orbit google play auth status --account core --verify-package com.example.app
+./si orbit google play context use --account core --env prod --package com.example.app --service-account-file ~/.secrets/play-sa.json
 
 # listing + details
-./si google play listing update --account core --package com.example.app --language en-US \
+./si orbit google play listing update --account core --package com.example.app --language en-US \
   --title "Example App" --short-description "Short summary" --full-description "Long description"
-./si google play details update --account core --package com.example.app \
+./si orbit google play details update --account core --package com.example.app \
   --contact-email support@example.com --contact-website https://example.com/support
 
 # assets
-./si google play asset upload --account core --package com.example.app --language en-US \
+./si orbit google play asset upload --account core --package com.example.app --language en-US \
   --type phoneScreenshots --clear-first --file ./play-store/images/en-US/phoneScreenshots/01.png
 
 # releases
-./si google play release upload --account core --package com.example.app --aab ./app-release.aab --track internal
-./si google play release promote --account core --package com.example.app --from internal --to production --status completed
-./si google play release set --account core --package com.example.app --track production --status halted
+./si orbit google play release upload --account core --package com.example.app --aab ./app-release.aab --track internal
+./si orbit google play release promote --account core --package com.example.app --from internal --to production --status completed
+./si orbit google play release set --account core --package com.example.app --track production --status halted
 
 # raw fallback
-./si google play raw --account core --method GET \
+./si orbit google play raw --account core --method GET \
   --path /androidpublisher/v3/applications/com.example.app/edits
 
 # release metadata planning (ReleaseMind namespace)
@@ -66,7 +66,7 @@ Supported credential sources (highest priority first):
 ## Metadata apply flow
 
 ```bash
-./si google play apply --account core --package com.example.app --metadata-dir ./play-store --aab ./app-release.aab --track internal
+./si orbit google play apply --account core --package com.example.app --metadata-dir ./play-store --aab ./app-release.aab --track internal
 ```
 
 `--metadata-dir` structure:
@@ -85,13 +85,13 @@ Supported `imageType` values:
 - `tvBanner`
 
 ## Command surface
-- `si google play auth status`
-- `si google play context list|current|use`
-- `si google play doctor`
-- `si google play app create`
-- `si google play listing get|list|update`
-- `si google play details get|update`
-- `si google play asset list|upload|clear`
-- `si google play release upload|status|promote|set`
-- `si google play raw`
-- `si google play apply`
+- `si orbit google play auth status`
+- `si orbit google play context list|current|use`
+- `si orbit google play doctor`
+- `si orbit google play app create`
+- `si orbit google play listing get|list|update`
+- `si orbit google play details get|update`
+- `si orbit google play asset list|upload|clear`
+- `si orbit google play release upload|status|promote|set`
+- `si orbit google play raw`
+- `si orbit google play apply`

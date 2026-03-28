@@ -1,9 +1,9 @@
-# Google YouTube (`si google youtube` / `si google youtube-data`)
+# Google YouTube (`si orbit google youtube` / `si orbit google youtube-data`)
 
 ![YouTube](/docs/images/integrations/youtube.svg)
 
-`si google youtube` provides a YouTube Data API v3 command family with vault-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
-`si google youtube-data` is an alias with identical behavior.
+`si orbit google youtube` provides a YouTube Data API v3 command family with vault-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
+`si orbit google youtube-data` is an alias with identical behavior.
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -48,40 +48,40 @@ OAuth login cache file:
 ## Core Commands
 ```bash
 # auth/context
-si google youtube auth status --account core --mode api-key
-si google youtube auth login --account core --mode oauth
-si google youtube auth logout --account core --mode oauth
-si google youtube context list
-si google youtube context current
-si google youtube context use --account core --env prod --mode oauth
-si google youtube doctor --account core --mode oauth
+si orbit google youtube auth status --account core --mode api-key
+si orbit google youtube auth login --account core --mode oauth
+si orbit google youtube auth logout --account core --mode oauth
+si orbit google youtube context list
+si orbit google youtube context current
+si orbit google youtube context use --account core --env prod --mode oauth
+si orbit google youtube doctor --account core --mode oauth
 
 # discovery
-si google youtube search list --query "engineering vlog" --type video
-si google youtube support languages
-si google youtube support regions
-si google youtube support categories --support-region US
+si orbit google youtube search list --query "engineering vlog" --type video
+si orbit google youtube support languages
+si orbit google youtube support regions
+si orbit google youtube support categories --support-region US
 
 # resources
-si google youtube channel list --id <channel_id>
-si google youtube channel mine --mode oauth
-si google youtube video list --id <video_id>
-si google youtube video upload --mode oauth --file ./clip.mp4 --title "Demo" --privacy unlisted
-si google youtube video rate --mode oauth --id <video_id> --rating like
-si google youtube playlist create --mode oauth --title "Sandbox"
-si google youtube items add --mode oauth --playlist-id <playlist_id> --video-id <video_id>
-si google youtube subscription list --mode oauth --mine
-si google youtube comment thread create --mode oauth --video-id <video_id> --text "Nice work"
-si google youtube caption upload --mode oauth --video-id <video_id> --file ./captions.vtt --language en
-si google youtube caption download --mode oauth --id <caption_id> --output ./captions.vtt
-si google youtube thumbnail set --mode oauth --video-id <video_id> --file ./thumb.jpg
-si google youtube live broadcast list --mode oauth
-si google youtube live stream list --mode oauth
-si google youtube live chat list --mode oauth --live-chat-id <chat_id>
+si orbit google youtube channel list --id <channel_id>
+si orbit google youtube channel mine --mode oauth
+si orbit google youtube video list --id <video_id>
+si orbit google youtube video upload --mode oauth --file ./clip.mp4 --title "Demo" --privacy unlisted
+si orbit google youtube video rate --mode oauth --id <video_id> --rating like
+si orbit google youtube playlist create --mode oauth --title "Sandbox"
+si orbit google youtube items add --mode oauth --playlist-id <playlist_id> --video-id <video_id>
+si orbit google youtube subscription list --mode oauth --mine
+si orbit google youtube comment thread create --mode oauth --video-id <video_id> --text "Nice work"
+si orbit google youtube caption upload --mode oauth --video-id <video_id> --file ./captions.vtt --language en
+si orbit google youtube caption download --mode oauth --id <caption_id> --output ./captions.vtt
+si orbit google youtube thumbnail set --mode oauth --video-id <video_id> --file ./thumb.jpg
+si orbit google youtube live broadcast list --mode oauth
+si orbit google youtube live stream list --mode oauth
+si orbit google youtube live chat list --mode oauth --live-chat-id <chat_id>
 
 # observability and fallback
-si google youtube report usage --since 2026-02-08T00:00:00Z
-si google youtube raw --method GET --path /youtube/v3/search --param part=id --param q=music
+si orbit google youtube report usage --since 2026-02-08T00:00:00Z
+si orbit google youtube raw --method GET --path /youtube/v3/search --param part=id --param q=music
 ```
 
 ## Notes

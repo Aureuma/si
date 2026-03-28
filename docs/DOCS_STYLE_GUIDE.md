@@ -9,7 +9,7 @@ This guide defines how SI docs should be written and maintained for Mintlify.
 
 ## Why this guide exists
 
-SI has broad scope: dyads, codex runtime, provider bridges, browser MCP, Orbitals, and secure runtime operations. Without consistent docs standards, operators lose time and trust.
+SI has broad scope: dyads, codex runtime, provider orbits, browser MCP, and secure runtime operations. Without consistent docs standards, operators lose time and trust.
 
 Use this guide as the default contract for every docs PR.
 
@@ -78,7 +78,7 @@ Rules:
 ## Cross-linking policy
 
 - Link each integration page back to the integration hub.
-- Link command guides to related operational docs (Vault, Settings, Browser, Orbitals).
+- Link command guides to related operational docs (Vault, Settings, Browser, Providers).
 - Avoid orphan pages.
 - Prefer relative Mintlify paths (`./PAGE_NAME`).
 
