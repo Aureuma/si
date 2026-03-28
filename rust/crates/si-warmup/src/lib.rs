@@ -484,8 +484,8 @@ mod tests {
             r#"{
   "version": 2,
   "profiles": {
-    "ferma": {
-      "profile_id": " ferma ",
+    "profile-zeta": {
+      "profile_id": " profile-zeta ",
       "last_result": "warmed",
       "last_weekly_used_pct": 12.5,
       "last_weekly_reset": "2030-03-20T00:00:00Z"
@@ -497,9 +497,9 @@ mod tests {
         .expect("write state");
 
         let state = load_state(&path).expect("load state");
-        let profile = state.profiles.get("ferma").expect("profile");
+        let profile = state.profiles.get("profile-zeta").expect("profile");
         assert_eq!(state.version, WARMUP_STATE_VERSION);
-        assert_eq!(profile.profile_id, "ferma");
+        assert_eq!(profile.profile_id, "profile-zeta");
         assert!(profile.last_weekly_used_ok);
         assert_eq!(profile.last_warmed_reset, "2030-03-20T00:00:00Z");
     }
@@ -561,9 +561,9 @@ mod tests {
             profiles: Default::default(),
         };
         state.profiles.insert(
-            " ferma ".to_owned(),
+            " profile-zeta ".to_owned(),
             WarmupProfileState {
-                profile_id: " ferma ".to_owned(),
+                profile_id: " profile-zeta ".to_owned(),
                 last_result: " ready ".to_owned(),
                 ..WarmupProfileState::default()
             },
@@ -573,8 +573,8 @@ mod tests {
         let loaded = load_state(&path).expect("load state");
         assert_eq!(loaded.version, WARMUP_STATE_VERSION);
         assert_eq!(loaded.updated_at, "2030-03-19T12:00:00Z");
-        assert_eq!(loaded.profiles["ferma"].profile_id, "ferma");
-        assert_eq!(loaded.profiles["ferma"].last_result, "ready");
+        assert_eq!(loaded.profiles["profile-zeta"].profile_id, "profile-zeta");
+        assert_eq!(loaded.profiles["profile-zeta"].last_result, "ready");
         #[cfg(unix)]
         {
             let mode = fs::metadata(&path).expect("stat state").permissions().mode() & 0o777;
@@ -630,7 +630,7 @@ mod tests {
 
         let mut state = super::WarmupState::default();
         state.profiles.insert(
-            "ferma".to_owned(),
+            "profile-zeta".to_owned(),
             WarmupProfileState {
                 next_due: "2030-03-19T11:55:00Z".to_owned(),
                 ..WarmupProfileState::default()
@@ -641,7 +641,7 @@ mod tests {
         assert!(decision.requested);
 
         state.profiles.insert(
-            "america".to_owned(),
+            "profile-alpha".to_owned(),
             WarmupProfileState {
                 next_due: "2030-03-19T12:10:00Z".to_owned(),
                 ..WarmupProfileState::default()
@@ -659,7 +659,7 @@ mod tests {
             version: WARMUP_STATE_VERSION,
             updated_at: String::new(),
             profiles: [(
-                "cadma".to_owned(),
+                "profile-gamma".to_owned(),
                 WarmupProfileState {
                     next_due: "2030-03-19T12:10:00Z".to_owned(),
                     ..WarmupProfileState::default()

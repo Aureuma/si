@@ -721,7 +721,7 @@ mod tests {
     fn renders_docker_run_args_with_bind_mounts() {
         let temp_dir = tempdir().expect("tempdir");
         let spec = ContainerSpec::new("ghcr.io/aureuma/si:latest")
-            .name("si-codex-ferma")
+            .name("si-codex-profile-zeta")
             .auto_remove(false)
             .detach(true)
             .restart_policy("unless-stopped")
@@ -729,10 +729,10 @@ mod tests {
             .workdir("/workspace")
             .user("root")
             .label("si.component", "codex")
-            .env("PROFILE", "ferma")
+            .env("PROFILE", "profile-zeta")
             .published_port(PublishedPort::new("3000", 3000))
             .mount(BindMount::new(temp_dir.path(), "/workspace").read_only(true))
-            .volume_mount(VolumeMount::new("si-codex-ferma", "/home/si/.codex"))
+            .volume_mount(VolumeMount::new("si-codex-profile-zeta", "/home/si/.codex"))
             .command(["bash", "-lc", "sleep infinity"]);
 
         let args = spec.docker_run_args().expect("docker args");
@@ -752,9 +752,9 @@ mod tests {
         assert!(args.contains(&"si.component=codex".to_owned()));
         assert!(args.contains(&"-p".to_owned()));
         assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
-        assert!(args.contains(&"si-codex-ferma".to_owned()));
+        assert!(args.contains(&"si-codex-profile-zeta".to_owned()));
         assert!(args.contains(&"-e".to_owned()));
-        assert!(args.contains(&"PROFILE=ferma".to_owned()));
+        assert!(args.contains(&"PROFILE=profile-zeta".to_owned()));
         assert!(args.contains(&"--mount".to_owned()));
         assert!(args.iter().any(|arg| arg.contains("type=bind")));
         assert!(args.iter().any(|arg| arg.contains("type=volume")));
@@ -831,7 +831,7 @@ mod tests {
     fn builds_docker_run_command_spec() {
         let temp_dir = tempdir().expect("tempdir");
         let spec = ContainerSpec::new("ghcr.io/aureuma/si:latest")
-            .name("si-codex-ferma")
+            .name("si-codex-profile-zeta")
             .auto_remove(false)
             .detach(true)
             .mount(BindMount::new(temp_dir.path(), "/workspace"))
@@ -846,22 +846,28 @@ mod tests {
 
     #[test]
     fn builds_docker_start_command() {
-        let command =
-            docker_container_action_command("docker", ContainerAction::Start, "si-codex-ferma")
-                .expect("start command");
+        let command = docker_container_action_command(
+            "docker",
+            ContainerAction::Start,
+            "si-codex-profile-zeta",
+        )
+        .expect("start command");
 
         assert_eq!(command.program(), "docker");
-        assert_eq!(command.args_slice(), ["start", "si-codex-ferma"]);
+        assert_eq!(command.args_slice(), ["start", "si-codex-profile-zeta"]);
     }
 
     #[test]
     fn builds_docker_restart_command() {
-        let command =
-            docker_container_action_command("docker", ContainerAction::Restart, "si-codex-ferma")
-                .expect("restart command");
+        let command = docker_container_action_command(
+            "docker",
+            ContainerAction::Restart,
+            "si-codex-profile-zeta",
+        )
+        .expect("restart command");
 
         assert_eq!(command.program(), "docker");
-        assert_eq!(command.args_slice(), ["restart", "si-codex-ferma"]);
+        assert_eq!(command.args_slice(), ["restart", "si-codex-profile-zeta"]);
     }
 
     #[test]
@@ -874,29 +880,29 @@ mod tests {
 
     #[test]
     fn builds_docker_logs_command() {
-        let command = docker_container_logs_command("docker", "si-codex-ferma", "200", true)
+        let command = docker_container_logs_command("docker", "si-codex-profile-zeta", "200", true)
             .expect("logs command");
 
         assert_eq!(command.program(), "docker");
-        assert_eq!(command.args_slice(), ["logs", "-f", "--tail", "200", "si-codex-ferma"]);
+        assert_eq!(command.args_slice(), ["logs", "-f", "--tail", "200", "si-codex-profile-zeta"]);
     }
 
     #[test]
     fn builds_docker_remove_command() {
-        let command =
-            docker_container_remove_command("docker", "si-codex-ferma", true).expect("rm command");
+        let command = docker_container_remove_command("docker", "si-codex-profile-zeta", true)
+            .expect("rm command");
 
         assert_eq!(command.program(), "docker");
-        assert_eq!(command.args_slice(), ["rm", "-f", "si-codex-ferma"]);
+        assert_eq!(command.args_slice(), ["rm", "-f", "si-codex-profile-zeta"]);
     }
 
     #[test]
     fn builds_docker_volume_remove_command() {
-        let command =
-            docker_volume_remove_command("docker", "si-codex-ferma", true).expect("volume rm");
+        let command = docker_volume_remove_command("docker", "si-codex-profile-zeta", true)
+            .expect("volume rm");
 
         assert_eq!(command.program(), "docker");
-        assert_eq!(command.args_slice(), ["volume", "rm", "-f", "si-codex-ferma"]);
+        assert_eq!(command.args_slice(), ["volume", "rm", "-f", "si-codex-profile-zeta"]);
     }
 
     #[test]
@@ -909,7 +915,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_tail_for_container_logs() {
-        let err = docker_container_logs_command("docker", "si-codex-ferma", "   ", false)
+        let err = docker_container_logs_command("docker", "si-codex-profile-zeta", "   ", false)
             .expect_err("missing tail");
 
         assert_eq!(err, ContainerLogsError::MissingTail);
@@ -919,7 +925,7 @@ mod tests {
     fn builds_docker_exec_command() {
         let command = docker_container_exec_command(
             "docker",
-            &ContainerExecSpec::new("si-codex-ferma")
+            &ContainerExecSpec::new("si-codex-profile-zeta")
                 .user("si")
                 .workdir("/workspace/project")
                 .env("SI_REPO", "acme/repo")
@@ -940,7 +946,7 @@ mod tests {
                 "/workspace/project",
                 "-e",
                 "SI_REPO=acme/repo",
-                "si-codex-ferma",
+                "si-codex-profile-zeta",
                 "/usr/local/bin/si-entrypoint",
                 "bash",
                 "-lc",
@@ -951,9 +957,11 @@ mod tests {
 
     #[test]
     fn rejects_missing_command_for_container_exec() {
-        let err =
-            docker_container_exec_command("docker", &ContainerExecSpec::new("si-codex-ferma"))
-                .expect_err("missing command");
+        let err = docker_container_exec_command(
+            "docker",
+            &ContainerExecSpec::new("si-codex-profile-zeta"),
+        )
+        .expect_err("missing command");
 
         assert_eq!(err, ContainerExecError::MissingCommand);
     }
