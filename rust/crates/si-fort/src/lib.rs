@@ -710,8 +710,8 @@ mod tests {
 
     fn snapshot() -> SessionSnapshot {
         SessionSnapshot {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: Some("session-123".to_owned()),
             access_expires_at_unix: Some(200),
             refresh_expires_at_unix: Some(400),
@@ -805,8 +805,8 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let path = dir.path().join("session.json");
         let state = PersistedSessionState {
-            profile_id: " ferma ".to_owned(),
-            agent_id: " agent-ferma ".to_owned(),
+            profile_id: " profile-zeta ".to_owned(),
+            agent_id: " agent-profile-zeta ".to_owned(),
             session_id: " session-123 ".to_owned(),
             host: " https://fort.example.test ".to_owned(),
             container_host: " http://fort.internal:8088 ".to_owned(),
@@ -820,8 +820,8 @@ mod tests {
         save_persisted_session_state(&path, &state).expect("save session state");
         let loaded = load_persisted_session_state(&path).expect("load session state");
 
-        assert_eq!(loaded.profile_id, "ferma");
-        assert_eq!(loaded.agent_id, "agent-ferma");
+        assert_eq!(loaded.profile_id, "profile-zeta");
+        assert_eq!(loaded.agent_id, "agent-profile-zeta");
         assert_eq!(loaded.session_id, "session-123");
         assert_eq!(loaded.host, "https://fort.example.test");
         assert_eq!(loaded.container_host, "http://fort.internal:8088");
@@ -837,7 +837,7 @@ mod tests {
     fn load_persisted_session_state_rejects_insecure_permissions() {
         let dir = tempdir().expect("tempdir");
         let path = dir.path().join("session.json");
-        fs::write(&path, br#"{"profile_id":"ferma","agent_id":"agent-ferma"}"#)
+        fs::write(&path, br#"{"profile_id":"profile-zeta","agent_id":"agent-profile-zeta"}"#)
             .expect("write session state");
         #[cfg(unix)]
         fs::set_permissions(&path, PermissionsExt::from_mode(0o644)).expect("chmod session state");
@@ -851,8 +851,8 @@ mod tests {
     #[test]
     fn classify_persisted_session_state_parses_rfc3339_expiries() {
         let state = PersistedSessionState {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: "session-123".to_owned(),
             access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
             refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
@@ -865,8 +865,8 @@ mod tests {
         assert_eq!(
             classified,
             SessionState::Refreshing(SessionSnapshot {
-                profile_id: "ferma".to_owned(),
-                agent_id: "agent-ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
+                agent_id: "agent-profile-zeta".to_owned(),
                 session_id: Some("session-123".to_owned()),
                 access_expires_at_unix: Some(90),
                 refresh_expires_at_unix: Some(400),
@@ -877,8 +877,8 @@ mod tests {
     #[test]
     fn classify_persisted_session_state_rejects_invalid_expiry() {
         let state = PersistedSessionState {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: "session-123".to_owned(),
             access_expires_at: "not-a-timestamp".to_owned(),
             refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
@@ -897,8 +897,8 @@ mod tests {
     #[test]
     fn apply_refresh_outcome_to_persisted_session_state_updates_expiries() {
         let state = PersistedSessionState {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: "session-123".to_owned(),
             access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
             refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
@@ -924,8 +924,8 @@ mod tests {
                     ..state
                 },
                 classification: SessionState::Resumable(SessionSnapshot {
-                    profile_id: "ferma".to_owned(),
-                    agent_id: "agent-ferma".to_owned(),
+                    profile_id: "profile-zeta".to_owned(),
+                    agent_id: "agent-profile-zeta".to_owned(),
                     session_id: Some("session-123".to_owned()),
                     access_expires_at_unix: Some(500),
                     refresh_expires_at_unix: Some(800),
@@ -937,8 +937,8 @@ mod tests {
     #[test]
     fn apply_refresh_outcome_to_persisted_session_state_revokes_on_unauthorized() {
         let state = PersistedSessionState {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: "session-123".to_owned(),
             access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
             refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
@@ -960,8 +960,8 @@ mod tests {
             transitioned.classification,
             SessionState::Revoked {
                 snapshot: Some(SessionSnapshot {
-                    profile_id: "ferma".to_owned(),
-                    agent_id: "agent-ferma".to_owned(),
+                    profile_id: "profile-zeta".to_owned(),
+                    agent_id: "agent-profile-zeta".to_owned(),
                     session_id: Some("session-123".to_owned()),
                     access_expires_at_unix: Some(90),
                     refresh_expires_at_unix: Some(400),
@@ -974,8 +974,8 @@ mod tests {
     #[test]
     fn teardown_persisted_session_state_transitions_to_closed() {
         let state = PersistedSessionState {
-            profile_id: "ferma".to_owned(),
-            agent_id: "agent-ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
+            agent_id: "agent-profile-zeta".to_owned(),
             session_id: "session-123".to_owned(),
             access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
             refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
@@ -1018,7 +1018,7 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let path = dir.path().join("runtime-agent.json");
         let state = PersistedRuntimeAgentState {
-            profile_id: " ferma ".to_owned(),
+            profile_id: " profile-zeta ".to_owned(),
             pid: 4242,
             command_path: " /tmp/si ".to_owned(),
             started_at: " 2030-01-01T00:00:00Z ".to_owned(),
@@ -1028,7 +1028,7 @@ mod tests {
         save_persisted_runtime_agent_state(&path, &state).expect("save runtime agent state");
         let loaded = load_persisted_runtime_agent_state(&path).expect("load runtime agent state");
 
-        assert_eq!(loaded.profile_id, "ferma");
+        assert_eq!(loaded.profile_id, "profile-zeta");
         assert_eq!(loaded.pid, 4242);
         assert_eq!(loaded.command_path, "/tmp/si");
         assert_eq!(loaded.started_at, "2030-01-01T00:00:00Z");
@@ -1063,7 +1063,7 @@ mod tests {
     fn build_bootstrap_view_defaults_agent_and_container_host() {
         let view = build_bootstrap_view(
             &PersistedSessionState {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 host: "http://127.0.0.1:8088".to_owned(),
                 ..PersistedSessionState::default()
             },
@@ -1078,8 +1078,8 @@ mod tests {
         assert_eq!(
             view,
             BootstrapView {
-                profile_id: "ferma".to_owned(),
-                agent_id: "si-codex-ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
+                agent_id: "si-codex-profile-zeta".to_owned(),
                 session_id: String::new(),
                 host_url: "http://127.0.0.1:8088".to_owned(),
                 container_host_url: "http://host.docker.internal:8088/".to_owned(),

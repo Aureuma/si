@@ -50,7 +50,7 @@ Color control:
 | Domain | Commands |
 | --- | --- |
 | Runtime and orchestration | `si dyad`, `si codex`, `si surf`, `si viva` |
-| Secrets and context | `si vault` (`si creds`), `si fort`, `si settings`, `si paths` |
+| Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
 | Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple`, `si orbit stripe`, `si image` |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
 

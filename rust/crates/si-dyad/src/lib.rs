@@ -627,8 +627,8 @@ mod tests {
                 role: Some("ios".to_owned()),
                 workspace_host: workspace.path().to_path_buf(),
                 configs_host: Some(configs.path().to_path_buf()),
-                profile_id: Some("ferma".to_owned()),
-                profile_name: Some("Ferma".to_owned()),
+                profile_id: Some("profile-zeta".to_owned()),
+                profile_name: Some("Profile Zeta".to_owned()),
                 codex_model: Some("gpt-5.2-codex".to_owned()),
                 codex_effort_actor: Some("high".to_owned()),
                 codex_effort_critic: Some("medium".to_owned()),
@@ -641,7 +641,7 @@ mod tests {
         )
         .expect("build dyad spawn plan");
 
-        assert!(plan.actor.env.iter().any(|value| value == "SI_CODEX_PROFILE_ID=ferma"));
+        assert!(plan.actor.env.iter().any(|value| value == "SI_CODEX_PROFILE_ID=profile-zeta"));
         assert!(plan.critic.env.iter().any(|value| value == "DYAD_LOOP_ENABLED=true"));
         assert!(plan.critic.env.iter().any(|value| value == "DYAD_LOOP_GOAL=ship"));
         assert!(

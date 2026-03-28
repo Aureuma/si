@@ -78,7 +78,7 @@ Profile metadata tracked in settings.
 - `codex.profiles.active` (string): the most recently swapped/selected profile for profile-scoped Fort runtime auth and related host state
 
 ##### `[codex.profiles.entries.<id>]`
-Per-profile entry keyed by profile ID (for example `america`). These entries are created and updated by `si codex profile add` and any later profile metadata sync flows.
+Per-profile entry keyed by profile ID (for example `profile-alpha`). These entries are created and updated by `si codex profile add` and any later profile metadata sync flows.
 - `name` (string): profile display name
 - `email` (string): profile email
 - `auth_path` (string): path to auth.json
@@ -403,15 +403,15 @@ image = "aureuma/si:local"
 network = "si"
 workspace = "/path/to/your/repo"
 workdir = "/workspace"
-profile = "america"
+profile = "profile-alpha"
 
 [codex.profiles]
-active = "america"
+active = "profile-alpha"
 
-[codex.profiles.entries.america]
-name = "🗽 America"
+[codex.profiles.entries.profile-alpha]
+name = "🧪 Profile Alpha"
 email = "example@example.com"
-auth_path = "~/.si/codex/profiles/america/auth.json"
+auth_path = "~/.si/codex/profiles/profile-alpha/auth.json"
 auth_updated = "2026-01-26T00:00:00Z"
 
 [dyad]

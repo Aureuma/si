@@ -895,7 +895,7 @@ fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
     let bootstrap_refresh_path = bootstrap_dir.join("admin.refresh.token");
     fs::write(&bootstrap_token_path, "stale-admin-token\n").expect("write stale admin token");
     fs::write(&bootstrap_refresh_path, "stale-admin-refresh\n").expect("write stale admin refresh");
-    let profile_fort_dir = home.path().join(".si/codex/profiles/darmstada/fort");
+    let profile_fort_dir = home.path().join(".si/codex/profiles/profile-delta/fort");
     fs::create_dir_all(&profile_fort_dir).expect("mkdir profile fort dir");
     let profile_token_path = profile_fort_dir.join("access.token");
     let profile_refresh_path = profile_fort_dir.join("refresh.token");
@@ -918,7 +918,7 @@ fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
     }
     fs::write(
         home.path().join(".si/settings.toml"),
-        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"darmstada\"\n[codex.profiles]\nactive = \"darmstada\"\n[codex.profiles.entries.darmstada]\nname = \"Darmstada\"\n",
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
     )
     .expect("write settings");
 
@@ -987,7 +987,7 @@ fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
     let bootstrap_refresh_path = bootstrap_dir.join("admin.refresh.token");
     fs::write(&bootstrap_token_path, "stale-admin-token\n").expect("write stale admin token");
     fs::write(&bootstrap_refresh_path, "stale-admin-refresh\n").expect("write stale admin refresh");
-    let profile_fort_dir = home.path().join(".si/codex/profiles/darmstada/fort");
+    let profile_fort_dir = home.path().join(".si/codex/profiles/profile-delta/fort");
     fs::create_dir_all(&profile_fort_dir).expect("mkdir profile fort dir");
     let profile_token_path = profile_fort_dir.join("access.token");
     let profile_refresh_path = profile_fort_dir.join("refresh.token");
@@ -1010,7 +1010,7 @@ fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
     }
     fs::write(
         home.path().join(".si/settings.toml"),
-        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"darmstada\"\n[codex.profiles]\nactive = \"darmstada\"\n[codex.profiles.entries.darmstada]\nname = \"Darmstada\"\n",
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
     )
     .expect("write settings");
 
@@ -4117,10 +4117,10 @@ fn wrapper_help_and_paths_text_support_forced_color_palette() {
     assert!(surf_help.contains("Usage:"));
 
     let home = tempdir().expect("tempdir");
-    let paths_output = String::from_utf8(
+    let settings_output = String::from_utf8(
         cargo_bin()
             .env("SI_CLI_COLOR", "always")
-            .args(["paths", "--home"])
+            .args(["settings", "--home"])
             .arg(home.path())
             .assert()
             .success()
@@ -4128,9 +4128,9 @@ fn wrapper_help_and_paths_text_support_forced_color_palette() {
             .stdout
             .clone(),
     )
-    .expect("utf8 paths output");
-    assert!(paths_output.contains("\u{1b}["));
-    assert!(paths_output.contains("root"));
+    .expect("utf8 settings output");
+    assert!(settings_output.contains("\u{1b}["));
+    assert!(settings_output.contains("paths.root"));
 }
 
 #[test]
@@ -4360,13 +4360,12 @@ fn singleton_root_commands_run_without_placeholder_subcommands() {
     assert!(settings_help.contains("settings [OPTIONS] [COMMAND]"));
     assert!(settings_help.contains("show  Show resolved SI settings."));
 
-    let paths_help = String::from_utf8(
-        cargo_bin().args(["paths", "--help"]).assert().success().get_output().stdout.clone(),
+    let paths_stderr = String::from_utf8(
+        cargo_bin().args(["paths", "--help"]).assert().failure().get_output().stderr.clone(),
     )
-    .expect("utf8 paths help");
-    assert!(paths_help.contains("Show resolved SI paths."));
-    assert!(paths_help.contains("paths [OPTIONS] [COMMAND]"));
-    assert!(paths_help.contains("show  Show resolved SI paths."));
+    .expect("utf8 paths stderr");
+    assert!(paths_stderr.contains("`si paths` was removed"));
+    assert!(paths_stderr.contains("`si settings`"));
 }
 
 #[test]
@@ -4396,7 +4395,7 @@ fn codex_report_command_is_not_available() {
 }
 
 #[test]
-fn removed_provider_root_commands_report_orbit_replacements() {
+fn removed_root_commands_report_replacements() {
     let aws_stderr = String::from_utf8(
         cargo_bin().args(["aws", "--help"]).assert().failure().get_output().stderr.clone(),
     )
@@ -4417,16 +4416,30 @@ fn removed_provider_root_commands_report_orbit_replacements() {
     .expect("providers stderr utf8");
     assert!(providers_stderr.contains("`si providers` was removed"));
     assert!(providers_stderr.contains("`si orbit list`"));
+
+    let paths_stderr = String::from_utf8(
+        cargo_bin().args(["paths", "--help"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("paths stderr utf8");
+    assert!(paths_stderr.contains("`si paths` was removed"));
+    assert!(paths_stderr.contains("`si settings`"));
 }
 
 #[test]
-fn help_rejects_removed_provider_roots() {
+fn help_rejects_removed_roots() {
     let stderr = String::from_utf8(
         cargo_bin().args(["help", "aws"]).assert().failure().get_output().stderr.clone(),
     )
     .expect("help stderr utf8");
     assert!(stderr.contains("`si aws` was removed"));
     assert!(stderr.contains("`si orbit aws ...`"));
+
+    let paths_stderr = String::from_utf8(
+        cargo_bin().args(["help", "paths"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("help paths stderr utf8");
+    assert!(paths_stderr.contains("`si paths` was removed"));
+    assert!(paths_stderr.contains("`si settings`"));
 }
 
 #[test]
@@ -4456,7 +4469,6 @@ fn help_json_lists_known_root_commands() {
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
     assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
-    assert!(commands.iter().any(|entry| entry["name"] == "paths"));
     assert!(commands.iter().any(|entry| entry["name"] == "vault"));
     assert!(commands.iter().any(|entry| entry["name"] == "fort"));
     assert!(!commands.iter().any(|entry| entry["name"] == "github"));
@@ -4489,7 +4501,7 @@ fn help_json_root_command_order_matches_public_cli_order() {
         names,
         vec![
             "version", "help", "build", "commands", "settings", "orbit", "image", "dyad", "codex",
-            "paths", "surf", "viva", "fort", "vault"
+            "surf", "viva", "fort", "vault"
         ]
     );
 }
@@ -4526,11 +4538,10 @@ fn commands_root_defaults_to_list_output() {
     let commands = parsed["commands"].as_array().expect("commands array should be present");
     assert!(commands.iter().any(|entry| entry["name"] == "commands"));
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
-    assert!(commands.iter().any(|entry| entry["name"] == "paths"));
 }
 
 #[test]
-fn settings_and_paths_roots_default_to_show() {
+fn settings_root_defaults_to_show() {
     let home = tempdir().expect("tempdir");
 
     let settings_output = cargo_bin()
@@ -4544,18 +4555,10 @@ fn settings_and_paths_roots_default_to_show() {
     let settings: Value = serde_json::from_slice(&settings_output).expect("json settings output");
     assert_eq!(settings["schema_version"], 1);
     assert_eq!(settings["paths"]["root"], path_string(home.path().join(".si")));
-
-    let paths_output = cargo_bin()
-        .args(["paths", "--format", "json", "--home"])
-        .arg(home.path())
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let paths: Value = serde_json::from_slice(&paths_output).expect("json paths output");
-    assert_eq!(paths["root"], path_string(home.path().join(".si")));
-    assert_eq!(paths["codex_profiles_dir"], path_string(home.path().join(".si/codex/profiles")));
+    assert_eq!(
+        settings["paths"]["codex_profiles_dir"],
+        path_string(home.path().join(".si/codex/profiles"))
+    );
 }
 
 #[test]
@@ -4594,7 +4597,7 @@ workspace_root = "~/Development"
 [codex]
 workspace = "~/Development/si"
 workdir = "/workspace"
-profile = "darmstada"
+profile = "profile-delta"
 
 [dyad]
 workspace = "~/Development"
@@ -4618,7 +4621,7 @@ configs = "~/Development/si/configs"
     assert_eq!(parsed["paths"]["workspace_root"], "~/Development");
     assert_eq!(parsed["codex"]["workspace"], "~/Development/si");
     assert_eq!(parsed["codex"]["workdir"], "/workspace");
-    assert_eq!(parsed["codex"]["profile"], "darmstada");
+    assert_eq!(parsed["codex"]["profile"], "profile-delta");
     assert_eq!(parsed["dyad"]["workspace"], "~/Development");
     assert_eq!(parsed["dyad"]["configs"], "~/Development/si/configs");
 }
@@ -4633,8 +4636,8 @@ fn warmup_status_json_reads_and_upgrades_legacy_state() {
         r#"{
   "version": 2,
   "profiles": {
-    "ferma": {
-      "profile_id": " ferma ",
+    "profile-zeta": {
+      "profile_id": " profile-zeta ",
       "last_result": "warmed",
       "last_weekly_used_pct": 12.5,
       "last_weekly_reset": "2030-03-20T00:00:00Z"
@@ -4657,9 +4660,9 @@ fn warmup_status_json_reads_and_upgrades_legacy_state() {
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["version"], 3);
-    assert_eq!(parsed["profiles"]["ferma"]["profile_id"], "ferma");
-    assert_eq!(parsed["profiles"]["ferma"]["last_warmed_reset"], "2030-03-20T00:00:00Z");
-    assert_eq!(parsed["profiles"]["ferma"]["last_weekly_used_ok"], true);
+    assert_eq!(parsed["profiles"]["profile-zeta"]["profile_id"], "profile-zeta");
+    assert_eq!(parsed["profiles"]["profile-zeta"]["last_warmed_reset"], "2030-03-20T00:00:00Z");
+    assert_eq!(parsed["profiles"]["profile-zeta"]["last_weekly_used_ok"], true);
 }
 
 #[test]
@@ -4688,7 +4691,7 @@ fn warmup_state_write_persists_normalized_json() {
         .arg(&state_path)
         .args([
             "--state-json",
-            r#"{"version":0,"updated_at":" 2030-03-19T12:00:00Z ","profiles":{" ferma ":{"profile_id":" ferma ","last_result":" ready "}}}"#,
+            r#"{"version":0,"updated_at":" 2030-03-19T12:00:00Z ","profiles":{" profile-zeta ":{"profile_id":" profile-zeta ","last_result":" ready "}}}"#,
         ])
         .assert()
         .success();
@@ -4697,8 +4700,8 @@ fn warmup_state_write_persists_normalized_json() {
     let parsed: Value = serde_json::from_str(&raw).expect("json");
     assert_eq!(parsed["version"], 3);
     assert_eq!(parsed["updated_at"], "2030-03-19T12:00:00Z");
-    assert_eq!(parsed["profiles"]["ferma"]["profile_id"], "ferma");
-    assert_eq!(parsed["profiles"]["ferma"]["last_result"], "ready");
+    assert_eq!(parsed["profiles"]["profile-zeta"]["profile_id"], "profile-zeta");
+    assert_eq!(parsed["profiles"]["profile-zeta"]["last_result"], "ready");
 }
 
 #[test]
@@ -4760,7 +4763,7 @@ fn warmup_autostart_decision_uses_due_schedule_and_disabled_marker() {
     fs::create_dir_all(&warmup_dir).expect("mkdir warmup dir");
     fs::write(
         warmup_dir.join("state.json"),
-        r#"{"version":3,"profiles":{"ferma":{"profile_id":"ferma","last_result":"ready","next_due":"2099-03-19T12:00:00Z"}}}"#,
+        r#"{"version":3,"profiles":{"profile-zeta":{"profile_id":"profile-zeta","last_result":"ready","next_due":"2099-03-19T12:00:00Z"}}}"#,
     )
     .expect("write state");
 
@@ -4779,7 +4782,7 @@ fn warmup_autostart_decision_uses_due_schedule_and_disabled_marker() {
 
     fs::write(
         warmup_dir.join("state.json"),
-        r#"{"version":3,"profiles":{"ferma":{"profile_id":"ferma","last_result":"ready","next_due":"2000-03-19T12:00:00Z"}}}"#,
+        r#"{"version":3,"profiles":{"profile-zeta":{"profile_id":"profile-zeta","last_result":"ready","next_due":"2000-03-19T12:00:00Z"}}}"#,
     )
     .expect("write due state");
     let output = cargo_bin()
@@ -7507,7 +7510,7 @@ fn github_graphql_query_json_fetches_from_api_with_oauth() {
         http_json_response(
             "200 OK",
             &[("x-github-request-id", "req_gh_graphql")],
-            r#"{"data":{"viewer":{"login":"shawn"}}}"#,
+            r#"{"data":{"viewer":{"login":"example-user"}}}"#,
         )
     });
 
@@ -7534,7 +7537,7 @@ fn github_graphql_query_json_fetches_from_api_with_oauth() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["status_code"], 200);
     assert_eq!(parsed["request_id"], "req_gh_graphql");
-    assert_eq!(parsed["data"]["viewer"]["login"], "shawn");
+    assert_eq!(parsed["data"]["viewer"]["login"], "example-user");
     server.join();
 }
 
@@ -15549,7 +15552,15 @@ fn dyad_spawn_plan_json_includes_critic_configs_and_loop_env() {
         .arg(workspace.path())
         .args(["--configs"])
         .arg(configs.path())
-        .args(["--profile-id", "ferma", "--loop-enabled", "true", "--loop-goal", "ship", "--home"])
+        .args([
+            "--profile-id",
+            "profile-zeta",
+            "--loop-enabled",
+            "true",
+            "--loop-goal",
+            "ship",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -15565,7 +15576,7 @@ fn dyad_spawn_plan_json_includes_critic_configs_and_loop_env() {
             .as_array()
             .expect("actor env")
             .iter()
-            .any(|value| value == "SI_CODEX_PROFILE_ID=ferma")
+            .any(|value| value == "SI_CODEX_PROFILE_ID=profile-zeta")
     );
     assert!(
         parsed["critic"]["env"]
@@ -16108,25 +16119,7 @@ fn dyad_cleanup_removes_only_stopped_members() {
 }
 
 #[test]
-fn paths_show_uses_home_defaults() {
-    let home = tempdir().expect("tempdir");
-    let output = cargo_bin()
-        .args(["paths", "show", "--format", "json", "--home"])
-        .arg(home.path())
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["root"], path_string(home.path().join(".si")));
-    assert_eq!(parsed["settings_file"], path_string(home.path().join(".si/settings.toml")));
-    assert_eq!(parsed["codex_profiles_dir"], path_string(home.path().join(".si/codex/profiles")));
-}
-
-#[test]
-fn paths_show_honors_settings_override() {
+fn settings_show_honors_path_overrides() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
@@ -16143,7 +16136,7 @@ codex_profiles_dir = "~/state/si/profiles"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["paths", "show", "--format", "json", "--home"])
+        .args(["settings", "show", "--format", "json", "--home"])
         .arg(home.path())
         .args(["--settings-file"])
         .arg(&settings_path)
@@ -16154,9 +16147,15 @@ codex_profiles_dir = "~/state/si/profiles"
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["root"], path_string(home.path().join("state/si")));
-    assert_eq!(parsed["settings_file"], path_string(home.path().join("config/si/settings.toml")));
-    assert_eq!(parsed["codex_profiles_dir"], path_string(home.path().join("state/si/profiles")));
+    assert_eq!(parsed["paths"]["root"], path_string(home.path().join("state/si")));
+    assert_eq!(
+        parsed["paths"]["settings_file"],
+        path_string(home.path().join("config/si/settings.toml"))
+    );
+    assert_eq!(
+        parsed["paths"]["codex_profiles_dir"],
+        path_string(home.path().join("state/si/profiles"))
+    );
 }
 
 #[test]
@@ -16166,8 +16165,8 @@ fn fort_session_state_show_reads_and_normalizes_persisted_state() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": " ferma ",
-  "agent_id": " agent-ferma ",
+  "profile_id": " profile-zeta ",
+  "agent_id": " agent-profile-zeta ",
   "session_id": " session-123 ",
   "host": " https://fort.example.test ",
   "container_host": " http://fort.internal:8088 ",
@@ -16192,8 +16191,8 @@ fn fort_session_state_show_reads_and_normalizes_persisted_state() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["profile_id"], "ferma");
-    assert_eq!(parsed["agent_id"], "agent-ferma");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
+    assert_eq!(parsed["agent_id"], "agent-profile-zeta");
     assert_eq!(parsed["session_id"], "session-123");
     assert_eq!(parsed["host"], "https://fort.example.test");
     assert_eq!(parsed["container_host"], "http://fort.internal:8088");
@@ -16206,8 +16205,8 @@ fn fort_session_state_classify_reports_refreshing_state() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": "ferma",
-  "agent_id": "agent-ferma",
+  "profile_id": "profile-zeta",
+  "agent_id": "agent-profile-zeta",
   "session_id": "session-123",
   "access_expires_at": "1970-01-01T00:01:30Z",
   "refresh_expires_at": "1970-01-01T00:06:40Z"
@@ -16230,8 +16229,8 @@ fn fort_session_state_classify_reports_refreshing_state() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["Refreshing"]["profile_id"], "ferma");
-    assert_eq!(parsed["Refreshing"]["agent_id"], "agent-ferma");
+    assert_eq!(parsed["Refreshing"]["profile_id"], "profile-zeta");
+    assert_eq!(parsed["Refreshing"]["agent_id"], "agent-profile-zeta");
     assert_eq!(parsed["Refreshing"]["session_id"], "session-123");
     assert_eq!(parsed["Refreshing"]["access_expires_at_unix"], 90);
     assert_eq!(parsed["Refreshing"]["refresh_expires_at_unix"], 400);
@@ -16244,7 +16243,7 @@ fn fort_runtime_agent_state_show_reads_and_normalizes_persisted_state() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": " ferma ",
+  "profile_id": " profile-zeta ",
   "pid": 4242,
   "command_path": " /tmp/si ",
   "started_at": " 2030-01-01T00:00:00Z ",
@@ -16268,7 +16267,7 @@ fn fort_runtime_agent_state_show_reads_and_normalizes_persisted_state() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
     assert_eq!(parsed["pid"], 4242);
     assert_eq!(parsed["command_path"], "/tmp/si");
 }
@@ -16288,15 +16287,15 @@ fn fort_session_state_write_persists_normalized_json() {
         .arg(&state_path)
         .args([
             "--state-json",
-            r#"{"profile_id":" ferma ","agent_id":" agent-ferma ","session_id":" session-123 ","host":" https://fort.example.test "}"#,
+            r#"{"profile_id":" profile-zeta ","agent_id":" agent-profile-zeta ","session_id":" session-123 ","host":" https://fort.example.test "}"#,
         ])
         .assert()
         .success();
 
     let raw = fs::read_to_string(&state_path).expect("read persisted state");
     let parsed: Value = serde_json::from_str(&raw).expect("json");
-    assert_eq!(parsed["profile_id"], "ferma");
-    assert_eq!(parsed["agent_id"], "agent-ferma");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
+    assert_eq!(parsed["agent_id"], "agent-profile-zeta");
     assert_eq!(parsed["session_id"], "session-123");
     assert_eq!(parsed["host"], "https://fort.example.test");
 }
@@ -16309,13 +16308,16 @@ fn fort_runtime_agent_state_write_persists_normalized_json() {
     cargo_bin()
         .args(["fort", "runtime", "write", "--path"])
         .arg(&state_path)
-        .args(["--state-json", r#"{"profile_id":" ferma ","pid":4242,"command_path":" /tmp/si "}"#])
+        .args([
+            "--state-json",
+            r#"{"profile_id":" profile-zeta ","pid":4242,"command_path":" /tmp/si "}"#,
+        ])
         .assert()
         .success();
 
     let raw = fs::read_to_string(&state_path).expect("read persisted runtime state");
     let parsed: Value = serde_json::from_str(&raw).expect("json");
-    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
     assert_eq!(parsed["pid"], 4242);
     assert_eq!(parsed["command_path"], "/tmp/si");
 }
@@ -16338,7 +16340,7 @@ fn fort_session_state_bootstrap_view_normalizes_fallbacks() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": " ferma ",
+  "profile_id": " profile-zeta ",
   "agent_id": "",
   "host": " http://127.0.0.1:8088 "
 }
@@ -16371,8 +16373,8 @@ fn fort_session_state_bootstrap_view_normalizes_fallbacks() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["profile_id"], "ferma");
-    assert_eq!(parsed["agent_id"], "si-codex-ferma");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
+    assert_eq!(parsed["agent_id"], "si-codex-profile-zeta");
     assert_eq!(parsed["container_host_url"], "http://host.docker.internal:8088/");
     assert_eq!(parsed["access_token_container_path"], "/home/si/.si/access.token");
 }
@@ -16395,8 +16397,8 @@ fn fort_session_state_refresh_outcome_returns_updated_state_and_classification()
     fs::write(
         &state_path,
         r#"{
-  "profile_id": "ferma",
-  "agent_id": "agent-ferma",
+  "profile_id": "profile-zeta",
+  "agent_id": "agent-profile-zeta",
   "session_id": "session-123",
   "access_expires_at": "1970-01-01T00:01:30Z",
   "refresh_expires_at": "1970-01-01T00:06:40Z"
@@ -16442,8 +16444,8 @@ fn fort_session_state_teardown_reports_closed_state() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": "ferma",
-  "agent_id": "agent-ferma",
+  "profile_id": "profile-zeta",
+  "agent_id": "agent-profile-zeta",
   "session_id": "session-123",
   "access_expires_at": "1970-01-01T00:01:30Z",
   "refresh_expires_at": "1970-01-01T00:06:40Z"
@@ -16476,8 +16478,8 @@ fn fort_session_state_refresh_outcome_unauthorized_clears_session_id() {
     fs::write(
         &state_path,
         r#"{
-  "profile_id": "ferma",
-  "agent_id": "agent-ferma",
+  "profile_id": "profile-zeta",
+  "agent_id": "agent-profile-zeta",
   "session_id": "session-123",
   "access_expires_at": "1970-01-01T00:01:30Z",
   "refresh_expires_at": "1970-01-01T00:06:40Z"
@@ -16583,7 +16585,7 @@ fn vault_trust_lookup_reports_missing_entry() {
 #[test]
 fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
@@ -16598,7 +16600,7 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
         .args([
             "--cmd",
@@ -16606,7 +16608,7 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
             "--port",
             "3000:3000",
             "--label",
-            "si.codex.profile=ferma",
+            "si.codex.profile=profile-zeta",
             "--docker-bin",
         ])
         .arg(&docker_bin)
@@ -16625,13 +16627,13 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     assert!(args.contains("root"));
     assert!(args.contains("--label"));
     assert!(args.contains("si.component=codex"));
-    assert!(args.contains("si.codex.profile=ferma"));
+    assert!(args.contains("si.codex.profile=profile-zeta"));
 }
 
 #[test]
 fn codex_spawn_uses_current_dir_when_workspace_is_omitted() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
@@ -16647,7 +16649,7 @@ fn codex_spawn_uses_current_dir_when_workspace_is_omitted() {
     let output = cargo_bin()
         .current_dir(workspace.path())
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--profile", "ferma", "--docker-bin"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -16672,18 +16674,23 @@ fn codex_spawn_uses_codex_settings_defaults_when_flags_are_omitted() {
             concat!(
                 "schema_version = 1\n",
                 "[codex]\n",
-                "profile = \"ferma\"\n",
+                "profile = \"profile-zeta\"\n",
                 "image = \"ghcr.io/example/si:test\"\n",
                 "network = \"si-dev\"\n",
                 "workdir = \"/custom/workdir\"\n\n",
                 "[codex.profiles]\n",
-                "active = \"ferma\"\n\n",
-                "[codex.profiles.entries.ferma]\n",
-                "name = \"ferma\"\n",
-                "email = \"ferma@example.com\"\n",
+                "active = \"profile-zeta\"\n\n",
+                "[codex.profiles.entries.profile-zeta]\n",
+                "name = \"profile-zeta\"\n",
+                "email = \"profile-zeta@example.com\"\n",
                 "auth_path = {:?}\n",
             ),
-            home.path().join(".si").join("codex").join("profiles").join("ferma").join("auth.json")
+            home.path()
+                .join(".si")
+                .join("codex")
+                .join("profiles")
+                .join("profile-zeta")
+                .join("auth.json")
         ),
     )
     .expect("write settings");
@@ -16701,7 +16708,7 @@ fn codex_spawn_uses_codex_settings_defaults_when_flags_are_omitted() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
         .args(["--docker-bin"])
         .arg(&docker_bin)
@@ -16724,10 +16731,10 @@ fn codex_spawn_uses_active_profile_when_profile_is_omitted() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "america",
+        "profile-alpha",
         &[
-            ("america", "🗽 America", "america@example.com"),
-            ("ferma", "🏰 Ferma", "ferma@example.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "profile-alpha@example.com"),
+            ("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com"),
         ],
     );
     let workspace = tempdir().expect("tempdir");
@@ -16757,13 +16764,13 @@ fn codex_spawn_uses_active_profile_when_profile_is_omitted() {
     let text = String::from_utf8(output).expect("utf8 output");
     assert!(text.contains("container-id-123"));
     let args = fs::read_to_string(args_path).expect("args file");
-    assert!(args.contains("si.codex.profile=america"));
+    assert!(args.contains("si.codex.profile=profile-alpha"));
 }
 
 #[test]
 fn codex_spawn_reports_missing_default_runtime_image_clearly() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let docker_bin = script_dir.path().join("docker");
@@ -16781,7 +16788,7 @@ exit 1
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
         .args(["--docker-bin"])
         .arg(&docker_bin)
@@ -16986,7 +16993,7 @@ exit 0
 #[test]
 fn codex_remove_executes_container_and_volume_removal() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -17001,7 +17008,7 @@ fn codex_remove_executes_container_and_volume_removal() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
+        .args(["codex", "remove", "profile-zeta", "--volumes", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -17013,22 +17020,22 @@ fn codex_remove_executes_container_and_volume_removal() {
     assert!(text.contains("removed"));
     let args = fs::read_to_string(args_path).expect("args file");
     assert!(args.contains("rm"));
-    assert!(args.contains("si-codex-ferma"));
+    assert!(args.contains("si-codex-profile-zeta"));
     assert!(args.contains("volume"));
-    assert!(args.contains("si-gh-ferma"));
+    assert!(args.contains("si-gh-profile-zeta"));
 }
 
 #[test]
 fn codex_remove_json_reports_profile_and_removed_artifacts() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
     write_executable_script(
         &docker_bin,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nif [ \"$1\" = \"inspect\" ]; then\n  printf '%s\\n' 'ferma'\nelse\n  printf '%s\\n' 'removed'\nfi\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nif [ \"$1\" = \"inspect\" ]; then\n  printf '%s\\n' 'profile-zeta'\nelse\n  printf '%s\\n' 'removed'\nfi\n",
             args_path.display(),
             args_path.display()
         ),
@@ -17036,7 +17043,7 @@ fn codex_remove_json_reports_profile_and_removed_artifacts() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "remove", "ferma", "--volumes", "--format", "json", "--docker-bin"])
+        .args(["codex", "remove", "profile-zeta", "--volumes", "--format", "json", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -17045,10 +17052,10 @@ fn codex_remove_json_reports_profile_and_removed_artifacts() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["container_name"], "si-codex-ferma");
-    assert_eq!(parsed["profile_id"], "ferma");
-    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
-    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
+    assert_eq!(parsed["container_name"], "si-codex-profile-zeta");
+    assert_eq!(parsed["profile_id"], "profile-zeta");
+    assert_eq!(parsed["codex_volume"], "si-codex-profile-zeta");
+    assert_eq!(parsed["gh_volume"], "si-gh-profile-zeta");
     assert!(parsed["output"].as_str().expect("output string").contains("removed"));
 }
 
@@ -17065,8 +17072,8 @@ set -eu
 printf '%s\n' "$@" >> {args}
 printf '%s\n' '--' >> {args}
 if [ "${{1:-}}" = "ps" ]; then
-  printf '%s\n' 'si-codex-america	running	aureuma/si:local	america'
-  printf '%s\n' 'si-codex-ferma	exited	aureuma/si:local	ferma'
+  printf '%s\n' 'si-codex-profile-alpha	running	aureuma/si:local	profile-alpha'
+  printf '%s\n' 'si-codex-profile-zeta	exited	aureuma/si:local	profile-zeta'
   exit 0
 fi
 printf '%s\n' 'removed'
@@ -17089,19 +17096,19 @@ printf '%s\n' 'removed'
     assert_eq!(parsed["aborted"], false);
     let removed = parsed["removed"].as_array().expect("removed array");
     assert_eq!(removed.len(), 2);
-    assert_eq!(removed[0]["container_name"], "si-codex-america");
-    assert_eq!(removed[0]["profile_id"], "america");
-    assert_eq!(removed[1]["container_name"], "si-codex-ferma");
-    assert_eq!(removed[1]["profile_id"], "ferma");
+    assert_eq!(removed[0]["container_name"], "si-codex-profile-alpha");
+    assert_eq!(removed[0]["profile_id"], "profile-alpha");
+    assert_eq!(removed[1]["container_name"], "si-codex-profile-zeta");
+    assert_eq!(removed[1]["profile_id"], "profile-zeta");
 
     let args = fs::read_to_string(args_path).expect("read args");
     assert!(args.contains("ps\n"));
-    assert!(args.contains("rm\n-f\nsi-codex-america\n"));
-    assert!(args.contains("rm\n-f\nsi-codex-ferma\n"));
-    assert!(args.contains("volume\nrm\n-f\nsi-codex-america\n"));
-    assert!(args.contains("volume\nrm\n-f\nsi-gh-america\n"));
-    assert!(args.contains("volume\nrm\n-f\nsi-codex-ferma\n"));
-    assert!(args.contains("volume\nrm\n-f\nsi-gh-ferma\n"));
+    assert!(args.contains("rm\n-f\nsi-codex-profile-alpha\n"));
+    assert!(args.contains("rm\n-f\nsi-codex-profile-zeta\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-codex-profile-alpha\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-gh-profile-alpha\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-codex-profile-zeta\n"));
+    assert!(args.contains("volume\nrm\n-f\nsi-gh-profile-zeta\n"));
 }
 
 #[test]
@@ -17117,7 +17124,7 @@ set -eu
 printf '%s\n' "$@" >> {args}
 printf '%s\n' '--' >> {args}
 if [ "${{1:-}}" = "ps" ]; then
-  printf '%s\n' 'si-codex-america	running	aureuma/si:local	america'
+  printf '%s\n' 'si-codex-profile-alpha	running	aureuma/si:local	profile-alpha'
   exit 0
 fi
 printf '%s\n' 'removed'
@@ -17164,7 +17171,7 @@ fn codex_stop_command_is_not_available() {
 #[test]
 fn codex_tail_executes_following_docker_logs_for_container_name() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -17178,7 +17185,7 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "tail", "ferma", "--tail", "25", "--docker-bin"])
+        .args(["codex", "tail", "profile-zeta", "--tail", "25", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -17189,13 +17196,16 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
     let text = String::from_utf8(output).expect("utf8 output");
     assert!(text.contains("tail line"));
     let args = fs::read_to_string(args_path).expect("args file");
-    assert_eq!(args.lines().collect::<Vec<_>>(), ["logs", "-f", "--tail", "25", "si-codex-ferma"]);
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        ["logs", "-f", "--tail", "25", "si-codex-profile-zeta"]
+    );
 }
 
 #[test]
 fn codex_exec_executes_docker_exec_for_container_name() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
@@ -17212,7 +17222,7 @@ fn codex_exec_executes_docker_exec_for_container_name() {
         .args([
             "codex",
             "exec",
-            "ferma",
+            "profile-zeta",
             "--interactive=false",
             "--tty=false",
             "--workdir",
@@ -17247,7 +17257,7 @@ fn codex_exec_executes_docker_exec_for_container_name() {
             "A=1",
             "-e",
             "B=2",
-            "si-codex-ferma",
+            "si-codex-profile-zeta",
             "git",
             "status",
         ]
@@ -17257,7 +17267,7 @@ fn codex_exec_executes_docker_exec_for_container_name() {
 #[test]
 fn codex_lifecycle_smoke_works_with_fake_docker() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
     let state_path = script_dir.path().join("state.txt");
@@ -17287,7 +17297,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
         "result": {
             "account": {
                 "type": "chatgpt",
-                "email": "ferma@example.com",
+                "email": "profile-zeta@example.com",
                 "planType": "pro"
             }
         }
@@ -17306,7 +17316,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
     write_executable_script(
         &docker_bin,
         &format!(
-            "#!/bin/sh\nSTATE='{}'\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  run)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'container-id-123'\n    ;;\n  ps)\n    state='missing'\n    if [ -f \"$STATE\" ]; then state=$(tr -d '\\n' < \"$STATE\"); fi\n    if [ \"$state\" = 'removed' ] || [ \"$state\" = 'missing' ]; then exit 0; fi\n    printf '%s\\n' 'si-codex-ferma\t'\"$state\"'\taureuma/si:local\tferma'\n    ;;\n  logs)\n    printf '%s\\n' 'log line'\n    ;;\n  inspect)\n    printf '%s\\n' 'ferma'\n    ;;\n  rm)\n    printf '%s\\n' 'removed' > \"$STATE\"\n    printf '%s\\n' 'si-codex-ferma'\n    ;;\n  volume)\n    shift\n    printf '%s\\n' 'removed-volume'\n    ;;\n  exec)\n    cat >/dev/null\n    if [ \"$1\" = \"--user\" ]; then shift 2; fi\n    while [ $# -gt 0 ]; do\n      case \"$1\" in\n        -e|-w) shift 2 ;;\n        -i|-t) shift ;;\n        si-codex-*) shift; break ;;\n        *) shift ;;\n      esac\n    done\n    if [ \"$1\" = \"/usr/local/bin/si-entrypoint\" ]; then\n      printf '%s\\n' 'cloned'\n    else\n      printf '%s\\n' '{}' '{}' '{}'\n    fi\n    ;;\n  *)\n    printf 'unexpected docker command: %s\\n' \"$cmd\" >&2\n    exit 1\n    ;;\nesac\n",
+            "#!/bin/sh\nSTATE='{}'\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  run)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'container-id-123'\n    ;;\n  ps)\n    state='missing'\n    if [ -f \"$STATE\" ]; then state=$(tr -d '\\n' < \"$STATE\"); fi\n    if [ \"$state\" = 'removed' ] || [ \"$state\" = 'missing' ]; then exit 0; fi\n    printf '%s\\n' 'si-codex-profile-zeta\t'\"$state\"'\taureuma/si:local\tprofile-zeta'\n    ;;\n  logs)\n    printf '%s\\n' 'log line'\n    ;;\n  inspect)\n    printf '%s\\n' 'profile-zeta'\n    ;;\n  rm)\n    printf '%s\\n' 'removed' > \"$STATE\"\n    printf '%s\\n' 'si-codex-profile-zeta'\n    ;;\n  volume)\n    shift\n    printf '%s\\n' 'removed-volume'\n    ;;\n  exec)\n    cat >/dev/null\n    if [ \"$1\" = \"--user\" ]; then shift 2; fi\n    while [ $# -gt 0 ]; do\n      case \"$1\" in\n        -e|-w) shift 2 ;;\n        -i|-t) shift ;;\n        si-codex-*) shift; break ;;\n        *) shift ;;\n      esac\n    done\n    if [ \"$1\" = \"/usr/local/bin/si-entrypoint\" ]; then\n      printf '%s\\n' 'cloned'\n    else\n      printf '%s\\n' '{}' '{}' '{}'\n    fi\n    ;;\n  *)\n    printf 'unexpected docker command: %s\\n' \"$cmd\" >&2\n    exit 1\n    ;;\nesac\n",
             state_path.display(),
             ferma_rate_json,
             account_json,
@@ -17316,7 +17326,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
 
     cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--profile", "ferma", "--workspace"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
         .args(["--cmd", "echo hello", "--docker-bin"])
         .arg(&docker_bin)
@@ -17337,14 +17347,14 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
         .clone();
     let profiles: Value = serde_json::from_slice(&profiles_output).expect("json output");
     let profile = profiles.as_array().and_then(|items| items.first()).expect("profile entry");
-    assert_eq!(profile["email"], "ferma@example.com");
+    assert_eq!(profile["email"], "profile-zeta@example.com");
     assert_eq!(profile["account_plan"], "pro");
     assert_eq!(profile["five_hour_left_pct"], 75.0);
     assert_eq!(profile["weekly_left_pct"], 88.0);
 
     cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
+        .args(["codex", "remove", "profile-zeta", "--volumes", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success();
@@ -17354,17 +17364,17 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
 #[test]
 fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let output = cargo_bin()
         .env("HOME", home.path())
         .args([
             "codex",
             "respawn-plan",
-            "ferma",
+            "profile-zeta",
             "--profile-container",
             "si-codex-alpha",
             "--profile-container",
-            "ferma",
+            "profile-zeta",
             "--format",
             "json",
         ])
@@ -17375,8 +17385,8 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["profile_id"], "ferma");
-    assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "ferma"]));
+    assert_eq!(parsed["profile_id"], "profile-zeta");
+    assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "profile-zeta"]));
 }
 
 #[test]
@@ -17600,11 +17610,11 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
             "codex",
             "profile",
             "add",
-            "ferma",
+            "profile-zeta",
             "--name",
-            "Ferma",
+            "Profile Zeta",
             "--email",
-            "ferma@example.com",
+            "profile-zeta@example.com",
             "--activate",
             "--home",
         ])
@@ -17614,7 +17624,7 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
         .success();
 
     cargo_bin()
-        .args(["codex", "profile", "add", "einsteina", "--name", "Einsteina", "--home"])
+        .args(["codex", "profile", "add", "profile-epsilon", "--name", "Profile Epsilon", "--home"])
         .arg(home.path())
         .assert()
         .success();
@@ -17635,11 +17645,11 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
             .as_array()
             .expect("profiles")
             .iter()
-            .any(|profile| profile["profile"] == "ferma" && profile["active"] == true)
+            .any(|profile| profile["profile"] == "profile-zeta" && profile["active"] == true)
     );
 
     let show_output = cargo_bin()
-        .args(["codex", "profile", "show", "einsteina", "--home"])
+        .args(["codex", "profile", "show", "profile-epsilon", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -17648,7 +17658,7 @@ fn codex_profile_commands_manage_registry_and_active_profile() {
         .stdout
         .clone();
     let shown: Value = serde_json::from_slice(&show_output).expect("json output");
-    assert_eq!(shown["profile"], "einsteina");
+    assert_eq!(shown["profile"], "profile-epsilon");
     assert_eq!(shown["active"], false);
 }
 
@@ -17657,16 +17667,17 @@ fn codex_profile_list_text_renders_table_without_auth_paths() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "darmstada",
+        "profile-delta",
         &[
-            ("america", "🗽 America", "maps-android.5t@icloud.com"),
-            ("darmstada", "🐦‍🔥 Darmstada", "bacon.trace.5e@icloud.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "alpha@example.test"),
+            ("profile-delta", "🧭 Profile Delta", "delta@example.test"),
         ],
     );
-    write_codex_auth(home.path(), "darmstada", "bacon.trace.5e@icloud.com");
-    write_codex_auth(home.path(), "america", "wrong@example.com");
+    write_codex_auth(home.path(), "profile-delta", "delta@example.test");
+    write_codex_auth(home.path(), "profile-alpha", "wrong@example.com");
 
     let output = cargo_bin()
+        .env("COLUMNS", "200")
         .args(["codex", "profile", "list", "--home"])
         .arg(home.path())
         .assert()
@@ -17679,12 +17690,9 @@ fn codex_profile_list_text_renders_table_without_auth_paths() {
     assert!(rendered.contains("Name"));
     assert!(rendered.contains("Email"));
     assert!(!rendered.contains("Plan"));
-    assert!(rendered.contains("america"));
-    assert!(rendered.contains("🗽 America"));
-    assert!(rendered.contains("🐦‍🔥 Darmstada"));
-    assert!(rendered.contains("maps-android.5t@i…"));
-    assert!(rendered.contains("bacon.trace.5e@i…"));
-    assert!(!rendered.contains("maps-android.5t@icloud.com"));
+    assert!(rendered.contains("alpha@e…"));
+    assert!(rendered.contains("delta@e…"));
+    assert!(!rendered.contains("alpha@example.test"));
     assert!(rendered.contains("Missing"));
     assert!(!rendered.contains("auth.json"));
     assert!(!rendered.contains("auth_path"));
@@ -17695,16 +17703,17 @@ fn codex_profile_show_text_resolves_display_name_query() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "darmstada",
+        "profile-delta",
         &[
-            ("america", "🗽 America", "maps-android.5t@icloud.com"),
-            ("darmstada", "🐦‍🔥 Darmstada", "bacon.trace.5e@icloud.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "alpha@example.test"),
+            ("profile-delta", "🧭 Profile Delta", "delta@example.test"),
         ],
     );
-    write_codex_auth(home.path(), "america", "wrong@example.com");
+    write_codex_auth(home.path(), "profile-alpha", "wrong@example.com");
 
     let output = cargo_bin()
-        .args(["codex", "profile", "show", "America", "--home"])
+        .env("COLUMNS", "200")
+        .args(["codex", "profile", "show", "Profile Alpha", "--home"])
         .arg(home.path())
         .assert()
         .success()
@@ -17712,10 +17721,8 @@ fn codex_profile_show_text_resolves_display_name_query() {
         .stdout
         .clone();
     let rendered = String::from_utf8(output).expect("utf8 output");
-    assert!(rendered.contains("america"));
-    assert!(rendered.contains("🗽 America"));
-    assert!(rendered.contains("maps-android.5t@i…"));
-    assert!(!rendered.contains("maps-android.5t@icloud.com"));
+    assert!(rendered.contains("alpha@e…"));
+    assert!(!rendered.contains("alpha@example.test"));
     assert!(rendered.contains("Missing"));
     assert!(!rendered.contains("auth_path"));
 }
@@ -17725,10 +17732,10 @@ fn codex_profile_list_includes_live_quota_fields_for_running_container() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "ferma",
-        &[("ferma", "🏰 Ferma", "ferma@example.com")],
+        "profile-zeta",
+        &[("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com")],
     );
-    write_codex_auth(home.path(), "ferma", "ferma@example.com");
+    write_codex_auth(home.path(), "profile-zeta", "profile-zeta@example.com");
 
     let script_dir = tempdir().expect("tempdir");
     let docker_path = script_dir.path().join("docker");
@@ -17757,7 +17764,7 @@ fn codex_profile_list_includes_live_quota_fields_for_running_container() {
         "result": {
             "account": {
                 "type": "chatgpt",
-                "email": "ferma@example.com",
+                "email": "profile-zeta@example.com",
                 "planType": "pro"
             }
         }
@@ -17782,7 +17789,7 @@ cmd="${{1:-}}"
 shift || true
 case "$cmd" in
   ps)
-    printf '%s\n' 'si-codex-ferma	running	aureuma/si:local	ferma'
+    printf '%s\n' 'si-codex-profile-zeta	running	aureuma/si:local	profile-zeta'
     ;;
   exec)
     cat >/dev/null
@@ -17815,7 +17822,7 @@ esac
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let profile = parsed.as_array().and_then(|profiles| profiles.first()).expect("profile entry");
-    assert_eq!(profile["profile"], "ferma");
+    assert_eq!(profile["profile"], "profile-zeta");
     assert_eq!(profile["account_plan"], "pro");
     assert_eq!(profile["five_hour_left_pct"], 75.0);
     assert_eq!(profile["weekly_left_pct"], 88.0);
@@ -17826,10 +17833,10 @@ fn codex_profile_list_syncs_running_container_auth_before_live_status_read() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "ferma",
-        &[("ferma", "🏰 Ferma", "ferma@example.com")],
+        "profile-zeta",
+        &[("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com")],
     );
-    write_codex_auth(home.path(), "ferma", "ferma@example.com");
+    write_codex_auth(home.path(), "profile-zeta", "profile-zeta@example.com");
 
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("docker-args.txt");
@@ -17859,7 +17866,7 @@ fn codex_profile_list_syncs_running_container_auth_before_live_status_read() {
         "result": {
             "account": {
                 "type": "chatgpt",
-                "email": "ferma@example.com",
+                "email": "profile-zeta@example.com",
                 "planType": "pro"
             }
         }
@@ -17886,13 +17893,14 @@ cmd="${{1:-}}"
 shift || true
 case "$cmd" in
   ps)
-    printf '%s\n' 'si-codex-ferma	running	aureuma/si:local	ferma'
+    printf '%s\n' 'si-codex-profile-zeta	running	aureuma/si:local	profile-zeta'
     ;;
   exec)
     if printf '%s\n' "$@" | grep -qx 'codex'; then
       cat >/dev/null
       printf '%s\n' '{rate_json}' '{account_json}' '{config_json}'
     else
+      cat >/dev/null
       exit 0
     fi
     ;;
@@ -17929,8 +17937,8 @@ esac
     assert_eq!(profile["weekly_left_pct"], 88.0);
 
     let args = fs::read_to_string(args_path).expect("read args");
-    assert!(args.contains("exec\n-i\n--user\nsi\n-e\nHOME=/home/si\n-e\nCODEX_HOME=/home/si/.codex\nsi-codex-ferma\nsh\n-lc\nmkdir -p /home/si/.codex && cat > /home/si/.codex/auth.json && chmod 600 /home/si/.codex/auth.json\n"));
-    assert!(args.contains("exec\n-i\n--user\nsi\n-e\nHOME=/home/si\n-e\nCODEX_HOME=/home/si/.codex\n-e\nTERM=xterm-256color\nsi-codex-ferma\ncodex\napp-server\n"));
+    assert!(args.contains("exec\n-i\n--user\nsi\n-e\nHOME=/home/si\n-e\nCODEX_HOME=/home/si/.codex\nsi-codex-profile-zeta\nsh\n-lc\nmkdir -p /home/si/.codex && cat > /home/si/.codex/auth.json && chmod 600 /home/si/.codex/auth.json\n"));
+    assert!(args.contains("exec\n-i\n--user\nsi\n-e\nHOME=/home/si\n-e\nCODEX_HOME=/home/si/.codex\n-e\nTERM=xterm-256color\nsi-codex-profile-zeta\ncodex\napp-server\n"));
 }
 
 #[test]
@@ -17938,10 +17946,10 @@ fn codex_profile_list_marks_running_profile_missing_when_live_status_fails() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "ferma",
-        &[("ferma", "🏰 Ferma", "ferma@example.com")],
+        "profile-zeta",
+        &[("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com")],
     );
-    write_codex_auth(home.path(), "ferma", "ferma@example.com");
+    write_codex_auth(home.path(), "profile-zeta", "profile-zeta@example.com");
 
     let script_dir = tempdir().expect("tempdir");
     let docker_path = script_dir.path().join("docker");
@@ -17953,7 +17961,7 @@ cmd="${1:-}"
 shift || true
 case "$cmd" in
   ps)
-    printf '%s\n' 'si-codex-ferma	running	aureuma/si:local	ferma'
+    printf '%s\n' 'si-codex-profile-zeta	running	aureuma/si:local	profile-zeta'
     ;;
   exec)
     cat >/dev/null
@@ -17983,7 +17991,7 @@ esac
         .clone();
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let profile = parsed.as_array().and_then(|profiles| profiles.first()).expect("profile entry");
-    assert_eq!(profile["profile"], "ferma");
+    assert_eq!(profile["profile"], "profile-zeta");
     assert_eq!(profile["state"], "Missing");
     assert!(profile.get("account_plan").is_none());
     assert!(profile.get("five_hour_left_pct").is_none());
@@ -17995,20 +18003,20 @@ fn codex_warmup_run_warms_profiles_and_updates_state() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "ferma",
+        "profile-zeta",
         &[
-            ("ferma", "🏰 Ferma", "ferma@example.com"),
-            ("america", "🗽 America", "america@example.com"),
+            ("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "profile-alpha@example.com"),
         ],
     );
-    write_codex_auth(home.path(), "ferma", "ferma@example.com");
-    write_codex_auth(home.path(), "america", "america@example.com");
+    write_codex_auth(home.path(), "profile-zeta", "profile-zeta@example.com");
+    write_codex_auth(home.path(), "profile-alpha", "profile-alpha@example.com");
 
     let workspace = tempdir().expect("workspace");
     let script_dir = tempdir().expect("tempdir");
     let state_file = script_dir.path().join("docker-state.txt");
     let args_file = script_dir.path().join("docker-args.txt");
-    let america_touched = script_dir.path().join("america-touched.txt");
+    let america_touched = script_dir.path().join("profile-alpha-touched.txt");
     let docker_path = script_dir.path().join("docker");
     let warmup_state = script_dir.path().join("warmup-state.json");
     let primary_reset = Local::now().timestamp() + 3600;
@@ -18072,7 +18080,7 @@ fn codex_warmup_run_warms_profiles_and_updates_state() {
         "result": {
             "account": {
                 "type": "chatgpt",
-                "email": "ferma@example.com",
+                "email": "profile-zeta@example.com",
                 "planType": "pro"
             }
         }
@@ -18159,7 +18167,7 @@ case "$cmd" in
     done
     if [ "${{1:-}}" = "codex" ] && [ "${{2:-}}" = "exec" ]; then
       case "$container" in
-        si-codex-america)
+        si-codex-profile-alpha)
           : > "$AMERICA_TOUCHED"
           ;;
       esac
@@ -18167,11 +18175,11 @@ case "$cmd" in
       exit 0
     fi
     case "$container" in
-      si-codex-america)
+      si-codex-profile-alpha)
         if [ -f "$AMERICA_TOUCHED" ]; then
-          printf '%s\n' '{america_rate_after_prime_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"america@example.com","planType":"plus"}}}}}}' '{config_json}'
+          printf '%s\n' '{america_rate_after_prime_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}' '{config_json}'
         else
-          printf '%s\n' '{america_rate_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"america@example.com","planType":"plus"}}}}}}' '{config_json}'
+          printf '%s\n' '{america_rate_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}' '{config_json}'
         fi
         ;;
       *)
@@ -18217,14 +18225,14 @@ esac
     let profiles = parsed["profiles"].as_array().expect("profiles array");
     assert_eq!(profiles.len(), 2);
     assert!(profiles.iter().any(|profile| {
-        profile["profile_id"] == "ferma"
+        profile["profile_id"] == "profile-zeta"
             && profile["result"] == "warmed"
             && profile["five_hour_left_pct"] == 75.0
             && profile["weekly_left_pct"] == 88.0
             && profile["account_plan"] == "pro"
     }));
     assert!(profiles.iter().any(|profile| {
-        profile["profile_id"] == "america"
+        profile["profile_id"] == "profile-alpha"
             && profile["result"] == "warmed"
             && profile["action"] == "spawned+primed"
             && profile["five_hour_left_pct"] == 99.0
@@ -18235,16 +18243,19 @@ esac
     let state: Value =
         serde_json::from_str(&fs::read_to_string(&warmup_state).expect("read warmup state"))
             .expect("parse warmup state");
-    assert_eq!(state["profiles"]["ferma"]["last_result"], "warmed");
-    assert_eq!(state["profiles"]["ferma"]["last_weekly_used_ok"], true);
-    assert_eq!(state["profiles"]["america"]["last_result"], "warmed");
+    assert_eq!(state["profiles"]["profile-zeta"]["last_result"], "warmed");
+    assert_eq!(state["profiles"]["profile-zeta"]["last_weekly_used_ok"], true);
+    assert_eq!(state["profiles"]["profile-alpha"]["last_result"], "warmed");
     assert!(
-        state["profiles"]["america"]["next_due"].as_str().expect("america next due").contains("T")
+        state["profiles"]["profile-alpha"]["next_due"]
+            .as_str()
+            .expect("profile-alpha next due")
+            .contains("T")
     );
     let settings =
         fs::read_to_string(home.path().join(".si").join("settings.toml")).expect("read settings");
-    assert!(settings.contains("active = \"ferma\""));
-    assert!(settings.contains("profile = \"ferma\""));
+    assert!(settings.contains("active = \"profile-zeta\""));
+    assert!(settings.contains("profile = \"profile-zeta\""));
 
     let args = fs::read_to_string(&args_file).expect("docker args");
     assert!(args.contains("ps"));
@@ -18258,10 +18269,10 @@ fn codex_profile_show_requires_explicit_profile_outside_tty() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "america",
+        "profile-alpha",
         &[
-            ("america", "🗽 America", "maps-android.5t@icloud.com"),
-            ("cadma", "💟 Cadma", "calypso.bard-05@icloud.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "alpha@example.test"),
+            ("profile-gamma", "🛰 Profile Gamma", "gamma@example.test"),
         ],
     );
 
@@ -18281,7 +18292,7 @@ fn codex_profile_show_requires_explicit_profile_outside_tty() {
 #[test]
 fn codex_profile_login_runs_codex_and_caches_auth_json() {
     let home = tempdir().expect("tempdir");
-    write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
 
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("codex-args.txt");
@@ -18290,7 +18301,7 @@ fn codex_profile_login_runs_codex_and_caches_auth_json() {
     let docker_path = bin_dir.path().join("docker");
     let token = fake_jwt(&serde_json::json!({
         "https://api.openai.com/profile": {
-            "email": "ferma@example.com"
+            "email": "profile-zeta@example.com"
         }
     }));
     let auth_json = serde_json::json!({
@@ -18344,7 +18355,7 @@ esac
     let output = cargo_bin()
         .env("HOME", home.path())
         .env("PATH", path_env)
-        .args(["codex", "profile", "login", "ferma", "--home"])
+        .args(["codex", "profile", "login", "profile-zeta", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -18353,16 +18364,16 @@ esac
         .stdout
         .clone();
     let shown: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(shown["profile"], "ferma");
+    assert_eq!(shown["profile"], "profile-zeta");
     assert_eq!(shown["active"], true);
     assert_eq!(shown["state"], "Logged-In");
     assert_eq!(
         shown["auth_path"],
-        home.path().join(".si/codex/profiles/ferma/auth.json").display().to_string()
+        home.path().join(".si/codex/profiles/profile-zeta/auth.json").display().to_string()
     );
     assert!(shown["auth_updated"].as_str().expect("auth_updated string").starts_with("20"));
 
-    let cached_auth = home.path().join(".si/codex/profiles/ferma/auth.json");
+    let cached_auth = home.path().join(".si/codex/profiles/profile-zeta/auth.json");
     let cached_auth_json: Value =
         serde_json::from_str(&fs::read_to_string(&cached_auth).expect("read cached auth"))
             .expect("parse cached auth");
@@ -18372,7 +18383,7 @@ esac
     let env = fs::read_to_string(&env_file).expect("read env");
     assert_eq!(
         env,
-        format!("CODEX_HOME={}\n", home.path().join(".si/codex/profiles/ferma").display())
+        format!("CODEX_HOME={}\n", home.path().join(".si/codex/profiles/profile-zeta").display())
     );
 
     let settings =
@@ -18382,12 +18393,98 @@ esac
 }
 
 #[test]
+fn codex_profile_login_text_shows_full_profile_table() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-zeta",
+        &[
+            ("profile-zeta", "🔧 Profile Zeta", "zeta@example.test"),
+            ("profile-alpha", "🧪 Profile Alpha", "alpha@example.test"),
+        ],
+    );
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let codex_path = bin_dir.path().join("codex");
+    let docker_path = bin_dir.path().join("docker");
+    let token = fake_jwt(&serde_json::json!({
+        "https://api.openai.com/profile": {
+            "email": "zeta@example.test"
+        }
+    }));
+    let auth_json = serde_json::json!({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "access_token": token
+        }
+    })
+    .to_string();
+    write_executable_shell_script(
+        &codex_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+if [ "${{1:-}}" = "login" ]; then
+  mkdir -p "${{CODEX_HOME}}"
+  printf '%s\n' '{auth_json}' > "${{CODEX_HOME}}/auth.json"
+  exit 0
+fi
+echo "unexpected args: $*" >&2
+exit 2
+"#,
+            auth_json = auth_json,
+        ),
+    );
+    write_executable_shell_script(
+        &docker_path,
+        r#"#!/bin/sh
+set -eu
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  ps)
+    exit 0
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+    );
+
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path_env)
+        .env("COLUMNS", "200")
+        .args(["codex", "profile", "login", "profile-zeta", "--home"])
+        .arg(home.path())
+        .args(["--format", "text"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output).expect("utf8 output");
+    assert!(rendered.contains("Profile"));
+    assert!(rendered.contains("Name"));
+    assert!(rendered.contains("State"));
+    assert!(rendered.contains("zeta@e…"));
+    assert!(rendered.contains("alpha@e…"));
+    assert!(rendered.contains("Logged-In"));
+    assert!(rendered.contains("Missing"));
+}
+
+#[test]
 fn codex_profile_login_rejects_wrong_account_for_profile() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "ferma",
-        &[("ferma", "🏰 Ferma", "lily-gusts.1e@icloud.com")],
+        "profile-zeta",
+        &[("profile-zeta", "🔧 Profile Zeta", "zeta@example.test")],
     );
 
     let bin_dir = tempdir().expect("bin tempdir");
@@ -18425,7 +18522,7 @@ exit 2
     let output = cargo_bin()
         .env("HOME", home.path())
         .env("PATH", path_env)
-        .args(["codex", "profile", "login", "ferma", "--home"])
+        .args(["codex", "profile", "login", "profile-zeta", "--home"])
         .arg(home.path())
         .assert()
         .failure()
@@ -18433,8 +18530,8 @@ exit 2
         .stderr
         .clone();
     let stderr = String::from_utf8(output).expect("utf8 stderr");
-    assert!(stderr.contains("expected \"lily-gusts.1e@icloud.com\""));
-    assert!(!home.path().join(".si/codex/profiles/ferma/auth.json").exists());
+    assert!(stderr.contains("expected \"zeta@example.test\""));
+    assert!(!home.path().join(".si/codex/profiles/profile-zeta/auth.json").exists());
 }
 
 #[test]
@@ -18442,13 +18539,13 @@ fn codex_profile_swap_resets_host_codex_home_and_uses_selected_profile() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "cadma",
+        "profile-gamma",
         &[
-            ("america", "🗽 America", "maps-android.5t@icloud.com"),
-            ("cadma", "💟 Cadma", "calypso.bard-05@icloud.com"),
+            ("profile-alpha", "🧪 Profile Alpha", "alpha@example.test"),
+            ("profile-gamma", "🛰 Profile Gamma", "gamma@example.test"),
         ],
     );
-    write_codex_auth(home.path(), "america", "maps-android.5t@icloud.com");
+    write_codex_auth(home.path(), "profile-alpha", "alpha@example.test");
 
     let host_codex_home = home.path().join(".codex");
     fs::create_dir_all(host_codex_home.join("tmp")).expect("mkdir host codex tmp");
@@ -18481,7 +18578,7 @@ esac
 
     let output = cargo_bin()
         .env("PATH", path_env)
-        .args(["codex", "profile", "swap", "america", "--home"])
+        .args(["codex", "profile", "swap", "profile-alpha", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -18490,12 +18587,13 @@ esac
         .stdout
         .clone();
     let shown: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(shown["profile"], "america");
+    assert_eq!(shown["profile"], "profile-alpha");
     assert_eq!(shown["state"], "Logged-In");
     assert_eq!(shown["active"], true);
 
-    let profile_auth = fs::read_to_string(home.path().join(".si/codex/profiles/america/auth.json"))
-        .expect("read profile auth");
+    let profile_auth =
+        fs::read_to_string(home.path().join(".si/codex/profiles/profile-alpha/auth.json"))
+            .expect("read profile auth");
     let host_auth = fs::read_to_string(host_codex_home.join("auth.json")).expect("read host auth");
     assert_eq!(host_auth, profile_auth);
     assert_eq!(
@@ -18507,8 +18605,8 @@ esac
 
     let settings =
         fs::read_to_string(home.path().join(".si/settings.toml")).expect("read settings");
-    assert!(settings.contains("active = \"america\""));
-    assert!(settings.contains("profile = \"america\""));
+    assert!(settings.contains("active = \"profile-alpha\""));
+    assert!(settings.contains("profile = \"profile-alpha\""));
 }
 
 #[test]
@@ -18516,15 +18614,15 @@ fn codex_profile_swap_requires_logged_in_profile() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "cadma",
-        &[("cadma", "💟 Cadma", "calypso.bard-05@icloud.com")],
+        "profile-gamma",
+        &[("profile-gamma", "🛰 Profile Gamma", "gamma@example.test")],
     );
     let host_codex_home = home.path().join(".codex");
     fs::create_dir_all(&host_codex_home).expect("mkdir host codex home");
     fs::write(host_codex_home.join("config.toml"), "model = \"gpt-5\"\n").expect("write config");
 
     let output = cargo_bin()
-        .args(["codex", "profile", "swap", "cadma", "--home"])
+        .args(["codex", "profile", "swap", "profile-gamma", "--home"])
         .arg(home.path())
         .assert()
         .failure()

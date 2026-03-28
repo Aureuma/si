@@ -87,13 +87,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "paths",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Show resolved SI paths.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "surf",
         aliases: &[],
         category: CommandCategory::Runtime,

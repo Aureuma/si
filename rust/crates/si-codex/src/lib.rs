@@ -628,7 +628,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -639,10 +639,10 @@ mod tests {
         )
         .expect("spawn plan");
 
-        assert_eq!(plan.name, "ferma");
-        assert_eq!(plan.container_name, "si-codex-ferma");
-        assert_eq!(plan.codex_volume, "si-codex-ferma");
-        assert_eq!(plan.gh_volume, "si-gh-ferma");
+        assert_eq!(plan.name, "profile-zeta");
+        assert_eq!(plan.container_name, "si-codex-profile-zeta");
+        assert_eq!(plan.codex_volume, "si-codex-profile-zeta");
+        assert_eq!(plan.gh_volume, "si-gh-profile-zeta");
         assert_eq!(plan.skills_volume, DEFAULT_SKILLS_VOLUME);
     }
 
@@ -651,7 +651,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 workdir: Some("/workspace".to_owned()),
                 detach: true,
@@ -673,7 +673,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 workdir: Some("/custom".to_owned()),
                 detach: false,
@@ -695,7 +695,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 repo: Some("acme/repo".to_owned()),
                 gh_pat: Some("token-123".to_owned()),
@@ -711,7 +711,7 @@ mod tests {
 
         assert!(plan.env.contains(&format!("SI_WORKSPACE_HOST={}", workspace.path().display())));
         assert!(plan.env.contains(&format!("SI_WORKSPACE_MIRROR={}", workspace.path().display())));
-        assert!(plan.env.contains(&"SI_CODEX_PROFILE_ID=ferma".to_owned()));
+        assert!(plan.env.contains(&"SI_CODEX_PROFILE_ID=profile-zeta".to_owned()));
         assert!(plan.env.contains(&"SI_REPO=acme/repo".to_owned()));
         assert!(plan.env.contains(&"SI_GH_PAT=token-123".to_owned()));
         assert!(plan.env.contains(&"GH_TOKEN=token-123".to_owned()));
@@ -728,7 +728,7 @@ mod tests {
             HostMountContext { home_dir: Some(home.path().to_path_buf()), ssh_auth_sock: None };
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 include_host_si: true,
                 detach: true,
@@ -765,7 +765,7 @@ mod tests {
     fn build_spawn_plan_rejects_invalid_workspace() {
         let err = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: PathBuf::from("relative"),
                 ..SpawnRequest::default()
             },
@@ -781,7 +781,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 image: Some("ghcr.io/aureuma/si:latest".to_owned()),
                 detach: true,
@@ -797,7 +797,7 @@ mod tests {
             &plan,
             &SpawnContainerOptions {
                 command: Some("echo hello".to_owned()),
-                labels: vec!["si.codex.profile=ferma".to_owned()],
+                labels: vec!["si.codex.profile=profile-zeta".to_owned()],
                 ports: vec!["3000:3000".to_owned()],
             },
         )
@@ -809,7 +809,7 @@ mod tests {
         assert!(args.contains(&"root".to_owned()));
         assert!(args.contains(&"--label".to_owned()));
         assert!(args.contains(&"si.component=codex".to_owned()));
-        assert!(args.contains(&"si.codex.profile=ferma".to_owned()));
+        assert!(args.contains(&"si.codex.profile=profile-zeta".to_owned()));
         assert!(args.contains(&"-p".to_owned()));
         assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
         assert!(args.contains(&"--restart".to_owned()));
@@ -823,7 +823,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let mut plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -846,7 +846,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -875,7 +875,7 @@ mod tests {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
             &SpawnRequest {
-                profile_id: "ferma".to_owned(),
+                profile_id: "profile-zeta".to_owned(),
                 workspace_host: workspace.path().to_path_buf(),
                 detach: true,
                 docker_socket: true,
@@ -901,23 +901,23 @@ mod tests {
 
     #[test]
     fn codex_container_name_preserves_existing_prefix() {
-        assert_eq!(codex_container_name("si-codex-ferma"), "si-codex-ferma");
-        assert_eq!(codex_container_name("ferma"), "si-codex-ferma");
+        assert_eq!(codex_container_name("si-codex-profile-zeta"), "si-codex-profile-zeta");
+        assert_eq!(codex_container_name("profile-zeta"), "si-codex-profile-zeta");
     }
 
     #[test]
     fn codex_container_slug_strips_prefix_when_present() {
-        assert_eq!(codex_container_slug("si-codex-ferma"), "ferma");
-        assert_eq!(codex_container_slug("ferma"), "ferma");
+        assert_eq!(codex_container_slug("si-codex-profile-zeta"), "profile-zeta");
+        assert_eq!(codex_container_slug("profile-zeta"), "profile-zeta");
     }
 
     #[test]
     fn build_remove_artifacts_defaults_legacy_volume_names() {
-        let artifacts = build_remove_artifacts("ferma").expect("remove artifacts");
-        assert_eq!(artifacts.container_name, "si-codex-ferma");
-        assert_eq!(artifacts.slug, "ferma");
-        assert_eq!(artifacts.codex_volume, "si-codex-ferma");
-        assert_eq!(artifacts.gh_volume, "si-gh-ferma");
+        let artifacts = build_remove_artifacts("profile-zeta").expect("remove artifacts");
+        assert_eq!(artifacts.container_name, "si-codex-profile-zeta");
+        assert_eq!(artifacts.slug, "profile-zeta");
+        assert_eq!(artifacts.codex_volume, "si-codex-profile-zeta");
+        assert_eq!(artifacts.gh_volume, "si-gh-profile-zeta");
     }
 
     #[test]
@@ -929,17 +929,17 @@ mod tests {
     #[test]
     fn build_respawn_plan_collects_sorted_unique_remove_targets() {
         let plan = build_respawn_plan(&RespawnRequest {
-            profile_id: "ferma".to_owned(),
+            profile_id: "profile-zeta".to_owned(),
             profile_container_names: vec![
-                "si-codex-ferma".to_owned(),
+                "si-codex-profile-zeta".to_owned(),
                 "si-codex-alpha".to_owned(),
                 "alpha".to_owned(),
             ],
         })
         .expect("respawn plan");
 
-        assert_eq!(plan.profile_id, "ferma");
-        assert_eq!(plan.remove_targets, vec!["alpha".to_owned(), "ferma".to_owned()]);
+        assert_eq!(plan.profile_id, "profile-zeta");
+        assert_eq!(plan.remove_targets, vec!["alpha".to_owned(), "profile-zeta".to_owned()]);
     }
 
     #[test]

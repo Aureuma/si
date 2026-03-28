@@ -1623,7 +1623,7 @@ codex_profiles_dir = "~/.si/codex/profiles"
     #[test]
     fn applies_home_defaults_for_core_state_paths() {
         let settings = Settings::from_toml_with_home_defaults(
-            "[codex]\nprofile = \"ferma\"\n",
+            "[codex]\nprofile = \"profile-zeta\"\n",
             Path::new("/Users/dev"),
         )
         .expect("settings should parse");
@@ -1635,7 +1635,7 @@ codex_profiles_dir = "~/.si/codex/profiles"
             settings.paths.codex_profiles_dir.as_deref(),
             Some("/Users/dev/.si/codex/profiles")
         );
-        assert_eq!(settings.codex.profile.as_deref(), Some("ferma"));
+        assert_eq!(settings.codex.profile.as_deref(), Some("profile-zeta"));
     }
 
     #[test]
@@ -1653,7 +1653,7 @@ workspace_root = "~/Development"
 [codex]
 workspace = "~/Development/si"
 workdir = "/workspace"
-profile = "darmstada"
+profile = "profile-delta"
 
 [dyad]
 workspace = "~/Development"
@@ -1668,7 +1668,7 @@ configs = "~/Development/si/configs"
         assert_eq!(settings.paths.workspace_root.as_deref(), Some("~/Development"));
         assert_eq!(settings.codex.workspace.as_deref(), Some("~/Development/si"));
         assert_eq!(settings.codex.workdir.as_deref(), Some("/workspace"));
-        assert_eq!(settings.codex.profile.as_deref(), Some("darmstada"));
+        assert_eq!(settings.codex.profile.as_deref(), Some("profile-delta"));
         assert_eq!(settings.dyad.workspace.as_deref(), Some("~/Development"));
         assert_eq!(settings.dyad.configs.as_deref(), Some("~/Development/si/configs"));
     }
@@ -1686,12 +1686,12 @@ configs = "~/Development/si/configs"
 profile = "legacy"
 
 [codex.profiles]
-active = "darmstada"
+active = "profile-delta"
 
-[codex.profiles.entries.darmstada]
-name = "Darmstada"
-email = "darmstada@example.com"
-auth_path = "~/.si/codex/profiles/darmstada/auth.json"
+[codex.profiles.entries.profile-delta]
+name = "Profile Delta"
+email = "profile-delta@example.com"
+auth_path = "~/.si/codex/profiles/profile-delta/auth.json"
 auth_updated = "2026-03-23T00:00:00Z"
 "#,
         )
@@ -1701,11 +1701,14 @@ auth_updated = "2026-03-23T00:00:00Z"
             Settings::load(home.path(), Some(&settings_path)).expect("settings should load");
 
         assert_eq!(settings.codex.profile.as_deref(), Some("legacy"));
-        assert_eq!(settings.codex.profiles.active.as_deref(), Some("darmstada"));
-        let entry = settings.codex.profiles.entries.get("darmstada").expect("profile entry");
-        assert_eq!(entry.name.as_deref(), Some("Darmstada"));
-        assert_eq!(entry.email.as_deref(), Some("darmstada@example.com"));
-        assert_eq!(entry.auth_path.as_deref(), Some("~/.si/codex/profiles/darmstada/auth.json"));
+        assert_eq!(settings.codex.profiles.active.as_deref(), Some("profile-delta"));
+        let entry = settings.codex.profiles.entries.get("profile-delta").expect("profile entry");
+        assert_eq!(entry.name.as_deref(), Some("Profile Delta"));
+        assert_eq!(entry.email.as_deref(), Some("profile-delta@example.com"));
+        assert_eq!(
+            entry.auth_path.as_deref(),
+            Some("~/.si/codex/profiles/profile-delta/auth.json")
+        );
         assert_eq!(entry.auth_updated.as_deref(), Some("2026-03-23T00:00:00Z"));
     }
 
