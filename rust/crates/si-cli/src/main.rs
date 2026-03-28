@@ -19313,6 +19313,15 @@ fn reject_removed_provider_root(root: &str) -> Result<()> {
     Ok(())
 }
 
+const PUBLIC_ROOT_COMMANDS: &[&str] = &[
+    "version", "help", "build", "commands", "settings", "orbit", "image", "dyad", "codex", "paths",
+    "surf", "viva", "fort", "vault",
+];
+
+fn is_public_root_command(name: &str) -> bool {
+    PUBLIC_ROOT_COMMANDS.contains(&name)
+}
+
 fn main() -> Result<()> {
     configure_sigpipe();
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
@@ -34124,11 +34133,19 @@ fn show_help(command: Option<&str>, format: OutputFormat) -> Result<()> {
     let view = match command {
         Some(name) => {
             reject_removed_provider_root(name)?;
+            if !is_public_root_command(name) {
+                anyhow::bail!("unknown root command: {name}");
+            }
             let spec = find_root_command(name)
                 .ok_or_else(|| anyhow::anyhow!("unknown root command: {name}"))?;
             HelpView { commands: vec![command_view(spec)] }
         }
-        None => HelpView { commands: visible_root_commands().map(command_view).collect() },
+        None => HelpView {
+            commands: visible_root_commands()
+                .filter(|spec| is_public_root_command(spec.name))
+                .map(command_view)
+                .collect(),
+        },
     };
 
     render_help(view, format)
