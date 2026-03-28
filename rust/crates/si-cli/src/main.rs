@@ -487,6 +487,14 @@ struct BuildImageArgs {
 }
 
 #[derive(Debug, Args)]
+struct BuildCargoOptions {
+    #[arg(long = "target-dir")]
+    target_dir: Option<PathBuf>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    timings: bool,
+}
+
+#[derive(Debug, Args)]
 struct BuildSelfBuildArgs {
     #[arg(long)]
     repo: Option<PathBuf>,
@@ -498,6 +506,8 @@ struct BuildSelfBuildArgs {
     install_path: Option<PathBuf>,
     #[arg(long)]
     quiet: bool,
+    #[command(flatten)]
+    cargo: BuildCargoOptions,
 }
 
 #[derive(Debug, Args)]
@@ -508,12 +518,26 @@ struct BuildSelfUpgradeArgs {
     install_path: Option<PathBuf>,
     #[arg(long)]
     quiet: bool,
+    #[command(flatten)]
+    cargo: BuildCargoOptions,
+}
+
+#[derive(Debug, Args)]
+struct BuildSelfCheckArgs {
+    #[arg(long)]
+    repo: Option<PathBuf>,
+    #[arg(long)]
+    quiet: bool,
+    #[command(flatten)]
+    cargo: BuildCargoOptions,
 }
 
 #[derive(Debug, Args)]
 struct BuildSelfRunArgs {
     #[arg(long)]
     repo: Option<PathBuf>,
+    #[command(flatten)]
+    cargo: BuildCargoOptions,
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     args: Vec<String>,
 }
@@ -530,6 +554,8 @@ struct BuildSelfArgs {
 enum BuildSelfCommand {
     #[command(name = "build")]
     Build(BuildSelfBuildArgs),
+    #[command(name = "check")]
+    Check(BuildSelfCheckArgs),
     #[command(name = "upgrade")]
     Upgrade(BuildSelfUpgradeArgs),
     #[command(name = "run")]
@@ -17073,6 +17099,79 @@ fn resolve_self_install_path(path: Option<PathBuf>) -> Result<PathBuf> {
     Ok(home.join(".local").join("bin").join("si"))
 }
 
+struct PreparedCargoTargetDir {
+    path: PathBuf,
+    _temp: Option<tempfile::TempDir>,
+}
+
+fn resolve_program_on_path(name: &str) -> Option<PathBuf> {
+    let path_env = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_env) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn ensure_directory_is_writable(path: &Path) -> Result<()> {
+    fs::create_dir_all(path).with_context(|| format!("create {}", path.display()))?;
+    let probe = path.join(format!(".si-write-probe-{}", std::process::id()));
+    fs::write(&probe, "").with_context(|| format!("write {}", probe.display()))?;
+    fs::remove_file(&probe).with_context(|| format!("remove {}", probe.display()))?;
+    Ok(())
+}
+
+fn prepare_self_cargo_target_dir(
+    repo_root: &Path,
+    target_dir: Option<PathBuf>,
+) -> Result<PreparedCargoTargetDir> {
+    if let Some(target_dir) = target_dir {
+        let resolved = resolve_self_absolute_path(&target_dir)?;
+        ensure_directory_is_writable(&resolved)?;
+        return Ok(PreparedCargoTargetDir { path: resolved, _temp: None });
+    }
+
+    let default_dir = repo_root.join(".artifacts").join("cargo-target").join("self-build");
+    if ensure_directory_is_writable(&default_dir).is_ok() {
+        return Ok(PreparedCargoTargetDir { path: default_dir, _temp: None });
+    }
+
+    let temp = tempfile::tempdir().context("create temp cargo target dir")?;
+    Ok(PreparedCargoTargetDir { path: temp.path().to_path_buf(), _temp: Some(temp) })
+}
+
+fn configure_self_cargo_command(
+    command: &mut StdCommand,
+    repo_root: &Path,
+    cargo_target_dir: &Path,
+) {
+    command.current_dir(repo_root).env("CARGO_TARGET_DIR", cargo_target_dir);
+    if std::env::var_os("RUSTC_WRAPPER").is_none() {
+        if let Some(sccache) = resolve_program_on_path("sccache") {
+            command.env("RUSTC_WRAPPER", sccache);
+        }
+    }
+}
+
+fn print_self_build_runtime_notes(cargo_target_dir: &Path, timings: bool, quiet: bool) {
+    if quiet {
+        return;
+    }
+    println!("cargo target dir: {}", cargo_target_dir.display());
+    if std::env::var_os("RUSTC_WRAPPER").is_some() {
+        println!("rustc wrapper: {}", std::env::var("RUSTC_WRAPPER").unwrap_or_default());
+    } else if let Some(sccache) = resolve_program_on_path("sccache") {
+        println!("rustc wrapper: {}", sccache.display());
+    } else {
+        println!("rustc wrapper: unavailable (install sccache for faster cold builds)");
+    }
+    if timings {
+        println!("cargo timings: {}", cargo_target_dir.join("cargo-timings").display());
+    }
+}
+
 fn resolve_self_build_target(
     repo_root: &Path,
     install_path: Option<PathBuf>,
@@ -17093,19 +17192,27 @@ fn resolve_self_build_target(
     Ok(SelfBuildTarget { target: resolve_self_install_path(install_path)?, upgrade: true })
 }
 
-fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()> {
+fn build_self_binary(
+    repo_root: &Path,
+    output: &Path,
+    quiet: bool,
+    cargo_options: &BuildCargoOptions,
+) -> Result<()> {
     let dir = output.parent().ok_or_else(|| anyhow!("invalid output path {}", output.display()))?;
     fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    let cargo_target_dir = tempfile::tempdir().context("create temp cargo target dir")?;
+    let cargo_target_dir =
+        prepare_self_cargo_target_dir(repo_root, cargo_options.target_dir.clone())?;
     if !quiet {
         println!(
             "running: cargo build --release --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs"
         );
     }
-    let status = StdCommand::new("cargo")
-        .current_dir(repo_root)
-        .env("CARGO_TARGET_DIR", cargo_target_dir.path())
+    print_self_build_runtime_notes(&cargo_target_dir.path, cargo_options.timings, quiet);
+    let mut command = StdCommand::new("cargo");
+    configure_self_cargo_command(&mut command, repo_root, &cargo_target_dir.path);
+    let status = command
         .arg("build")
+        .args(cargo_options.timings.then_some("--timings"))
         .arg("--release")
         .arg("--locked")
         .arg("--manifest-path")
@@ -17117,7 +17224,7 @@ fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()>
     if !status.success() {
         return Err(anyhow!("build failed: {}", status));
     }
-    let built_binary = cargo_target_dir.path().join("release").join(if cfg!(windows) {
+    let built_binary = cargo_target_dir.path.join("release").join(if cfg!(windows) {
         "si-rs.exe"
     } else {
         "si-rs"
@@ -17159,10 +17266,11 @@ fn run_build_self_build(
     output: Option<PathBuf>,
     no_upgrade: bool,
     quiet: bool,
+    cargo_options: BuildCargoOptions,
 ) -> Result<()> {
     let repo_root = resolve_self_repo_root(repo)?;
     let target = resolve_self_build_target(&repo_root, install_path, output, no_upgrade)?;
-    build_self_binary(&repo_root, &target.target, quiet)?;
+    build_self_binary(&repo_root, &target.target, quiet, &cargo_options)?;
     if target.upgrade {
         println!("upgraded si binary: {}", target.target.display());
     } else {
@@ -17175,19 +17283,59 @@ fn run_build_self_upgrade(
     repo: Option<PathBuf>,
     install_path: Option<PathBuf>,
     quiet: bool,
+    cargo_options: BuildCargoOptions,
 ) -> Result<()> {
     let repo_root = resolve_self_repo_root(repo)?;
     let target = resolve_self_install_path(install_path)?;
-    build_self_binary(&repo_root, &target, quiet)?;
+    build_self_binary(&repo_root, &target, quiet, &cargo_options)?;
     println!("upgraded si binary: {}", target.display());
     Ok(())
 }
 
-fn run_build_self_run(repo: Option<PathBuf>, args: Vec<String>) -> Result<()> {
+fn run_build_self_check(
+    repo: Option<PathBuf>,
+    quiet: bool,
+    cargo_options: BuildCargoOptions,
+) -> Result<()> {
     let repo_root = resolve_self_repo_root(repo)?;
+    let cargo_target_dir =
+        prepare_self_cargo_target_dir(&repo_root, cargo_options.target_dir.clone())?;
+    if !quiet {
+        println!(
+            "running: cargo check --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs"
+        );
+    }
+    print_self_build_runtime_notes(&cargo_target_dir.path, cargo_options.timings, quiet);
     let mut command = StdCommand::new("cargo");
+    configure_self_cargo_command(&mut command, &repo_root, &cargo_target_dir.path);
+    let status = command
+        .arg("check")
+        .args(cargo_options.timings.then_some("--timings"))
+        .arg("--locked")
+        .arg("--manifest-path")
+        .arg("rust/crates/si-cli/Cargo.toml")
+        .arg("--bin")
+        .arg("si-rs")
+        .status()
+        .context("run cargo check for self build")?;
+    if !status.success() {
+        return Err(anyhow!("cargo check failed: {}", status));
+    }
+    println!("checked si binary manifest: rust/crates/si-cli/Cargo.toml");
+    Ok(())
+}
+
+fn run_build_self_run(
+    repo: Option<PathBuf>,
+    cargo_options: BuildCargoOptions,
+    args: Vec<String>,
+) -> Result<()> {
+    let repo_root = resolve_self_repo_root(repo)?;
+    let cargo_target_dir =
+        prepare_self_cargo_target_dir(&repo_root, cargo_options.target_dir.clone())?;
+    let mut command = StdCommand::new("cargo");
+    configure_self_cargo_command(&mut command, &repo_root, &cargo_target_dir.path);
     command
-        .current_dir(repo_root)
         .arg("run")
         .arg("--locked")
         .arg("--manifest-path")
@@ -17283,9 +17431,8 @@ fn build_release_asset(
     let cargo_target_dir = temp.path().join("cargo-target");
     let output_path = staging_dir.join("si");
     let mut cargo_command = StdCommand::new("cargo");
+    configure_self_cargo_command(&mut cargo_command, repo_root, &cargo_target_dir);
     cargo_command
-        .current_dir(repo_root)
-        .env("CARGO_TARGET_DIR", &cargo_target_dir)
         .env("GOOS", goos)
         .env("GOARCH", goarch)
         .arg("build")
@@ -19077,14 +19224,19 @@ fn main() -> Result<()> {
                     output,
                     install_path,
                     quiet,
-                })) => run_build_self_build(repo, install_path, output, no_upgrade, quiet)?,
+                    cargo,
+                })) => run_build_self_build(repo, install_path, output, no_upgrade, quiet, cargo)?,
+                Some(BuildSelfCommand::Check(BuildSelfCheckArgs { repo, quiet, cargo })) => {
+                    run_build_self_check(repo, quiet, cargo)?
+                }
                 Some(BuildSelfCommand::Upgrade(BuildSelfUpgradeArgs {
                     repo,
                     install_path,
                     quiet,
-                })) => run_build_self_upgrade(repo, install_path, quiet)?,
-                Some(BuildSelfCommand::Run(BuildSelfRunArgs { repo, args })) => {
-                    run_build_self_run(repo, args)?
+                    cargo,
+                })) => run_build_self_upgrade(repo, install_path, quiet, cargo)?,
+                Some(BuildSelfCommand::Run(BuildSelfRunArgs { repo, cargo, args })) => {
+                    run_build_self_run(repo, cargo, args)?
                 }
                 Some(BuildSelfCommand::ReleaseAsset {
                     repo_root,
@@ -19111,6 +19263,7 @@ fn main() -> Result<()> {
                     args.default_build.output,
                     args.default_build.no_upgrade,
                     args.default_build.quiet,
+                    args.default_build.cargo,
                 )?,
             },
             BuildCommand::Installer { command } => match command {
@@ -33360,6 +33513,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["build", "image"] => Some("Build the local SI runtime image."),
         ["build", "self"] => Some("Build, upgrade, or run the SI CLI."),
         ["build", "self", "build"] => Some("Build the SI CLI."),
+        ["build", "self", "check"] => Some("Check the SI CLI without linking."),
         ["build", "self", "upgrade"] => Some("Install the freshly built SI CLI."),
         ["build", "self", "run"] => Some("Build and run the SI CLI."),
         ["build", "self", "asset"] => Some("Build one release asset."),
@@ -35542,6 +35696,23 @@ fn find_codex_profile_candidates(profiles: &[CodexProfileView], query: &str) -> 
         .collect()
 }
 
+fn codex_profile_email_table_value(email: Option<&str>) -> String {
+    let Some(email) = email.map(str::trim).filter(|value| !value.is_empty()) else {
+        return "-".to_owned();
+    };
+    let Some((local, domain)) = email.split_once('@') else {
+        return email.to_owned();
+    };
+    let local = local.trim();
+    let domain = domain.trim();
+    if local.is_empty() || domain.is_empty() {
+        return email.to_owned();
+    }
+    let mut chars = domain.chars();
+    let first = chars.next().unwrap_or_default();
+    format!("{local}@{first}…")
+}
+
 fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
     let show_five_hour = profiles.iter().any(|profile| profile.five_hour_left_pct.is_some());
     let show_weekly = profiles.iter().any(|profile| profile.weekly_left_pct.is_some());
@@ -35617,7 +35788,7 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
             Cell::new(codex_profile_display_name(profile)).fg(cli_table_color(CliTone::Command)),
         );
         row.push(
-            Cell::new(render_option_text_value(profile.email.as_deref()))
+            Cell::new(codex_profile_email_table_value(profile.email.as_deref()))
                 .fg(cli_table_color(CliTone::Label)),
         );
         if show_five_hour {
