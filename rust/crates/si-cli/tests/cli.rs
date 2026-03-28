@@ -16769,7 +16769,7 @@ fn codex_spawn_uses_explicit_profile_over_active_profile() {
 }
 
 #[test]
-fn codex_spawn_without_profile_spawns_all_configured_profiles() {
+fn codex_spawn_requires_profile_outside_tty() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -16781,33 +16781,8 @@ fn codex_spawn_without_profile_spawns_all_configured_profiles() {
     );
     let workspace = tempdir().expect("tempdir");
     let script_dir = tempdir().expect("tempdir");
-    let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    write_executable_shell_script(
-        &docker_bin,
-        &format!(
-            r#"#!/bin/sh
-set -eu
-printf '%s\n' "$@" >> {args}
-printf '%s\n' '--' >> {args}
-cmd="${{1:-}}"
-shift || true
-case "$cmd" in
-  ps)
-    exit 0
-    ;;
-  run)
-    printf '%s\n' 'container-id-123'
-    ;;
-  *)
-    echo "unexpected docker command: $cmd" >&2
-    exit 2
-    ;;
-esac
-"#,
-            args = shell_escape_for_test(&args_path),
-        ),
-    );
+    write_executable_shell_script(&docker_bin, "#!/bin/sh\nexit 2\n");
 
     let output = cargo_bin()
         .env("HOME", home.path())
@@ -16816,17 +16791,14 @@ esac
         .args(["--docker-bin"])
         .arg(&docker_bin)
         .assert()
-        .success()
+        .failure()
         .get_output()
-        .stdout
+        .stderr
         .clone();
 
-    let text = String::from_utf8(output).expect("utf8 output");
-    assert_eq!(text.matches("container-id-123").count(), 2);
-    let args = fs::read_to_string(args_path).expect("args file");
-    assert_eq!(args.matches("\nrun\n").count(), 2);
-    assert!(args.contains("si.codex.profile=profile-alpha"));
-    assert!(args.contains("si.codex.profile=profile-zeta"));
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("codex profile is required"));
+    assert!(stderr.contains("run in a TTY"));
 }
 
 #[test]
@@ -16868,7 +16840,7 @@ exit 1
 }
 
 #[test]
-fn codex_spawn_reuses_existing_running_container_cleanly() {
+fn codex_spawn_allows_multiple_running_containers_for_same_profile() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
@@ -16885,12 +16857,8 @@ printf '%s\n' '--' >> {args}
 cmd="${{1:-}}"
 shift || true
 case "$cmd" in
-  ps)
-    printf '%s\n' 'si-codex-profile-zeta	running	aureuma/si:local	profile-zeta'
-    ;;
   run)
-    echo "docker run should not have been called" >&2
-    exit 9
+    printf '%s\n' 'container-id-123'
     ;;
   *)
     echo "unexpected docker command: $cmd" >&2
@@ -16915,14 +16883,15 @@ esac
         .clone();
 
     let stdout = String::from_utf8(output).expect("utf8 output");
-    assert!(stdout.contains("already running"));
+    assert!(stdout.contains("container-id-123"));
     let args = fs::read_to_string(args_path).expect("read docker args");
-    assert!(args.contains("ps\n"));
-    assert!(!args.contains("\nrun\n"));
+    assert!(args.contains("\nrun\n"));
+    assert!(!args.contains("\nps\n"));
+    assert!(args.contains("si.codex.profile=profile-zeta"));
 }
 
 #[test]
-fn codex_spawn_starts_existing_stopped_container_by_default() {
+fn codex_spawn_allows_multiple_stopped_or_running_instances_for_same_profile() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let workspace = tempdir().expect("tempdir");
@@ -16939,15 +16908,8 @@ printf '%s\n' '--' >> {args}
 cmd="${{1:-}}"
 shift || true
 case "$cmd" in
-  ps)
-    printf '%s\n' 'si-codex-profile-zeta	exited	aureuma/si:local	profile-zeta'
-    ;;
-  start)
-    printf '%s\n' 'si-codex-profile-zeta'
-    ;;
   run)
-    echo "docker run should not have been called" >&2
-    exit 9
+    printf '%s\n' 'container-id-123'
     ;;
   *)
     echo "unexpected docker command: $cmd" >&2
@@ -16972,11 +16934,10 @@ esac
         .clone();
 
     let stdout = String::from_utf8(output).expect("utf8 output");
-    assert!(stdout.contains("started"));
+    assert!(stdout.contains("container-id-123"));
     let args = fs::read_to_string(args_path).expect("read docker args");
-    assert!(args.contains("ps\n"));
-    assert!(args.contains("start\nsi-codex-profile-zeta\n"));
-    assert!(!args.contains("\nrun\n"));
+    assert!(args.contains("\nrun\n"));
+    assert!(!args.contains("\nstart\n"));
 }
 
 #[test]
@@ -17560,7 +17521,10 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["profile_id"], "profile-zeta");
-    assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "profile-zeta"]));
+    assert_eq!(
+        parsed["remove_targets"],
+        serde_json::json!(["si-codex-alpha", "si-codex-profile-zeta"])
+    );
 }
 
 #[test]
@@ -17712,7 +17676,7 @@ esac
         .clone();
     let stderr = String::from_utf8(output).expect("stderr utf8");
     assert!(stderr.contains("no running codex containers found"));
-    assert!(stderr.contains("si codex spawn <profile>"));
+    assert!(stderr.contains("si codex spawn --profile <profile>"));
 }
 
 #[test]
@@ -17764,7 +17728,7 @@ esac
         .clone();
     let stderr = String::from_utf8(output).expect("stderr utf8");
     assert!(stderr.contains("is not running"));
-    assert!(stderr.contains("si codex spawn profile-beta"));
+    assert!(stderr.contains("si codex spawn --profile profile-beta"));
 
     let args = fs::read_to_string(&args_file).expect("read tmux args");
     assert!(args.contains("has-session\n-t\nsi-codex-pane-profile-beta 🧪 Profile Beta\n"));

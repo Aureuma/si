@@ -15,6 +15,7 @@ pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnRequest {
     pub profile_id: String,
+    pub instance_name: Option<String>,
     pub image: Option<String>,
     pub network_name: Option<String>,
     pub workspace_host: PathBuf,
@@ -35,6 +36,7 @@ pub struct SpawnRequest {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SpawnPlan {
+    pub profile_id: String,
     pub name: String,
     pub container_name: String,
     pub image: String,
@@ -146,7 +148,8 @@ pub fn build_spawn_plan(
     if name.is_empty() {
         return Err(SpawnPlanError::MissingProfile);
     }
-    let name = name.to_owned();
+    let profile_id = name.to_owned();
+    let name = default_named_value(request.instance_name.as_deref(), &profile_id);
 
     let workspace_host = request.workspace_host.clone();
     if !workspace_host.is_absolute() || !workspace_host.is_dir() {
@@ -176,7 +179,7 @@ pub fn build_spawn_plan(
         format!("SI_WORKSPACE_PRIMARY={}", workspace_primary_target.display()),
         format!("SI_WORKSPACE_MIRROR={}", workspace_mirror_target.display()),
         format!("SI_WORKSPACE_HOST={}", workspace_host.display()),
-        format!("SI_CODEX_PROFILE_ID={name}"),
+        format!("SI_CODEX_PROFILE_ID={profile_id}"),
     ];
     if let Some(repo) = request.repo.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
         env.push(format!("SI_REPO={repo}"));
@@ -208,6 +211,7 @@ pub fn build_spawn_plan(
     );
 
     Ok(SpawnPlan {
+        profile_id,
         name: name.clone(),
         container_name: codex_container_name(&name),
         image: default_named_value(request.image.as_deref(), DEFAULT_IMAGE),
@@ -268,9 +272,8 @@ pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, Respa
         return Err(RespawnPlanError::MissingProfile);
     }
     let mut targets = BTreeSet::new();
-    targets.insert(codex_container_slug(profile_id));
     for item in &request.profile_container_names {
-        let item = codex_container_slug(item);
+        let item = codex_container_name(item);
         if !item.trim().is_empty() {
             targets.insert(item);
         }
@@ -387,7 +390,8 @@ pub fn build_container_spec(
         .user("root")
         .label("si.component", "codex")
         .label("si.name", plan.name.clone())
-        .label("si.codex.profile", plan.name.clone())
+        .label("si.codex.profile", plan.profile_id.clone())
+        .label("si.codex.instance", plan.name.clone())
         .volume_mount(VolumeMount::new(
             plan.codex_volume.clone(),
             PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex"),
@@ -639,6 +643,7 @@ mod tests {
         )
         .expect("spawn plan");
 
+        assert_eq!(plan.profile_id, "profile-zeta");
         assert_eq!(plan.name, "profile-zeta");
         assert_eq!(plan.container_name, "si-codex-profile-zeta");
         assert_eq!(plan.codex_volume, "si-codex-profile-zeta");
@@ -810,6 +815,7 @@ mod tests {
         assert!(args.contains(&"--label".to_owned()));
         assert!(args.contains(&"si.component=codex".to_owned()));
         assert!(args.contains(&"si.codex.profile=profile-zeta".to_owned()));
+        assert!(args.contains(&"si.codex.instance=profile-zeta".to_owned()));
         assert!(args.contains(&"-p".to_owned()));
         assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
         assert!(args.contains(&"--restart".to_owned()));
@@ -939,7 +945,10 @@ mod tests {
         .expect("respawn plan");
 
         assert_eq!(plan.profile_id, "profile-zeta");
-        assert_eq!(plan.remove_targets, vec!["alpha".to_owned(), "profile-zeta".to_owned()]);
+        assert_eq!(
+            plan.remove_targets,
+            vec!["si-codex-alpha".to_owned(), "si-codex-profile-zeta".to_owned()]
+        );
     }
 
     #[test]
