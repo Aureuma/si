@@ -8,6 +8,6 @@ mod tests {
 
     #[test]
     fn returns_repo_version() {
-        assert_eq!(current_version(), "v0.55.7");
+        assert_eq!(current_version(), format!("v{}", env!("CARGO_PKG_VERSION")));
     }
 }
