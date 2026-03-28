@@ -16,7 +16,7 @@ use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{
     ArgAction, Args, ColorChoice, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum,
@@ -34,7 +34,7 @@ use sha2::{Digest, Sha256};
 use si_rs_codex::{
     DEFAULT_IMAGE, RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
     build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_command_for_container,
-    codex_tmux_session_name, parse_report_capture,
+    codex_tmux_session_name,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -223,6 +223,10 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command as StdCommand, ExitStatus};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
+use std::time::Duration;
 use tar::Builder as TarBuilder;
 
 #[derive(Debug, Parser)]
@@ -15589,27 +15593,6 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    Start {
-        profile: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
-    Stop {
-        profile: Option<String>,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
-    Logs {
-        profile: Option<String>,
-        #[arg(long, default_value = "200")]
-        tail: String,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
     Tail {
         profile: Option<String>,
         #[arg(long, default_value = "200")]
@@ -15640,25 +15623,10 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    #[command(name = "status", alias = "statusread", alias = "status-read")]
-    Status {
-        profile: Option<String>,
-        #[arg(long, default_value_t = false)]
-        raw: bool,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-        #[arg(long)]
-        docker_bin: Option<PathBuf>,
-    },
     Tmux(CodexTmuxArgs),
     Warmup {
         #[command(subcommand)]
         command: WarmupCommand,
-    },
-    #[command(name = "report", alias = "reportparse", alias = "report-parse")]
-    Report {
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
     },
     #[command(name = "respawn", alias = "respawnplan", alias = "respawn-plan")]
     Respawn {
@@ -16813,14 +16781,6 @@ struct CodexRemoveResultView {
 }
 
 #[derive(Debug, Serialize)]
-struct CodexContainerActionView {
-    action: String,
-    name: String,
-    container_name: String,
-    output: String,
-}
-
-#[derive(Debug, Serialize)]
 struct CodexPublishedPortView {
     host_ip: String,
     host_port: String,
@@ -16887,6 +16847,7 @@ struct CodexTmuxCommandView {
     profile_id: String,
     container: String,
     session_name: String,
+    window_name: String,
     launch_command: String,
 }
 
@@ -16916,27 +16877,6 @@ struct CodexWarmupRunProfileView {
     weekly_left_pct: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_reset: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CodexReportParseInput {
-    clean: String,
-    raw: String,
-    prompt_index: usize,
-    ansi: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexPromptSegmentView {
-    prompt: String,
-    lines: Vec<String>,
-    raw: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexReportParseView {
-    segments: Vec<CodexPromptSegmentView>,
-    report: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -33233,21 +33173,6 @@ fn main() -> Result<()> {
             CodexCommand::Remove { profile, all, volumes, format, docker_bin } => {
                 run_codex_remove(profile.as_deref(), all, volumes, format, docker_bin)?
             }
-            CodexCommand::Start { profile, format, docker_bin } => run_codex_container_action(
-                profile.as_deref(),
-                ContainerAction::Start,
-                format,
-                docker_bin,
-            )?,
-            CodexCommand::Stop { profile, format, docker_bin } => run_codex_container_action(
-                profile.as_deref(),
-                ContainerAction::Stop,
-                format,
-                docker_bin,
-            )?,
-            CodexCommand::Logs { profile, tail, docker_bin } => {
-                run_codex_container_logs(profile.as_deref(), &tail, false, docker_bin)?
-            }
             CodexCommand::Tail { profile, tail, docker_bin } => {
                 run_codex_container_logs(profile.as_deref(), &tail, true, docker_bin)?
             }
@@ -33271,9 +33196,6 @@ fn main() -> Result<()> {
                 command,
             )?,
             CodexCommand::List { format, docker_bin } => run_codex_list(format, docker_bin)?,
-            CodexCommand::Status { profile, raw, format, docker_bin } => {
-                run_codex_status_read(profile.as_deref(), raw, format, docker_bin)?
-            }
             CodexCommand::Tmux(CodexTmuxArgs { profile, format }) => {
                 run_codex_tmux_command(profile.as_deref(), format)?
             }
@@ -33332,7 +33254,6 @@ fn main() -> Result<()> {
                     }
                 },
             },
-            CodexCommand::Report { format } => run_codex_report_parse(format)?,
             CodexCommand::Respawn { profile, profile_containers, format } => {
                 run_codex_respawn_plan(profile.as_deref(), profile_containers, format)?
             }
@@ -33449,17 +33370,12 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "profile"] => Some("Manage Codex profiles."),
         ["codex", "spawn"] => Some("Plan and start a Codex container."),
         ["codex", "remove"] => Some("Remove a Codex container or volume set."),
-        ["codex", "start"] => Some("Start a Codex container."),
-        ["codex", "stop"] => Some("Stop a Codex container."),
-        ["codex", "logs"] => Some("Show Codex container logs."),
         ["codex", "tail"] => Some("Tail Codex container logs."),
         ["codex", "exec"] => Some("Run a command in a Codex container."),
         ["codex", "list"] => Some("List Codex containers."),
-        ["codex", "status"] => Some("Show Codex container status."),
         ["codex", "tmux"] => Some("Attach to a Codex tmux session."),
         ["codex", "warmup"] => Some("Inspect Codex warmup state."),
         ["codex", "warmup", "run"] => Some("Warm configured Codex profiles."),
-        ["codex", "report"] => Some("Parse a Codex report capture."),
         ["codex", "respawn"] => Some("Plan replacement Codex containers."),
         ["codex", "warmup", "decision"] => Some("Decide whether warmup should run."),
         ["codex", "warmup", "status"] => Some("Show warmup status."),
@@ -34039,6 +33955,68 @@ fn print_help_section(title: &str) {
 
 fn print_help_item(text: &str, tone: CliTone) {
     println!("  {}", stdout_text(text, tone));
+}
+
+struct CliSpinnerHandle {
+    done: Arc<AtomicUsize>,
+    stop: Arc<AtomicBool>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl CliSpinnerHandle {
+    fn progress_counter(&self) -> Arc<AtomicUsize> {
+        Arc::clone(&self.done)
+    }
+
+    fn finish(mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+        eprint!("\r\x1b[2K");
+        let _ = io::stderr().flush();
+    }
+}
+
+fn codex_profile_list_spinner_frame(frame_idx: usize, done: usize, total: usize) -> String {
+    let width = 10;
+    let head = frame_idx % width;
+    let mut rail = ['.'; 10];
+    rail[head] = '=';
+    let rail = rail.into_iter().collect::<String>();
+    format!(
+        "{} {} {}",
+        stderr_text(&format!("si radar [{}]", rail), CliTone::Command),
+        stderr_text(&format!("{done}/{total}"), CliTone::Info),
+        stderr_text("sampling codex profiles", CliTone::Muted),
+    )
+}
+
+fn start_codex_profile_list_spinner(total: usize) -> Option<CliSpinnerHandle> {
+    if total == 0 || !io::stderr().is_terminal() {
+        return None;
+    }
+
+    let done = Arc::new(AtomicUsize::new(0));
+    let stop = Arc::new(AtomicBool::new(false));
+    let spinner_done = Arc::clone(&done);
+    let spinner_stop = Arc::clone(&stop);
+    let thread = thread::spawn(move || {
+        let mut frame_idx = 0usize;
+        while !spinner_stop.load(Ordering::Relaxed) {
+            let frame = codex_profile_list_spinner_frame(
+                frame_idx,
+                spinner_done.load(Ordering::Relaxed).min(total),
+                total,
+            );
+            eprint!("\r\x1b[2K{frame}");
+            let _ = io::stderr().flush();
+            frame_idx = frame_idx.wrapping_add(1);
+            thread::sleep(Duration::from_millis(90));
+        }
+    });
+
+    Some(CliSpinnerHandle { done, stop, thread: Some(thread) })
 }
 
 fn cli_table_color(tone: CliTone) -> Color {
@@ -35565,7 +35543,6 @@ fn find_codex_profile_candidates(profiles: &[CodexProfileView], query: &str) -> 
 }
 
 fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
-    let show_plan = profiles.iter().any(|profile| profile.account_plan.is_some());
     let show_five_hour = profiles.iter().any(|profile| profile.five_hour_left_pct.is_some());
     let show_weekly = profiles.iter().any(|profile| profile.weekly_left_pct.is_some());
 
@@ -35598,11 +35575,6 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     header.push(
         Cell::new("Email").fg(cli_table_color(CliTone::Label)).add_attribute(Attribute::Bold),
     );
-    if show_plan {
-        header.push(
-            Cell::new("Plan").fg(cli_table_color(CliTone::Flag)).add_attribute(Attribute::Bold),
-        );
-    }
     if show_five_hour {
         header.push(
             Cell::new("5h Left").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
@@ -35626,9 +35598,6 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(12)));
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(16)));
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(30)));
-    if show_plan {
-        constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(10)));
-    }
     if show_five_hour {
         constraints.push(ColumnConstraint::Absolute(Width::Fixed(9)));
     }
@@ -35651,12 +35620,6 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
             Cell::new(render_option_text_value(profile.email.as_deref()))
                 .fg(cli_table_color(CliTone::Label)),
         );
-        if show_plan {
-            row.push(
-                Cell::new(render_option_text_value(profile.account_plan.as_deref()))
-                    .fg(cli_table_color(CliTone::Flag)),
-            );
-        }
         if show_five_hour {
             row.push(
                 Cell::new(render_option_percent_value(profile.five_hour_left_pct))
@@ -35770,12 +35733,39 @@ fn resolve_codex_requested_profile(
     paths: &SiPaths,
     profile: Option<&str>,
 ) -> Result<String> {
-    resolve_codex_profile_with_mode(
-        settings,
-        paths,
-        profile,
-        CodexProfileSelectionMode::PromptOnMissing,
-        "codex",
+    let active = resolve_codex_active_profile_id(settings);
+    let mut profiles = settings
+        .codex
+        .profiles
+        .entries
+        .iter()
+        .map(|(profile_id, entry)| codex_profile_view(paths, active.as_deref(), profile_id, entry))
+        .collect::<Vec<_>>();
+    profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+
+    if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
+        let candidates = find_codex_profile_candidates(&profiles, query);
+        return match candidates.as_slice() {
+            [index] => Ok(profiles[*index].profile.clone()),
+            [] => Err(codex_profile_resolution_error(query, &profiles)),
+            _ => Err(anyhow!("codex profile {:?} matched multiple configured profiles", query)),
+        };
+    }
+
+    if let Some(active_profile) = active
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .filter(|value| settings.codex.profiles.entries.contains_key(value))
+    {
+        return Ok(active_profile);
+    }
+
+    if codex_profile_prompt_available() {
+        return prompt_for_codex_profile("codex", &profiles);
+    }
+
+    anyhow::bail!(
+        "codex profile is required; pass one explicitly or run in a TTY to choose from the configured profiles"
     )
 }
 
@@ -35901,6 +35891,7 @@ fn codex_profile_view(
 }
 
 fn apply_codex_status_to_profile(view: &mut CodexProfileView, status: &CodexStatusView) {
+    view.state = "Logged-In".to_owned();
     if view.email.as_deref().is_none_or(|value| value.trim().is_empty()) {
         view.email = status.account_email.clone();
     }
@@ -35911,30 +35902,105 @@ fn apply_codex_status_to_profile(view: &mut CodexProfileView, status: &CodexStat
     view.weekly_reset = status.weekly_reset.clone();
 }
 
+fn clear_codex_profile_live_status(view: &mut CodexProfileView) {
+    view.account_plan = None;
+    view.five_hour_left_pct = None;
+    view.five_hour_reset = None;
+    view.weekly_left_pct = None;
+    view.weekly_reset = None;
+}
+
+fn codex_status_has_live_quota(status: &CodexStatusView) -> bool {
+    status.five_hour_left_pct.is_some() && status.weekly_left_pct.is_some()
+}
+
+fn mark_codex_profile_missing(view: &mut CodexProfileView) {
+    view.state = "Missing".to_owned();
+    clear_codex_profile_live_status(view);
+}
+
+fn resolve_codex_profile_live_view(
+    mut profile: CodexProfileView,
+    container_name: Option<String>,
+    docker_program: PathBuf,
+) -> CodexProfileView {
+    let Some(container_name) = container_name else {
+        return profile;
+    };
+    if let Some(auth_path) =
+        profile.auth_path.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        let _ = sync_codex_auth_to_running_container(
+            profile.profile.as_str(),
+            Path::new(auth_path),
+            Some(docker_program.clone()),
+        );
+    }
+    match read_codex_status_for_container_name(&container_name, false, docker_program.as_path()) {
+        Ok(status) if codex_status_has_live_quota(&status) => {
+            apply_codex_status_to_profile(&mut profile, &status);
+        }
+        _ => {
+            mark_codex_profile_missing(&mut profile);
+        }
+    }
+    profile
+}
+
 fn enrich_codex_profiles_with_live_status(
-    profiles: &mut [CodexProfileView],
+    profiles: Vec<CodexProfileView>,
     docker_bin: Option<PathBuf>,
-) {
+) -> Vec<CodexProfileView> {
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let Ok(containers) = read_codex_containers(Some(docker_program.clone())) else {
-        return;
+        return profiles;
     };
     let container_by_profile = containers
         .into_iter()
         .filter(|item| item.state.eq_ignore_ascii_case("running"))
         .filter_map(|item| item.profile_id.map(|profile_id| (profile_id, item.name)))
         .collect::<BTreeMap<_, _>>();
-    for profile in profiles {
-        let Some(container_name) = container_by_profile.get(profile.profile.as_str()) else {
-            continue;
-        };
-        if let Ok(status) =
-            read_codex_status_for_container_name(container_name, false, docker_program.as_path())
-        {
-            apply_codex_status_to_profile(profile, &status);
+    let progress = Arc::new(AtomicUsize::new(0));
+    enrich_codex_profiles_with_live_status_parallel(
+        profiles,
+        container_by_profile,
+        docker_program,
+        Some(progress),
+    )
+}
+
+fn enrich_codex_profiles_with_live_status_parallel(
+    profiles: Vec<CodexProfileView>,
+    container_by_profile: BTreeMap<String, String>,
+    docker_program: PathBuf,
+    progress: Option<Arc<AtomicUsize>>,
+) -> Vec<CodexProfileView> {
+    thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(profiles.len());
+        for (index, profile) in profiles.into_iter().enumerate() {
+            let container_name = container_by_profile.get(profile.profile.as_str()).cloned();
+            let docker_program = docker_program.clone();
+            let progress = progress.clone();
+            handles.push(scope.spawn(move || {
+                let resolved =
+                    resolve_codex_profile_live_view(profile, container_name, docker_program);
+                if let Some(progress) = progress {
+                    progress.fetch_add(1, Ordering::Relaxed);
+                }
+                (index, resolved)
+            }));
         }
-    }
+
+        let mut ordered = Vec::with_capacity(handles.len());
+        for handle in handles {
+            if let Ok(item) = handle.join() {
+                ordered.push(item);
+            }
+        }
+        ordered.sort_by_key(|(index, _)| *index);
+        ordered.into_iter().map(|(_, profile)| profile).collect()
+    })
 }
 
 fn show_codex_profile_list(
@@ -35954,7 +36020,27 @@ fn show_codex_profile_list(
         .map(|(profile_id, entry)| codex_profile_view(&paths, active.as_deref(), profile_id, entry))
         .collect::<Vec<_>>();
     profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
-    enrich_codex_profiles_with_live_status(&mut profiles, None);
+    let spinner = match format {
+        OutputFormat::Text => start_codex_profile_list_spinner(profiles.len()),
+        OutputFormat::Json => None,
+    };
+    let progress = spinner.as_ref().map(CliSpinnerHandle::progress_counter);
+    let docker_program = si_rs_docker::docker_binary_path().to_path_buf();
+    let container_by_profile = read_codex_containers(Some(docker_program.clone()))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|item| item.state.eq_ignore_ascii_case("running"))
+        .filter_map(|item| item.profile_id.map(|profile_id| (profile_id, item.name)))
+        .collect::<BTreeMap<_, _>>();
+    let profiles = enrich_codex_profiles_with_live_status_parallel(
+        profiles,
+        container_by_profile,
+        docker_program,
+        progress,
+    );
+    if let Some(spinner) = spinner {
+        spinner.finish();
+    }
 
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&profiles)?),
@@ -35999,8 +36085,7 @@ fn show_codex_profile(
         &profile_id,
         &entry,
     );
-    let mut profiles = vec![view];
-    enrich_codex_profiles_with_live_status(&mut profiles, None);
+    let mut profiles = enrich_codex_profiles_with_live_status(vec![view], None);
     let view = profiles.pop().expect("single codex profile view");
 
     match format {
@@ -36051,7 +36136,7 @@ fn add_codex_profile(
     let entry_table = ensure_toml_table(entries, profile_id)?;
     set_toml_string(entry_table, "name", name);
     set_toml_string(entry_table, "email", email);
-    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path));
+    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path.clone()));
     if activate {
         set_toml_string(profiles, "active", Some(profile_id.to_owned()));
         set_toml_string(codex, "profile", Some(profile_id.to_owned()));
@@ -36187,13 +36272,14 @@ fn login_codex_profile(
     let profiles = ensure_toml_table(codex, "profiles")?;
     let entries = ensure_toml_table(profiles, "entries")?;
     let entry_table = ensure_toml_table(entries, profile_id.as_str())?;
-    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path));
+    set_toml_string(entry_table, "auth_path", Some(resolved_auth_path.clone()));
     set_toml_string(
         entry_table,
         "auth_updated",
         Some(Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
     );
     write_settings_document(&settings_path, &document)?;
+    sync_codex_auth_to_running_container(&profile_id, Path::new(&resolved_auth_path), None)?;
 
     show_codex_profile(Some(profile_id), Some(home), Some(settings_path), format)
 }
@@ -36274,6 +36360,26 @@ fn resolve_codex_runtime_profile(
     let (home, settings) = load_codex_runtime_settings(home, settings_file)?;
     let paths = SiPaths::from_settings(&home, &settings);
     resolve_codex_requested_profile(&settings, &paths, profile)
+}
+
+fn update_codex_active_profile_in_settings(
+    home: &Path,
+    settings_file: Option<&Path>,
+    profile_id: &str,
+) -> Result<()> {
+    let settings_path = settings_file
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| home.join(".si").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let codex = ensure_toml_table(&mut document, "codex")?;
+    let profiles = ensure_toml_table(codex, "profiles")?;
+    set_toml_string(profiles, "active", Some(profile_id.to_owned()));
+    set_toml_string(codex, "profile", Some(profile_id.to_owned()));
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
 }
 
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
@@ -64740,6 +64846,29 @@ fn read_codex_containers(docker_bin: Option<PathBuf>) -> Result<Vec<CodexContain
     Ok(items)
 }
 
+fn codex_running_container_count(items: &[CodexContainerListItem]) -> usize {
+    items.iter().filter(|item| item.state.eq_ignore_ascii_case("running")).count()
+}
+
+fn codex_container_is_running(items: &[CodexContainerListItem], container_name: &str) -> bool {
+    items
+        .iter()
+        .any(|item| item.name == container_name && item.state.eq_ignore_ascii_case("running"))
+}
+
+fn kill_tmux_session_if_present(tmux_bin: &str, tmux_term: &str, session_name: &str) {
+    if session_name.trim().is_empty() {
+        return;
+    }
+    let Ok(true) = tmux_session_exists(tmux_bin, tmux_term, session_name) else {
+        return;
+    };
+    let _ = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(["kill-session", "-t", session_name])
+        .status();
+}
+
 fn prompt_codex_remove_all(items: &[CodexContainerListItem], volumes: bool) -> Result<bool> {
     eprintln!(
         "{}",
@@ -64877,49 +65006,21 @@ fn run_codex_remove(
         return Ok(());
     }
 
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
+    let (home, settings) = load_codex_runtime_settings(None, None)?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    let profile_id = resolve_codex_profile_with_mode(
+        &settings,
+        &paths,
+        profile,
+        CodexProfileSelectionMode::PromptOnMissing,
+        "remove",
+    )?;
     let artifacts = build_remove_artifacts(&profile_id)?;
     let profile_id = inspect_codex_profile_label(&docker_program_str, &artifacts.container_name)?;
     let view = remove_codex_artifacts(&docker_program_str, &artifacts, profile_id, volumes)?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => print!("{}", view.output),
-    }
-    Ok(())
-}
-
-fn run_codex_container_action(
-    profile: Option<&str>,
-    action: ContainerAction,
-    format: OutputFormat,
-    docker_bin: Option<PathBuf>,
-) -> Result<()> {
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
-    let artifacts = build_remove_artifacts(&profile_id)?;
-    let docker_program =
-        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let command = docker_container_action_command(
-        docker_program.display().to_string(),
-        action,
-        artifacts.container_name.clone(),
-    )?;
-    let output = ProcessRunner.run(&command, &RunOptions::default())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("docker {} failed: {}", action.as_str(), stderr.trim());
-    }
-    let rendered = String::from_utf8_lossy(&output.stdout).into_owned();
-    match format {
-        OutputFormat::Json => {
-            let view = CodexContainerActionView {
-                action: action.as_str().to_owned(),
-                name: profile_id,
-                container_name: artifacts.container_name,
-                output: rendered,
-            };
-            println!("{}", serde_json::to_string_pretty(&view)?);
-        }
-        OutputFormat::Text => print!("{rendered}"),
     }
     Ok(())
 }
@@ -65015,32 +65116,6 @@ fn run_codex_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<(
     Ok(())
 }
 
-fn run_codex_status_read(
-    profile: Option<&str>,
-    raw: bool,
-    format: OutputFormat,
-    docker_bin: Option<PathBuf>,
-) -> Result<()> {
-    let status = read_codex_status(profile, raw, docker_bin)?;
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
-        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
-    }
-    Ok(())
-}
-
-fn read_codex_status(
-    profile: Option<&str>,
-    raw: bool,
-    docker_bin: Option<PathBuf>,
-) -> Result<CodexStatusView> {
-    let profile_id = resolve_codex_runtime_profile(profile, None, None)?;
-    let artifacts = build_remove_artifacts(&profile_id)?;
-    let docker_program =
-        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    read_codex_status_for_container_name(&artifacts.container_name, raw, docker_program.as_path())
-}
-
 fn read_codex_status_for_container_name(
     container_name: &str,
     raw: bool,
@@ -65080,6 +65155,57 @@ fn read_codex_status_for_container_name(
         status.raw = Some(combined);
     }
     Ok(status)
+}
+
+fn sync_codex_auth_to_running_container(
+    profile_id: &str,
+    auth_path: &Path,
+    docker_bin: Option<PathBuf>,
+) -> Result<bool> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let Ok(containers) = read_codex_containers(Some(docker_program.clone())) else {
+        return Ok(false);
+    };
+    if !auth_path.is_file() {
+        return Ok(false);
+    }
+    let artifacts = build_remove_artifacts(profile_id)?;
+    if !containers.iter().any(|item| {
+        item.name == artifacts.container_name && item.state.eq_ignore_ascii_case("running")
+    }) {
+        return Ok(false);
+    }
+
+    let payload =
+        fs::read(auth_path).with_context(|| format!("read codex auth {}", auth_path.display()))?;
+    let command = docker_container_exec_command(
+        docker_program.display().to_string(),
+        &ContainerExecSpec::new(artifacts.container_name.clone())
+            .user("si")
+            .interactive(true)
+            .tty(false)
+            .env("HOME", "/home/si")
+            .env("CODEX_HOME", "/home/si/.codex")
+            .command([
+                "sh",
+                "-lc",
+                "mkdir -p /home/si/.codex && cat > /home/si/.codex/auth.json && chmod 600 /home/si/.codex/auth.json",
+            ]),
+    )?;
+    let output = ProcessRunner.run(
+        &command,
+        &RunOptions { stdin: StdinBehavior::Bytes(payload), ..RunOptions::default() },
+    )?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "refresh running codex auth for {:?} failed: {}",
+            artifacts.container_name,
+            stderr.trim()
+        );
+    }
+    Ok(true)
 }
 
 fn spawn_codex_container_for_profile(
@@ -65199,6 +65325,170 @@ fn read_codex_status_with_retry(
     Err(last_error.unwrap_or_else(|| anyhow!("codex status did not become ready")))
 }
 
+const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
+const CODEX_WARMUP_PRIME_MAX_ATTEMPTS: usize = 3;
+const CODEX_WARMUP_PRIME_STATUS_POLLS: usize = 6;
+const CODEX_WARMUP_PRIME_STATUS_POLL_SECS: u64 = 5;
+
+fn codex_profile_auth_path_from_settings(
+    paths: &SiPaths,
+    settings: &Settings,
+    profile_id: &str,
+) -> Option<PathBuf> {
+    settings.codex.profiles.entries.get(profile_id).map(|entry| {
+        entry
+            .auth_path
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(default_codex_profile_auth_path(paths, profile_id)))
+    })
+}
+
+fn sync_codex_profile_auth_from_settings(
+    paths: &SiPaths,
+    settings: &Settings,
+    profile_id: &str,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let Some(auth_path) = codex_profile_auth_path_from_settings(paths, settings, profile_id) else {
+        return Ok(());
+    };
+    if !auth_path.is_file() {
+        return Ok(());
+    }
+    sync_codex_auth_to_running_container(profile_id, &auth_path, docker_bin)?;
+    Ok(())
+}
+
+fn codex_weekly_quota_is_fully_reset(status: &CodexStatusView) -> bool {
+    status.weekly_left_pct.is_some_and(|value| value >= 100.0)
+}
+
+fn codex_warmup_touch_line_count(attempt: usize) -> usize {
+    match attempt {
+        0 => 128,
+        1 => 256,
+        _ => 384,
+    }
+}
+
+fn codex_warmup_touch_prompt(line_count: usize) -> String {
+    format!(
+        "Print exactly {line_count} lines. Each line must be in the form 'warmup-XXXX alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega', with XXXX counting from 0001 to {line_count:04}."
+    )
+}
+
+fn run_codex_weekly_quota_touch(
+    container_name: &str,
+    docker_program: &Path,
+    attempt: usize,
+) -> Result<()> {
+    let prompt = codex_warmup_touch_prompt(codex_warmup_touch_line_count(attempt));
+    let command = docker_container_exec_command(
+        docker_program.display().to_string(),
+        &ContainerExecSpec::new(container_name)
+            .user("si")
+            .interactive(false)
+            .tty(false)
+            .workdir("/home/si")
+            .env("HOME", "/home/si")
+            .env("CODEX_HOME", "/home/si/.codex")
+            .command([
+                "codex",
+                "exec",
+                "--skip-git-repo-check",
+                "--color",
+                "never",
+                "--dangerously-bypass-approvals-and-sandbox",
+                prompt.as_str(),
+            ]),
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        "codex exec failed".to_owned()
+    };
+    anyhow::bail!(detail);
+}
+
+fn read_codex_status_until_weekly_consumed(
+    container_name: &str,
+    docker_program: &Path,
+) -> Result<CodexStatusView> {
+    let mut last_status: Option<CodexStatusView> = None;
+    for attempt in 0..CODEX_WARMUP_PRIME_STATUS_POLLS {
+        let status = read_codex_status_with_retry(container_name, docker_program)?;
+        if !codex_weekly_quota_is_fully_reset(&status) {
+            return Ok(status);
+        }
+        last_status = Some(status);
+        if attempt + 1 < CODEX_WARMUP_PRIME_STATUS_POLLS {
+            std::thread::sleep(std::time::Duration::from_secs(CODEX_WARMUP_PRIME_STATUS_POLL_SECS));
+        }
+    }
+    last_status.ok_or_else(|| anyhow!("codex weekly quota status was unavailable"))
+}
+
+fn prime_codex_weekly_quota_if_needed(
+    profile_id: &str,
+    container_name: &str,
+    mut status: CodexStatusView,
+    docker_program: &Path,
+) -> Result<(CodexStatusView, bool)> {
+    let mut primed = false;
+    for attempt in 0..CODEX_WARMUP_PRIME_MAX_ATTEMPTS {
+        if !codex_weekly_quota_is_fully_reset(&status) {
+            return Ok((status, primed));
+        }
+        run_codex_weekly_quota_touch(container_name, docker_program, attempt)
+            .with_context(|| format!("prime weekly codex quota for {}", profile_id))?;
+        primed = true;
+        status = read_codex_status_until_weekly_consumed(container_name, docker_program)
+            .with_context(|| format!("refresh weekly codex quota for {}", profile_id))?;
+    }
+
+    if codex_weekly_quota_is_fully_reset(&status) {
+        anyhow::bail!(
+            "weekly quota for {} remained at 100% after {} warmup touch attempts",
+            profile_id,
+            CODEX_WARMUP_PRIME_MAX_ATTEMPTS
+        );
+    }
+
+    Ok((status, primed))
+}
+
+fn codex_warmup_profile_jitter_seconds(profile_id: &str) -> i64 {
+    if profile_id.trim().is_empty() {
+        return 0;
+    }
+    profile_id
+        .bytes()
+        .fold(0_i64, |acc, byte| acc.wrapping_add(i64::from(byte)))
+        .rem_euclid(CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS + 1)
+}
+
+fn codex_warmup_next_due(status: &CodexStatusView, profile_id: &str, now: DateTime<Utc>) -> String {
+    let remaining_minutes =
+        status.weekly_remaining_minutes.or(status.five_hour_remaining_minutes).map(i64::from);
+    let Some(remaining_minutes) = remaining_minutes else {
+        return String::new();
+    };
+    let due_at = now
+        + chrono::Duration::minutes(remaining_minutes)
+        + chrono::Duration::seconds(codex_warmup_profile_jitter_seconds(profile_id));
+    due_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
 fn run_codex_warmup(
     profile: Option<String>,
     all: bool,
@@ -65212,7 +65502,9 @@ fn run_codex_warmup(
     format: OutputFormat,
 ) -> Result<()> {
     let home_dir = home.clone().unwrap_or_else(default_home_dir);
-    let settings = Settings::load(&home_dir, settings_file.as_deref())?;
+    let settings_path =
+        settings_file.clone().unwrap_or_else(|| home_dir.join(".si").join("settings.toml"));
+    let settings = Settings::load(&home_dir, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home_dir, &settings);
     let state_path = match path {
         Some(path) => path,
@@ -65259,11 +65551,26 @@ fn run_codex_warmup(
         ) {
             Ok(action) => {
                 let artifacts = build_remove_artifacts(&profile_id)?;
-                match read_codex_status_with_retry(
-                    &artifacts.container_name,
-                    docker_program.as_path(),
-                ) {
-                    Ok(status) => {
+                let warm_result = (|| -> Result<(CodexStatusView, bool)> {
+                    sync_codex_profile_auth_from_settings(
+                        &paths,
+                        &settings,
+                        &profile_id,
+                        docker_bin.clone(),
+                    )?;
+                    let status = read_codex_status_with_retry(
+                        &artifacts.container_name,
+                        docker_program.as_path(),
+                    )?;
+                    prime_codex_weekly_quota_if_needed(
+                        &profile_id,
+                        &artifacts.container_name,
+                        status,
+                        docker_program.as_path(),
+                    )
+                })();
+                match warm_result {
+                    Ok((status, primed_weekly)) => {
                         let weekly_used_pct =
                             status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
                         entry.last_result = "warmed".to_owned();
@@ -65277,16 +65584,12 @@ fn run_codex_warmup(
                         } else {
                             0.0
                         };
-                        entry.next_due = status
-                            .five_hour_reset
-                            .clone()
-                            .or_else(|| status.weekly_reset.clone())
-                            .unwrap_or_default();
+                        entry.next_due = codex_warmup_next_due(&status, &profile_id, updated_at);
                         entry.failure_count = 0;
                         entry.paused = false;
                         results.push(CodexWarmupRunProfileView {
                             profile_id,
-                            action,
+                            action: if primed_weekly { format!("{action}+primed") } else { action },
                             result: "warmed".to_owned(),
                             error: None,
                             account_email: status.account_email,
@@ -65336,6 +65639,13 @@ fn run_codex_warmup(
         }
     }
 
+    if let Some(next_active) = select_codex_warmup_active_profile(
+        &results,
+        resolve_codex_active_profile_id(&settings).as_deref(),
+    ) {
+        update_codex_active_profile_in_settings(&home_dir, Some(&settings_path), next_active)?;
+    }
+
     state.version = si_rs_warmup::WARMUP_STATE_VERSION;
     state.updated_at = updated_at.to_rfc3339();
     save_warmup_state(&state_path, &state)?;
@@ -65372,9 +65682,57 @@ fn run_codex_warmup(
     Ok(())
 }
 
+fn codex_warmup_profile_is_usable(profile: &CodexWarmupRunProfileView) -> bool {
+    profile.result.eq_ignore_ascii_case("warmed")
+        && profile.five_hour_left_pct.is_some_and(|value| value > 0.0)
+        && profile.weekly_left_pct.is_some_and(|value| value > 0.0)
+}
+
+fn select_codex_warmup_active_profile<'a>(
+    profiles: &'a [CodexWarmupRunProfileView],
+    current_active: Option<&'a str>,
+) -> Option<&'a str> {
+    if let Some(active_profile) =
+        current_active.map(str::trim).filter(|value| !value.is_empty()).filter(|active_profile| {
+            profiles.iter().any(|profile| {
+                profile.profile_id == *active_profile && codex_warmup_profile_is_usable(profile)
+            })
+        })
+    {
+        return Some(active_profile);
+    }
+
+    profiles
+        .iter()
+        .filter(|profile| codex_warmup_profile_is_usable(profile))
+        .max_by(|left, right| {
+            left.weekly_left_pct
+                .partial_cmp(&right.weekly_left_pct)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.five_hour_left_pct
+                        .partial_cmp(&right.five_hour_left_pct)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        })
+        .map(|profile| profile.profile_id.as_str())
+}
+
 fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
+    let runtime_containers =
+        if format.is_none() { Some(read_codex_containers(None)?) } else { None };
+    if format.is_none()
+        && profile.is_none()
+        && runtime_containers
+            .as_deref()
+            .is_some_and(|items| codex_running_container_count(items) == 0)
+    {
+        anyhow::bail!(
+            "no running codex containers found; run `si codex spawn <profile>` or `si codex warmup run --all` first"
+        );
+    }
     let profile_id = resolve_codex_requested_profile(&settings, &paths, profile)?;
     let profile_display_name = settings
         .codex
@@ -65386,12 +65744,14 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
     let container = build_remove_artifacts(&profile_id)?.container_name;
     let legacy_session_name = codex_tmux_session_name(&container);
     let session_name = codex_tmux_session_name_for_profile(&container, profile_display_name);
+    let window_name = codex_tmux_window_name(&profile_id, profile_display_name);
     let launch_command = build_tmux_command_for_container(&container)?;
     let view = CodexTmuxCommandView {
         profile_id,
-        container,
+        container: container.clone(),
         launch_command,
         session_name: session_name.clone(),
+        window_name: window_name.clone(),
     };
     if let Some(format) = format {
         match format {
@@ -65400,6 +65760,7 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
                 print_cli_kv("profile_id", &view.profile_id);
                 print_cli_kv("container", &view.container);
                 print_cli_kv("session_name", &view.session_name);
+                print_cli_kv("window_name", &view.window_name);
                 print_cli_kv("launch_command", &view.launch_command);
             }
         }
@@ -65413,6 +65774,20 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
     } else {
         term.trim()
     };
+    if let Some(items) = runtime_containers.as_deref() {
+        if !codex_container_is_running(items, &container) {
+            kill_tmux_session_if_present(tmux_bin, tmux_term, &session_name);
+            if session_name != legacy_session_name {
+                kill_tmux_session_if_present(tmux_bin, tmux_term, &legacy_session_name);
+            }
+            anyhow::bail!(
+                "codex container {:?} for profile {:?} is not running; run `si codex spawn {}` or `si codex warmup run --all` first",
+                container,
+                view.profile_id,
+                view.profile_id,
+            );
+        }
+    }
     let has_session = tmux_session_exists(tmux_bin, tmux_term, &session_name)?;
     if !has_session {
         if session_name != legacy_session_name
@@ -65435,7 +65810,15 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
         } else {
             let status = std::process::Command::new(tmux_bin)
                 .env("TERM", tmux_term)
-                .args(["new-session", "-d", "-s", &session_name, &view.launch_command])
+                .args([
+                    "new-session",
+                    "-d",
+                    "-s",
+                    &session_name,
+                    "-n",
+                    &window_name,
+                    &view.launch_command,
+                ])
                 .status()
                 .with_context(|| format!("create tmux session {}", session_name))?;
             if !status.success() {
@@ -65443,7 +65826,8 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
             }
         }
     }
-    apply_codex_tmux_session_defaults(tmux_bin, tmux_term, &session_name);
+    apply_codex_tmux_repository_config(tmux_bin, tmux_term);
+    apply_codex_tmux_window_identity(tmux_bin, tmux_term, &session_name, &window_name);
 
     let tmux_env = env::var_os("TMUX");
     let attach_args = if tmux_env.is_some() {
@@ -65494,6 +65878,12 @@ fn sanitize_codex_tmux_profile_label(raw: &str) -> Option<String> {
     if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
 }
 
+fn codex_tmux_window_name(profile_id: &str, profile_display_name: Option<&str>) -> String {
+    profile_display_name
+        .and_then(sanitize_codex_tmux_profile_label)
+        .unwrap_or_else(|| profile_id.trim().to_owned())
+}
+
 fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> Result<bool> {
     let mut command = std::process::Command::new(tmux_bin);
     command
@@ -65505,51 +65895,46 @@ fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> R
     Ok(status.success())
 }
 
-fn apply_codex_tmux_session_defaults(tmux_bin: &str, tmux_term: &str, session_name: &str) {
-    if session_name.trim().is_empty() {
+fn codex_tmux_config_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("repo root from crate manifest")
+        .join("tools")
+        .join("tmux")
+        .join("codex-session.tmux.conf")
+}
+
+fn apply_codex_tmux_repository_config(tmux_bin: &str, tmux_term: &str) {
+    let config_path = codex_tmux_config_path();
+    if !config_path.is_file() {
         return;
     }
     let _ = std::process::Command::new(tmux_bin)
         .env("TERM", tmux_term)
-        .args(["set-option", "-t", session_name, "mouse", "on"])
-        .status();
-    let _ = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(["set-option", "-t", session_name, "history-limit", "200000"])
+        .args(["source-file", &config_path.display().to_string()])
         .status();
 }
 
-fn run_codex_report_parse(format: OutputFormat) -> Result<()> {
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input)?;
-    let payload: CodexReportParseInput = serde_json::from_str(&input)?;
-    let parsed =
-        parse_report_capture(&payload.clean, &payload.raw, payload.prompt_index, payload.ansi);
-    let view = CodexReportParseView {
-        segments: parsed
-            .segments
-            .into_iter()
-            .map(|segment| CodexPromptSegmentView {
-                prompt: segment.prompt,
-                lines: segment.lines,
-                raw: segment.raw,
-            })
-            .collect(),
-        report: parsed.report,
-    };
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("report={}", view.report);
-            for segment in view.segments {
-                println!("prompt={}", segment.prompt);
-                for line in segment.lines {
-                    println!("line={line}");
-                }
-            }
-        }
+fn apply_codex_tmux_window_identity(
+    tmux_bin: &str,
+    tmux_term: &str,
+    session_name: &str,
+    window_name: &str,
+) {
+    if session_name.trim().is_empty() || window_name.trim().is_empty() {
+        return;
     }
-    Ok(())
+    let target_window = format!("{session_name}:0");
+    let target_pane = format!("{session_name}:0.0");
+    let _ = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(["rename-window", "-t", &target_window, window_name])
+        .status();
+    let _ = std::process::Command::new(tmux_bin)
+        .env("TERM", tmux_term)
+        .args(["select-pane", "-t", &target_pane, "-T", window_name])
+        .status();
 }
 
 fn run_codex_respawn_plan(
@@ -65791,7 +66176,7 @@ fn run_warmup_autostart_decision(
     };
     let marker_state = read_warmup_marker_state(autostart_path, disabled_path)?;
     let state = load_warmup_state(state_path)?;
-    let decision = classify_autostart_request(&marker_state, &state);
+    let decision = classify_autostart_request(&marker_state, &state, chrono::Utc::now());
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&decision)?),
         OutputFormat::Text => {

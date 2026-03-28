@@ -179,17 +179,33 @@ pub fn read_marker_state(
 pub fn classify_autostart_request(
     marker_state: &WarmupMarkerState,
     state: &WarmupState,
+    now: DateTime<Utc>,
 ) -> WarmupAutostartDecision {
     if marker_state.disabled {
         return WarmupAutostartDecision { requested: false, reason: "disabled".to_owned() };
     }
-    if marker_state.autostart_present {
+    if !marker_state.autostart_present && state.profiles.is_empty() {
+        return WarmupAutostartDecision { requested: false, reason: "none".to_owned() };
+    }
+
+    if state.profiles.is_empty() {
         return WarmupAutostartDecision { requested: true, reason: "marker".to_owned() };
     }
-    if !state.profiles.is_empty() {
-        return WarmupAutostartDecision { requested: true, reason: "legacy_state".to_owned() };
+
+    let due = state.profiles.values().any(|profile| warmup_profile_is_due(profile, now));
+    if marker_state.autostart_present {
+        return if due {
+            WarmupAutostartDecision { requested: true, reason: "due".to_owned() }
+        } else {
+            WarmupAutostartDecision { requested: false, reason: "scheduled".to_owned() }
+        };
     }
-    WarmupAutostartDecision { requested: false, reason: "none".to_owned() }
+
+    if due {
+        WarmupAutostartDecision { requested: true, reason: "legacy_due".to_owned() }
+    } else {
+        WarmupAutostartDecision { requested: false, reason: "legacy_scheduled".to_owned() }
+    }
 }
 
 pub fn write_autostart_marker(
@@ -335,6 +351,19 @@ impl WarmupProfileState {
             paused: self.paused,
         }
     }
+}
+
+fn warmup_profile_is_due(profile: &WarmupProfileState, now: DateTime<Utc>) -> bool {
+    if profile.paused {
+        return false;
+    }
+    let next_due = profile.next_due.trim();
+    if next_due.is_empty() {
+        return true;
+    }
+    DateTime::parse_from_rfc3339(next_due)
+        .map(|value| value.with_timezone(&Utc) <= now)
+        .unwrap_or(true)
 }
 
 fn default_warmup_dir<E>(home: Option<&Path>, missing_error: E) -> Result<PathBuf, E> {
@@ -581,10 +610,12 @@ mod tests {
     }
 
     #[test]
-    fn classify_autostart_request_prefers_disabled_then_marker_then_legacy() {
+    fn classify_autostart_request_prefers_disabled_then_marker_then_due_schedule() {
+        let now = Utc.with_ymd_and_hms(2030, 3, 19, 12, 0, 0).unwrap();
         let decision = classify_autostart_request(
             &WarmupMarkerState { disabled: true, autostart_present: true },
             &super::WarmupState::default(),
+            now,
         );
         assert_eq!(decision.reason, "disabled");
         assert!(!decision.requested);
@@ -592,14 +623,57 @@ mod tests {
         let decision = classify_autostart_request(
             &WarmupMarkerState { disabled: false, autostart_present: true },
             &super::WarmupState::default(),
+            now,
         );
         assert_eq!(decision.reason, "marker");
         assert!(decision.requested);
 
         let mut state = super::WarmupState::default();
-        state.profiles.insert("ferma".to_owned(), WarmupProfileState::default());
-        let decision = classify_autostart_request(&WarmupMarkerState::default(), &state);
-        assert_eq!(decision.reason, "legacy_state");
+        state.profiles.insert(
+            "ferma".to_owned(),
+            WarmupProfileState {
+                next_due: "2030-03-19T11:55:00Z".to_owned(),
+                ..WarmupProfileState::default()
+            },
+        );
+        let decision = classify_autostart_request(&WarmupMarkerState::default(), &state, now);
+        assert_eq!(decision.reason, "legacy_due");
         assert!(decision.requested);
+
+        state.profiles.insert(
+            "america".to_owned(),
+            WarmupProfileState {
+                next_due: "2030-03-19T12:10:00Z".to_owned(),
+                ..WarmupProfileState::default()
+            },
+        );
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: false, autostart_present: true },
+            &state,
+            now,
+        );
+        assert_eq!(decision.reason, "due");
+        assert!(decision.requested);
+
+        let only_future = super::WarmupState {
+            version: WARMUP_STATE_VERSION,
+            updated_at: String::new(),
+            profiles: [(
+                "cadma".to_owned(),
+                WarmupProfileState {
+                    next_due: "2030-03-19T12:10:00Z".to_owned(),
+                    ..WarmupProfileState::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: false, autostart_present: true },
+            &only_future,
+            now,
+        );
+        assert_eq!(decision.reason, "scheduled");
+        assert!(!decision.requested);
     }
 }

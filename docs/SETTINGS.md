@@ -58,6 +58,7 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
 Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
+When a due Codex profile reports a fully reset weekly quota, warmup issues a small non-interactive Codex request so upstream quota tracking starts immediately, then schedules the next run from the weekly reset with a small jitter.
 
 ### `[codex]`
 Defaults for `si codex` profile-bound container commands.
