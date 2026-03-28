@@ -38,10 +38,24 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "codex",
+        name: "build",
         aliases: &[],
-        category: CommandCategory::Codex,
-        summary: "Manage profile-bound Codex containers and profile registry state.",
+        category: CommandCategory::Build,
+        summary: "Build images, binaries, and release assets.",
+        hidden: false,
+    },
+    CommandSpec {
+        name: "commands",
+        aliases: &[],
+        category: CommandCategory::Meta,
+        summary: "List visible SI root commands.",
+        hidden: false,
+    },
+    CommandSpec {
+        name: "settings",
+        aliases: &[],
+        category: CommandCategory::Runtime,
+        summary: "Show resolved SI settings.",
         hidden: false,
     },
     CommandSpec {
@@ -52,59 +66,10 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "analyze",
-        aliases: &["lint"],
-        category: CommandCategory::Developer,
-        summary: "Run SI static analysis lanes.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "vault",
-        aliases: &["creds"],
-        category: CommandCategory::Runtime,
-        summary: "Vault encryption, secret validation, and secure env flows.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "releasemind",
-        aliases: &["release"],
-        category: CommandCategory::Provider,
-        summary: "Release planning and repository cutover commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "social",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "Social platform bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "image",
         aliases: &["images"],
         category: CommandCategory::Provider,
         summary: "Image pipeline and generation bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "publish",
-        aliases: &["pub"],
-        category: CommandCategory::Provider,
-        summary: "Distribution publishing bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "docker",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Pass through to Docker-oriented helper commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "surf",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Manage the Surf browser runtime bridge.",
         hidden: false,
     },
     CommandSpec {
@@ -115,31 +80,24 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "build",
+        name: "codex",
         aliases: &[],
-        category: CommandCategory::Build,
-        summary: "Build images, binaries, and release assets.",
+        category: CommandCategory::Codex,
+        summary: "Manage profile-bound Codex containers and profile registry state.",
         hidden: false,
     },
     CommandSpec {
-        name: "mintlify",
+        name: "paths",
         aliases: &[],
-        category: CommandCategory::Developer,
-        summary: "Manage docs workflows through Mintlify.",
+        category: CommandCategory::Runtime,
+        summary: "Show resolved SI paths.",
         hidden: false,
     },
     CommandSpec {
-        name: "persona",
+        name: "surf",
         aliases: &[],
-        category: CommandCategory::Profile,
-        summary: "Manage markdown persona profiles.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "skill",
-        aliases: &[],
-        category: CommandCategory::Profile,
-        summary: "Inspect or select coding skills.",
+        category: CommandCategory::Runtime,
+        summary: "Manage the Surf browser runtime bridge.",
         hidden: false,
     },
     CommandSpec {
@@ -157,10 +115,10 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "remote-control",
-        aliases: &["rc"],
+        name: "vault",
+        aliases: &["creds"],
         category: CommandCategory::Runtime,
-        summary: "Expose local terminal sessions through the browser bridge.",
+        summary: "Vault encryption, secret validation, and secure env flows.",
         hidden: false,
     },
     CommandSpec {
@@ -169,13 +127,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         category: CommandCategory::Internal,
         summary: "Internal Fort runtime refresher entrypoint.",
         hidden: true,
-    },
-    CommandSpec {
-        name: "test",
-        aliases: &[],
-        category: CommandCategory::Developer,
-        summary: "Run grouped SI test lanes.",
-        hidden: false,
     },
 ];
 
@@ -211,9 +162,8 @@ mod tests {
 
     #[test]
     fn aliases_resolve_to_primary_command() {
-        assert_eq!(find_root_command("release").unwrap().name, "releasemind");
         assert_eq!(find_root_command("creds").unwrap().name, "vault");
-        assert_eq!(find_root_command("rc").unwrap().name, "remote-control");
+        assert_eq!(find_root_command("images").unwrap().name, "image");
         assert_eq!(find_root_command("orbit").unwrap().name, "orbit");
     }
 }

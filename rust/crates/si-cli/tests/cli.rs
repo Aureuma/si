@@ -179,8 +179,14 @@ fn surf_wrapper_marks_child_process_as_wrapped() {
 
 #[test]
 fn google_youtube_help_paths_render_without_flag_collisions() {
-    cargo_bin().args(["google", "youtube", "caption", "upload", "--help"]).assert().success();
-    cargo_bin().args(["google", "youtube", "support", "categories", "--help"]).assert().success();
+    cargo_bin()
+        .args(["orbit", "google", "youtube", "caption", "upload", "--help"])
+        .assert()
+        .success();
+    cargo_bin()
+        .args(["orbit", "google", "youtube", "support", "categories", "--help"])
+        .assert()
+        .success();
 }
 
 #[test]
@@ -228,7 +234,16 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "support", "categories", "--support-region", "US", "--home"])
+        .args([
+            "orbit",
+            "google",
+            "youtube",
+            "support",
+            "categories",
+            "--support-region",
+            "US",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -1255,7 +1270,7 @@ fn fort_config_set_and_show_round_trip_si_settings() {
     let parsed: toml::Value = toml::from_str(&settings_source).expect("parse settings");
     assert_eq!(parsed["fort"]["repo"].as_str().expect("repo"), "/tmp/fort-repo");
     assert_eq!(parsed["fort"]["bin"].as_str().expect("bin"), "/tmp/fort-bin");
-    assert_eq!(parsed["fort"]["build"].as_bool().expect("build"), true);
+    assert!(parsed["fort"]["build"].as_bool().expect("build"));
 
     let output = cargo_bin()
         .args([
@@ -1768,7 +1783,17 @@ fn build_installer_smoke_homebrew_runs_fake_brew() {
 fn aws_doctor_public_runs_rust_probe() {
     let base_url = spawn_single_response_server("200 OK", "<ok/>");
     let stdout = cargo_bin()
-        .args(["aws", "doctor", "--public", "true", "--base-url", &base_url, "--format", "json"])
+        .args([
+            "orbit",
+            "aws",
+            "doctor",
+            "--public",
+            "true",
+            "--base-url",
+            &base_url,
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -1788,7 +1813,7 @@ fn apple_appstore_doctor_public_runs_rust_probe() {
         spawn_single_response_server("200 OK", "zip")
     );
     let stdout = cargo_bin()
-        .args(["apple", "store", "doctor", "--public", "true", "--format", "json"])
+        .args(["orbit", "apple", "store", "doctor", "--public", "true", "--format", "json"])
         .env("SI_RUST_APPLE_APPSTORE_PUBLIC_PROBE_URL", &url)
         .assert()
         .success()
@@ -1805,7 +1830,17 @@ fn apple_appstore_doctor_public_runs_rust_probe() {
 fn oci_doctor_public_runs_rust_probe() {
     let base_url = spawn_single_response_server("200 OK", "{\"items\":[]}");
     let stdout = cargo_bin()
-        .args(["oci", "doctor", "--public", "true", "--base-url", &base_url, "--format", "json"])
+        .args([
+            "orbit",
+            "oci",
+            "doctor",
+            "--public",
+            "true",
+            "--base-url",
+            &base_url,
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -1972,7 +2007,7 @@ vault_prefix = "google_core"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["google", "youtube", "context", "current", "--home"])
+        .args(["orbit", "google", "youtube", "context", "current", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2034,7 +2069,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "auth", "status", "--home"])
+        .args(["orbit", "google", "youtube", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2107,7 +2142,9 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "search", "list", "--query", "music", "--all", "--home"])
+        .args([
+            "orbit", "google", "youtube", "search", "list", "--query", "music", "--all", "--home",
+        ])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2165,7 +2202,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "support", "languages", "--home"])
+        .args(["orbit", "google", "youtube", "support", "languages", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2228,7 +2265,7 @@ default_language_code = "en"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "doctor", "--home"])
+        .args(["orbit", "google", "youtube", "doctor", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2286,7 +2323,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "channel", "list", "--id", "c1", "--home"])
+        .args(["orbit", "google", "youtube", "channel", "list", "--id", "c1", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2344,7 +2381,7 @@ default_region_code = "US"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "video", "list", "--chart", "mostPopular", "--home"])
+        .args(["orbit", "google", "youtube", "video", "list", "--chart", "mostPopular", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -2402,7 +2439,16 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "channel", "update", "--body", "{\"id\":\"c1\"}", "--home"])
+        .args([
+            "orbit",
+            "google",
+            "youtube",
+            "channel",
+            "update",
+            "--body",
+            "{\"id\":\"c1\"}",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -2460,7 +2506,10 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "video", "rate", "--id", "v1", "--rating", "like", "--home"])
+        .args([
+            "orbit", "google", "youtube", "video", "rate", "--id", "v1", "--rating", "like",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -2520,6 +2569,7 @@ project_id = "yt-core"
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "playlist",
@@ -2591,6 +2641,7 @@ project_id = "yt-core"
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "playlist-item",
@@ -2659,7 +2710,16 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "subscription", "create", "--channel-id", "chan9", "--home"])
+        .args([
+            "orbit",
+            "google",
+            "youtube",
+            "subscription",
+            "create",
+            "--channel-id",
+            "chan9",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--access-token", "token-123", "--json"])
         .assert()
@@ -2718,6 +2778,7 @@ project_id = "yt-core"
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "comment",
@@ -2759,6 +2820,7 @@ fn google_youtube_report_usage_json_reads_log_file() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "report",
@@ -2830,6 +2892,7 @@ project_id = "yt-core"
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "live",
@@ -2899,6 +2962,7 @@ project_id = "yt-core"
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "google",
             "youtube",
             "live",
@@ -2981,7 +3045,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "video", "upload", "--file"])
+        .args(["orbit", "google", "youtube", "video", "upload", "--file"])
         .arg(&upload_path)
         .args(["--title", "Launch", "--home"])
         .arg(home.path())
@@ -3041,7 +3105,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "caption", "download", "--id", "cap1", "--output"])
+        .args(["orbit", "google", "youtube", "caption", "download", "--id", "cap1", "--output"])
         .arg(&output_path)
         .args(["--format", "vtt", "--home"])
         .arg(home.path())
@@ -3109,7 +3173,7 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "thumbnail", "set", "--video-id", "vthumb", "--file"])
+        .args(["orbit", "google", "youtube", "thumbnail", "set", "--video-id", "vthumb", "--file"])
         .arg(&file_path)
         .args(["--home"])
         .arg(home.path())
@@ -3168,7 +3232,16 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "playlist", "list", "--channel-id", "chan-1", "--home"])
+        .args([
+            "orbit",
+            "google",
+            "youtube",
+            "playlist",
+            "list",
+            "--channel-id",
+            "chan-1",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -3225,7 +3298,16 @@ project_id = "yt-core"
     });
 
     let output = cargo_bin()
-        .args(["google", "youtube", "playlist-item", "list", "--playlist-id", "pl-1", "--home"])
+        .args([
+            "orbit",
+            "google",
+            "youtube",
+            "playlist-item",
+            "list",
+            "--playlist-id",
+            "pl-1",
+            "--home",
+        ])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_CORE_YOUTUBE_API_KEY", "key-123")
@@ -3264,7 +3346,7 @@ default_language_code = "en-US"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["google", "play", "context", "current", "--home"])
+        .args(["orbit", "google", "play", "context", "current", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
@@ -3355,7 +3437,7 @@ default_package_name = "com.acme.app"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "auth", "status", "--home"])
+        .args(["orbit", "google", "play", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--verify-package", "com.acme.app"])
         .args(["--json"])
@@ -3451,7 +3533,7 @@ default_language_code = "en-US"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "listing", "get", "--home"])
+        .args(["orbit", "google", "play", "listing", "get", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
@@ -3523,7 +3605,7 @@ developer_account_id = "dev-123"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "app", "create", "--title", "Acme", "--home"])
+        .args(["orbit", "google", "play", "app", "create", "--title", "Acme", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
@@ -3615,7 +3697,7 @@ default_language_code = "en-US"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "asset", "upload", "--type", "phone", "--file"])
+        .args(["orbit", "google", "play", "asset", "upload", "--type", "phone", "--file"])
         .arg(&shot_path)
         .args(["--home"])
         .arg(home.path())
@@ -3706,7 +3788,7 @@ default_package_name = "com.acme.app"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "release", "status", "--track", "internal", "--home"])
+        .args(["orbit", "google", "play", "release", "status", "--track", "internal", "--home"])
         .arg(home.path())
         .args(["--json"])
         .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
@@ -3799,7 +3881,7 @@ default_package_name = "com.acme.app"
     });
 
     let output = cargo_bin()
-        .args(["google", "play", "apply", "--metadata-dir"])
+        .args(["orbit", "google", "play", "apply", "--metadata-dir"])
         .arg(&metadata_dir)
         .args(["--home"])
         .arg(home.path())
@@ -4038,7 +4120,7 @@ fn wrapper_help_and_paths_text_support_forced_color_palette() {
     let paths_output = String::from_utf8(
         cargo_bin()
             .env("SI_CLI_COLOR", "always")
-            .args(["paths", "show", "--home"])
+            .args(["paths", "--home"])
             .arg(home.path())
             .assert()
             .success()
@@ -4231,6 +4313,63 @@ fn legacy_hyphenated_aliases_still_work_for_help_paths() {
 }
 
 #[test]
+fn help_output_describes_github_release_create_tag_behavior() {
+    let release_help = cargo_bin()
+        .args(["orbit", "github", "release", "--help"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let release_help = String::from_utf8_lossy(&release_help);
+    assert!(release_help.contains("Manage GitHub releases and release assets."));
+    assert!(release_help.contains("create"));
+
+    let create_help = cargo_bin()
+        .args(["orbit", "github", "release", "create", "--help"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let create_help = String::from_utf8_lossy(&create_help);
+    assert!(create_help.contains("Create a GitHub release."));
+    assert!(create_help.contains("Create a GitHub release."));
+    assert!(create_help.contains(
+        "Target branch or commit SHA. Required when the tag does not already exist on the remote."
+    ));
+    assert!(create_help.contains("Release tag name, for example v0.55.10."));
+}
+
+#[test]
+fn singleton_root_commands_run_without_placeholder_subcommands() {
+    let commands_help = String::from_utf8(
+        cargo_bin().args(["commands", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 commands help");
+    assert!(commands_help.contains("List visible SI root commands."));
+    assert!(commands_help.contains("commands [OPTIONS] [COMMAND]"));
+    assert!(commands_help.contains("list  List visible SI root commands."));
+    assert!(!commands_help.contains("Commandses"));
+
+    let settings_help = String::from_utf8(
+        cargo_bin().args(["settings", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 settings help");
+    assert!(settings_help.contains("Show resolved SI settings."));
+    assert!(settings_help.contains("settings [OPTIONS] [COMMAND]"));
+    assert!(settings_help.contains("show  Show resolved SI settings."));
+
+    let paths_help = String::from_utf8(
+        cargo_bin().args(["paths", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 paths help");
+    assert!(paths_help.contains("Show resolved SI paths."));
+    assert!(paths_help.contains("paths [OPTIONS] [COMMAND]"));
+    assert!(paths_help.contains("show  Show resolved SI paths."));
+}
+
+#[test]
 fn codex_status_command_is_not_available() {
     let output =
         cargo_bin().args(["codex", "status"]).assert().failure().get_output().stderr.clone();
@@ -4312,8 +4451,14 @@ fn help_json_lists_known_root_commands() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let commands = parsed["commands"].as_array().expect("commands array should be present");
 
+    assert!(commands.iter().any(|entry| entry["name"] == "build"));
+    assert!(commands.iter().any(|entry| entry["name"] == "commands"));
+    assert!(commands.iter().any(|entry| entry["name"] == "settings"));
     assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
+    assert!(commands.iter().any(|entry| entry["name"] == "paths"));
+    assert!(commands.iter().any(|entry| entry["name"] == "vault"));
+    assert!(commands.iter().any(|entry| entry["name"] == "fort"));
     assert!(!commands.iter().any(|entry| entry["name"] == "github"));
     assert!(!commands.iter().any(|entry| entry["name"] == "analyze"));
     assert!(!commands.iter().any(|entry| entry["name"] == "publish"));
@@ -4324,9 +4469,35 @@ fn help_json_lists_known_root_commands() {
 }
 
 #[test]
+fn help_json_root_command_order_matches_public_cli_order() {
+    let output = cargo_bin()
+        .args(["help", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let commands = parsed["commands"].as_array().expect("commands array should be present");
+    let names = commands
+        .iter()
+        .map(|entry| entry["name"].as_str().expect("command name"))
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        names,
+        vec![
+            "version", "help", "build", "commands", "settings", "orbit", "image", "dyad", "codex",
+            "paths", "surf", "viva", "fort", "vault"
+        ]
+    );
+}
+
+#[test]
 fn help_json_for_specific_command_includes_aliases() {
     let output = cargo_bin()
-        .args(["help", "remote-control", "--format", "json"])
+        .args(["help", "creds", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -4337,8 +4508,54 @@ fn help_json_for_specific_command_includes_aliases() {
     let commands = parsed["commands"].as_array().expect("commands array should be present");
 
     assert_eq!(commands.len(), 1);
-    assert_eq!(commands[0]["name"], "remote-control");
-    assert_eq!(commands[0]["aliases"][0], "rc");
+    assert_eq!(commands[0]["name"], "vault");
+    assert_eq!(commands[0]["aliases"][0], "creds");
+}
+
+#[test]
+fn commands_root_defaults_to_list_output() {
+    let output = cargo_bin()
+        .args(["commands", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let commands = parsed["commands"].as_array().expect("commands array should be present");
+    assert!(commands.iter().any(|entry| entry["name"] == "commands"));
+    assert!(commands.iter().any(|entry| entry["name"] == "settings"));
+    assert!(commands.iter().any(|entry| entry["name"] == "paths"));
+}
+
+#[test]
+fn settings_and_paths_roots_default_to_show() {
+    let home = tempdir().expect("tempdir");
+
+    let settings_output = cargo_bin()
+        .args(["settings", "--format", "json", "--home"])
+        .arg(home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let settings: Value = serde_json::from_slice(&settings_output).expect("json settings output");
+    assert_eq!(settings["schema_version"], 1);
+    assert_eq!(settings["paths"]["root"], path_string(home.path().join(".si")));
+
+    let paths_output = cargo_bin()
+        .args(["paths", "--format", "json", "--home"])
+        .arg(home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let paths: Value = serde_json::from_slice(&paths_output).expect("json paths output");
+    assert_eq!(paths["root"], path_string(home.path().join(".si")));
+    assert_eq!(paths["codex_profiles_dir"], path_string(home.path().join(".si/codex/profiles")));
 }
 
 #[test]
@@ -4656,7 +4873,7 @@ owner = "OpsOrg"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["github", "context", "list", "--home"])
+        .args(["orbit", "github", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4698,7 +4915,7 @@ auth_mode = "oauth"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["github", "context", "current", "--home"])
+        .args(["orbit", "github", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4737,7 +4954,7 @@ auth_mode = "oauth"
 
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
-        .args(["github", "auth", "status", "--home"])
+        .args(["orbit", "github", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4779,7 +4996,7 @@ owner = "Aureuma"
         .env("GITHUB_CORE_APP_ID", "42")
         .env("GITHUB_CORE_APP_PRIVATE_KEY_PEM", "-----BEGIN PRIVATE KEY-----abc")
         .env("GITHUB_CORE_INSTALLATION_ID", "99")
-        .args(["github", "auth", "status", "--home"])
+        .args(["orbit", "github", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -4817,6 +5034,7 @@ fn github_release_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "release",
             "list",
@@ -4878,6 +5096,7 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
     let output = cargo_bin()
         .env("GITHUB_APP_PRIVATE_KEY_PEM", app_key)
         .args([
+            "orbit",
             "github",
             "release",
             "get",
@@ -4908,21 +5127,40 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
 
 #[test]
 fn github_release_create_json_mutates_via_api_with_oauth() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(request.starts_with("POST /repos/Aureuma/si/releases HTTP/1.1\r\n"));
-        assert!(request.contains("\"tag_name\":\"v1.2.4\""));
-        assert!(request.contains("\"name\":\"Release 1.2.4\""));
-        assert!(request.contains("\"draft\":true"));
-        http_json_response(
-            "201 Created",
-            &[("x-github-request-id", "req_gh_release_create")],
-            r#"{"id":102,"tag_name":"v1.2.4","name":"Release 1.2.4"}"#,
-        )
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(
+                    request.starts_with("GET /repos/Aureuma/si/git/ref/tags/v1.2.4 HTTP/1.1\r\n")
+                );
+                http_json_response(
+                    "200 OK",
+                    &[("x-github-request-id", "req_gh_tag_ref_get")],
+                    r#"{"ref":"refs/tags/v1.2.4","object":{"sha":"abc123"}}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with("POST /repos/Aureuma/si/releases HTTP/1.1\r\n"));
+                assert!(request.contains("\"tag_name\":\"v1.2.4\""));
+                assert!(request.contains("\"name\":\"Release 1.2.4\""));
+                assert!(request.contains("\"draft\":true"));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_release_create")],
+                    r#"{"id":102,"tag_name":"v1.2.4","name":"Release 1.2.4"}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
     });
 
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "release",
             "create",
@@ -4948,6 +5186,116 @@ fn github_release_create_json_mutates_via_api_with_oauth() {
     assert_eq!(parsed["status_code"], 201);
     assert_eq!(parsed["request_id"], "req_gh_release_create");
     assert_eq!(parsed["data"]["tag_name"], "v1.2.4");
+    server.join();
+}
+
+#[test]
+fn github_release_create_json_creates_missing_tag_ref_before_release() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(3, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => http_json_response(
+                "404 Not Found",
+                &[("x-github-request-id", "req_gh_tag_ref_missing")],
+                r#"{"message":"Not Found"}"#,
+            ),
+            1 => {
+                assert!(request.starts_with("POST /repos/Aureuma/si/git/refs HTTP/1.1\r\n"));
+                assert!(request.contains("\"ref\":\"refs/tags/v1.2.5\""));
+                assert!(request.contains("\"sha\":\"abc123def456\""));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_tag_ref_create")],
+                    r#"{"ref":"refs/tags/v1.2.5"}"#,
+                )
+            }
+            2 => {
+                assert!(request.starts_with("POST /repos/Aureuma/si/releases HTTP/1.1\r\n"));
+                assert!(request.contains("\"tag_name\":\"v1.2.5\""));
+                assert!(request.contains("\"target_commitish\":\"abc123def456\""));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_release_create")],
+                    r#"{"id":103,"tag_name":"v1.2.5","name":"Release 1.2.5"}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "create",
+            "Aureuma/si",
+            "--tag",
+            "v1.2.5",
+            "--title",
+            "Release 1.2.5",
+            "--target",
+            "abc123def456",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_release_create");
+    assert_eq!(parsed["data"]["tag_name"], "v1.2.5");
+    server.join();
+}
+
+#[test]
+fn github_release_create_requires_target_when_tag_is_missing() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/git/ref/tags/v1.2.6 HTTP/1.1\r\n"));
+        http_json_response(
+            "404 Not Found",
+            &[("x-github-request-id", "req_gh_tag_ref_missing")],
+            r#"{"message":"Not Found"}"#,
+        )
+    });
+
+    let assert = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "create",
+            "Aureuma/si",
+            "--tag",
+            "v1.2.6",
+            "--title",
+            "Release 1.2.6",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(
+        stderr.contains(
+            "github tag v1.2.6 does not exist; pass --target <sha> or create the tag first"
+        ),
+        "stderr was: {stderr}"
+    );
+
     server.join();
 }
 
@@ -4995,6 +5343,7 @@ fn github_release_upload_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "release",
             "upload",
@@ -5053,6 +5402,7 @@ fn github_release_delete_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "release",
             "delete",
@@ -5111,6 +5461,7 @@ fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "repo",
@@ -5151,6 +5502,7 @@ fn github_secret_repo_delete_json_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "repo",
@@ -5205,6 +5557,7 @@ fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "env",
@@ -5242,6 +5595,7 @@ fn github_secret_env_delete_json_mutates_with_oauth() {
     cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "env",
@@ -5295,6 +5649,7 @@ fn github_secret_org_set_json_encrypts_and_mutates_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "org",
@@ -5333,6 +5688,7 @@ fn github_secret_org_delete_json_mutates_with_oauth() {
     cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "secret",
             "org",
@@ -5366,6 +5722,7 @@ fn github_repo_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "list",
@@ -5404,6 +5761,7 @@ fn github_repo_get_json_fetches_repo_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "get",
@@ -5443,6 +5801,7 @@ fn github_repo_create_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "create",
@@ -5486,6 +5845,7 @@ fn github_repo_update_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "update",
@@ -5528,6 +5888,7 @@ fn github_repo_archive_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "archive",
@@ -5562,6 +5923,7 @@ fn github_repo_delete_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "repo",
             "delete",
@@ -5600,6 +5962,7 @@ fn github_project_list_json_fetches_from_graphql_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "list",
@@ -5638,6 +6001,7 @@ fn github_project_get_json_fetches_from_graphql_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "get",
@@ -5675,6 +6039,7 @@ fn github_project_fields_json_fetches_from_graphql_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "fields",
@@ -5714,6 +6079,7 @@ fn github_project_items_json_fetches_from_graphql_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "items",
@@ -5754,6 +6120,7 @@ fn github_project_update_json_mutates_via_graphql_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "update",
@@ -5805,6 +6172,7 @@ fn github_project_item_add_json_resolves_issue_and_mutates() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-add",
@@ -5854,6 +6222,7 @@ fn github_project_item_set_json_resolves_field_name_and_mutates() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-set",
@@ -5905,6 +6274,7 @@ fn github_project_item_clear_json_resolves_field_name_and_mutates() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-clear",
@@ -5946,6 +6316,7 @@ fn github_project_item_archive_json_mutates_via_graphql() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-archive",
@@ -5984,6 +6355,7 @@ fn github_project_item_unarchive_json_mutates_via_graphql() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-unarchive",
@@ -6022,6 +6394,7 @@ fn github_project_item_delete_json_mutates_via_graphql() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "project",
             "item-delete",
@@ -6060,6 +6433,7 @@ fn github_workflow_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "list",
@@ -6098,6 +6472,7 @@ fn github_workflow_runs_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "runs",
@@ -6138,6 +6513,7 @@ fn github_workflow_run_get_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "run",
@@ -6181,6 +6557,7 @@ fn github_workflow_dispatch_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "dispatch",
@@ -6218,6 +6595,7 @@ fn github_workflow_run_cancel_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "run",
@@ -6252,6 +6630,7 @@ fn github_workflow_run_rerun_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "run",
@@ -6300,6 +6679,7 @@ fn github_workflow_watch_json_waits_until_completed_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "watch",
@@ -6345,6 +6725,7 @@ fn github_issue_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "list",
@@ -6385,6 +6766,7 @@ fn github_issue_get_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "get",
@@ -6425,6 +6807,7 @@ fn github_issue_create_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "create",
@@ -6467,6 +6850,7 @@ fn github_issue_comment_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "comment",
@@ -6508,6 +6892,7 @@ fn github_issue_close_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "close",
@@ -6546,6 +6931,7 @@ fn github_issue_reopen_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "issue",
             "reopen",
@@ -6586,6 +6972,7 @@ fn github_pr_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "pr",
             "list",
@@ -6626,6 +7013,7 @@ fn github_pr_get_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "pr",
             "get",
@@ -6666,6 +7054,7 @@ fn github_pr_create_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "pr",
             "create",
@@ -6710,6 +7099,7 @@ fn github_pr_comment_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "pr",
             "comment",
@@ -6751,6 +7141,7 @@ fn github_pr_merge_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "pr",
             "merge",
@@ -6793,6 +7184,7 @@ fn github_branch_list_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "list",
@@ -6833,6 +7225,7 @@ fn github_branch_get_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "get",
@@ -6887,6 +7280,7 @@ fn github_branch_create_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "create",
@@ -6925,6 +7319,7 @@ fn github_branch_delete_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "delete",
@@ -6967,6 +7362,7 @@ fn github_branch_protect_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "protect",
@@ -7018,6 +7414,7 @@ fn github_branch_unprotect_json_mutates_via_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "branch",
             "unprotect",
@@ -7046,7 +7443,7 @@ fn github_branch_unprotect_json_mutates_via_api_with_oauth() {
 fn github_git_credential_get_reads_stdin_and_prints_token() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
-        .args(["github", "git", "credential", "get", "--auth-mode", "oauth"])
+        .args(["orbit", "github", "git", "credential", "get", "--auth-mode", "oauth"])
         .write_stdin("protocol=https\nhost=github.com\npath=Aureuma/si.git\n\n")
         .assert()
         .success()
@@ -7073,6 +7470,7 @@ fn github_raw_get_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "raw",
             "--method",
@@ -7116,6 +7514,7 @@ fn github_graphql_query_json_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "graphql",
             "--query",
@@ -7155,6 +7554,7 @@ fn github_workflow_logs_raw_fetches_from_api_with_oauth() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "workflow",
             "logs",
@@ -7205,7 +7605,7 @@ sandbox_key = "sk_test_ops"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["stripe", "context", "list", "--home"])
+        .args(["orbit", "stripe", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7246,7 +7646,7 @@ sandbox_key = "sk_test_core"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["stripe", "context", "current", "--home"])
+        .args(["orbit", "stripe", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7280,7 +7680,7 @@ default_env = "sandbox"
 
     let output = cargo_bin()
         .env("SI_STRIPE_API_KEY", "sk_test_shared")
-        .args(["stripe", "auth", "status", "--account", "acct_123", "--home"])
+        .args(["orbit", "stripe", "auth", "status", "--account", "acct_123", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7311,7 +7711,7 @@ fn stripe_raw_json_fetches_from_api() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "raw"])
+        .args(["orbit", "stripe", "raw"])
         .args([
             "--account",
             "acct_123",
@@ -7354,7 +7754,7 @@ fn stripe_report_revenue_summary_json_aggregates_transactions() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "report", "revenue-summary"])
+        .args(["orbit", "stripe", "report", "revenue-summary"])
         .args([
             "--api-key",
             "sk_test_core",
@@ -7397,7 +7797,7 @@ fn stripe_object_list_json_fetches_list() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "object", "list", "product"])
+        .args(["orbit", "stripe", "object", "list", "product"])
         .args([
             "--api-key",
             "sk_test_core",
@@ -7433,7 +7833,7 @@ fn stripe_object_get_json_fetches_single_object() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "object", "get", "product", "prod_123"])
+        .args(["orbit", "stripe", "object", "get", "product", "prod_123"])
         .args(["--api-key", "sk_test_core", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
@@ -7463,7 +7863,7 @@ fn stripe_object_create_json_posts_object() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "object", "create", "product"])
+        .args(["orbit", "stripe", "object", "create", "product"])
         .args([
             "--api-key",
             "sk_test_core",
@@ -7502,7 +7902,7 @@ fn stripe_object_update_json_posts_object() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "object", "update", "product", "prod_123"])
+        .args(["orbit", "stripe", "object", "update", "product", "prod_123"])
         .args([
             "--api-key",
             "sk_test_core",
@@ -7540,7 +7940,7 @@ fn stripe_object_delete_json_deletes_object() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "object", "delete", "product", "prod_123"])
+        .args(["orbit", "stripe", "object", "delete", "product", "prod_123"])
         .args([
             "--api-key",
             "sk_test_core",
@@ -7582,7 +7982,7 @@ fn stripe_sync_plan_json_detects_missing_sandbox_product() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "sync", "live-to-sandbox", "plan"])
+        .args(["orbit", "stripe", "sync", "live-to-sandbox", "plan"])
         .args([
             "--live-api-key",
             "sk_live",
@@ -7637,7 +8037,7 @@ fn stripe_sync_apply_json_creates_missing_sandbox_product() {
     });
 
     let output = cargo_bin()
-        .args(["stripe", "sync", "live-to-sandbox", "apply"])
+        .args(["orbit", "stripe", "sync", "live-to-sandbox", "apply"])
         .args([
             "--live-api-key",
             "sk_live",
@@ -7689,7 +8089,7 @@ organization_id = "org_123"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["workos", "context", "list", "--home"])
+        .args(["orbit", "workos", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7728,7 +8128,7 @@ organization_id = "org_123"
 
     let output = cargo_bin()
         .env("CORE_PROD", "sk_workos_prod")
-        .args(["workos", "context", "current", "--home"])
+        .args(["orbit", "workos", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7768,7 +8168,7 @@ organization_id = "org_123"
     let output = cargo_bin()
         .env("CORE_PROD", "sk_workos_prod")
         .env("CORE_CLIENT", "client_123")
-        .args(["workos", "auth", "status", "--home"])
+        .args(["orbit", "workos", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -7798,6 +8198,7 @@ fn workos_doctor_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "workos",
             "doctor",
             "--base-url",
@@ -7834,6 +8235,7 @@ fn workos_raw_json_fetches_with_headers_and_query_params() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "workos",
             "raw",
             "--base-url",
@@ -7877,6 +8279,7 @@ fn workos_organization_list_json_fetches_from_api() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "workos",
             "organization",
             "list",
@@ -7919,6 +8322,7 @@ fn workos_invitation_revoke_json_posts_empty_body() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "workos",
             "invitation",
             "revoke",
@@ -7967,7 +8371,7 @@ staging_zone_id = "zone_staging"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["cloudflare", "context", "list", "--home"])
+        .args(["orbit", "cloudflare", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -8006,7 +8410,7 @@ prod_zone_id = "zone_prod"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["cloudflare", "context", "current", "--home"])
+        .args(["orbit", "cloudflare", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -8037,7 +8441,7 @@ fn cloudflare_auth_status_json_verifies_token() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "auth", "status"])
+        .args(["orbit", "cloudflare", "auth", "status"])
         .args(["--account", "core"])
         .args(["--env", "prod"])
         .args(["--zone-id", "zone_prod"])
@@ -8073,7 +8477,7 @@ fn cloudflare_raw_json_fetches_with_query_params() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "raw"])
+        .args(["orbit", "cloudflare", "raw"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8112,7 +8516,7 @@ fn cloudflare_raw_text_prints_body_for_raw_mode() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "raw"])
+        .args(["orbit", "cloudflare", "raw"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8153,7 +8557,7 @@ fn cloudflare_analytics_http_json_fetches_zone_dashboard() {
         });
 
     let output = cargo_bin()
-        .args(["cloudflare", "analytics", "http"])
+        .args(["orbit", "cloudflare", "analytics", "http"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8191,7 +8595,7 @@ fn cloudflare_report_billing_summary_json_fetches_account_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "report", "billing-summary"])
+        .args(["orbit", "cloudflare", "report", "billing-summary"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8257,7 +8661,7 @@ fn cloudflare_smoke_json_runs_public_checks_and_skips_account_scoped_ones() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "smoke"])
+        .args(["orbit", "cloudflare", "smoke"])
         .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
@@ -8290,7 +8694,7 @@ fn cloudflare_logs_received_json_fetches_zone_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "received"])
+        .args(["orbit", "cloudflare", "logs", "received"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8328,7 +8732,7 @@ fn cloudflare_logs_job_list_json_fetches_zone_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "job", "list"])
+        .args(["orbit", "cloudflare", "logs", "job", "list"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8364,7 +8768,7 @@ fn cloudflare_logs_job_get_json_fetches_zone_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "job", "get", "job_123"])
+        .args(["orbit", "cloudflare", "logs", "job", "get", "job_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8402,7 +8806,7 @@ fn cloudflare_logs_job_create_json_posts_body() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "job", "create"])
+        .args(["orbit", "cloudflare", "logs", "job", "create"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8443,7 +8847,7 @@ fn cloudflare_logs_job_update_json_patches_body() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "job", "update", "job_123"])
+        .args(["orbit", "cloudflare", "logs", "job", "update", "job_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8480,7 +8884,7 @@ fn cloudflare_logs_job_delete_json_deletes_job() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "logs", "job", "delete", "job_123"])
+        .args(["orbit", "cloudflare", "logs", "job", "delete", "job_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8516,7 +8920,7 @@ fn cloudflare_zone_list_json_fetches_global_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "zone", "list"])
+        .args(["orbit", "cloudflare", "zone", "list"])
         .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
@@ -8545,7 +8949,7 @@ fn cloudflare_dns_create_json_posts_zone_body() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "dns", "create"])
+        .args(["orbit", "cloudflare", "dns", "create"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8587,7 +8991,7 @@ fn cloudflare_email_address_get_json_fetches_account_endpoint() {
         });
 
     let output = cargo_bin()
-        .args(["cloudflare", "email", "address", "get", "addr_123"])
+        .args(["orbit", "cloudflare", "email", "address", "get", "addr_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8622,7 +9026,7 @@ fn cloudflare_token_delete_json_deletes_global_resource() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "token", "delete", "tok_123"])
+        .args(["orbit", "cloudflare", "token", "delete", "tok_123"])
         .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--force", "--json"])
         .assert()
         .success()
@@ -8650,7 +9054,7 @@ fn cloudflare_ruleset_update_json_patches_zone_resource() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "ruleset", "update", "rule_123"])
+        .args(["orbit", "cloudflare", "ruleset", "update", "rule_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8690,7 +9094,7 @@ fn cloudflare_workers_script_update_json_puts_account_resource() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "workers", "script", "update", "script_123"])
+        .args(["orbit", "cloudflare", "workers", "script", "update", "script_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8728,7 +9132,7 @@ fn cloudflare_pages_project_create_json_posts_account_resource() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "pages", "project", "create"])
+        .args(["orbit", "cloudflare", "pages", "project", "create"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8765,7 +9169,7 @@ fn cloudflare_queue_list_json_fetches_account_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "queue", "list"])
+        .args(["orbit", "cloudflare", "queue", "list"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8802,7 +9206,7 @@ fn cloudflare_waf_update_json_patches_zone_resource() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "waf", "update", "waf_123"])
+        .args(["orbit", "cloudflare", "waf", "update", "waf_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8836,7 +9240,7 @@ fn cloudflare_r2_bucket_get_json_fetches_account_endpoint() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "r2", "bucket", "get", "bucket_123"])
+        .args(["orbit", "cloudflare", "r2", "bucket", "get", "bucket_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8869,7 +9273,7 @@ fn cloudflare_d1_db_create_json_posts_account_resource() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "d1", "db", "create"])
+        .args(["orbit", "cloudflare", "d1", "db", "create"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8906,7 +9310,7 @@ fn cloudflare_kv_namespace_delete_json_deletes_account_resource() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "kv", "namespace", "delete", "ns_123"])
+        .args(["orbit", "cloudflare", "kv", "namespace", "delete", "ns_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8939,7 +9343,7 @@ fn cloudflare_access_app_list_json_fetches_account_endpoint() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "access", "app", "list"])
+        .args(["orbit", "cloudflare", "access", "app", "list"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -8974,7 +9378,7 @@ fn cloudflare_access_policy_update_json_patches_account_resource() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "access", "policy", "update", "pol_123"])
+        .args(["orbit", "cloudflare", "access", "policy", "update", "pol_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -9008,7 +9412,7 @@ fn cloudflare_tunnel_get_json_fetches_account_endpoint() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "tunnel", "get", "tun_123"])
+        .args(["orbit", "cloudflare", "tunnel", "get", "tun_123"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -9041,7 +9445,7 @@ fn cloudflare_tls_cert_create_json_posts_zone_resource() {
         )
     });
     let output = cargo_bin()
-        .args(["cloudflare", "tls", "cert", "create"])
+        .args(["orbit", "cloudflare", "tls", "cert", "create"])
         .args([
             "--api-token",
             "cf-test-token",
@@ -9076,7 +9480,7 @@ fn cloudflare_token_verify_json_fetches_global_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "token", "verify"])
+        .args(["orbit", "cloudflare", "token", "verify"])
         .args(["--api-token", "cf-test-token", "--base-url", &server.base_url, "--json"])
         .assert()
         .success()
@@ -9105,7 +9509,7 @@ fn cloudflare_workers_secret_set_json_puts_account_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "workers", "secret", "set"])
+        .args(["orbit", "cloudflare", "workers", "secret", "set"])
         .args([
             "--script",
             "core-worker",
@@ -9146,7 +9550,7 @@ fn cloudflare_tunnel_token_json_fetches_account_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "tunnel", "token"])
+        .args(["orbit", "cloudflare", "tunnel", "token"])
         .args([
             "--tunnel",
             "tun_123",
@@ -9182,7 +9586,7 @@ fn cloudflare_cache_purge_json_posts_zone_endpoint() {
     });
 
     let output = cargo_bin()
-        .args(["cloudflare", "cache", "purge"])
+        .args(["orbit", "cloudflare", "cache", "purge"])
         .args([
             "--everything",
             "--force",
@@ -9232,7 +9636,7 @@ project_id = "proj_ops"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["apple", "store", "context", "list", "--home"])
+        .args(["orbit", "apple", "store", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -9279,7 +9683,7 @@ default_platform = "IOS"
         .env("CORE_ISSUER", "issuer_123")
         .env("CORE_KEY", "key_123")
         .env("CORE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
-        .args(["apple", "store", "context", "current", "--home"])
+        .args(["orbit", "apple", "store", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -9326,7 +9730,7 @@ region = "us-west-2"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["aws", "context", "list", "--home"])
+        .args(["orbit", "aws", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -9367,7 +9771,7 @@ secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
     let output = cargo_bin()
         .env("CORE_AWS_ACCESS_KEY_ID", "AKIA1234567890ABCD")
         .env("CORE_AWS_SECRET_ACCESS_KEY", "secret")
-        .args(["aws", "context", "current", "--home"])
+        .args(["orbit", "aws", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -9408,6 +9812,7 @@ fn aws_auth_status_json_verifies_signed_get_user_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "auth",
             "status",
@@ -9453,6 +9858,7 @@ fn aws_doctor_json_verifies_signed_get_user_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "doctor",
             "--base-url",
@@ -9496,6 +9902,7 @@ fn aws_sts_get_caller_identity_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "sts",
             "get-caller-identity",
@@ -9544,6 +9951,7 @@ fn aws_sts_assume_role_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "sts",
             "assume-role",
@@ -9597,6 +10005,7 @@ fn aws_iam_user_create_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "iam",
             "user",
@@ -9648,6 +10057,7 @@ fn aws_iam_query_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "iam",
             "query",
@@ -9695,6 +10105,7 @@ fn aws_s3_bucket_list_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "s3",
             "bucket",
@@ -9740,6 +10151,7 @@ fn aws_s3_bucket_create_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "s3",
             "bucket",
@@ -9788,6 +10200,7 @@ fn aws_ec2_instance_list_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ec2",
             "instance",
@@ -9837,6 +10250,7 @@ fn aws_ec2_instance_start_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ec2",
             "instance",
@@ -9884,6 +10298,7 @@ fn aws_lambda_function_list_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "lambda",
             "function",
@@ -9928,6 +10343,7 @@ fn aws_lambda_function_get_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "lambda",
             "function",
@@ -9979,6 +10395,7 @@ fn aws_ecr_repository_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ecr",
             "repository",
@@ -10027,6 +10444,7 @@ fn aws_ecr_repository_create_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ecr",
             "repository",
@@ -10075,6 +10493,7 @@ fn aws_ecr_image_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ecr",
             "image",
@@ -10121,6 +10540,7 @@ fn aws_s3_object_list_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "s3",
             "object",
@@ -10168,6 +10588,7 @@ fn aws_s3_object_get_output_writes_file() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "s3",
             "object",
@@ -10221,6 +10642,7 @@ fn aws_secrets_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "secrets",
             "list",
@@ -10265,6 +10687,7 @@ fn aws_secrets_create_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "secrets",
             "create",
@@ -10308,6 +10731,7 @@ fn aws_kms_key_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "kms",
             "key",
@@ -10353,6 +10777,7 @@ fn aws_kms_encrypt_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "kms",
             "encrypt",
@@ -10400,6 +10825,7 @@ fn aws_dynamodb_table_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "dynamodb",
             "table",
@@ -10445,6 +10871,7 @@ fn aws_dynamodb_item_get_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "dynamodb",
             "item",
@@ -10494,6 +10921,7 @@ fn aws_ssm_parameter_get_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "ssm",
             "parameter",
@@ -10540,6 +10968,7 @@ fn aws_logs_group_list_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "logs",
             "group",
@@ -10585,6 +11014,7 @@ fn aws_logs_events_json_executes_signed_json_target_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "logs",
             "events",
@@ -10636,6 +11066,7 @@ fn aws_cloudwatch_metric_list_json_executes_signed_query_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "cloudwatch",
             "metric",
@@ -10683,6 +11114,7 @@ fn aws_bedrock_foundation_model_list_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "foundation-model",
@@ -10729,6 +11161,7 @@ fn aws_bedrock_guardrail_get_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "guardrail",
@@ -10778,6 +11211,7 @@ fn aws_bedrock_runtime_invoke_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "runtime",
@@ -10829,6 +11263,7 @@ fn aws_bedrock_runtime_count_tokens_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "runtime",
@@ -10880,6 +11315,7 @@ fn aws_bedrock_job_create_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "job",
@@ -10940,6 +11376,7 @@ fn aws_bedrock_agent_alias_get_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "agent",
@@ -10991,6 +11428,7 @@ fn aws_bedrock_knowledge_base_data_source_list_json_executes_signed_rest_request
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "knowledge-base",
@@ -11052,6 +11490,7 @@ fn aws_bedrock_agent_runtime_invoke_agent_json_executes_signed_rest_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "agent-runtime",
@@ -11110,6 +11549,7 @@ fn aws_bedrock_agent_runtime_retrieve_and_generate_json_executes_signed_rest_req
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "aws",
             "bedrock",
             "agent-runtime",
@@ -11170,7 +11610,7 @@ project_id_env = "OPS_GCP_PROJECT"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["gcp", "context", "list", "--home"])
+        .args(["orbit", "gcp", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -11211,7 +11651,7 @@ project_id_env = "CORE_PROJECT"
 
     let output = cargo_bin()
         .env("CORE_PROJECT", "proj_core")
-        .args(["gcp", "context", "current", "--home"])
+        .args(["orbit", "gcp", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -11252,7 +11692,7 @@ access_token_env = "CORE_TOKEN"
     let output = cargo_bin()
         .env("CORE_PROJECT", "proj_core")
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "auth", "status", "--home"])
+        .args(["orbit", "gcp", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -11294,7 +11734,7 @@ fn gcp_doctor_json_verifies_request() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "doctor", "--home"])
+        .args(["orbit", "gcp", "doctor", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -11330,7 +11770,7 @@ fn gcp_service_list_json_fetches_services() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "service", "list", "--home"])
+        .args(["orbit", "gcp", "service", "list", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11373,7 +11813,7 @@ fn gcp_service_enable_json_posts_operation() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "service", "enable", "--home"])
+        .args(["orbit", "gcp", "service", "enable", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11413,7 +11853,7 @@ fn gcp_raw_json_fetches_with_headers_and_query_params() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "raw", "--home"])
+        .args(["orbit", "gcp", "raw", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11463,7 +11903,7 @@ fn gcp_apikey_list_json_fetches_keys() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "list", "--home"])
+        .args(["orbit", "gcp", "keys", "list", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11509,7 +11949,7 @@ fn gcp_apikey_get_json_expands_key_id() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "get", "key1", "--home"])
+        .args(["orbit", "gcp", "keys", "get", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -11547,7 +11987,7 @@ fn gcp_apikey_create_json_posts_payload() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "create", "--home"])
+        .args(["orbit", "gcp", "keys", "create", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11591,7 +12031,7 @@ fn gcp_apikey_lookup_json_queries_key_string() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "lookup", "--home"])
+        .args(["orbit", "gcp", "keys", "lookup", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--key-string", "AIzaLookup", "--format", "json"])
         .assert()
@@ -11628,7 +12068,7 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
 
     cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "delete", "key1", "--home"])
+        .args(["orbit", "gcp", "keys", "delete", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -11636,7 +12076,7 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "keys", "delete", "key1", "--home"])
+        .args(["orbit", "gcp", "keys", "delete", "key1", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--force", "--format", "json"])
         .assert()
@@ -11671,7 +12111,7 @@ fn gcp_iam_service_account_list_json_fetches_accounts() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "iam", "service-account", "list", "--home"])
+        .args(["orbit", "gcp", "iam", "service-account", "list", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--limit", "2", "--format", "json"])
         .assert()
@@ -11707,7 +12147,7 @@ fn gcp_iam_service_account_create_json_posts_payload() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "iam", "service-account", "create", "--home"])
+        .args(["orbit", "gcp", "iam", "service-account", "create", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11752,7 +12192,7 @@ fn gcp_iam_service_account_key_create_json_posts_defaults() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "iam", "service-account-key", "create", "--home"])
+        .args(["orbit", "gcp", "iam", "service-account-key", "create", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11790,7 +12230,7 @@ fn gcp_iam_policy_get_json_defaults_project_resource() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "iam", "policy", "get", "--home"])
+        .args(["orbit", "gcp", "iam", "policy", "get", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -11821,7 +12261,7 @@ fn gcp_iam_role_list_json_fetches_roles() {
 
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "iam", "role", "list", "--home"])
+        .args(["orbit", "gcp", "iam", "role", "list", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--limit", "5", "--format", "json"])
         .assert()
@@ -11852,7 +12292,7 @@ fn gcp_gemini_models_list_json_fetches_models() {
 
     let output = cargo_bin()
         .env("GEMINI_API_KEY", "AIzaGemini")
-        .args(["gcp", "gemini", "models", "list", "--home"])
+        .args(["orbit", "gcp", "gemini", "models", "list", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--format", "json"])
         .assert()
@@ -11888,7 +12328,7 @@ fn gcp_gemini_generate_json_posts_prompt_body() {
 
     let output = cargo_bin()
         .env("GEMINI_API_KEY", "AIzaGemini")
-        .args(["gcp", "gemini", "generate", "--home"])
+        .args(["orbit", "gcp", "gemini", "generate", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -11928,7 +12368,7 @@ fn gcp_gemini_embed_json_posts_text() {
 
     let output = cargo_bin()
         .env("GEMINI_API_KEY", "AIzaGemini")
-        .args(["gcp", "gemini", "embed", "--home"])
+        .args(["orbit", "gcp", "gemini", "embed", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--text", "embed me", "--format", "json"])
         .assert()
@@ -11959,7 +12399,7 @@ fn gcp_gemini_raw_json_passes_headers() {
 
     let output = cargo_bin()
         .env("GEMINI_API_KEY", "AIzaGemini")
-        .args(["gcp", "gemini", "raw", "--home"])
+        .args(["orbit", "gcp", "gemini", "raw", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -12007,7 +12447,7 @@ fn gcp_gemini_image_generate_writes_png_and_reports_json() {
 
     let output = cargo_bin()
         .env("GEMINI_API_KEY", "AIzaGemini")
-        .args(["gcp", "gemini", "image", "generate", "--home"])
+        .args(["orbit", "gcp", "gemini", "image", "generate", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -12047,7 +12487,7 @@ fn gcp_vertex_model_list_json_fetches_models() {
     });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "vertex", "model", "list", "--home"])
+        .args(["orbit", "gcp", "vertex", "model", "list", "--home"])
         .arg(home.path())
         .args(["--base-url", &server.base_url, "--limit", "2", "--format", "json"])
         .assert()
@@ -12077,7 +12517,7 @@ fn gcp_vertex_endpoint_create_json_posts_body() {
     });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "vertex", "endpoint", "create", "--home"])
+        .args(["orbit", "gcp", "vertex", "endpoint", "create", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -12112,7 +12552,7 @@ fn gcp_vertex_endpoint_predict_json_posts_instances() {
     });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "vertex", "endpoint", "predict", "--home"])
+        .args(["orbit", "gcp", "vertex", "endpoint", "predict", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -12149,7 +12589,7 @@ fn gcp_vertex_raw_json_fetches_with_header() {
         });
     let output = cargo_bin()
         .env("CORE_TOKEN", "ya29.token-core-xyz")
-        .args(["gcp", "vertex", "raw", "--home"])
+        .args(["orbit", "gcp", "vertex", "raw", "--home"])
         .arg(home.path())
         .args([
             "--base-url",
@@ -12196,7 +12636,7 @@ project_id = "proj_ops"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["google", "places", "context", "list", "--home"])
+        .args(["orbit", "google", "places", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -12241,7 +12681,7 @@ default_region_code = "US"
     let output = cargo_bin()
         .env("CORE_PROJECT", "proj_core")
         .env("CORE_API_KEY", "AIza.token.core.xyz")
-        .args(["google", "places", "context", "current", "--home"])
+        .args(["orbit", "google", "places", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -12289,7 +12729,7 @@ default_region_code = "GB"
     let output = cargo_bin()
         .env("CORE_PROJECT", "proj_core")
         .env("CORE_STAGING_KEY", "AIza.staging-token-xyz")
-        .args(["google", "places", "auth", "status", "--home"])
+        .args(["orbit", "google", "places", "auth", "status", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -12333,7 +12773,7 @@ fn google_places_autocomplete_json_posts_request() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "autocomplete"])
+        .args(["orbit", "google", "places", "autocomplete"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12386,7 +12826,7 @@ fn google_places_search_text_json_fetches_all_pages() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "search-text"])
+        .args(["orbit", "google", "places", "search-text"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12428,7 +12868,7 @@ fn google_places_search_nearby_json_posts_location_body() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "search-nearby"])
+        .args(["orbit", "google", "places", "search-nearby"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12474,7 +12914,7 @@ fn google_places_details_json_gets_place() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "details", "place_123"])
+        .args(["orbit", "google", "places", "details", "place_123"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12519,7 +12959,14 @@ fn google_places_photo_download_json_writes_output() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "photo", "download", "places/place_123/photos/photo_123"])
+        .args([
+            "orbit",
+            "google",
+            "places",
+            "photo",
+            "download",
+            "places/place_123/photos/photo_123",
+        ])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12573,7 +13020,7 @@ fn google_places_doctor_json_verifies_requests() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "doctor"])
+        .args(["orbit", "google", "places", "doctor"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12615,7 +13062,7 @@ fn google_places_raw_json_fetches_with_headers_and_query_params() {
     });
 
     let output = cargo_bin()
-        .args(["google", "places", "raw"])
+        .args(["orbit", "google", "places", "raw"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12657,7 +13104,7 @@ fn google_places_session_json_round_trip_uses_home_store() {
     .expect("write settings");
 
     let created = cargo_bin()
-        .args(["google", "places", "session", "new"])
+        .args(["orbit", "google", "places", "session", "new"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12676,7 +13123,7 @@ fn google_places_session_json_round_trip_uses_home_store() {
     assert_eq!(created["account_alias"], "core");
 
     let listed = cargo_bin()
-        .args(["google", "places", "session", "list"])
+        .args(["orbit", "google", "places", "session", "list"])
         .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
         .assert()
         .success()
@@ -12687,7 +13134,7 @@ fn google_places_session_json_round_trip_uses_home_store() {
     assert_eq!(listed[0]["token"], token);
 
     let ended = cargo_bin()
-        .args(["google", "places", "session", "end", &token])
+        .args(["orbit", "google", "places", "session", "end", &token])
         .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
         .assert()
         .success()
@@ -12702,7 +13149,7 @@ fn google_places_session_json_round_trip_uses_home_store() {
 #[test]
 fn google_places_types_validate_json_reports_group() {
     let output = cargo_bin()
-        .args(["google", "places", "types", "validate", "cafe", "--format", "json"])
+        .args(["orbit", "google", "places", "types", "validate", "cafe", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -12732,7 +13179,7 @@ fn google_places_report_usage_json_reads_log_file() {
 
     let output = cargo_bin()
         .env("SI_GOOGLE_PLACES_LOG_FILE", log_path.to_str().expect("log path"))
-        .args(["google", "places", "report", "usage"])
+        .args(["orbit", "google", "places", "report", "usage"])
         .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
         .assert()
         .success()
@@ -12764,7 +13211,7 @@ fn google_places_report_sessions_json_reads_store() {
     .expect("write store");
 
     let output = cargo_bin()
-        .args(["google", "places", "report", "sessions"])
+        .args(["orbit", "google", "places", "report", "sessions"])
         .args([
             "--home",
             home.path().to_str().expect("home str"),
@@ -12810,7 +13257,7 @@ project_id_env = "OPS_OPENAI_PROJECT_ID"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["openai", "context", "list", "--home"])
+        .args(["orbit", "openai", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -12856,7 +13303,7 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
         .env("CORE_OPENAI_API_KEY", "sk-test")
         .env("CORE_OPENAI_ORG", "org_core")
         .env("CORE_OPENAI_ADMIN_KEY", "sk-admin")
-        .args(["openai", "context", "current", "--home"])
+        .args(["orbit", "openai", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -12884,7 +13331,7 @@ fn apple_appstore_auth_status_json_reads_local_inputs() {
     fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
 
     let output = cargo_bin()
-        .args(["apple", "store", "auth", "status"])
+        .args(["orbit", "apple", "store", "auth", "status"])
         .args(["--account", "mobile"])
         .args(["--env", "staging"])
         .args(["--project-id", "proj_mobile"])
@@ -12939,6 +13386,7 @@ fn apple_appstore_app_list_json_fetches_apps() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "app",
@@ -13008,6 +13456,7 @@ fn apple_appstore_app_create_json_creates_bundle_and_app() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "app",
@@ -13067,6 +13516,7 @@ fn apple_appstore_listing_update_json_updates_localized_metadata() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "listing",
@@ -13115,6 +13565,7 @@ fn apple_appstore_raw_json_fetches_api_path() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "raw",
@@ -13175,6 +13626,7 @@ fn apple_appstore_apply_json_applies_metadata_bundle() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "apply",
@@ -13224,6 +13676,7 @@ fn apple_appstore_auth_status_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "auth",
@@ -13271,6 +13724,7 @@ fn apple_appstore_doctor_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "apple",
             "store",
             "doctor",
@@ -13312,6 +13766,7 @@ fn openai_auth_status_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "auth",
             "status",
@@ -13349,6 +13804,7 @@ fn openai_doctor_json_verifies_request() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "doctor",
             "--base-url",
@@ -13388,6 +13844,7 @@ fn openai_model_list_json_fetches_from_api() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "model",
             "list",
@@ -13430,6 +13887,7 @@ fn openai_model_get_text_formats_response() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "model",
             "get",
@@ -13468,6 +13926,7 @@ fn openai_project_list_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "list",
@@ -13509,6 +13968,7 @@ fn openai_project_get_text_formats_response() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "get",
@@ -13549,6 +14009,7 @@ fn openai_project_create_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "create",
@@ -13580,6 +14041,7 @@ fn openai_project_create_json_posts_payload() {
 fn openai_project_archive_requires_force() {
     let stderr = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "archive",
@@ -13616,6 +14078,7 @@ fn openai_project_api_key_list_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "api-key",
@@ -13662,6 +14125,7 @@ fn openai_project_api_key_get_text_formats_response() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "api-key",
@@ -13705,6 +14169,7 @@ fn openai_project_api_key_delete_json_deletes_with_force() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "api-key",
@@ -13749,6 +14214,7 @@ fn openai_project_service_account_list_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "service-account",
@@ -13794,6 +14260,7 @@ fn openai_project_service_account_get_text_formats_response() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "service-account",
@@ -13838,6 +14305,7 @@ fn openai_project_service_account_create_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "service-account",
@@ -13882,6 +14350,7 @@ fn openai_project_rate_limit_list_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "rate-limit",
@@ -13929,6 +14398,7 @@ fn openai_project_rate_limit_update_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "project",
             "rate-limit",
@@ -13976,6 +14446,7 @@ fn openai_key_list_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "key",
             "list",
@@ -14020,6 +14491,7 @@ fn openai_key_get_text_formats_response() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "key",
             "get",
@@ -14058,6 +14530,7 @@ fn openai_key_create_json_posts_payload() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "key",
             "create",
@@ -14087,6 +14560,7 @@ fn openai_key_create_json_posts_payload() {
 fn openai_key_delete_requires_force() {
     let stderr = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "key",
             "delete",
@@ -14122,6 +14596,7 @@ fn openai_usage_completions_json_fetches_from_api_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "usage",
             "completions",
@@ -14166,6 +14641,7 @@ fn openai_codex_usage_json_defaults_codex_model() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "codex",
             "usage",
@@ -14207,6 +14683,7 @@ fn openai_monitor_usage_json_defaults_to_completions() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "monitor",
             "usage",
@@ -14249,6 +14726,7 @@ fn openai_monitor_limits_json_fetches_project_rate_limits() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "monitor",
             "limits",
@@ -14294,6 +14772,7 @@ fn openai_raw_json_fetches_with_headers_and_query_params() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "raw",
             "--base-url",
@@ -14341,6 +14820,7 @@ fn openai_raw_json_posts_json_body_with_admin_key() {
 
     let output = cargo_bin()
         .args([
+            "orbit",
             "openai",
             "raw",
             "--base-url",
@@ -14396,7 +14876,7 @@ profile = "OPS"
     .expect("write settings");
 
     let output = cargo_bin()
-        .args(["oci", "context", "list", "--home"])
+        .args(["orbit", "oci", "context", "list", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
         .assert()
@@ -14423,7 +14903,7 @@ fn oci_context_current_json_reads_profile_config() {
         .expect("write config");
 
     let output = cargo_bin()
-        .args(["oci", "context", "current"])
+        .args(["orbit", "oci", "context", "current"])
         .args(["--config-file", config_file.to_str().expect("utf8")])
         .arg("--format")
         .arg("json")
@@ -14456,7 +14936,7 @@ fn oci_auth_status_json_reads_local_signature_context() {
     fs::write(&key_file, OCI_TEST_RSA_KEY_PEM).expect("write key");
 
     let output = cargo_bin()
-        .args(["oci", "auth", "status"])
+        .args(["orbit", "oci", "auth", "status"])
         .args(["--config-file", config_file.to_str().expect("utf8")])
         .args(["--verify=false", "--format", "json"])
         .assert()
@@ -14493,7 +14973,7 @@ fn oci_auth_status_json_verifies_with_identity_probe() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "auth", "status"])
+        .args(["orbit", "oci", "auth", "status"])
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
@@ -14528,7 +15008,7 @@ fn oci_doctor_json_verifies_runtime_probe() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "doctor"])
+        .args(["orbit", "oci", "doctor"])
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
@@ -14555,7 +15035,7 @@ fn oci_oracular_tenancy_json_reads_profile_config() {
         .expect("write config");
 
     let output = cargo_bin()
-        .args(["oci", "oracular", "tenancy"])
+        .args(["orbit", "oci", "oracular", "tenancy"])
         .args(["--config-file", config_file.to_str().expect("utf8")])
         .args(["--format", "json"])
         .assert()
@@ -14612,7 +15092,7 @@ fn write_oci_test_config(home: &tempfile::TempDir, base_url: &str) -> std::path:
 #[test]
 fn oci_oracular_cloud_init_json_renders_base64_payload() {
     let output = cargo_bin()
-        .args(["oci", "oracular", "cloud-init", "--ssh-port", "7129", "--format", "json"])
+        .args(["orbit", "oci", "oracular", "cloud-init", "--ssh-port", "7129", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -14639,7 +15119,7 @@ fn oci_identity_availability_domains_json_signs_and_lists() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "identity", "availability-domains", "list"])
+        .args(["orbit", "oci", "identity", "availability-domains", "list"])
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
@@ -14673,7 +15153,7 @@ fn oci_identity_compartment_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "identity", "compartment", "create"])
+        .args(["orbit", "oci", "identity", "compartment", "create"])
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
@@ -14715,7 +15195,7 @@ fn oci_compute_image_latest_ubuntu_json_queries_core_api() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "compute", "image", "latest-ubuntu"])
+        .args(["orbit", "oci", "compute", "image", "latest-ubuntu"])
         .args(["--home"])
         .arg(home.path())
         .args(["--config-file", config_file.to_str().expect("utf8")])
@@ -14747,7 +15227,7 @@ fn oci_network_vcn_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "network", "vcn", "create"])
+        .args(["orbit", "oci", "network", "vcn", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -14785,7 +15265,7 @@ fn oci_network_internet_gateway_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "network", "internet-gateway", "create"])
+        .args(["orbit", "oci", "network", "internet-gateway", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -14824,7 +15304,7 @@ fn oci_network_route_table_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "network", "route-table", "create"])
+        .args(["orbit", "oci", "network", "route-table", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -14866,7 +15346,7 @@ fn oci_network_security_list_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "network", "security-list", "create"])
+        .args(["orbit", "oci", "network", "security-list", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -14909,7 +15389,7 @@ fn oci_network_subnet_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "network", "subnet", "create"])
+        .args(["orbit", "oci", "network", "subnet", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -14957,7 +15437,7 @@ fn oci_compute_instance_create_json_posts_payload() {
     let config_file = write_oci_test_config(&home, &server.base_url);
 
     let output = cargo_bin()
-        .args(["oci", "compute", "instance", "create"])
+        .args(["orbit", "oci", "compute", "instance", "create"])
         .args(["--home"])
         .arg(home.path())
         .args([
@@ -15003,7 +15483,7 @@ fn oci_raw_json_supports_auth_none_and_query_headers() {
     });
 
     let output = cargo_bin()
-        .args(["oci", "raw"])
+        .args(["orbit", "oci", "raw"])
         .args([
             "--auth",
             "none",
@@ -17977,8 +18457,30 @@ fn codex_profile_swap_resets_host_codex_home_and_uses_selected_profile() {
     fs::write(host_codex_home.join("models_cache.json"), "{\"stale\":true}\n")
         .expect("write models cache");
     fs::write(host_codex_home.join("tmp").join("junk.txt"), "junk\n").expect("write junk");
+    let bin_dir = tempdir().expect("tempdir");
+    let docker_path = bin_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_path,
+        r#"#!/bin/sh
+set -eu
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  ps)
+    exit 0
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     let output = cargo_bin()
+        .env("PATH", path_env)
         .args(["codex", "profile", "swap", "america", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
@@ -18218,6 +18720,7 @@ fn github_git_setup_json_dry_run_normalizes_remotes_and_helper() {
         .env("HOME", home.path())
         .env("GITHUB_TOKEN", "gho_example_token")
         .args([
+            "orbit",
             "github",
             "git",
             "setup",
@@ -18268,6 +18771,7 @@ fn github_git_remote_auth_json_dry_run_reads_pat_from_env() {
         .env("HOME", home.path())
         .env("GH_PAT", "github_pat_example123")
         .args([
+            "orbit",
             "github",
             "git",
             "remote-auth",
@@ -18303,6 +18807,7 @@ fn github_git_clone_auth_json_dry_run_reads_pat_from_env() {
         .env("HOME", home.path())
         .env("GH_PAT", "github_pat_example123")
         .args([
+            "orbit",
             "github",
             "git",
             "clone-auth",
