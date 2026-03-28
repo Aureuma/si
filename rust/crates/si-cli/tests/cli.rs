@@ -3838,7 +3838,7 @@ fn help_output_uses_single_word_operational_subcommands() {
     )
     .expect("utf8 codex help");
     assert!(codex_help.contains("spawn"));
-    assert!(codex_help.contains("status"));
+    assert!(codex_help.contains("profile"));
     assert!(codex_help.contains("tmux"));
     assert!(codex_help.contains("warmup"));
     assert!(!codex_help.contains("spawnplan"));
@@ -3911,6 +3911,7 @@ fn help_output_uses_single_word_operational_subcommands() {
             .clone(),
     )
     .expect("utf8 build self help");
+    assert!(build_self_help.contains("check"));
     assert!(build_self_help.contains("assets"));
     assert!(build_self_help.contains("validate"));
     assert!(!build_self_help.contains("releaseassets"));
@@ -16274,6 +16275,147 @@ exit 0
 }
 
 #[test]
+fn build_self_check_uses_persistent_target_dir_and_sccache() {
+    let repo_root = repo_root_for_test();
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("cargo-args.txt");
+    let env_path = script_dir.path().join("cargo-env.txt");
+    let cargo_bin_path = script_dir.path().join("cargo");
+    let sccache_path = script_dir.path().join("sccache");
+    write_executable_shell_script(
+        &cargo_bin_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" > {args}
+printf 'CARGO_TARGET_DIR=%s\nRUSTC_WRAPPER=%s\n' "${{CARGO_TARGET_DIR:-}}" "${{RUSTC_WRAPPER:-}}" > {env}
+exit 0
+"#,
+            args = shell_escape_for_test(&args_path),
+            env = shell_escape_for_test(&env_path),
+        ),
+    );
+    write_executable_shell_script(&sccache_path, "#!/bin/sh\nset -eu\nexit 0\n");
+    let path_env =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("PATH", path_env)
+        .args(["build", "self", "check", "--repo"])
+        .arg(&repo_root)
+        .args(["--timings"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 stdout");
+    assert!(stdout.contains("cargo target dir:"));
+    assert!(stdout.contains(".artifacts/cargo-target/self-build"));
+    assert!(stdout.contains("cargo timings:"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("check\n"));
+    assert!(args.contains("--locked\n"));
+    assert!(args.contains("--manifest-path\nrust/crates/si-cli/Cargo.toml\n"));
+    assert!(args.contains("--bin\nsi-rs\n"));
+    assert!(args.contains("--timings\n"));
+    let env = fs::read_to_string(env_path).expect("env file");
+    assert!(env.contains(&format!(
+        "CARGO_TARGET_DIR={}\n",
+        repo_root.join(".artifacts").join("cargo-target").join("self-build").display()
+    )));
+    assert!(env.contains(&format!("RUSTC_WRAPPER={}\n", sccache_path.display())));
+}
+
+#[test]
+fn build_self_check_reports_missing_sccache_hint() {
+    let repo_root = repo_root_for_test();
+    let script_dir = tempdir().expect("tempdir");
+    let cargo_bin_path = script_dir.path().join("cargo");
+    write_executable_shell_script(&cargo_bin_path, "#!/bin/sh\nset -eu\nexit 0\n");
+
+    let output = cargo_bin()
+        .env("PATH", script_dir.path())
+        .args(["build", "self", "check", "--repo"])
+        .arg(&repo_root)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 stdout");
+    assert!(stdout.contains("rustc wrapper: unavailable (install sccache for faster cold builds)"));
+}
+
+#[test]
+fn build_self_build_uses_reusable_target_dir_and_installs_output() {
+    let repo_root = repo_root_for_test();
+    let script_dir = tempdir().expect("tempdir");
+    let output_dir = tempdir().expect("tempdir");
+    let output_path = output_dir.path().join("si");
+    let args_path = script_dir.path().join("cargo-args.txt");
+    let env_path = script_dir.path().join("cargo-env.txt");
+    let cargo_bin_path = script_dir.path().join("cargo");
+    let sccache_path = script_dir.path().join("sccache");
+    write_executable_shell_script(
+        &cargo_bin_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" > {args}
+printf 'CARGO_TARGET_DIR=%s\nRUSTC_WRAPPER=%s\n' "${{CARGO_TARGET_DIR:-}}" "${{RUSTC_WRAPPER:-}}" > {env}
+mkdir -p "${{CARGO_TARGET_DIR}}/release"
+cat > "${{CARGO_TARGET_DIR}}/release/si-rs" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "${{CARGO_TARGET_DIR}}/release/si-rs"
+exit 0
+"#,
+            args = shell_escape_for_test(&args_path),
+            env = shell_escape_for_test(&env_path),
+        ),
+    );
+    write_executable_shell_script(&sccache_path, "#!/bin/sh\nset -eu\nexit 0\n");
+    let path_env =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("PATH", path_env)
+        .args(["build", "self", "build", "--repo"])
+        .arg(&repo_root)
+        .args(["--no-upgrade", "--output"])
+        .arg(&output_path)
+        .args(["--timings"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 stdout");
+    assert!(stdout.contains("built si binary:"));
+    assert!(stdout.contains("cargo target dir:"));
+    assert!(stdout.contains("cargo timings:"));
+    assert!(output_path.exists());
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("build\n"));
+    assert!(args.contains("--release\n"));
+    assert!(args.contains("--locked\n"));
+    assert!(args.contains("--manifest-path\nrust/crates/si-cli/Cargo.toml\n"));
+    assert!(args.contains("--bin\nsi-rs\n"));
+    assert!(args.contains("--timings\n"));
+    let env = fs::read_to_string(env_path).expect("env file");
+    assert!(env.contains(&format!(
+        "CARGO_TARGET_DIR={}\n",
+        repo_root.join(".artifacts").join("cargo-target").join("self-build").display()
+    )));
+    assert!(env.contains(&format!("RUSTC_WRAPPER={}\n", sccache_path.display())));
+}
+
+#[test]
 fn codex_remove_executes_container_and_volume_removal() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "ferma", &["ferma"]);
@@ -16972,6 +17114,9 @@ fn codex_profile_list_text_renders_table_without_auth_paths() {
     assert!(rendered.contains("america"));
     assert!(rendered.contains("🗽 America"));
     assert!(rendered.contains("🐦‍🔥 Darmstada"));
+    assert!(rendered.contains("maps-android.5t@i…"));
+    assert!(rendered.contains("bacon.trace.5e@i…"));
+    assert!(!rendered.contains("maps-android.5t@icloud.com"));
     assert!(rendered.contains("Missing"));
     assert!(!rendered.contains("auth.json"));
     assert!(!rendered.contains("auth_path"));
@@ -17001,7 +17146,8 @@ fn codex_profile_show_text_resolves_display_name_query() {
     let rendered = String::from_utf8(output).expect("utf8 output");
     assert!(rendered.contains("america"));
     assert!(rendered.contains("🗽 America"));
-    assert!(rendered.contains("maps-android.5t@icloud.com"));
+    assert!(rendered.contains("maps-android.5t@i…"));
+    assert!(!rendered.contains("maps-android.5t@icloud.com"));
     assert!(rendered.contains("Missing"));
     assert!(!rendered.contains("auth_path"));
 }
