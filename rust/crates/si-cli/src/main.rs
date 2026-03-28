@@ -336,7 +336,6 @@ enum Command {
         #[command(subcommand)]
         command: Box<CodexCommand>,
     },
-    Paths(PathsArgs),
     Surf {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -15673,7 +15672,7 @@ struct CodexProfileLoginArgs {
     settings_file: Option<PathBuf>,
     #[arg(long)]
     codex_bin: Option<PathBuf>,
-    #[arg(long, default_value = "json")]
+    #[arg(long, default_value = "text")]
     format: OutputFormat,
 }
 
@@ -15768,29 +15767,6 @@ enum CodexCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
-}
-
-#[derive(Debug, Subcommand)]
-enum PathsCommand {
-    Show(PathsShowArgs),
-}
-
-#[derive(Debug, Args, Clone)]
-struct PathsShowArgs {
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long)]
-    settings_file: Option<PathBuf>,
-    #[arg(long, default_value = "text")]
-    format: OutputFormat,
-}
-
-#[derive(Debug, Args)]
-struct PathsArgs {
-    #[command(subcommand)]
-    command: Option<PathsCommand>,
-    #[command(flatten)]
-    default_show: PathsShowArgs,
 }
 
 #[derive(Debug, Parser)]
@@ -16091,13 +16067,6 @@ impl fmt::Display for OutputFormat {
         };
         f.write_str(value)
     }
-}
-
-#[derive(Debug, Serialize)]
-struct PathView {
-    root: String,
-    settings_file: String,
-    codex_profiles_dir: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -19333,8 +19302,9 @@ fn normalize_root_command(command: Command) -> Command {
     }
 }
 
-fn removed_provider_root_replacement(root: &str) -> Option<&'static str> {
+fn removed_root_command_replacement(root: &str) -> Option<&'static str> {
     match root {
+        "paths" => Some("si settings"),
         "providers" => Some("si orbit list"),
         "cloudflare" => Some("si orbit cloudflare ..."),
         "apple" => Some("si orbit apple ..."),
@@ -19350,8 +19320,8 @@ fn removed_provider_root_replacement(root: &str) -> Option<&'static str> {
     }
 }
 
-fn reject_removed_provider_root(root: &str) -> Result<()> {
-    if let Some(replacement) = removed_provider_root_replacement(root) {
+fn reject_removed_root_command(root: &str) -> Result<()> {
+    if let Some(replacement) = removed_root_command_replacement(root) {
         anyhow::bail!("`si {root}` was removed; use `{replacement}` instead");
     }
     Ok(())
@@ -19368,10 +19338,10 @@ fn main() -> Result<()> {
         match root {
             "help" => {
                 if let Some(target) = raw_args.get(1).map(String::as_str) {
-                    reject_removed_provider_root(target)?;
+                    reject_removed_root_command(target)?;
                 }
             }
-            _ => reject_removed_provider_root(root)?,
+            _ => reject_removed_root_command(root)?,
         }
     }
     let cli = parse_cli();
@@ -33596,16 +33566,6 @@ fn main() -> Result<()> {
                 run_codex_respawn_plan(profile.as_deref(), profile_containers, format)?
             }
         },
-        Command::Paths(args) => match args.command {
-            Some(PathsCommand::Show(args)) => {
-                show_paths(args.home, args.settings_file, args.format)?
-            }
-            None => show_paths(
-                args.default_show.home,
-                args.default_show.settings_file,
-                args.default_show.format,
-            )?,
-        },
         Command::Surf { home, settings_file, build, no_build, bin, args } => {
             run_surf_wrapper(home, settings_file, build, no_build, bin, args)?
         }
@@ -33762,8 +33722,6 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["dyad", "remove"] => Some("Remove a Dyad container set."),
         ["dyad", "exec"] => Some("Run a command in a Dyad container."),
         ["dyad", "cleanup"] => Some("Remove stopped Dyad containers."),
-        ["paths"] => Some("Show resolved SI paths."),
-        ["paths", "show"] => Some("Show resolved SI paths."),
         ["vault"] => Some("Vault secret and trust commands."),
         ["vault", "trust"] => Some("Verify trusted vault inputs."),
         ["image"] => Some("Image provider commands."),
@@ -34193,7 +34151,7 @@ fn configure_sigpipe() {}
 fn show_help(command: Option<&str>, format: OutputFormat) -> Result<()> {
     let view = match command {
         Some(name) => {
-            reject_removed_provider_root(name)?;
+            reject_removed_root_command(name)?;
             if !is_public_root_command(name) {
                 anyhow::bail!("unknown root command: {name}");
             }
@@ -34616,33 +34574,6 @@ fn image_request_id(
     headers.get(key).and_then(|value| value.to_str().ok()).map(str::to_owned)
 }
 
-fn show_paths(
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-    format: OutputFormat,
-) -> Result<()> {
-    let home = home.unwrap_or_else(default_home_dir);
-    let paths = SiPaths::load(&home, settings_file.as_deref())?;
-    let view = PathView {
-        root: paths.root.display().to_string(),
-        settings_file: paths.settings_file.display().to_string(),
-        codex_profiles_dir: paths.codex_profiles_dir.display().to_string(),
-    };
-
-    match format {
-        OutputFormat::Text => {
-            print_cli_kv("root", view.root);
-            print_cli_kv("settings_file", view.settings_file);
-            print_cli_kv("codex_profiles_dir", view.codex_profiles_dir);
-        }
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&view)?);
-        }
-    }
-
-    Ok(())
-}
-
 fn show_settings(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -34650,19 +34581,14 @@ fn show_settings(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
+    let resolved_paths = SiPaths::from_settings(&home, &settings);
 
     match format {
         OutputFormat::Text => {
             print_cli_kv("schema_version", settings.schema_version);
-            print_cli_kv("paths.root", settings.paths.root.as_deref().unwrap_or("(none)"));
-            print_cli_kv(
-                "paths.settings_file",
-                settings.paths.settings_file.as_deref().unwrap_or("(none)"),
-            );
-            print_cli_kv(
-                "paths.codex_profiles_dir",
-                settings.paths.codex_profiles_dir.as_deref().unwrap_or("(none)"),
-            );
+            print_cli_kv("paths.root", resolved_paths.root.display());
+            print_cli_kv("paths.settings_file", resolved_paths.settings_file.display());
+            print_cli_kv("paths.codex_profiles_dir", resolved_paths.codex_profiles_dir.display());
             print_cli_kv(
                 "paths.workspace_root",
                 settings.paths.workspace_root.as_deref().unwrap_or("(none)"),
@@ -34690,7 +34616,22 @@ fn show_settings(
             print_cli_kv("dyad.configs", settings.dyad.configs.as_deref().unwrap_or("(none)"));
         }
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&settings)?);
+            let mut value = serde_json::to_value(&settings)?;
+            if let Some(paths) = value.get_mut("paths").and_then(Value::as_object_mut) {
+                paths.insert(
+                    "root".to_owned(),
+                    Value::String(resolved_paths.root.display().to_string()),
+                );
+                paths.insert(
+                    "settings_file".to_owned(),
+                    Value::String(resolved_paths.settings_file.display().to_string()),
+                );
+                paths.insert(
+                    "codex_profiles_dir".to_owned(),
+                    Value::String(resolved_paths.codex_profiles_dir.display().to_string()),
+                );
+            }
+            println!("{}", serde_json::to_string_pretty(&value)?);
         }
     }
 
@@ -36113,6 +36054,7 @@ fn resolve_codex_profile_with_mode(
     }
 
     if codex_profile_prompt_available() {
+        profiles = enrich_codex_profiles_with_live_status(profiles, None);
         return prompt_for_codex_profile(purpose, &profiles);
     }
 
@@ -36154,6 +36096,7 @@ fn resolve_codex_requested_profile(
     }
 
     if codex_profile_prompt_available() {
+        profiles = enrich_codex_profiles_with_live_status(profiles, None);
         return prompt_for_codex_profile("codex", &profiles);
     }
 
@@ -36673,8 +36616,12 @@ fn login_codex_profile(
     );
     write_settings_document(&settings_path, &document)?;
     sync_codex_auth_to_running_container(&profile_id, Path::new(&resolved_auth_path), None)?;
-
-    show_codex_profile(Some(profile_id), Some(home), Some(settings_path), format)
+    match format {
+        OutputFormat::Text => show_codex_profile_list(Some(home), Some(settings_path), format),
+        OutputFormat::Json => {
+            show_codex_profile(Some(profile_id), Some(home), Some(settings_path), format)
+        }
+    }
 }
 
 fn swap_codex_profile(

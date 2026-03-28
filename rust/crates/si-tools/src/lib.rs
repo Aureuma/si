@@ -415,11 +415,11 @@ SPACE_KEY = value
         let home = tempfile::tempdir().expect("home tempdir");
         let codex_home = home.path().join(".codex");
         let si_dir = home.path().join(".si");
-        let source = si_dir.join("codex").join("profiles").join("america").join("auth.json");
+        let source = si_dir.join("codex").join("profiles").join("profile-alpha").join("auth.json");
         std::fs::create_dir_all(source.parent().expect("source parent")).expect("mkdir source");
         std::fs::write(&source, "{\"tokens\":{\"access_token\":\"abc\"}}\n").expect("write auth");
 
-        sync_codex_auth(Some("america"), &si_dir, &codex_home).expect("sync auth");
+        sync_codex_auth(Some("profile-alpha"), &si_dir, &codex_home).expect("sync auth");
 
         assert_eq!(
             std::fs::read_to_string(codex_home.join("auth.json")).expect("read synced auth"),
@@ -434,7 +434,8 @@ SPACE_KEY = value
         std::fs::create_dir_all(&codex_home).expect("mkdir codex home");
         std::fs::write(codex_home.join("auth.json"), "stale\n").expect("write stale auth");
 
-        sync_codex_auth(Some("america"), &home.path().join(".si"), &codex_home).expect("sync auth");
+        sync_codex_auth(Some("profile-alpha"), &home.path().join(".si"), &codex_home)
+            .expect("sync auth");
 
         assert!(!codex_home.join("auth.json").exists());
     }

@@ -30,7 +30,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
 | `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
 | `si settings` | Show resolved SI settings | none | [CLI Reference](./CLI_REFERENCE) |
-| `si paths` | Show resolved SI paths | none | [CLI Reference](./CLI_REFERENCE) |
 | `si commands` | List visible SI root commands | `list` | [CLI Reference](./CLI_REFERENCE) |
 
 ## Provider and integration command families
@@ -61,7 +60,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si build self assets` | Build all release archives + `checksums.txt` locally | `si build self assets --version vX.Y.Z` |
 | `si commands` | Show visible public root commands | `si commands` |
 | `si settings` | Inspect resolved settings | `si settings` |
-| `si paths` | Inspect resolved paths | `si paths` |
 
 ## Recommended operator workflows
 
