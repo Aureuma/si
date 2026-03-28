@@ -4257,6 +4257,40 @@ fn codex_report_command_is_not_available() {
 }
 
 #[test]
+fn removed_provider_root_commands_report_orbit_replacements() {
+    let aws_stderr = String::from_utf8(
+        cargo_bin().args(["aws", "--help"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("aws stderr utf8");
+    assert!(aws_stderr.contains("`si aws` was removed"));
+    assert!(aws_stderr.contains("`si orbit aws ...`"));
+
+    let github_stderr = String::from_utf8(
+        cargo_bin().args(["github", "--help"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("github stderr utf8");
+    assert!(github_stderr.contains("`si github` was removed"));
+    assert!(github_stderr.contains("`si orbit github ...`"));
+
+    let providers_stderr = String::from_utf8(
+        cargo_bin().args(["providers", "--help"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("providers stderr utf8");
+    assert!(providers_stderr.contains("`si providers` was removed"));
+    assert!(providers_stderr.contains("`si orbit list`"));
+}
+
+#[test]
+fn help_rejects_removed_provider_roots() {
+    let stderr = String::from_utf8(
+        cargo_bin().args(["help", "aws"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("help stderr utf8");
+    assert!(stderr.contains("`si aws` was removed"));
+    assert!(stderr.contains("`si orbit aws ...`"));
+}
+
+#[test]
 fn help_json_lists_known_root_commands() {
     let output = cargo_bin()
         .args(["help", "--format", "json"])
