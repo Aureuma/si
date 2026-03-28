@@ -485,31 +485,28 @@ impl CodexTurnExecutor {
         let _ = runner.output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
         if let Ok(out) =
             runner.output(timeout, &["display-message", "-p", "-t", &pane_target, "#{pane_dead}"])
+            && is_tmux_pane_dead_output(&out)
         {
-            if is_tmux_pane_dead_output(&out) {
-                let _ = runner.output(timeout, &["kill-session", "-t", session]);
-                runner.output(
-                    timeout,
-                    &[
-                        "new-session",
-                        "-d",
-                        "-s",
-                        session,
-                        "-n",
-                        &window_name,
-                        "bash",
-                        "-lc",
-                        &self.start_cmd,
-                    ],
-                )?;
-                apply_dyad_tmux_session_defaults(runner, session, timeout);
-                let _ = runner.output(
-                    timeout,
-                    &["rename-window", "-t", &format!("{session}:0"), &window_name],
-                );
-                let _ = runner
-                    .output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
-            }
+            let _ = runner.output(timeout, &["kill-session", "-t", session]);
+            runner.output(
+                timeout,
+                &[
+                    "new-session",
+                    "-d",
+                    "-s",
+                    session,
+                    "-n",
+                    &window_name,
+                    "bash",
+                    "-lc",
+                    &self.start_cmd,
+                ],
+            )?;
+            apply_dyad_tmux_session_defaults(runner, session, timeout);
+            let _ = runner
+                .output(timeout, &["rename-window", "-t", &format!("{session}:0"), &window_name]);
+            let _ =
+                runner.output(timeout, &["select-pane", "-t", &pane_target, "-T", &window_name]);
         }
         let _ =
             runner.output(timeout, &["resize-pane", "-t", &pane_target, "-x", "160", "-y", "60"]);
@@ -623,48 +620,41 @@ impl CodexTurnExecutor {
                 report = None;
             }
 
-            if report.is_none() && after.is_none() && baseline_report_end >= 0 {
-                if let Ok(full) = tmux_capture(
+            if report.is_none()
+                && after.is_none()
+                && baseline_report_end >= 0
+                && let Ok(full) = tmux_capture(
                     runner,
                     target,
                     &StatusOptions { capture_mode: self.capture_mode.clone(), capture_lines: 0 },
                     remaining(timeout, start)?,
-                ) {
-                    let full_clean = strip_ansi(&full);
-                    if let Some(body) = extract_tagged_work_report(&full_clean, turn_id) {
-                        if !body.trim().is_empty()
-                            && ((role == "actor"
-                                && !actor_report_looks_placeholder_with_mode(
-                                    &body,
-                                    self.strict_report,
-                                ))
-                                || (role == "critic"
-                                    && !critic_report_looks_placeholder_with_mode(
-                                        &body,
-                                        self.strict_report,
-                                    )))
-                        {
-                            return Ok(normalize_output_with_delimited_report(&full, &body));
-                        }
-                    }
-                    if let Some(body) =
-                        extract_delimited_work_report_after(&full_clean, Some(baseline_report_end))
-                    {
-                        if !body.trim().is_empty()
-                            && ((role == "actor"
-                                && !actor_report_looks_placeholder_with_mode(
-                                    &body,
-                                    self.strict_report,
-                                ))
-                                || (role == "critic"
-                                    && !critic_report_looks_placeholder_with_mode(
-                                        &body,
-                                        self.strict_report,
-                                    )))
-                        {
-                            return Ok(full);
-                        }
-                    }
+                )
+            {
+                let full_clean = strip_ansi(&full);
+                if let Some(body) = extract_tagged_work_report(&full_clean, turn_id)
+                    && !body.trim().is_empty()
+                    && ((role == "actor"
+                        && !actor_report_looks_placeholder_with_mode(&body, self.strict_report))
+                        || (role == "critic"
+                            && !critic_report_looks_placeholder_with_mode(
+                                &body,
+                                self.strict_report,
+                            )))
+                {
+                    return Ok(normalize_output_with_delimited_report(&full, &body));
+                }
+                if let Some(body) =
+                    extract_delimited_work_report_after(&full_clean, Some(baseline_report_end))
+                    && !body.trim().is_empty()
+                    && ((role == "actor"
+                        && !actor_report_looks_placeholder_with_mode(&body, self.strict_report))
+                        || (role == "critic"
+                            && !critic_report_looks_placeholder_with_mode(
+                                &body,
+                                self.strict_report,
+                            )))
+                {
+                    return Ok(full);
                 }
             }
 
@@ -701,11 +691,11 @@ impl CodexTurnExecutor {
             }
 
             if prompt_ready {
-                if let Some(line) = prompt_line.as_ref() {
-                    if codex_prompt_line_looks_like_echo(line, sent_prompt) {
-                        thread::sleep(self.poll_interval);
-                        continue;
-                    }
+                if let Some(line) = prompt_line.as_ref()
+                    && codex_prompt_line_looks_like_echo(line, sent_prompt)
+                {
+                    thread::sleep(self.poll_interval);
+                    continue;
                 }
                 if self.strict_report {
                     if last_submit.elapsed() <= Duration::from_secs(2) {
@@ -914,16 +904,16 @@ fn extract_tagged_work_report(output: &str, turn_id: &str) -> Option<String> {
 fn extract_delimited_work_report_after(output: &str, after_end: Option<isize>) -> Option<String> {
     let clean = normalize_newlines(output).trim().to_string();
     let end = clean.rfind(REPORT_END_MARKER)? as isize;
-    if let Some(after) = after_end {
-        if end <= after {
-            return None;
-        }
+    if let Some(after) = after_end
+        && end <= after
+    {
+        return None;
     }
     let start = clean[..end as usize].rfind(REPORT_BEGIN_MARKER)? as isize;
-    if let Some(after) = after_end {
-        if start <= after {
-            return None;
-        }
+    if let Some(after) = after_end
+        && start <= after
+    {
+        return None;
     }
     let body = clean[start as usize + REPORT_BEGIN_MARKER.len()..end as usize].trim();
     (!body.is_empty()).then(|| body.to_string())
@@ -1552,12 +1542,13 @@ fn decode_mount_info_path(raw: &str) -> String {
     let raw_bytes = raw.as_bytes();
     let mut index = 0usize;
     while index < raw_bytes.len() {
-        if raw_bytes[index] == b'\\' && index + 3 < raw_bytes.len() {
-            if let Ok(value) = u8::from_str_radix(&raw[index + 1..index + 4], 8) {
-                bytes.push(value);
-                index += 4;
-                continue;
-            }
+        if raw_bytes[index] == b'\\'
+            && index + 3 < raw_bytes.len()
+            && let Ok(value) = u8::from_str_radix(&raw[index + 1..index + 4], 8)
+        {
+            bytes.push(value);
+            index += 4;
+            continue;
         }
         bytes.push(raw_bytes[index]);
         index += 1;

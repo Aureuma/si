@@ -54,11 +54,19 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 ## 6. Publish GitHub release
 
-1. In GitHub UI: Releases -> "Draft a new release" (or use `gh release create`).
-1. Choose the tag `vX.Y.Z` on `main`.
-1. Title format: `vX.Y.Z - <short title>`.
-1. Body: paste the `CHANGELOG.md` section and add upgrade notes.
-1. Publish.
+1. Preferred SI CLI path:
+   - `si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z - <short title>" --notes-file release-notes.md --draft`
+1. If the remote tag does not exist yet, create the release with an explicit target:
+   - `si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z - <short title>" --notes-file release-notes.md --target "$(git rev-parse HEAD)" --draft`
+1. Confirm the remote tag exists:
+   - `git ls-remote --tags origin`
+1. Review the draft release in GitHub UI and publish.
+
+Notes:
+
+- SI now creates the git tag ref first when `--target` is provided and the requested tag is missing on the remote.
+- If the tag is missing and `--target` is omitted, the command fails instead of creating a malformed release flow.
+- For draft releases, GitHub may still show an `untagged-...` draft URL even when `tag_name` and the remote git ref are correct. Publish-time resolution is GitHub-side.
 
 ## 7. Post-release Checks
 
