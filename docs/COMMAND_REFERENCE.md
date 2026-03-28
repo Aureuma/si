@@ -54,6 +54,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | --- | --- | --- |
 | `si build image` | Build local runtime image | `si build image` |
 | `si-rs build self` | Build or upgrade `si` binary | `si-rs build self` |
+| `si-rs build self check` | Fast typecheck for the SI CLI | `si-rs build self check --timings` |
 | `si-rs build self assets` | Build all release archives + `checksums.txt` locally | `si-rs build self assets --version vX.Y.Z` |
 | `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
 | `si analyze` (`si lint`) | Static analysis and validation lanes | `si analyze` |
@@ -67,6 +68,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 ```bash
 si-rs build self
+si-rs build self check --timings
 si vault status
 si --help
 si mintlify validate

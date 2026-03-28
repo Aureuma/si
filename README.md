@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh
 Prerequisites:
 
 - Docker Engine available on host.
-- Rust 1.86 toolchain for local source builds.
+- Latest stable Rust toolchain for local source builds.
 - `si-rs` is the runtime entrypoint.
 
 Build local CLI + runtime image:
@@ -72,6 +72,13 @@ cargo build --release --locked --bin si-rs
 
 # runtime image for dyads/codex
 ./.artifacts/cargo-target/release/si-rs build image
+```
+
+Fast local iteration:
+
+```bash
+si build self check --timings
+si build self --timings
 ```
 
 ## Common workflows

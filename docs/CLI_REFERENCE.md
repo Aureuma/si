@@ -108,6 +108,17 @@ si mintlify broken-links
 ./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
+### Faster Rust iteration
+
+```bash
+si build self check --timings
+si build self --timings
+```
+
+- `si build self` now reuses `.artifacts/cargo-target/self-build` by default for faster rebuilds.
+- `si build self check` runs `cargo check` against the SI CLI manifest without linking a release binary.
+- `si build self` and release-asset builds auto-use `sccache` when it is available on `PATH`.
+
 ## Safety guidance
 
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
