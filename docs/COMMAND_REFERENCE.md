@@ -26,27 +26,27 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
-| `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build)` | [Orbitals](./ORBITALS) |
+| `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
 
 ## Provider and integration command families
 
 | Integration | Command family | Typical first checks | Detailed guide |
 | --- | --- | --- | --- |
-| GitHub | `si github ...` | `si github auth status`, `si github doctor`, `si github project list Aureuma` | [GitHub](./GITHUB) |
-| Cloudflare | `si cloudflare ...` | `si cloudflare auth status`, `si cloudflare doctor` | [Cloudflare](./CLOUDFLARE) |
-| GCP + Gemini/Vertex | `si gcp ...` | `si gcp auth status`, `si gcp doctor` | [GCP](./GCP) |
-| Google Places | `si google places ...` | `si google places auth status`, `si google places doctor` | [Google Places](./GOOGLE_PLACES) |
-| Google Play | `si google play ...` | `si google play auth status`, `si google play doctor` | [Google Play](./GOOGLE_PLAY) |
-| YouTube Data | `si google youtube ...` | `si google youtube auth status`, `si google youtube doctor` | [Google YouTube](./GOOGLE_YOUTUBE) |
-| AWS | `si aws ...` | `si aws auth status`, `si aws doctor` | [AWS](./AWS) |
-| OpenAI | `si openai ...` | `si openai auth status`, `si openai doctor` | [OpenAI](./OPENAI) |
-| OCI | `si oci ...` | `si oci auth status`, `si oci doctor` | [OCI](./OCI) |
-| Stripe | `si stripe ...` | `si stripe auth status`, `si stripe doctor` | [Stripe](./STRIPE) |
+| GitHub | `si orbit github ...` | `si orbit github auth status`, `si orbit github doctor`, `si orbit github project list Aureuma` | [GitHub](./GITHUB) |
+| Cloudflare | `si orbit cloudflare ...` | `si orbit cloudflare auth status`, `si orbit cloudflare doctor` | [Cloudflare](./CLOUDFLARE) |
+| GCP + Gemini/Vertex | `si orbit gcp ...` | `si orbit gcp auth status`, `si orbit gcp doctor` | [GCP](./GCP) |
+| Google Places | `si orbit google places ...` | `si orbit google places auth status`, `si orbit google places doctor` | [Google Places](./GOOGLE_PLACES) |
+| Google Play | `si orbit google play ...` | `si orbit google play auth status`, `si orbit google play doctor` | [Google Play](./GOOGLE_PLAY) |
+| YouTube Data | `si orbit google youtube ...` | `si orbit google youtube auth status`, `si orbit google youtube doctor` | [Google YouTube](./GOOGLE_YOUTUBE) |
+| AWS | `si orbit aws ...` | `si orbit aws auth status`, `si orbit aws doctor` | [AWS](./AWS) |
+| OpenAI | `si orbit openai ...` | `si orbit openai auth status`, `si orbit openai doctor` | [OpenAI](./OPENAI) |
+| OCI | `si orbit oci ...` | `si orbit oci auth status`, `si orbit oci doctor` | [OCI](./OCI) |
+| Stripe | `si orbit stripe ...` | `si orbit stripe auth status`, `si orbit stripe doctor` | [Stripe](./STRIPE) |
 | Social APIs | `si social ...` | `si social <platform> auth status`, `doctor` | [Social](./SOCIAL) |
-| WorkOS | `si workos ...` | `si workos auth status`, `si workos doctor` | [WorkOS](./WORKOS) |
-| Apple App Store Connect | `si apple store ...` | `si apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
+| WorkOS | `si orbit workos ...` | `si orbit workos auth status`, `si orbit workos doctor` | [WorkOS](./WORKOS) |
+| Apple App Store Connect | `si orbit apple store ...` | `si orbit apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
 | Publish flows | `si publish ...` | `si publish catalog list` | [Publish](./PUBLISH) |
-| Provider telemetry | `si providers ...` | `si providers characteristics`, `si providers health` | [Providers](./PROVIDERS) |
+| Provider inventory | `si orbit list` | `si orbit list`, `si orbit list --provider github --json` | [Providers](./PROVIDERS) |
 
 ## Build, docs, and developer tooling
 
@@ -77,10 +77,9 @@ si mintlify validate
 ### 2. Integration readiness check
 
 ```bash
-si providers characteristics --json
-si providers health --json
-si github doctor --json
-si cloudflare doctor --json
+si orbit list --json
+si orbit github doctor --json
+si orbit cloudflare doctor --json
 ```
 
 ### 3. Release maintainer preflight

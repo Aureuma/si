@@ -1,8 +1,8 @@
-# Cloudflare Command Guide (`si cloudflare`)
+# Cloudflare Command Guide (`si orbit cloudflare`)
 
 ![Cloudflare](/docs/images/integrations/cloudflare.svg)
 
-`si cloudflare` is the Cloudflare bridge for account context, operational workflows, and raw API access.
+`si orbit cloudflare` is the Cloudflare bridge for account context, operational workflows, and raw API access.
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -41,125 +41,125 @@ Environment policy:
 ## Context + Auth + Diagnostics
 
 ```bash
-si cloudflare auth status --account core
-si cloudflare status --account core
-si cloudflare smoke --account core
-si cloudflare context list
-si cloudflare context current
-si cloudflare context use --account core --env prod --zone-id <zone>
-si cloudflare doctor --account core
+si orbit cloudflare auth status --account core
+si orbit cloudflare status --account core
+si orbit cloudflare smoke --account core
+si orbit cloudflare context list
+si orbit cloudflare context current
+si orbit cloudflare context use --account core --env prod --zone-id <zone>
+si orbit cloudflare doctor --account core
 ```
 
 ## Zone + DNS
 
 ```bash
-si cloudflare zone list
-si cloudflare zone get <zone_id>
-si cloudflare zone create --param name=example.com --param account.id=<account_id>
+si orbit cloudflare zone list
+si orbit cloudflare zone get <zone_id>
+si orbit cloudflare zone create --param name=example.com --param account.id=<account_id>
 
-si cloudflare dns list --zone-id <zone_id>
-si cloudflare dns create --zone-id <zone_id> --param type=A --param name=api --param content=1.2.3.4 --param proxied=true
-si cloudflare dns update --zone-id <zone_id> <record_id> --param ttl=120
-si cloudflare dns delete --zone-id <zone_id> <record_id> --force
-si cloudflare dns export --zone-id <zone_id>
-si cloudflare dns import --zone-id <zone_id> --body '<BIND DATA>' --force
+si orbit cloudflare dns list --zone-id <zone_id>
+si orbit cloudflare dns create --zone-id <zone_id> --param type=A --param name=api --param content=1.2.3.4 --param proxied=true
+si orbit cloudflare dns update --zone-id <zone_id> <record_id> --param ttl=120
+si orbit cloudflare dns delete --zone-id <zone_id> <record_id> --force
+si orbit cloudflare dns export --zone-id <zone_id>
+si orbit cloudflare dns import --zone-id <zone_id> --body '<BIND DATA>' --force
 ```
 
 ## TLS + Cache + Security
 
 ```bash
-si cloudflare tls get --zone-id <zone_id> --setting min_tls_version
-si cloudflare tls set --zone-id <zone_id> --setting min_tls_version --value 1.2
-si cloudflare ssl get --zone-id <zone_id> --setting ssl
-si cloudflare tls cert list --zone-id <zone_id>
-si cloudflare cert list --zone-id <zone_id>
-si cloudflare tls origin list
-si cloudflare origin list
+si orbit cloudflare tls get --zone-id <zone_id> --setting min_tls_version
+si orbit cloudflare tls set --zone-id <zone_id> --setting min_tls_version --value 1.2
+si orbit cloudflare ssl get --zone-id <zone_id> --setting ssl
+si orbit cloudflare tls cert list --zone-id <zone_id>
+si orbit cloudflare cert list --zone-id <zone_id>
+si orbit cloudflare tls origin list
+si orbit cloudflare origin list
 
-si cloudflare cache purge --zone-id <zone_id> --everything --force
-si cloudflare cache settings get --zone-id <zone_id> --setting cache_level
+si orbit cloudflare cache purge --zone-id <zone_id> --everything --force
+si orbit cloudflare cache settings get --zone-id <zone_id> --setting cache_level
 
-si cloudflare waf list --zone-id <zone_id>
-si cloudflare ruleset list --zone-id <zone_id>
-si cloudflare firewall list --zone-id <zone_id>
-si cloudflare limits list --zone-id <zone_id>
+si orbit cloudflare waf list --zone-id <zone_id>
+si orbit cloudflare ruleset list --zone-id <zone_id>
+si orbit cloudflare firewall list --zone-id <zone_id>
+si orbit cloudflare limits list --zone-id <zone_id>
 ```
 
 ## Workers + Pages
 
 ```bash
-si cloudflare workers script list --account-id <account_id>
-si cloudflare workers route list --zone-id <zone_id>
-si cloudflare workers secret set --account-id <account_id> --script my-worker --name API_KEY --text '...'
+si orbit cloudflare workers script list --account-id <account_id>
+si orbit cloudflare workers route list --zone-id <zone_id>
+si orbit cloudflare workers secret set --account-id <account_id> --script my-worker --name API_KEY --text '...'
 
-si cloudflare pages project list --account-id <account_id>
-si cloudflare pages deploy list --account-id <account_id> --project my-pages
-si cloudflare pages deploy rollback --account-id <account_id> --project my-pages --deployment <id> --force
+si orbit cloudflare pages project list --account-id <account_id>
+si orbit cloudflare pages deploy list --account-id <account_id> --project my-pages
+si orbit cloudflare pages deploy rollback --account-id <account_id> --project my-pages --deployment <id> --force
 ```
 
 ## Data Platform
 
 ```bash
-si cloudflare r2 bucket list --account-id <account_id>
-si cloudflare r2 object list --account-id <account_id> --bucket my-bucket
+si orbit cloudflare r2 bucket list --account-id <account_id>
+si orbit cloudflare r2 object list --account-id <account_id> --bucket my-bucket
 
-si cloudflare d1 db list --account-id <account_id>
-si cloudflare d1 query --account-id <account_id> --db <db_id> --sql 'select 1'
+si orbit cloudflare d1 db list --account-id <account_id>
+si orbit cloudflare d1 query --account-id <account_id> --db <db_id> --sql 'select 1'
 
-si cloudflare kv namespace list --account-id <account_id>
-si cloudflare kv key put --account-id <account_id> --namespace <ns_id> --key demo --value hello
+si orbit cloudflare kv namespace list --account-id <account_id>
+si orbit cloudflare kv key put --account-id <account_id> --namespace <ns_id> --key demo --value hello
 
-si cloudflare queue list --account-id <account_id>
+si orbit cloudflare queue list --account-id <account_id>
 ```
 
 ## Access + Tunnel + Load Balancer
 
 ```bash
-si cloudflare access app list --account-id <account_id>
-si cloudflare access policy list --account-id <account_id>
+si orbit cloudflare access app list --account-id <account_id>
+si orbit cloudflare access policy list --account-id <account_id>
 
-si cloudflare tunnel list --account-id <account_id>
-si cloudflare tunnels list --account-id <account_id>
-si cloudflare tunnel token --account-id <account_id> --tunnel <id>
+si orbit cloudflare tunnel list --account-id <account_id>
+si orbit cloudflare tunnels list --account-id <account_id>
+si orbit cloudflare tunnel token --account-id <account_id> --tunnel <id>
 
-si cloudflare lb list --zone-id <zone_id>
-si cloudflare lb pool list --account-id <account_id>
+si orbit cloudflare lb list --zone-id <zone_id>
+si orbit cloudflare lb pool list --account-id <account_id>
 ```
 
 ## Email + Tokens
 
 ```bash
-si cloudflare email rule list --zone-id <zone_id>
-si cloudflare email rule create --zone-id <zone_id> --param name=forward-inbox --param enabled=true
-si cloudflare email address list --account-id <account_id>
-si cloudflare email settings get --zone-id <zone_id>
-si cloudflare email settings enable --zone-id <zone_id> --force
+si orbit cloudflare email rule list --zone-id <zone_id>
+si orbit cloudflare email rule create --zone-id <zone_id> --param name=forward-inbox --param enabled=true
+si orbit cloudflare email address list --account-id <account_id>
+si orbit cloudflare email settings get --zone-id <zone_id>
+si orbit cloudflare email settings enable --zone-id <zone_id> --force
 
-si cloudflare token verify
-si cloudflare token list
-si cloudflare token permissions
+si orbit cloudflare token verify
+si orbit cloudflare token list
+si orbit cloudflare token permissions
 ```
 
 ## Analytics + Logs + Reports
 
 ```bash
-si cloudflare analytics http --zone-id <zone_id>
-si cloudflare logs job list --zone-id <zone_id>
-si cloudflare logs received --zone-id <zone_id>
-si cloudflare report traffic-summary --zone-id <zone_id>
+si orbit cloudflare analytics http --zone-id <zone_id>
+si orbit cloudflare logs job list --zone-id <zone_id>
+si orbit cloudflare logs received --zone-id <zone_id>
+si orbit cloudflare report traffic-summary --zone-id <zone_id>
 ```
 
 ## Raw Escape Hatch
 
 ```bash
-si cloudflare raw --method GET --path /zones
-si cloudflare api --method GET --path /zones
-si cloudflare raw --method POST --path /zones/<zone_id>/purge_cache --body '{"purge_everything":true}'
+si orbit cloudflare raw --method GET --path /zones
+si orbit cloudflare api --method GET --path /zones
+si orbit cloudflare raw --method POST --path /zones/<zone_id>/purge_cache --body '{"purge_everything":true}'
 ```
 
 ## Error Reporting
 
-On failures, `si cloudflare` surfaces:
+On failures, `si orbit cloudflare` surfaces:
 
 - HTTP status
 - request id (`CF-Ray` when available)

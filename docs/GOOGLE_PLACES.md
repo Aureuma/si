@@ -1,8 +1,8 @@
-# Google Places Command Guide (`si google places`)
+# Google Places Command Guide (`si orbit google places`)
 
 ![Google Places](/docs/images/integrations/google-places.svg)
 
-`si google places` is the Google Places API (New) bridge for autocomplete, search, details, photos, local reporting, and raw API access.
+`si orbit google places` is the Google Places API (New) bridge for autocomplete, search, details, photos, local reporting, and raw API access.
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -43,11 +43,11 @@ Environment policy:
 ## Context + Auth + Diagnostics
 
 ```bash
-si google places auth status --account core
-si google places context list
-si google places context current
-si google places context use --account core --env prod --language en --region US
-si google places doctor --account core
+si orbit google places auth status --account core
+si orbit google places context list
+si orbit google places context current
+si orbit google places context use --account core --env prod --language en --region US
+si orbit google places doctor --account core
 ```
 
 ## Session Tokens
@@ -55,43 +55,43 @@ si google places doctor --account core
 Use sessions for autocomplete -> details flows:
 
 ```bash
-si google places session new
-si google places session inspect <token>
-si google places session list
-si google places session end <token>
+si orbit google places session new
+si orbit google places session inspect <token>
+si orbit google places session list
+si orbit google places session end <token>
 ```
 
 ## Search + Details
 
 ```bash
-si google places autocomplete --input "coffee" --session <token>
-si google places text --query "coffee near downtown" --field-mask places.id,places.displayName,places.formattedAddress
-si google places nearby --center 37.7749,-122.4194 --radius 1200 --included-type cafe --field-mask places.id,places.displayName,places.formattedAddress
-si google places details <place_id_or_name> --session <token> --field-mask id,name,displayName,formattedAddress
+si orbit google places autocomplete --input "coffee" --session <token>
+si orbit google places text --query "coffee near downtown" --field-mask places.id,places.displayName,places.formattedAddress
+si orbit google places nearby --center 37.7749,-122.4194 --radius 1200 --included-type cafe --field-mask places.id,places.displayName,places.formattedAddress
+si orbit google places details <place_id_or_name> --session <token> --field-mask id,name,displayName,formattedAddress
 ```
 
 Pagination helpers:
 
 ```bash
-si google places text --query "coffee" --all --max-pages 4 --field-mask places.id,places.displayName
-si google places nearby --center 37.77,-122.41 --radius 2000 --all --field-mask places.id,places.displayName
+si orbit google places text --query "coffee" --all --max-pages 4 --field-mask places.id,places.displayName
+si orbit google places nearby --center 37.77,-122.41 --radius 2000 --all --field-mask places.id,places.displayName
 ```
 
 ## Photos
 
 ```bash
-si google places photo get places/<place_id>/photos/<photo_id>
-si google places photo download places/<place_id>/photos/<photo_id> --output ./photo.jpg --max-width 1200
+si orbit google places photo get places/<place_id>/photos/<photo_id>
+si orbit google places photo download places/<place_id>/photos/<photo_id> --output ./photo.jpg --max-width 1200
 ```
 
 ## Types + Reports
 
 ```bash
-si google places types list --group food
-si google places types validate cafe
+si orbit google places types list --group food
+si orbit google places types validate cafe
 
-si google places report usage --since 2026-02-08T00:00:00Z
-si google places report sessions
+si orbit google places report usage --since 2026-02-08T00:00:00Z
+si orbit google places report sessions
 ```
 
 `report usage` is local-log-based and reads the bridge log (`~/.si/logs/google-places.log` by default).
@@ -99,8 +99,8 @@ si google places report sessions
 ## Raw Escape Hatch
 
 ```bash
-si google places raw --method GET --path /v1/places/<place_id> --field-mask id,name
-si google places raw --method POST --path /v1/places:searchText --body '{"textQuery":"coffee"}' --field-mask places.id,places.displayName
+si orbit google places raw --method GET --path /v1/places/<place_id> --field-mask id,name
+si orbit google places raw --method POST --path /v1/places:searchText --body '{"textQuery":"coffee"}' --field-mask places.id,places.displayName
 ```
 
 ## Field Mask Policy
@@ -112,7 +112,7 @@ si google places raw --method POST --path /v1/places:searchText --body '{"textQu
 
 ## Error Reporting
 
-On failures, `si google places` surfaces:
+On failures, `si orbit google places` surfaces:
 
 - HTTP status and Google status/code
 - request id (when present)

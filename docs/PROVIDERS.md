@@ -1,31 +1,23 @@
 ---
 title: Providers Telemetry Guide
-description: Using si providers to inspect integration characteristics, runtime health, guardrails, and API version policy coverage.
+description: Using si orbit list to inspect integration characteristics, guardrails, and API version policy coverage.
 ---
 
-# Providers Telemetry Guide (`si providers`)
+# Providers Telemetry Guide (`si orbit list`)
 
 ![Providers](/docs/images/integrations/providers.svg)
 
-`si providers` is the control-plane view across SI integration runtimes.
+`si orbit list` is the control-plane view across SI's first-party provider runtimes.
 
 ## Related docs
 
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
 - [API Characteristics](./API_CHARACTERISTICS)
-- [Orbitals](./ORBITALS)
 
 ## Command surface
 
 ```bash
-si providers <characteristics|health> [--provider <id>] [--json]
-```
-
-Aliases:
-
-```bash
-si integrations ...
-si apis ...
+si orbit list [--provider <id>] [--json]
 ```
 
 ## Characteristics view
@@ -33,8 +25,8 @@ si apis ...
 Use this to inspect static policy and capability metadata.
 
 ```bash
-si providers characteristics --json
-si providers characteristics --provider github --json
+si orbit list --json
+si orbit list --provider github --json
 ```
 
 Output includes:
@@ -44,23 +36,6 @@ Output includes:
 - rate and burst policy
 - public probe endpoint
 - capability flags (pagination/bulk/idempotency/raw)
-
-## Health view
-
-Use this for runtime traffic and guardrail telemetry.
-
-```bash
-si providers health --json
-si providers health --provider openai --json
-```
-
-Output includes:
-
-- per-provider request counts and latency percentiles
-- `429` and `5xx` surfaces
-- circuit state snapshots
-- guardrail warnings
-- API version warnings/errors and coverage gaps
 
 ## Provider IDs
 
@@ -82,13 +57,12 @@ Common IDs:
 
 ## Operational playbook
 
-1. Run `si providers characteristics --json` after upgrading SI.
-2. Run `si providers health --json` after auth/context setup.
-3. Investigate guardrail or version warnings before production writes.
-4. Pair provider health checks with integration-specific doctor commands.
+1. Run `si orbit list --json` after upgrading SI.
+2. Run integration-specific auth status and doctor commands after context setup.
+3. Investigate version warnings before production writes.
+4. Pair provider inventory checks with integration-specific doctor commands.
 
 ## Troubleshooting
 
-- No entries in health output usually means no integration traffic yet.
 - Version policy errors indicate missing/invalid provider policy metadata.
 - Re-run affected integration doctor command and verify context/account.
