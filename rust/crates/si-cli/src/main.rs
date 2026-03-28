@@ -33694,7 +33694,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["build", "self", "verify"] => Some("Verify release assets."),
         ["codex"] => Some("Manage Codex profiles and containers."),
         ["codex", "profile"] => Some("Manage Codex profiles."),
-        ["codex", "spawn"] => Some("Plan and start a Codex container."),
+        ["codex", "spawn"] => Some("Spawn one Codex profile or all configured profiles."),
         ["codex", "remove"] => Some("Remove a Codex container or volume set."),
         ["codex", "tail"] => Some("Tail Codex container logs."),
         ["codex", "exec"] => Some("Run a command in a Codex container."),
@@ -36027,13 +36027,10 @@ fn codex_profile_resolution_error(query: &str, profiles: &[CodexProfileView]) ->
     )
 }
 
-fn resolve_codex_profile_with_mode(
+fn load_codex_profiles_from_settings(
     settings: &Settings,
     paths: &SiPaths,
-    profile: Option<&str>,
-    _mode: CodexProfileSelectionMode,
-    purpose: &str,
-) -> Result<String> {
+) -> Vec<CodexProfileView> {
     let active = resolve_codex_active_profile_id(settings);
     let mut profiles = settings
         .codex
@@ -36043,6 +36040,28 @@ fn resolve_codex_profile_with_mode(
         .map(|(profile_id, entry)| codex_profile_view(paths, active.as_deref(), profile_id, entry))
         .collect::<Vec<_>>();
     profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+    profiles
+}
+
+fn load_codex_profiles_for_display(
+    settings: &Settings,
+    paths: &SiPaths,
+    docker_bin: Option<PathBuf>,
+) -> Vec<CodexProfileView> {
+    enrich_codex_profiles_with_live_status(
+        load_codex_profiles_from_settings(settings, paths),
+        docker_bin,
+    )
+}
+
+fn resolve_codex_profile_with_mode(
+    settings: &Settings,
+    paths: &SiPaths,
+    profile: Option<&str>,
+    _mode: CodexProfileSelectionMode,
+    purpose: &str,
+) -> Result<String> {
+    let profiles = load_codex_profiles_for_display(settings, paths, None);
 
     if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
         let candidates = find_codex_profile_candidates(&profiles, query);
@@ -36054,7 +36073,6 @@ fn resolve_codex_profile_with_mode(
     }
 
     if codex_profile_prompt_available() {
-        profiles = enrich_codex_profiles_with_live_status(profiles, None);
         return prompt_for_codex_profile(purpose, &profiles);
     }
 
@@ -36347,15 +36365,7 @@ fn show_codex_profile_list(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let active = resolve_codex_active_profile_id(&settings);
-    let mut profiles = settings
-        .codex
-        .profiles
-        .entries
-        .iter()
-        .map(|(profile_id, entry)| codex_profile_view(&paths, active.as_deref(), profile_id, entry))
-        .collect::<Vec<_>>();
-    profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+    let profiles = load_codex_profiles_from_settings(&settings, &paths);
     let spinner = match format {
         OutputFormat::Text => start_codex_profile_list_spinner(profiles.len()),
         OutputFormat::Json => None,
@@ -65063,50 +65073,140 @@ fn show_codex_spawn_start(
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile.as_deref())?;
-    let workspace = resolve_codex_workspace(workspace, &settings)?;
-    let image = resolve_codex_spawn_option(image, settings.codex.image.as_deref());
-    let network = resolve_codex_spawn_option(network, settings.codex.network.as_deref());
-    let workdir = resolve_codex_spawn_option(workdir, settings.codex.workdir.as_deref());
-    let mut host_ctx = HostMountContext::from_env();
-    if home.is_some() {
-        host_ctx.home_dir = Some(settings_home);
+    let profile_ids =
+        if let Some(query) = profile.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            vec![resolve_codex_requested_profile(&settings, &paths, Some(query))?]
+        } else {
+            let mut items = settings.codex.profiles.entries.keys().cloned().collect::<Vec<_>>();
+            items.sort();
+            items
+        };
+    if profile_ids.is_empty() {
+        anyhow::bail!("no codex profiles are configured");
     }
-    if ssh_auth_sock.is_some() {
-        host_ctx.ssh_auth_sock = ssh_auth_sock;
-    }
-    let plan = build_spawn_plan(
-        &SpawnRequest {
-            profile_id,
-            image,
-            network_name: network,
-            workspace_host: workspace,
-            workdir,
-            codex_volume,
-            skills_volume,
-            gh_volume,
-            repo,
-            gh_pat,
-            docker_socket,
-            clean_slate,
-            detach,
-            container_home: None,
-            host_vault_env_file: vault_env_file,
-            include_host_si,
-            additional_env: env,
-        },
-        &host_ctx,
-    )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
+
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let command = spec.docker_run_command(docker_program.display().to_string())?;
-    let output = ProcessRunner.run(&command, &RunOptions::default())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(codex_spawn_docker_run_error(plan.image.as_str(), stderr.trim()));
+    for profile_id in profile_ids {
+        let artifacts = build_remove_artifacts(&profile_id)?;
+        if let Some(existing) = read_codex_containers(Some(docker_program.clone()))?
+            .into_iter()
+            .find(|item| item.name == artifacts.container_name)
+        {
+            match existing.state.to_ascii_lowercase().as_str() {
+                "running" => {
+                    println!(
+                        "{}",
+                        stdout_text(
+                            &format!(
+                                "codex container {} is already running for profile {}",
+                                existing.name, profile_id
+                            ),
+                            CliTone::Info,
+                        )
+                    );
+                    continue;
+                }
+                _ if cmd.is_none()
+                    && labels.is_empty()
+                    && ports.is_empty()
+                    && codex_volume.is_none()
+                    && skills_volume.is_none()
+                    && gh_volume.is_none()
+                    && repo.is_none()
+                    && gh_pat.is_none()
+                    && !clean_slate
+                    && detach
+                    && vault_env_file.is_none()
+                    && include_host_si
+                    && env.is_empty() =>
+                {
+                    let status = ensure_codex_container_running(
+                        &profile_id,
+                        home.clone(),
+                        None,
+                        workspace.clone(),
+                        image.clone(),
+                        network.clone(),
+                        Some(docker_program.clone()),
+                    )?;
+                    println!(
+                        "{}",
+                        stdout_text(
+                            &format!(
+                                "codex container {} {}",
+                                existing.name,
+                                status.replace('-', " ")
+                            ),
+                            CliTone::Info,
+                        )
+                    );
+                    continue;
+                }
+                _ => {
+                    anyhow::bail!(
+                        "codex container {:?} already exists for profile {:?}; use `si codex tmux {}` to attach, `si codex exec {}` to run a command, or `si codex remove {}` before spawning with different options",
+                        existing.name,
+                        profile_id,
+                        profile_id,
+                        profile_id,
+                        profile_id
+                    );
+                }
+            }
+        }
+
+        let workspace = resolve_codex_workspace(workspace.clone(), &settings)?;
+        let image = resolve_codex_spawn_option(image.clone(), settings.codex.image.as_deref());
+        let network =
+            resolve_codex_spawn_option(network.clone(), settings.codex.network.as_deref());
+        let workdir =
+            resolve_codex_spawn_option(workdir.clone(), settings.codex.workdir.as_deref());
+        let mut host_ctx = HostMountContext::from_env();
+        if home.is_some() {
+            host_ctx.home_dir = Some(settings_home.clone());
+        }
+        if ssh_auth_sock.is_some() {
+            host_ctx.ssh_auth_sock = ssh_auth_sock.clone();
+        }
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                profile_id,
+                image,
+                network_name: network,
+                workspace_host: workspace,
+                workdir,
+                codex_volume: codex_volume.clone(),
+                skills_volume: skills_volume.clone(),
+                gh_volume: gh_volume.clone(),
+                repo: repo.clone(),
+                gh_pat: gh_pat.clone(),
+                docker_socket,
+                clean_slate,
+                detach,
+                container_home: None,
+                host_vault_env_file: vault_env_file.clone(),
+                include_host_si,
+                additional_env: env.clone(),
+            },
+            &host_ctx,
+        )?;
+        let spec = build_container_spec(
+            &plan,
+            &SpawnContainerOptions {
+                command: cmd.clone(),
+                labels: labels.clone(),
+                ports: ports.clone(),
+            },
+        )?;
+        let command = spec.docker_run_command(docker_program.display().to_string())?;
+        let output = ProcessRunner.run(&command, &RunOptions::default())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(codex_spawn_docker_run_error(plan.image.as_str(), stderr.trim()));
+        }
+        print!("{}", String::from_utf8_lossy(&output.stdout));
     }
-    print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 
