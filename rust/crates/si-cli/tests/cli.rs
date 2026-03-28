@@ -16727,7 +16727,7 @@ fn codex_spawn_uses_codex_settings_defaults_when_flags_are_omitted() {
 }
 
 #[test]
-fn codex_spawn_uses_active_profile_when_profile_is_omitted() {
+fn codex_spawn_uses_explicit_profile_over_active_profile() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -16751,7 +16751,7 @@ fn codex_spawn_uses_active_profile_when_profile_is_omitted() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["codex", "spawn", "--workspace"])
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
         .args(["--docker-bin"])
         .arg(&docker_bin)
@@ -16764,7 +16764,69 @@ fn codex_spawn_uses_active_profile_when_profile_is_omitted() {
     let text = String::from_utf8(output).expect("utf8 output");
     assert!(text.contains("container-id-123"));
     let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("si.codex.profile=profile-zeta"));
+    assert!(!args.contains("si.codex.profile=profile-alpha"));
+}
+
+#[test]
+fn codex_spawn_without_profile_spawns_all_configured_profiles() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-alpha",
+        &[
+            ("profile-alpha", "🧪 Profile Alpha", "profile-alpha@example.com"),
+            ("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com"),
+        ],
+    );
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+cmd="${{1:-}}"
+shift || true
+case "$cmd" in
+  ps)
+    exit 0
+    ;;
+  run)
+    printf '%s\n' 'container-id-123'
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn", "--workspace"])
+        .arg(workspace.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert_eq!(text.matches("container-id-123").count(), 2);
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(args.matches("\nrun\n").count(), 2);
     assert!(args.contains("si.codex.profile=profile-alpha"));
+    assert!(args.contains("si.codex.profile=profile-zeta"));
 }
 
 #[test]
@@ -16803,6 +16865,118 @@ exit 1
     assert!(stderr.contains("si build image"));
     assert!(stderr.contains("--image"));
     assert!(stderr.contains("codex.image"));
+}
+
+#[test]
+fn codex_spawn_reuses_existing_running_container_cleanly() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("docker-args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+cmd="${{1:-}}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-profile-zeta	running	aureuma/si:local	profile-zeta'
+    ;;
+  run)
+    echo "docker run should not have been called" >&2
+    exit 9
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
+        .arg(workspace.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 output");
+    assert!(stdout.contains("already running"));
+    let args = fs::read_to_string(args_path).expect("read docker args");
+    assert!(args.contains("ps\n"));
+    assert!(!args.contains("\nrun\n"));
+}
+
+#[test]
+fn codex_spawn_starts_existing_stopped_container_by_default() {
+    let home = tempdir().expect("tempdir");
+    write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("docker-args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_bin,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" >> {args}
+printf '%s\n' '--' >> {args}
+cmd="${{1:-}}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-profile-zeta	exited	aureuma/si:local	profile-zeta'
+    ;;
+  start)
+    printf '%s\n' 'si-codex-profile-zeta'
+    ;;
+  run)
+    echo "docker run should not have been called" >&2
+    exit 9
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+            args = shell_escape_for_test(&args_path),
+        ),
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
+        .arg(workspace.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let stdout = String::from_utf8(output).expect("utf8 output");
+    assert!(stdout.contains("started"));
+    let args = fs::read_to_string(args_path).expect("read docker args");
+    assert!(args.contains("ps\n"));
+    assert!(args.contains("start\nsi-codex-profile-zeta\n"));
+    assert!(!args.contains("\nrun\n"));
 }
 
 #[test]
