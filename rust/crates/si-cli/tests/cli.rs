@@ -4291,6 +4291,15 @@ fn help_rejects_removed_provider_roots() {
 }
 
 #[test]
+fn help_rejects_manifest_only_root_commands() {
+    let stderr = String::from_utf8(
+        cargo_bin().args(["help", "analyze"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("help stderr utf8");
+    assert!(stderr.contains("unknown root command: analyze"));
+}
+
+#[test]
 fn help_json_lists_known_root_commands() {
     let output = cargo_bin()
         .args(["help", "--format", "json"])
@@ -4306,6 +4315,10 @@ fn help_json_lists_known_root_commands() {
     assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
     assert!(!commands.iter().any(|entry| entry["name"] == "github"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "analyze"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "publish"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "social"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "releasemind"));
     assert!(!commands.iter().any(|entry| entry["name"] == "spawn"));
     assert!(!commands.iter().any(|entry| entry["name"] == "__fort-runtime-agent"));
 }
