@@ -19289,8 +19289,43 @@ fn normalize_root_command(command: Command) -> Command {
     }
 }
 
+fn removed_provider_root_replacement(root: &str) -> Option<&'static str> {
+    match root {
+        "providers" => Some("si orbit list"),
+        "cloudflare" => Some("si orbit cloudflare ..."),
+        "apple" => Some("si orbit apple ..."),
+        "aws" => Some("si orbit aws ..."),
+        "gcp" => Some("si orbit gcp ..."),
+        "google" => Some("si orbit google ..."),
+        "openai" => Some("si orbit openai ..."),
+        "oci" => Some("si orbit oci ..."),
+        "stripe" => Some("si orbit stripe ..."),
+        "workos" => Some("si orbit workos ..."),
+        "github" => Some("si orbit github ..."),
+        _ => None,
+    }
+}
+
+fn reject_removed_provider_root(root: &str) -> Result<()> {
+    if let Some(replacement) = removed_provider_root_replacement(root) {
+        anyhow::bail!("`si {root}` was removed; use `{replacement}` instead");
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     configure_sigpipe();
+    let raw_args = env::args().skip(1).collect::<Vec<_>>();
+    if let Some(root) = raw_args.first().map(String::as_str) {
+        match root {
+            "help" => {
+                if let Some(target) = raw_args.get(1).map(String::as_str) {
+                    reject_removed_provider_root(target)?;
+                }
+            }
+            _ => reject_removed_provider_root(root)?,
+        }
+    }
     let cli = parse_cli();
 
     if cli.version_flag {
@@ -34088,6 +34123,7 @@ fn configure_sigpipe() {}
 fn show_help(command: Option<&str>, format: OutputFormat) -> Result<()> {
     let view = match command {
         Some(name) => {
+            reject_removed_provider_root(name)?;
             let spec = find_root_command(name)
                 .ok_or_else(|| anyhow::anyhow!("unknown root command: {name}"))?;
             HelpView { commands: vec![command_view(spec)] }
