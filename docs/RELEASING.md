@@ -201,6 +201,23 @@ Notes:
 - Use `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
 - Use `tools/release/homebrew/render-core-formula.sh --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 
+### 10) Verify repo-boundary stability for Viva integrations
+When a release changes `si viva`, Viva-related settings, or shared orchestration/config behavior, validate the adjacent Viva repo before closing the release:
+
+```bash
+cd /home/<user>/Development/viva
+cargo fmt --all --check
+cargo test --locked --quiet
+cd /home/<user>/Development/si
+si viva config set --repo /home/<user>/Development/viva --build true
+si viva -- version
+si viva -- doctor
+```
+
+Notes:
+- Viva should follow the same release discipline: tag/version validation, asset verification, and CI green before publishing.
+- Prefer `si orbit github release create Aureuma/viva ...` for Viva releases so the GitHub release flow stays operationally consistent across the stack.
+
 ## Tagging Rules
 - Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.
 - Tags should point at the release commit that includes the changelog update.
