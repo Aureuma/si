@@ -49,13 +49,10 @@ Color control:
 
 | Domain | Commands |
 | --- | --- |
-| Runtime and orchestration | `si dyad`, `si codex` |
-| Secrets and context | `si vault` (`si creds`), `si fort` |
-| Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple store`, `si orbit stripe`, `si social`, `si publish`, `si releasemind` (`si release`) |
-| Surf browser runtime | `si surf` |
-| Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
-| Docs workflow | `si mintlify` |
-| Profiles and skills | `si persona`, `si skill` |
+| Runtime and orchestration | `si dyad`, `si codex`, `si surf`, `si viva` |
+| Secrets and context | `si vault` (`si creds`), `si fort`, `si settings`, `si paths` |
+| Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple`, `si orbit stripe`, `si image` |
+| Build and release | `si build`, `si commands`, `si version`, `si help` |
 
 ## High-signal workflows
 
@@ -93,18 +90,16 @@ si fort doctor
 si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
 ```
 
-### Docs quality
-
-```bash
-si mintlify validate
-si mintlify broken-links
-```
-
 ### Release preflight
 
 ```bash
-./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z" --target "$(git rev-parse HEAD)" --draft
 ```
+
+- `si orbit github release create` now verifies the remote tag first.
+- When the tag is missing, pass `--target <sha>` and SI will create the git tag ref before creating the release.
+- For draft releases, GitHub may still return an `untagged-...` HTML URL until publish; verify with `tag_name` and `git ls-remote --tags`.
 
 ### Faster Rust iteration
 
@@ -125,4 +120,4 @@ si build self --timings
 - If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.
-- Keep docs and `docs.json` navigation in sync.
+- Keep command docs aligned with `si --help` and `si help --format json`.

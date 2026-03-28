@@ -1467,6 +1467,54 @@ pub fn create_branch(
     Ok(response)
 }
 
+pub fn get_tag_ref(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let tag_name = normalize_tag_name(tag);
+    if tag_name.is_empty() {
+        return Err("tag name is required".to_owned());
+    }
+    let path =
+        format!("/repos/{owner}/{repo}/git/ref/tags/{}", percent_encode_path_segment(&tag_name));
+    normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
+}
+
+pub fn create_tag_ref(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    sha: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let tag_name = normalize_tag_name(tag);
+    if tag_name.is_empty() {
+        return Err("tag name is required".to_owned());
+    }
+    let sha = sha.trim();
+    if sha.is_empty() {
+        return Err("target sha is required".to_owned());
+    }
+    let payload = serde_json::json!({
+        "ref": format!("refs/tags/{tag_name}"),
+        "sha": sha,
+    });
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}/git/refs"),
+        &token,
+        &payload,
+    )?)
+}
+
 pub fn delete_branch(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2513,6 +2561,15 @@ fn normalize_branch_name(value: &str) -> String {
         .trim()
         .trim_start_matches("refs/heads/")
         .trim_start_matches("heads/")
+        .trim_matches('/')
+        .to_owned()
+}
+
+fn normalize_tag_name(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches("refs/tags/")
+        .trim_start_matches("tags/")
         .trim_matches('/')
         .to_owned()
 }

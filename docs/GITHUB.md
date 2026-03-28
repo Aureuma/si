@@ -232,8 +232,31 @@ si orbit github workflow logs Aureuma/si 1234567890 --raw
 si orbit github release list Aureuma/si
 si orbit github release get Aureuma/si v0.44.0
 si orbit github release create Aureuma/si --tag v0.44.0 --title "v0.44.0" --notes-file ./notes.md
+si orbit github release create Aureuma/si --tag v0.44.1 --title "v0.44.1" --target "$(git rev-parse HEAD)" --draft
 si orbit github release upload Aureuma/si v0.44.0 --asset ./dist/si-linux-amd64
 si orbit github release delete Aureuma/si v0.44.0 --force
+```
+
+Release create behavior:
+
+- If the requested tag already exists remotely, `si orbit github release create` reuses it.
+- If the tag is missing and `--target <sha>` is provided, SI creates `refs/tags/<tag>` first, then creates the release.
+- If the tag is missing and `--target` is omitted, the command fails clearly instead of creating a broken/tagless release flow.
+- For draft releases, GitHub can still report an `untagged-...` release URL until publish time. Treat `tag_name` plus the remote git ref as the source of truth.
+
+Practical first-release example:
+
+```bash
+si orbit github release create Aureuma/releasemind \
+  --auth-mode app \
+  --account core \
+  --owner Aureuma \
+  --tag v0.1.0 \
+  --title "v0.1.0" \
+  --target c2eb19f59c0f71dcdc41c1d7b6c4dcad54e5f480 \
+  --notes "Initial draft release." \
+  --draft
+git ls-remote --tags git@github.com:Aureuma/releasemind.git
 ```
 
 ## Secrets

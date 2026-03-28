@@ -100,7 +100,7 @@ use si_rs_provider_gcp::{
 };
 use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubBranchCreateOptions,
-    GitHubBranchProtectionOptions, GitHubContextListEntry, GitHubSecretScope,
+    GitHubBranchProtectionOptions, GitHubContextListEntry, GitHubRuntime, GitHubSecretScope,
     add_project_item as github_add_project_item,
     archive_project_item as github_archive_project_item, archive_repo as github_archive_repo,
     cancel_workflow_run as github_cancel_workflow_run,
@@ -108,13 +108,14 @@ use si_rs_provider_github::{
     comment_issue as github_comment_issue, comment_pull_request as github_comment_pull_request,
     create_branch as github_create_branch, create_issue as github_create_issue,
     create_pull_request as github_create_pull_request, create_release as github_create_release,
-    create_repo as github_create_repo, delete_branch as github_delete_branch,
-    delete_project_item as github_delete_project_item, delete_release as github_delete_release,
-    delete_repo as github_delete_repo, delete_secret as github_delete_secret,
-    dispatch_workflow as github_dispatch_workflow, get_branch as github_get_branch,
-    get_issue as github_get_issue, get_project as github_get_project,
-    get_pull_request as github_get_pull_request, get_release as github_get_release,
-    get_repo as github_get_repo, get_workflow_logs as github_get_workflow_logs,
+    create_repo as github_create_repo, create_tag_ref as github_create_tag_ref,
+    delete_branch as github_delete_branch, delete_project_item as github_delete_project_item,
+    delete_release as github_delete_release, delete_repo as github_delete_repo,
+    delete_secret as github_delete_secret, dispatch_workflow as github_dispatch_workflow,
+    get_branch as github_get_branch, get_issue as github_get_issue,
+    get_project as github_get_project, get_pull_request as github_get_pull_request,
+    get_release as github_get_release, get_repo as github_get_repo,
+    get_tag_ref as github_get_tag_ref, get_workflow_logs as github_get_workflow_logs,
     get_workflow_run as github_get_workflow_run, graphql_query as github_graphql_query,
     list_branches as github_list_branches, list_contexts, list_issues as github_list_issues,
     list_project_fields as github_list_project_fields,
@@ -257,14 +258,8 @@ enum Command {
         #[command(subcommand)]
         command: BuildCommand,
     },
-    Commands {
-        #[command(subcommand)]
-        command: CommandsCommand,
-    },
-    Settings {
-        #[command(subcommand)]
-        command: SettingsCommand,
-    },
+    Commands(CommandsArgs),
+    Settings(SettingsArgs),
     Orbit {
         #[command(subcommand)]
         command: OrbitCommand,
@@ -341,10 +336,7 @@ enum Command {
         #[command(subcommand)]
         command: Box<CodexCommand>,
     },
-    Paths {
-        #[command(subcommand)]
-        command: PathsCommand,
-    },
+    Paths(PathsArgs),
     Surf {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -395,10 +387,21 @@ enum Command {
 
 #[derive(Debug, Subcommand)]
 enum CommandsCommand {
-    List {
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-    },
+    List(CommandsListArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+struct CommandsListArgs {
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CommandsArgs {
+    #[command(subcommand)]
+    command: Option<CommandsCommand>,
+    #[command(flatten)]
+    default_list: CommandsListArgs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -455,14 +458,25 @@ enum ImageAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum SettingsCommand {
-    Show {
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        settings_file: Option<PathBuf>,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-    },
+    Show(SettingsShowArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+struct SettingsShowArgs {
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct SettingsArgs {
+    #[command(subcommand)]
+    command: Option<SettingsCommand>,
+    #[command(flatten)]
+    default_show: SettingsShowArgs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -13894,7 +13908,9 @@ enum GitHubContextCommand {
 
 #[derive(Debug, Subcommand)]
 enum GitHubReleaseCommand {
+    #[command(about = "List GitHub releases for a repository.")]
     List {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
@@ -13912,9 +13928,9 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long, default_value_t = 5)]
+        #[arg(long, default_value_t = 5, help = "Maximum release-list pages to fetch.")]
         max_pages: usize,
-        #[arg(long = "param")]
+        #[arg(long = "param", help = "Extra query parameter in key=value form.")]
         params: Vec<String>,
         #[arg(long)]
         home: Option<PathBuf>,
@@ -13925,8 +13941,11 @@ enum GitHubReleaseCommand {
         #[arg(long)]
         raw: bool,
     },
+    #[command(about = "Get a GitHub release by tag or numeric id.")]
     Get {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
@@ -13953,7 +13972,12 @@ enum GitHubReleaseCommand {
         #[arg(long)]
         raw: bool,
     },
+    #[command(
+        about = "Create a GitHub release.",
+        long_about = "Create a GitHub release.\n\nIf the requested tag already exists remotely, SI reuses it.\nIf the tag is missing and --target <sha> is provided, SI creates refs/tags/<tag> first, then creates the release.\nIf the tag is missing and --target is omitted, the command fails clearly."
+    )]
     Create {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
@@ -13971,21 +13995,24 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Release tag name, for example v0.55.10.")]
         tag: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Release title shown in GitHub.")]
         title: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Inline release notes text.")]
         notes: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Path to a file containing release notes.")]
         notes_file: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(
+            long,
+            help = "Target branch or commit SHA. Required when the tag does not already exist on the remote."
+        )]
         target: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Create the release as a draft.")]
         draft: bool,
-        #[arg(long)]
+        #[arg(long, help = "Mark the release as a prerelease.")]
         prerelease: bool,
-        #[arg(long = "param")]
+        #[arg(long = "param", help = "Extra release body field in key=value form.")]
         params: Vec<String>,
         #[arg(long)]
         home: Option<PathBuf>,
@@ -13996,8 +14023,11 @@ enum GitHubReleaseCommand {
         #[arg(long)]
         raw: bool,
     },
+    #[command(about = "Upload an asset to a GitHub release.")]
     Upload {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
@@ -14015,11 +14045,11 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Path to the asset file to upload.")]
         asset: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(long, help = "Optional display label for the uploaded asset.")]
         label: Option<String>,
-        #[arg(long, default_value = "application/octet-stream")]
+        #[arg(long, default_value = "application/octet-stream", help = "Asset content type.")]
         content_type: String,
         #[arg(long)]
         home: Option<PathBuf>,
@@ -14030,8 +14060,11 @@ enum GitHubReleaseCommand {
         #[arg(long)]
         raw: bool,
     },
+    #[command(about = "Delete a GitHub release by tag or numeric id.")]
     Delete {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
@@ -14049,7 +14082,7 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Allow the destructive delete operation.")]
         force: bool,
         #[arg(long)]
         home: Option<PathBuf>,
@@ -15739,14 +15772,25 @@ enum CodexCommand {
 
 #[derive(Debug, Subcommand)]
 enum PathsCommand {
-    Show {
-        #[arg(long)]
-        home: Option<PathBuf>,
-        #[arg(long)]
-        settings_file: Option<PathBuf>,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-    },
+    Show(PathsShowArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+struct PathsShowArgs {
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct PathsArgs {
+    #[command(subcommand)]
+    command: Option<PathsCommand>,
+    #[command(flatten)]
+    default_show: PathsShowArgs,
 }
 
 #[derive(Debug, Parser)]
@@ -19313,13 +19357,8 @@ fn reject_removed_provider_root(root: &str) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_ROOT_COMMANDS: &[&str] = &[
-    "version", "help", "build", "commands", "settings", "orbit", "image", "dyad", "codex", "paths",
-    "surf", "viva", "fort", "vault",
-];
-
 fn is_public_root_command(name: &str) -> bool {
-    PUBLIC_ROOT_COMMANDS.contains(&name)
+    find_root_command(name).is_some_and(|spec| !spec.hidden)
 }
 
 fn main() -> Result<()> {
@@ -19493,13 +19532,19 @@ fn main() -> Result<()> {
                 } => run_homebrew_update_tap_repo(version, checksums, tap_dir, repo, commit, push)?,
             },
         },
-        Command::Commands { command } => match command {
-            CommandsCommand::List { format } => show_help(None, format)?,
+        Command::Commands(args) => match args.command {
+            Some(CommandsCommand::List(args)) => show_help(None, args.format)?,
+            None => show_help(None, args.default_list.format)?,
         },
-        Command::Settings { command } => match command {
-            SettingsCommand::Show { home, settings_file, format } => {
-                show_settings(home, settings_file, format)?
+        Command::Settings(args) => match args.command {
+            Some(SettingsCommand::Show(args)) => {
+                show_settings(args.home, args.settings_file, args.format)?
             }
+            None => show_settings(
+                args.default_show.home,
+                args.default_show.settings_file,
+                args.default_show.format,
+            )?,
         },
         Command::Providers { command } => match command {
             ProvidersCommand::Characteristics { provider, json, format } => {
@@ -33551,10 +33596,15 @@ fn main() -> Result<()> {
                 run_codex_respawn_plan(profile.as_deref(), profile_containers, format)?
             }
         },
-        Command::Paths { command } => match command {
-            PathsCommand::Show { home, settings_file, format } => {
-                show_paths(home, settings_file, format)?
+        Command::Paths(args) => match args.command {
+            Some(PathsCommand::Show(args)) => {
+                show_paths(args.home, args.settings_file, args.format)?
             }
+            None => show_paths(
+                args.default_show.home,
+                args.default_show.settings_file,
+                args.default_show.format,
+            )?,
         },
         Command::Surf { home, settings_file, build, no_build, bin, args } => {
             run_surf_wrapper(home, settings_file, build, no_build, bin, args)?
@@ -33647,7 +33697,9 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["help"] => Some("Show SI command help."),
         ["version"] => Some("Print the current SI version."),
         ["commands"] => Some("List visible SI root commands."),
+        ["commands", "list"] => Some("List visible SI root commands."),
         ["settings"] => Some("Show resolved SI settings."),
+        ["settings", "show"] => Some("Show resolved SI settings."),
         ["orbit"] => Some("Manage first-party provider orbits."),
         ["orbit", "list"] => Some("List orbit capabilities and provider traits."),
         ["orbit", "cloudflare"] => Some("Cloudflare orbit commands."),
@@ -33660,6 +33712,14 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["orbit", "stripe"] => Some("Stripe orbit commands."),
         ["orbit", "workos"] => Some("WorkOS orbit commands."),
         ["orbit", "github"] => Some("GitHub orbit commands."),
+        ["orbit", "github", "release"] => Some("Manage GitHub releases and release assets."),
+        ["orbit", "github", "release", "list"] => Some("List GitHub releases for a repository."),
+        ["orbit", "github", "release", "get"] => Some("Get a GitHub release by tag or id."),
+        ["orbit", "github", "release", "create"] => {
+            Some("Create a GitHub release and create the tag ref first when needed.")
+        }
+        ["orbit", "github", "release", "upload"] => Some("Upload an asset to a GitHub release."),
+        ["orbit", "github", "release", "delete"] => Some("Delete a GitHub release by tag or id."),
         ["providers"] => Some("Inspect provider capabilities."),
         ["build"] => Some("Build images, binaries, and release assets."),
         ["build", "image"] => Some("Build the local SI runtime image."),
@@ -33703,6 +33763,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["dyad", "exec"] => Some("Run a command in a Dyad container."),
         ["dyad", "cleanup"] => Some("Remove stopped Dyad containers."),
         ["paths"] => Some("Show resolved SI paths."),
+        ["paths", "show"] => Some("Show resolved SI paths."),
         ["vault"] => Some("Vault secret and trust commands."),
         ["vault", "trust"] => Some("Verify trusted vault inputs."),
         ["image"] => Some("Image provider commands."),
@@ -34201,7 +34262,7 @@ enum CliTone {
 }
 
 fn cli_color_choice() -> ColorChoice {
-    if let Some(value) = env::var("SI_CLI_COLOR").ok() {
+    if let Ok(value) = env::var("SI_CLI_COLOR") {
         match value.trim().to_ascii_lowercase().as_str() {
             "always" => return ColorChoice::Always,
             "never" => return ColorChoice::Never,
@@ -35551,9 +35612,9 @@ fn refresh_fort_access_token(
             .arg("session")
             .arg("refresh")
             .arg("--refresh-token-file")
-            .arg(&refresh_token_path)
+            .arg(refresh_token_path)
             .arg("--refresh-token-out")
-            .arg(&refresh_token_path);
+            .arg(refresh_token_path);
         refresh_command.env_remove("FORT_HOST");
         refresh_command.env_remove("FORT_TOKEN_PATH");
         refresh_command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
@@ -59960,8 +60021,17 @@ fn run_github_release_create(
     if !notes_text.trim().is_empty() {
         payload.insert("body".to_owned(), Value::String(notes_text));
     }
-    if let Some(target) = target.filter(|value| !value.trim().is_empty()) {
-        payload.insert("target_commitish".to_owned(), Value::String(target.trim().to_owned()));
+    let resolved_target =
+        target.filter(|value| !value.trim().is_empty()).map(|value| value.trim().to_owned());
+    ensure_github_release_tag_exists(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        tag.trim(),
+        resolved_target.as_deref(),
+    )?;
+    if let Some(target) = resolved_target.as_deref() {
+        payload.insert("target_commitish".to_owned(), Value::String(target.to_owned()));
     }
     if draft {
         payload.insert("draft".to_owned(), Value::Bool(true));
@@ -59972,6 +60042,40 @@ fn run_github_release_create(
     let response = github_create_release(&runtime, &repo_owner, &repo_name, Value::Object(payload))
         .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn github_error_status_code(error: &str) -> Option<u16> {
+    let marker = "status=";
+    let rest = error.split(marker).nth(1)?;
+    let digits = rest.chars().take_while(|ch| ch.is_ascii_digit()).collect::<String>();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<u16>().ok()
+}
+
+fn ensure_github_release_tag_exists(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    tag: &str,
+    target: Option<&str>,
+) -> Result<()> {
+    match github_get_tag_ref(runtime, owner, repo, tag) {
+        Ok(_) => Ok(()),
+        Err(error) if github_error_status_code(&error) == Some(404) => {
+            let target = target.ok_or_else(|| {
+                anyhow::Error::msg(format!(
+                    "github tag {} does not exist; pass --target <sha> or create the tag first",
+                    tag.trim()
+                ))
+            })?;
+            github_create_tag_ref(runtime, owner, repo, tag, target).map_err(anyhow::Error::msg)?;
+            Ok(())
+        }
+        Err(error) => Err(anyhow::Error::msg(error)),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -65635,7 +65739,8 @@ fn ensure_codex_container_running(
         network,
         docker_bin,
     )?;
-    if output.is_empty() { Ok("spawned".to_owned()) } else { Ok("spawned".to_owned()) }
+    let _ = output;
+    Ok("spawned".to_owned())
 }
 
 fn read_codex_status_with_retry(

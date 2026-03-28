@@ -92,6 +92,7 @@ git push origin vX.Y.Z
 - `gh release create` can auto-create a tag if it doesn't exist; using `--verify-tag` ensures you only release a tag you already created and pushed.
 - If you let `gh release create` auto-create a tag, fetch tags afterward to sync locally: `git fetch --tags origin`.
 - If you do let it auto-create a tag, use `--target <branch|sha>` to pin the release to the desired commit.
+- `si orbit github release create` is stricter: it checks the remote tag first, creates the tag ref only when `--target <sha>` is provided, and otherwise fails clearly.
 
 ### 7) Prepare release notes and publish release
 If you need a quick summary of commits since the last release:
@@ -102,6 +103,23 @@ GitHub Releases should include a clear, hand-written release note (not just a ve
 Option A: Use the changelog entry as the release body.
 1. Extract the new `vX.Y.Z` section into `release-notes.md` (manual or script).
 2. Create the release with a title and notes file:
+```
+si orbit github release create Aureuma/si \
+  --tag vX.Y.Z \
+  --title "vX.Y.Z - Suggested Name" \
+  --notes-file release-notes.md \
+  --draft
+```
+3. If the tag is not pushed yet, use:
+```
+si orbit github release create Aureuma/si \
+  --tag vX.Y.Z \
+  --title "vX.Y.Z - Suggested Name" \
+  --notes-file release-notes.md \
+  --target "$(git rev-parse HEAD)" \
+  --draft
+```
+4. Equivalent `gh` fallback:
 ```
 gh release create vX.Y.Z \\
   --title "vX.Y.Z - Suggested Name" \\

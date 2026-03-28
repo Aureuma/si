@@ -26,7 +26,12 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
+| `si viva` | Manage Viva runtime and node helper commands | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |
 | `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
+| `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
+| `si settings` | Show resolved SI settings | none | [CLI Reference](./CLI_REFERENCE) |
+| `si paths` | Show resolved SI paths | none | [CLI Reference](./CLI_REFERENCE) |
+| `si commands` | List visible SI root commands | `list` | [CLI Reference](./CLI_REFERENCE) |
 
 ## Provider and integration command families
 
@@ -42,10 +47,8 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | OpenAI | `si orbit openai ...` | `si orbit openai auth status`, `si orbit openai doctor` | [OpenAI](./OPENAI) |
 | OCI | `si orbit oci ...` | `si orbit oci auth status`, `si orbit oci doctor` | [OCI](./OCI) |
 | Stripe | `si orbit stripe ...` | `si orbit stripe auth status`, `si orbit stripe doctor` | [Stripe](./STRIPE) |
-| Social APIs | `si social ...` | `si social <platform> auth status`, `doctor` | [Social](./SOCIAL) |
 | WorkOS | `si orbit workos ...` | `si orbit workos auth status`, `si orbit workos doctor` | [WorkOS](./WORKOS) |
 | Apple App Store Connect | `si orbit apple store ...` | `si orbit apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
-| Publish flows | `si publish ...` | `si publish catalog list` | [Publish](./PUBLISH) |
 | Provider inventory | `si orbit list` | `si orbit list`, `si orbit list --provider github --json` | [Providers](./PROVIDERS) |
 
 ## Build, docs, and developer tooling
@@ -53,25 +56,23 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | Command family | Purpose | Typical usage |
 | --- | --- | --- |
 | `si build image` | Build local runtime image | `si build image` |
-| `si-rs build self` | Build or upgrade `si` binary | `si-rs build self` |
-| `si-rs build self check` | Fast typecheck for the SI CLI | `si-rs build self check --timings` |
-| `si-rs build self assets` | Build all release archives + `checksums.txt` locally | `si-rs build self assets --version vX.Y.Z` |
-| `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
-| `si analyze` (`si lint`) | Static analysis and validation lanes | `si analyze` |
-| `si docker` | Raw Docker passthrough | `si docker ps` |
-| `si persona` | Persona/profile helpers | `si persona <name>` |
-| `si skill` | Skill role helper | `si skill <role>` |
+| `si build self` | Build or upgrade `si` binary | `si build self` |
+| `si build self check` | Fast typecheck for the SI CLI | `si build self check --timings` |
+| `si build self assets` | Build all release archives + `checksums.txt` locally | `si build self assets --version vX.Y.Z` |
+| `si commands` | Show visible public root commands | `si commands` |
+| `si settings` | Inspect resolved settings | `si settings` |
+| `si paths` | Inspect resolved paths | `si paths` |
 
 ## Recommended operator workflows
 
 ### 1. New machine bootstrap
 
 ```bash
-si-rs build self
-si-rs build self check --timings
+si build self
+si build self check --timings
 si vault status
 si --help
-si mintlify validate
+si commands
 ```
 
 ### 2. Integration readiness check
@@ -85,8 +86,12 @@ si orbit cloudflare doctor --json
 ### 3. Release maintainer preflight
 
 ```bash
-si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z" --target "$(git rev-parse HEAD)" --draft
 ```
+
+- Use `--target <sha>` when creating a release for a tag that does not already exist on the remote.
+- SI creates the tag ref first in that case; if `--target` is omitted, release creation fails clearly.
 
 ## Guardrails
 
@@ -95,4 +100,4 @@ si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 - `si fort` bootstrap/admin auth is file-backed and prefers explicit `--token-file` injection from `~/.si/fort/bootstrap/admin.token` when present.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
-- Run `si mintlify validate` for docs changes and `si analyze` for code changes.
+- Run `si help --format json` or `si commands` when updating CLI docs.
