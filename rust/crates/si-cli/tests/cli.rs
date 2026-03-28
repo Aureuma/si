@@ -3931,9 +3931,15 @@ fn help_output_renders_root_command_summaries() {
             .expect("utf8 root help");
 
     assert!(root_help.contains("SI CLI for providers, runtimes, and build flows."));
-    assert!(root_help.contains("codex       Manage Codex profiles and containers."));
-    assert!(root_help.contains("build       Build images, binaries, and release assets."));
-    assert!(root_help.contains("providers   Inspect provider capabilities."));
+    assert!(root_help.contains("codex"));
+    assert!(root_help.contains("Manage Codex profiles and containers."));
+    assert!(root_help.contains("build"));
+    assert!(root_help.contains("Build images, binaries, and release assets."));
+    assert!(root_help.contains("orbit"));
+    assert!(root_help.contains("Manage first-party provider orbits."));
+    assert!(!root_help.contains("providers   Inspect provider capabilities."));
+    assert!(!root_help.contains("cloudflare"));
+    assert!(!root_help.contains("github"));
 }
 
 #[test]
@@ -3968,8 +3974,24 @@ fn help_output_renders_nested_command_summaries() {
     .expect("utf8 codex warmup run help");
     assert!(codex_warmup_run_help.contains("Warm configured Codex profiles."));
 
+    let orbit_help = String::from_utf8(
+        cargo_bin().args(["orbit", "--help"]).assert().success().get_output().stdout.clone(),
+    )
+    .expect("utf8 orbit help");
+    assert!(orbit_help.contains("Manage first-party provider orbits."));
+    assert!(orbit_help.contains("list"));
+    assert!(orbit_help.contains("aws"));
+    assert!(orbit_help.contains("openai"));
+    assert!(orbit_help.contains("github"));
+
     let aws_s3_help = String::from_utf8(
-        cargo_bin().args(["aws", "s3", "--help"]).assert().success().get_output().stdout.clone(),
+        cargo_bin()
+            .args(["orbit", "aws", "s3", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
     )
     .expect("utf8 aws s3 help");
 
@@ -4033,7 +4055,7 @@ fn wrapper_help_and_paths_text_support_forced_color_palette() {
 fn help_output_uses_single_word_project_and_session_subcommands() {
     let github_project_help = String::from_utf8(
         cargo_bin()
-            .args(["github", "project", "--help"])
+            .args(["orbit", "github", "project", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4059,7 +4081,7 @@ fn help_output_uses_single_word_project_and_session_subcommands() {
 fn help_output_uses_single_word_provider_subcommands() {
     let cloudflare_token_help = String::from_utf8(
         cargo_bin()
-            .args(["cloudflare", "token", "--help"])
+            .args(["orbit", "cloudflare", "token", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4071,7 +4093,13 @@ fn help_output_uses_single_word_provider_subcommands() {
     assert!(!cloudflare_token_help.contains("permissiongroups"));
 
     let aws_sts_help = String::from_utf8(
-        cargo_bin().args(["aws", "sts", "--help"]).assert().success().get_output().stdout.clone(),
+        cargo_bin()
+            .args(["orbit", "aws", "sts", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
     )
     .expect("utf8 aws sts help");
     assert!(aws_sts_help.contains("whoami"));
@@ -4081,7 +4109,7 @@ fn help_output_uses_single_word_provider_subcommands() {
 
     let aws_bedrock_help = String::from_utf8(
         cargo_bin()
-            .args(["aws", "bedrock", "--help"])
+            .args(["orbit", "aws", "bedrock", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4097,7 +4125,13 @@ fn help_output_uses_single_word_provider_subcommands() {
     assert!(!aws_bedrock_help.contains("agentruntime"));
 
     let gcp_iam_help = String::from_utf8(
-        cargo_bin().args(["gcp", "iam", "--help"]).assert().success().get_output().stdout.clone(),
+        cargo_bin()
+            .args(["orbit", "gcp", "iam", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
     )
     .expect("utf8 gcp iam help");
     assert!(gcp_iam_help.contains("account"));
@@ -4107,7 +4141,7 @@ fn help_output_uses_single_word_provider_subcommands() {
 
     let google_places_help = String::from_utf8(
         cargo_bin()
-            .args(["google", "places", "--help"])
+            .args(["orbit", "google", "places", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4122,7 +4156,7 @@ fn help_output_uses_single_word_provider_subcommands() {
 
     let openai_project_help = String::from_utf8(
         cargo_bin()
-            .args(["openai", "project", "--help"])
+            .args(["orbit", "openai", "project", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4139,7 +4173,7 @@ fn help_output_uses_single_word_provider_subcommands() {
 
     let oci_network_help = String::from_utf8(
         cargo_bin()
-            .args(["oci", "network", "--help"])
+            .args(["orbit", "oci", "network", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4156,7 +4190,7 @@ fn help_output_uses_single_word_provider_subcommands() {
 
     let github_git_help = String::from_utf8(
         cargo_bin()
-            .args(["github", "git", "--help"])
+            .args(["orbit", "github", "git", "--help"])
             .assert()
             .success()
             .get_output()
@@ -4174,19 +4208,25 @@ fn help_output_uses_single_word_provider_subcommands() {
 fn legacy_hyphenated_aliases_still_work_for_help_paths() {
     cargo_bin().args(["build", "self", "release-assets", "--help"]).assert().success();
     cargo_bin().args(["dyad", "spawn-plan", "--help"]).assert().success();
-    cargo_bin().args(["github", "project", "item-add", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "github", "project", "item-add", "--help"]).assert().success();
     cargo_bin().args(["fort", "session-state", "refresh-outcome", "--help"]).assert().success();
     cargo_bin().args(["fort", "runtime-agent-state", "show", "--help"]).assert().success();
-    cargo_bin().args(["cloudflare", "token", "permission-groups", "--help"]).assert().success();
-    cargo_bin().args(["aws", "sts", "get-caller-identity", "--help"]).assert().success();
-    cargo_bin().args(["aws", "bedrock", "foundation-model", "--help"]).assert().success();
-    cargo_bin().args(["gcp", "iam", "service-account", "--help"]).assert().success();
-    cargo_bin().args(["google", "places", "search-text", "--help"]).assert().success();
-    cargo_bin().args(["google", "youtube", "video", "get-rating", "--help"]).assert().success();
-    cargo_bin().args(["openai", "project", "api-key", "--help"]).assert().success();
-    cargo_bin().args(["oci", "network", "internet-gateway", "--help"]).assert().success();
-    cargo_bin().args(["stripe", "sync", "live-to-sandbox", "--help"]).assert().success();
-    cargo_bin().args(["github", "git", "remote-auth", "--help"]).assert().success();
+    cargo_bin()
+        .args(["orbit", "cloudflare", "token", "permission-groups", "--help"])
+        .assert()
+        .success();
+    cargo_bin().args(["orbit", "aws", "sts", "get-caller-identity", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "aws", "bedrock", "foundation-model", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "gcp", "iam", "service-account", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "google", "places", "search-text", "--help"]).assert().success();
+    cargo_bin()
+        .args(["orbit", "google", "youtube", "video", "get-rating", "--help"])
+        .assert()
+        .success();
+    cargo_bin().args(["orbit", "openai", "project", "api-key", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "oci", "network", "internet-gateway", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "stripe", "sync", "live-to-sandbox", "--help"]).assert().success();
+    cargo_bin().args(["orbit", "github", "git", "remote-auth", "--help"]).assert().success();
     cargo_bin().args(["codex", "warmup", "marker", "write-autostart", "--help"]).assert().success();
 }
 
@@ -4229,8 +4269,9 @@ fn help_json_lists_known_root_commands() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let commands = parsed["commands"].as_array().expect("commands array should be present");
 
-    assert!(commands.iter().any(|entry| entry["name"] == "github"));
+    assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "github"));
     assert!(!commands.iter().any(|entry| entry["name"] == "spawn"));
     assert!(!commands.iter().any(|entry| entry["name"] == "__fort-runtime-agent"));
 }
@@ -4508,7 +4549,7 @@ fn warmup_autostart_decision_uses_due_schedule_and_disabled_marker() {
 #[test]
 fn providers_characteristics_json_matches_expected_shape() {
     let output = cargo_bin()
-        .args(["providers", "characteristics", "--provider", "github", "--format", "json"])
+        .args(["orbit", "list", "--provider", "github", "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -4528,7 +4569,7 @@ fn providers_characteristics_json_matches_expected_shape() {
 #[test]
 fn providers_characteristics_supports_alias_ids() {
     let output = cargo_bin()
-        .args(["providers", "characteristics", "--provider", "twitter", "--format", "json"])
+        .args(["orbit", "list", "--provider", "twitter", "--format", "json"])
         .assert()
         .success()
         .get_output()

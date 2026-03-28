@@ -45,17 +45,17 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
+        name: "orbit",
+        aliases: &[],
+        category: CommandCategory::Provider,
+        summary: "Manage first-party provider orbits.",
+        hidden: false,
+    },
+    CommandSpec {
         name: "analyze",
         aliases: &["lint"],
         category: CommandCategory::Developer,
         summary: "Run SI static analysis lanes.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "stripe",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "Stripe provider bridge commands.",
         hidden: false,
     },
     CommandSpec {
@@ -66,27 +66,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "github",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "GitHub provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "cloudflare",
-        aliases: &["cf"],
-        category: CommandCategory::Provider,
-        summary: "Cloudflare provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "google",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "Google provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "releasemind",
         aliases: &["release"],
         category: CommandCategory::Provider,
@@ -94,52 +73,10 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "apple",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "Apple provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "social",
         aliases: &[],
         category: CommandCategory::Provider,
         summary: "Social platform bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "workos",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "WorkOS provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "aws",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "AWS provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "gcp",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "GCP provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "openai",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "OpenAI provider bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "oci",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "OCI provider bridge commands.",
         hidden: false,
     },
     CommandSpec {
@@ -154,13 +91,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         aliases: &["pub"],
         category: CommandCategory::Provider,
         summary: "Distribution publishing bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "providers",
-        aliases: &["provider", "integrations", "apis"],
-        category: CommandCategory::Provider,
-        summary: "Inspect provider characteristics and health.",
         hidden: false,
     },
     CommandSpec {
@@ -210,13 +140,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         category: CommandCategory::Profile,
         summary: "Inspect or select coding skills.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "orbits",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Manage Orbitals and integration registry entries.",
         hidden: false,
     },
     CommandSpec {
@@ -288,10 +211,9 @@ mod tests {
 
     #[test]
     fn aliases_resolve_to_primary_command() {
-        assert_eq!(find_root_command("cf"), find_root_command("cloudflare"));
         assert_eq!(find_root_command("release").unwrap().name, "releasemind");
         assert_eq!(find_root_command("creds").unwrap().name, "vault");
         assert_eq!(find_root_command("rc").unwrap().name, "remote-control");
-        assert_eq!(find_root_command("github").unwrap().name, "github");
+        assert_eq!(find_root_command("orbit").unwrap().name, "orbit");
     }
 }

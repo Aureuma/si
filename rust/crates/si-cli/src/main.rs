@@ -265,46 +265,60 @@ enum Command {
         #[command(subcommand)]
         command: SettingsCommand,
     },
+    Orbit {
+        #[command(subcommand)]
+        command: OrbitCommand,
+    },
+    #[command(hide = true)]
     Providers {
         #[command(subcommand)]
         command: ProvidersCommand,
     },
+    #[command(hide = true)]
     Cloudflare {
         #[command(subcommand)]
         command: CloudflareCommand,
     },
+    #[command(hide = true)]
     Apple {
         #[command(subcommand)]
         command: AppleCommand,
     },
+    #[command(hide = true)]
     Aws {
         #[command(subcommand)]
         command: AWSCommand,
     },
     #[command(name = "gcp")]
+    #[command(hide = true)]
     Gcp {
         #[command(subcommand)]
         command: GCPCommand,
     },
+    #[command(hide = true)]
     Google {
         #[command(subcommand)]
         command: GoogleCommand,
     },
     #[command(name = "openai")]
+    #[command(hide = true)]
     OpenAI {
         #[command(subcommand)]
         command: OpenAICommand,
     },
     #[command(name = "oci")]
+    #[command(hide = true)]
     Oci {
         #[command(subcommand)]
         command: OciCommand,
     },
+    #[command(hide = true)]
     Stripe {
         #[command(subcommand)]
         command: StripeCommand,
     },
     #[command(name = "workos")]
+    #[command(hide = true)]
     WorkOS {
         #[command(subcommand)]
         command: WorkOSCommand,
@@ -314,6 +328,7 @@ enum Command {
         command: ImageCommand,
     },
     #[command(name = "github")]
+    #[command(hide = true)]
     GitHub {
         #[command(subcommand)]
         command: GitHubCommand,
@@ -751,6 +766,64 @@ enum BuildHomebrewCommand {
         commit: bool,
         #[arg(long = "push", action = ArgAction::SetTrue)]
         push: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OrbitCommand {
+    List {
+        #[arg(long)]
+        provider: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(visible_alias = "cf")]
+    Cloudflare {
+        #[command(subcommand)]
+        command: CloudflareCommand,
+    },
+    Apple {
+        #[command(subcommand)]
+        command: AppleCommand,
+    },
+    Aws {
+        #[command(subcommand)]
+        command: AWSCommand,
+    },
+    #[command(name = "gcp")]
+    Gcp {
+        #[command(subcommand)]
+        command: GCPCommand,
+    },
+    Google {
+        #[command(subcommand)]
+        command: GoogleCommand,
+    },
+    #[command(name = "openai")]
+    OpenAI {
+        #[command(subcommand)]
+        command: OpenAICommand,
+    },
+    #[command(name = "oci")]
+    Oci {
+        #[command(subcommand)]
+        command: OciCommand,
+    },
+    Stripe {
+        #[command(subcommand)]
+        command: StripeCommand,
+    },
+    #[command(name = "workos")]
+    WorkOS {
+        #[command(subcommand)]
+        command: WorkOSCommand,
+    },
+    #[command(name = "github")]
+    GitHub {
+        #[command(subcommand)]
+        command: GitHubCommand,
     },
 }
 
@@ -19195,6 +19268,27 @@ fn execute_public_probe(
     Ok(())
 }
 
+fn normalize_root_command(command: Command) -> Command {
+    match command {
+        Command::Orbit { command } => match command {
+            OrbitCommand::List { provider, json, format } => Command::Providers {
+                command: ProvidersCommand::Characteristics { provider, json, format },
+            },
+            OrbitCommand::Cloudflare { command } => Command::Cloudflare { command },
+            OrbitCommand::Apple { command } => Command::Apple { command },
+            OrbitCommand::Aws { command } => Command::Aws { command },
+            OrbitCommand::Gcp { command } => Command::Gcp { command },
+            OrbitCommand::Google { command } => Command::Google { command },
+            OrbitCommand::OpenAI { command } => Command::OpenAI { command },
+            OrbitCommand::Oci { command } => Command::Oci { command },
+            OrbitCommand::Stripe { command } => Command::Stripe { command },
+            OrbitCommand::WorkOS { command } => Command::WorkOS { command },
+            OrbitCommand::GitHub { command } => Command::GitHub { command },
+        },
+        other => other,
+    }
+}
+
 fn main() -> Result<()> {
     configure_sigpipe();
     let cli = parse_cli();
@@ -19207,6 +19301,7 @@ fn main() -> Result<()> {
     let Some(command) = cli.command else {
         return Ok(());
     };
+    let command = normalize_root_command(command);
 
     match command {
         Command::Version => {
@@ -32704,6 +32799,7 @@ fn main() -> Result<()> {
                 },
             },
         },
+        Command::Orbit { .. } => unreachable!("orbit commands are normalized before dispatch"),
         Command::Dyad { command } => match *command {
             DyadCommand::Spawn { command } => match command {
                 DyadSpawnCommand::Plan(DyadSpawnPlanArgs {
@@ -33508,6 +33604,18 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["version"] => Some("Print the current SI version."),
         ["commands"] => Some("List visible SI root commands."),
         ["settings"] => Some("Show resolved SI settings."),
+        ["orbit"] => Some("Manage first-party provider orbits."),
+        ["orbit", "list"] => Some("List orbit capabilities and provider traits."),
+        ["orbit", "cloudflare"] => Some("Cloudflare orbit commands."),
+        ["orbit", "apple"] => Some("Apple orbit commands."),
+        ["orbit", "aws"] => Some("AWS orbit commands."),
+        ["orbit", "gcp"] => Some("GCP orbit commands."),
+        ["orbit", "google"] => Some("Google orbit commands."),
+        ["orbit", "openai"] => Some("OpenAI orbit commands."),
+        ["orbit", "oci"] => Some("OCI orbit commands."),
+        ["orbit", "stripe"] => Some("Stripe orbit commands."),
+        ["orbit", "workos"] => Some("WorkOS orbit commands."),
+        ["orbit", "github"] => Some("GitHub orbit commands."),
         ["providers"] => Some("Inspect provider capabilities."),
         ["build"] => Some("Build images, binaries, and release assets."),
         ["build", "image"] => Some("Build the local SI runtime image."),

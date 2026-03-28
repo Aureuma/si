@@ -49,7 +49,7 @@ Reference paths for the local `.si` directory layout.
 - `paths.root` (string): default `~/.si`
 - `paths.settings_file` (string): default `~/.si/settings.toml`
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
-- `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si github git ...`, `si remote-control`, and `si viva node bootstrap` when flags are omitted.
+- `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si orbit github git ...`, `si remote-control`, and `si viva node bootstrap` when flags are omitted.
 
 Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/state.json` (reconcile state/feedback loop)
@@ -126,7 +126,7 @@ Defaults for dyad spawns.
 - `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
 
 ### `[stripe]`
-Defaults for `si stripe` account and environment context.
+Defaults for `si orbit stripe` account and environment context.
 - `stripe.organization` (string): optional organization label
 - `stripe.default_account` (string): default account alias (or `acct_` id)
 - `stripe.default_env` (string): `live` or `sandbox` (default: `sandbox`)
@@ -141,7 +141,7 @@ Per-account Stripe settings.
 - `live_key_env` (string): env var name holding the live key
 - `sandbox_key_env` (string): env var name holding the sandbox key
 
-Credential resolution order for `si stripe`:
+Credential resolution order for `si orbit stripe`:
 1. `--api-key` (or `--live-api-key`/`--sandbox-api-key` for sync)
 2. Account settings key (`live_key` / `sandbox_key`)
 3. Account settings env ref (`live_key_env` / `sandbox_key_env`)
@@ -151,7 +151,7 @@ Credential resolution order for `si stripe`:
 `SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
 
 ### `[github]`
-Defaults for `si github` (GitHub App or OAuth token auth).
+Defaults for `si orbit github` (GitHub App or OAuth token auth).
 - `github.default_account` (string): default account alias
 - `github.default_auth_mode` (string): `app` or `oauth` (default: `app`)
 - `github.api_base_url` (string): API base URL (default: `https://api.github.com`)
@@ -176,20 +176,20 @@ Per-account GitHub settings.
 - `installation_id` (int): explicit installation id
 - `installation_id_env` (string): env var with installation id
 
-Auth mode resolution for `si github`:
+Auth mode resolution for `si orbit github`:
 1. CLI override (`--auth-mode` where available)
 2. Account settings (`auth_mode`)
 3. Env fallback (`GITHUB_AUTH_MODE`, then `GITHUB_DEFAULT_AUTH_MODE`)
 4. Global settings (`github.default_auth_mode`)
 
-Credential resolution for `si github` in `app` mode:
+Credential resolution for `si orbit github` in `app` mode:
 1. CLI overrides (`--app-id`, `--app-key`, `--installation-id`)
 2. Account settings (`app_id`, `app_private_key_pem`, `installation_id`)
 3. Account env refs (`app_id_env`, `app_private_key_env`, `installation_id_env`)
 4. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
 5. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
 
-Credential resolution for `si github` in `oauth` mode:
+Credential resolution for `si orbit github` in `oauth` mode:
 1. CLI override (`--token` where available)
 2. Account settings (`oauth_access_token`)
 3. Account env ref (`oauth_token_env`)
@@ -197,7 +197,7 @@ Credential resolution for `si github` in `oauth` mode:
 5. Global env fallbacks (`GITHUB_OAUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`)
 
 ### `[cloudflare]`
-Defaults for `si cloudflare` (token auth with multi-account and env context labels).
+Defaults for `si orbit cloudflare` (token auth with multi-account and env context labels).
 - `cloudflare.default_account` (string): default account alias
 - `cloudflare.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
 - `cloudflare.api_base_url` (string): API base URL (default: `https://api.cloudflare.com/client/v4`)
@@ -219,7 +219,7 @@ Per-account Cloudflare context and env-key pointers.
 - `dev_zone_id` (string): zone id used when `env=dev`
 - `api_token_env` (string): env var with API token
 
-Credential resolution for `si cloudflare` is vault-compatible and token-only:
+Credential resolution for `si orbit cloudflare` is vault-compatible and token-only:
 1. CLI overrides (`--api-token`, `--account-id`, `--zone-id`)
 2. Account settings (`account_id`, env-mapped zone ids, defaults)
 3. Account env refs (`account_id_env`, `api_token_env`)
@@ -227,10 +227,10 @@ Credential resolution for `si cloudflare` is vault-compatible and token-only:
 5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
 
 ### `[gcp]`
-Defaults for `si gcp` (Service Usage, IAM, API keys, Gemini, and Vertex AI).
+Defaults for `si orbit gcp` (Service Usage, IAM, API keys, Gemini, and Vertex AI).
 - `gcp.default_account` (string): default account alias
 - `gcp.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
-- `gcp.api_base_url` (string): default API base URL used by `si gcp service` (default: `https://serviceusage.googleapis.com`)
+- `gcp.api_base_url` (string): default API base URL used by `si orbit gcp service` (default: `https://serviceusage.googleapis.com`)
 - `gcp.log_file` (string): JSONL log path for GCP bridge events (default: `~/.si/logs/gcp-serviceusage.log`)
 
 #### `[gcp.accounts.<alias>]`
@@ -243,27 +243,27 @@ Per-account GCP context and env-key pointers.
 - `api_key_env` (string): env var with API key (used by Gemini API-key mode)
 - `api_base_url` (string): per-account API base URL override
 
-Credential resolution for `si gcp` project id:
+Credential resolution for `si orbit gcp` project id:
 1. CLI override (`--project`)
 2. Account settings (`project_id`)
 3. Account env ref (`project_id_env`)
 4. Account-prefix env key (`GCP_<ACCOUNT>_PROJECT_ID`)
 5. Global env fallbacks (`GCP_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`)
 
-Credential resolution for `si gcp` OAuth token:
+Credential resolution for `si orbit gcp` OAuth token:
 1. CLI override (`--access-token`)
 2. Account env ref (`access_token_env`)
 3. Account-prefix env key (`GCP_<ACCOUNT>_ACCESS_TOKEN`)
 4. Global env fallbacks (`GOOGLE_OAUTH_ACCESS_TOKEN`, `GCP_ACCESS_TOKEN`)
 
-Credential resolution for Gemini API-key mode (`si gcp gemini`):
+Credential resolution for Gemini API-key mode (`si orbit gcp gemini`):
 1. CLI override (`--api-key`)
 2. Account env ref (`api_key_env`)
 3. Account-prefix env key (`GCP_<ACCOUNT>_API_KEY`)
 4. Global env fallbacks (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GCP_API_KEY`)
 
 ### `[google]`
-Defaults for `si google places` and `si google youtube` (multi-account and env context labels).
+Defaults for `si orbit google places` and `si orbit google youtube` (multi-account and env context labels).
 - `google.default_account` (string): default account alias
 - `google.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
 - `google.api_base_url` (string): API base URL (default: `https://places.googleapis.com`)
@@ -285,7 +285,7 @@ Per-account Google Places context and env-key pointers.
 - `default_region_code` (string): default CLDR region code
 - `default_language_code` (string): default BCP-47 language code
 
-Credential resolution for `si google places` is vault-compatible and API-key based:
+Credential resolution for `si orbit google places` is vault-compatible and API-key based:
 1. CLI overrides (`--api-key`, `--project-id`)
 2. Account settings (`project_id`)
 3. Account env refs (`project_id_env`, `places_api_key_env`, `prod_places_api_key_env`, `staging_places_api_key_env`, `dev_places_api_key_env`)
@@ -293,7 +293,7 @@ Credential resolution for `si google places` is vault-compatible and API-key bas
 5. Global env fallbacks (`GOOGLE_PLACES_API_KEY`, `GOOGLE_PROJECT_ID`)
 
 ### `[google.youtube]`
-Defaults for `si google youtube` (YouTube Data API v3).
+Defaults for `si orbit google youtube` (YouTube Data API v3).
 - `google.youtube.api_base_url` (string): API base URL (default: `https://www.googleapis.com`)
 - `google.youtube.upload_base_url` (string): upload API base URL (default: `https://www.googleapis.com/upload`)
 - `google.youtube.default_auth_mode` (string): `api-key` or `oauth` (default: `api-key`)
@@ -316,14 +316,14 @@ Per-account YouTube context and env-key pointers.
 - `default_region_code` (string): default region code
 - `default_language_code` (string): default language code
 
-Credential resolution for `si google youtube` is vault-compatible and supports both API key and OAuth:
+Credential resolution for `si orbit google youtube` is vault-compatible and supports both API key and OAuth:
 1. CLI overrides (`--api-key`, `--project-id`, `--client-id`, `--client-secret`, `--redirect-uri`, `--access-token`, `--refresh-token`)
 2. Account settings (`project_id`)
 3. Account env refs (`project_id_env`, `youtube_api_key_env`, env-specific api key refs, OAuth refs)
 4. Account-prefix env keys (`GOOGLE_<ACCOUNT>_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_PROD_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_STAGING_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_DEV_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_YOUTUBE_CLIENT_ID`, `GOOGLE_<ACCOUNT>_YOUTUBE_CLIENT_SECRET`, `GOOGLE_<ACCOUNT>_YOUTUBE_REDIRECT_URI`, `GOOGLE_<ACCOUNT>_YOUTUBE_ACCESS_TOKEN`, `GOOGLE_<ACCOUNT>_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_PROD_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_STAGING_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_DEV_YOUTUBE_REFRESH_TOKEN`)
 5. Global env fallbacks (`GOOGLE_YOUTUBE_API_KEY`, `GOOGLE_YOUTUBE_CLIENT_ID`, `GOOGLE_YOUTUBE_CLIENT_SECRET`, `GOOGLE_YOUTUBE_REDIRECT_URI`, `GOOGLE_YOUTUBE_ACCESS_TOKEN`, `GOOGLE_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_PROJECT_ID`)
 
-Local OAuth token cache for `si google youtube auth login` is stored at:
+Local OAuth token cache for `si orbit google youtube auth login` is stored at:
 - `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`

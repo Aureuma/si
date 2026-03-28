@@ -22,8 +22,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 - Dyads: actor + critic paired containers, closed-loop execution, status/log/exec workflows.
 - Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `exec`, `report`, `clone`, `remove`, `respawn`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
-- Provider bridges: Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, Social, WorkOS, AWS, GCP, OpenAI, OCI.
-- Orbitals: namespaced integration catalog + install/enable/doctor lifecycle (`si orbits ...`).
+- Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
@@ -118,8 +117,7 @@ Mintlify docs tooling:
 
 - `si dyad ...` / `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
-- `si providers ...`: provider characteristics + health surfaces.
-- `si orbits ...`: Orbitals and integration onboarding.
+- `si orbit ...`: provider bridges and provider capability inventory.
 - `si browser ...`: Playwright MCP browser runtime.
 - `si mintlify ...`: docs site bootstrap/validation/dev wrappers.
 - `si build ...`: local image + self-build workflows.

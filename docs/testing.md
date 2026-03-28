@@ -34,33 +34,16 @@ For the direct Rust host matrix across `si`, sibling `fort`, and sibling `surf`,
 
 That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
 
-## Orbit runner matrix
-For orbit-system specific regression lanes, use:
+## Provider orbit validation
+
+Provider-orbit coverage now lives in the normal Rust CLI and provider test suites.
+
+Use focused command tests such as:
 
 ```bash
-si test orbits unit
-si test orbits policy
-si test orbits catalog
-si test orbits e2e
-# compatibility aliases:
-./tools/test-runners/orbits-unit.sh
-./tools/test-runners/orbits-policy.sh
-./tools/test-runners/orbits-catalog.sh
-./tools/test-runners/orbits-e2e.sh
-```
-
-Run the full orbit runner stack:
-
-```bash
-si test orbits all
-# compatibility alias:
-./tools/test-runners/orbits-all.sh
-```
-
-CI coverage for these lanes is defined in:
-
-```bash
-.github/workflows/orbits-runners.yml
+cargo test -p si-rs-cli orbit
+cargo test -p si-rs-provider-github
+cargo test -p si-rs-provider-aws
 ```
 
 ## Installer smoke tests
@@ -182,7 +165,7 @@ After CLI command-surface changes, run targeted help checks:
 ```bash
 ./si --help
 ./si mintlify --help
-./si gcp gemini image generate --help
+./si orbit gcp gemini image generate --help
 ./si surf --help
 ```
 

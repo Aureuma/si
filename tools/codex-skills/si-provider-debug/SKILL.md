@@ -12,7 +12,7 @@ Use this workflow to isolate provider integration issues quickly.
 1. Confirm resolved settings and auth context:
 ```bash
 si self doctor
-si providers
+si orbit list
 ```
 
 2. Run the smallest read-only probe for the target provider:

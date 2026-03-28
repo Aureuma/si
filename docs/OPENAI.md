@@ -3,11 +3,11 @@ title: OpenAI Command Guide
 description: OpenAI integration workflows in SI for auth, projects, keys, usage, monitoring, codex usage, and raw API calls.
 ---
 
-# OpenAI Command Guide (`si openai`)
+# OpenAI Command Guide (`si orbit openai`)
 
 ![OpenAI](/docs/images/integrations/openai.svg)
 
-`si openai` provides authenticated OpenAI operations with context management, project administration, usage analytics, and raw access.
+`si orbit openai` provides authenticated OpenAI operations with context management, project administration, usage analytics, and raw access.
 
 ## Related docs
 
@@ -18,61 +18,61 @@ description: OpenAI integration workflows in SI for auth, projects, keys, usage,
 ## Command surface
 
 ```bash
-si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
+si orbit openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
 ```
 
 ## Auth and context
 
 ```bash
-si openai auth status --account core --json
-si openai auth status --auth-mode codex --profile main --json
-si openai auth codex-status --profile main --json
-si openai context list --json
-si openai context current --json
-si openai context use --account core --org-id org_xxx --project-id proj_xxx
-si openai doctor --account core --public --json
+si orbit openai auth status --account core --json
+si orbit openai auth status --auth-mode codex --profile main --json
+si orbit openai auth codex-status --profile main --json
+si orbit openai context list --json
+si orbit openai context current --json
+si orbit openai context use --account core --org-id org_xxx --project-id proj_xxx
+si orbit openai doctor --account core --public --json
 ```
 
-`si openai auth` supports two modes:
+`si orbit openai auth` supports two modes:
 - `api` (default): validates OpenAI API-key auth against `api.openai.com`.
 - `codex`: validates ChatGPT/Codex plan-token auth from SI codex profiles (OpenClaw-style non-API-key flow).
 
 ## Model and project administration
 
 ```bash
-si openai model list --limit 20 --json
-si openai model get gpt-5 --json
+si orbit openai model list --limit 20 --json
+si orbit openai model get gpt-5 --json
 
-si openai project list --json
-si openai project create --name "release-mind" --json
-si openai project get proj_xxx --json
-si openai project archive proj_xxx --force --json
+si orbit openai project list --json
+si orbit openai project create --name "release-mind" --json
+si orbit openai project get proj_xxx --json
+si orbit openai project archive proj_xxx --force --json
 ```
 
 ## Key management
 
 ```bash
-si openai key list --json
-si openai key create --name "ci-automation" --json
-si openai key delete key_xxx --force --json
+si orbit openai key list --json
+si orbit openai key create --name "ci-automation" --json
+si orbit openai key delete key_xxx --force --json
 
-si openai project keys list --project-id proj_xxx --json
-si openai project accounts list --project-id proj_xxx --json
+si orbit openai project keys list --project-id proj_xxx --json
+si orbit openai project accounts list --project-id proj_xxx --json
 ```
 
 ## Usage and monitoring
 
 ```bash
-si openai usage costs --start-time 1738368000 --end-time 1738972800 --json
-si openai monitor usage --start-time 1738368000 --end-time 1738972800 --json
-si openai codex usage --model gpt-5-codex --json
+si orbit openai usage costs --start-time 1738368000 --end-time 1738972800 --json
+si orbit openai monitor usage --start-time 1738368000 --end-time 1738972800 --json
+si orbit openai codex usage --model gpt-5-codex --json
 ```
 
 ## Raw API mode
 
 ```bash
-si openai raw --method GET --path /v1/models --json
-si openai raw --method POST --path /v1/responses --json-body '{"model":"gpt-5","input":"hello"}' --json
+si orbit openai raw --method GET --path /v1/models --json
+si orbit openai raw --method POST --path /v1/responses --json-body '{"model":"gpt-5","input":"hello"}' --json
 ```
 
 Use `--admin` when explicitly targeting admin APIs.
@@ -86,7 +86,7 @@ Use `--admin` when explicitly targeting admin APIs.
 
 ## Troubleshooting
 
-1. `si openai auth status --json`
-2. `si openai doctor --json`
-3. `si providers health --provider openai --json`
+1. `si orbit openai auth status --json`
+2. `si orbit openai doctor --json`
+3. `si orbit list --provider openai --json`
 4. Verify org/project context values and key source precedence.

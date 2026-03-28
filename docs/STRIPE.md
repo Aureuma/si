@@ -1,4 +1,4 @@
-# Stripe Command Guide (`si stripe`)
+# Stripe Command Guide (`si orbit stripe`)
 
 ![Stripe](/docs/images/integrations/stripe.svg)
 
@@ -14,21 +14,21 @@ Related:
 
 ## Context & Auth
 ```bash
-si stripe auth status
-si stripe auth status --account core --env sandbox
+si orbit stripe auth status
+si orbit stripe auth status --account core --env sandbox
 
-si stripe context list
-si stripe context current
-si stripe context use --account core --env sandbox
+si orbit stripe context list
+si orbit stripe context current
+si orbit stripe context use --account core --env sandbox
 ```
 
 ## Object CRUD
 ```bash
-si stripe object list product --limit 50
-si stripe object get product prod_123
-si stripe object create product --param name=Starter --param active=true
-si stripe object update product prod_123 --param metadata[tier]=pro
-si stripe object delete customer cus_123 --force
+si orbit stripe object list product --limit 50
+si orbit stripe object get product prod_123
+si orbit stripe object create product --param name=Starter --param active=true
+si orbit stripe object update product prod_123 --param metadata[tier]=pro
+si orbit stripe object delete customer cus_123 --force
 ```
 
 Supported object registry includes:
@@ -36,27 +36,27 @@ Supported object registry includes:
 - `customer`, `payment_intent`, `subscription`, `invoice`, `refund`, `charge`
 - `account`, `organization`, `balance_transaction`, `payout`, `payment_method`
 
-If an object/operation is unsupported in the curated registry, use `si stripe raw`.
+If an object/operation is unsupported in the curated registry, use `si orbit stripe raw`.
 
 ## Raw Endpoint Access
 ```bash
-si stripe raw --method GET --path /v1/balance
-si stripe raw --method POST --path /v1/products --param name=Starter
+si orbit stripe raw --method GET --path /v1/balance
+si orbit stripe raw --method POST --path /v1/products --param name=Starter
 ```
 
 ## Reporting Presets
 ```bash
-si stripe report revenue-summary
-si stripe report payment-intent-status --from 2026-02-01T00:00:00Z --to 2026-02-07T00:00:00Z
-si stripe report subscription-churn
-si stripe report balance-overview
+si orbit stripe report revenue-summary
+si orbit stripe report payment-intent-status --from 2026-02-01T00:00:00Z --to 2026-02-07T00:00:00Z
+si orbit stripe report subscription-churn
+si orbit stripe report balance-overview
 ```
 
 ## Live-to-Sandbox Sync
 ```bash
-si stripe sync mirror plan --account core
-si stripe sync mirror apply --account core --dry-run
-si stripe sync mirror apply --account core --only products --only prices --force
+si orbit stripe sync mirror plan --account core
+si orbit stripe sync mirror apply --account core --dry-run
+si orbit stripe sync mirror apply --account core --only products --only prices --force
 ```
 
 Supported sync families:
@@ -68,7 +68,7 @@ Behavior:
 - `--dry-run`: computes actions without mutation
 
 ## Error Visibility
-On API failures, `si stripe` surfaces:
+On API failures, `si orbit stripe` surfaces:
 - HTTP status
 - Stripe `type`, `code`, `decline_code`, `param`, `message`
 - `request_id`, `doc_url`, `request_log_url`

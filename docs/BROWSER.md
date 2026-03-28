@@ -6,7 +6,7 @@
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Orbitals](./ORBITALS)
+- [Providers](./PROVIDERS)
 
 ## Commands
 

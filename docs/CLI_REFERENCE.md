@@ -51,10 +51,8 @@ Color control:
 | --- | --- |
 | Runtime and orchestration | `si dyad`, `si codex` |
 | Secrets and context | `si vault` (`si creds`), `si fort` |
-| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple store`, `si stripe`, `si publish`, `si releasemind` (`si release`) |
-| Provider telemetry | `si providers` |
+| Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple store`, `si orbit stripe`, `si social`, `si publish`, `si releasemind` (`si release`) |
 | Surf browser runtime | `si surf` |
-| Orbit ecosystem | `si orbits` |
 | Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
 | Docs workflow | `si mintlify` |
 | Profiles and skills | `si persona`, `si skill` |
@@ -82,10 +80,10 @@ si viva -- tunnel down --profile dev
 ### Integration readiness
 
 ```bash
-si providers characteristics --json
-si github doctor --json
-si cloudflare doctor --json
-si gcp doctor --json
+si orbit list --json
+si orbit github doctor --json
+si orbit cloudflare doctor --json
+si orbit gcp doctor --json
 ```
 
 ### Fort runtime secret check
