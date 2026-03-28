@@ -79,6 +79,12 @@ Notes:
   - `HOME=/home/<user> si dyad spawn start --name <name> --workspace "$PWD"`
   - `HOME=/home/<user> si dyad status <name>`
   - `HOME=/home/<user> si dyad remove <name>`
+- Viva compatibility smoke when the change touches `si viva`, Viva settings, or shared orchestration/config paths:
+  - `si viva config show --format json`
+  - `si viva config set --repo /home/<user>/Development/viva --build true`
+  - `si viva -- version`
+  - `si viva -- doctor`
+  - confirm `/home/<user>/Development/viva/.github/workflows/ci.yml` and `/home/<user>/Development/viva/.github/workflows/release.yml` still match the current SI release discipline
 - Release assets:
   - `gh run list --workflow "CLI Release Assets" --limit 1`
   - `gh release view vX.Y.Z --json assets --jq '.assets[].name'`
