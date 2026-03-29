@@ -13994,7 +13994,7 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long, help = "Release tag name, for example v0.55.10.")]
+        #[arg(long, help = "Release tag name, for example v0.55.11.")]
         tag: Option<String>,
         #[arg(long, help = "Release title shown in GitHub.")]
         title: Option<String>,
@@ -16871,12 +16871,7 @@ struct CodexProfileView {
     auth_updated: Option<String>,
 }
 
-#[derive(Clone, Copy)]
-enum CodexProfileSelectionMode {
-    PromptOnMissing,
-}
-
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct CodexEnvVarView {
     key: String,
     value: String,
@@ -18271,27 +18266,27 @@ fn write_atomic_file(path: &Path, data: &[u8], mode: u32) -> Result<()> {
 
 fn run_installer_smoke_host() -> Result<()> {
     let root = std::env::current_dir().context("resolve repo root")?;
-    let installer = root.join("tools").join("install-si.sh");
-    let settings_helper = root.join("tools").join("test-install-si-settings.sh");
+    let installer_runner = override_executable("SI_INSTALLER_RUNNER")
+        .unwrap_or(std::env::current_exe().context("resolve current si binary")?);
+    let settings_test_runner = override_executable("SI_INSTALLER_SETTINGS_TEST");
     ensure_command_exists("git")?;
-    if !installer.exists() {
-        return Err(anyhow!("FAIL: installer not found at {}", installer.display()));
+    if !root.join("Cargo.toml").exists() {
+        return Err(anyhow!("FAIL: expected Cargo.toml at repo root: {}", root.display()));
     }
-    if !settings_helper.exists() {
-        return Err(anyhow!(
-            "FAIL: installer settings helper test not found at {}",
-            settings_helper.display()
-        ));
-    }
-
-    eprintln!("==> syntax check");
-    run_command_checked(&root, "bash", ["-n", installer.to_str().unwrap_or_default()])?;
 
     eprintln!("==> installer settings helper tests");
-    run_path_command_checked(&root, &settings_helper, &[])?;
+    if let Some(settings_test_runner) = settings_test_runner {
+        run_path_command_checked(&root, &settings_test_runner, &[])?;
+    } else {
+        run_command_checked(
+            &root,
+            "cargo",
+            ["test", "-p", "si-rs-cli", "build_installer_settings_helper_"],
+        )?;
+    }
 
     eprintln!("==> help output");
-    run_path_command_checked(&root, &installer, &["--help"])?;
+    run_path_command_checked(&root, &installer_runner, &["build", "installer", "run", "--help"])?;
 
     let tmp = tempfile::tempdir().context("create temp dir")?;
     eprintln!("==> dry-run: linux/amd64 install-dir with spaces");
@@ -18299,8 +18294,11 @@ fn run_installer_smoke_host() -> Result<()> {
     fs::create_dir_all(&spaced_dir).with_context(|| format!("create {}", spaced_dir.display()))?;
     run_path_command_checked(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--source-dir",
             root.to_str().unwrap_or_default(),
@@ -18313,8 +18311,11 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> dry-run: darwin/arm64 toolchain resolution");
     run_path_command_checked(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--source-dir",
             root.to_str().unwrap_or_default(),
@@ -18331,8 +18332,11 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> dry-run: no-path-hint flag");
     run_path_command_checked(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--no-path-hint",
             "--source-dir",
@@ -18344,15 +18348,27 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> dry-run: --yes accepted");
     run_path_command_checked(
         &root,
-        &installer,
-        &["--dry-run", "--yes", "--source-dir", root.to_str().unwrap_or_default(), "--force"],
+        &installer_runner,
+        &[
+            "build",
+            "installer",
+            "run",
+            "--dry-run",
+            "--yes",
+            "--source-dir",
+            root.to_str().unwrap_or_default(),
+            "--force",
+        ],
     )?;
 
     eprintln!("==> dry-run: backend local accepted");
     run_path_command_checked(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--backend",
             "local",
@@ -18365,8 +18381,11 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> edge: invalid backend rejected");
     run_path_command_expect_fail(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--backend",
             "bad-backend",
@@ -18379,8 +18398,11 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> edge: install-dir and install-path are mutually exclusive");
     run_path_command_expect_fail(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--source-dir",
             root.to_str().unwrap_or_default(),
@@ -18395,8 +18417,11 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> edge: invalid source-dir rejected");
     run_path_command_expect_fail(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--dry-run",
             "--source-dir",
             tmp.path().join("missing-source").to_str().unwrap_or_default(),
@@ -18410,8 +18435,11 @@ fn run_installer_smoke_host() -> Result<()> {
         .with_context(|| format!("create {}", install_dir.display()))?;
     run_path_command_checked(
         &root,
-        &installer,
+        &installer_runner,
         &[
+            "build",
+            "installer",
+            "run",
             "--source-dir",
             root.to_str().unwrap_or_default(),
             "--install-dir",
@@ -18430,8 +18458,16 @@ fn run_installer_smoke_host() -> Result<()> {
     eprintln!("==> e2e: uninstall");
     run_path_command_checked(
         &root,
-        &installer,
-        &["--install-dir", install_dir.to_str().unwrap_or_default(), "--uninstall", "--quiet"],
+        &installer_runner,
+        &[
+            "build",
+            "installer",
+            "run",
+            "--install-dir",
+            install_dir.to_str().unwrap_or_default(),
+            "--uninstall",
+            "--quiet",
+        ],
     )?;
     if installed.exists() {
         return Err(anyhow!("FAIL: expected {} to be removed", installed.display()));
@@ -18442,6 +18478,9 @@ fn run_installer_smoke_host() -> Result<()> {
 
 fn run_installer_smoke_npm() -> Result<()> {
     let root = std::env::current_dir().context("resolve repo root")?;
+    let self_bin = std::env::current_exe().context("resolve current si binary")?;
+    let assets_builder = override_executable("SI_BUILD_ASSETS_EXEC");
+    let npm_builder = override_executable("SI_BUILD_NPM_PACKAGE_EXEC");
     let version = read_si_version(&root)?;
     let tmp = tempfile::tempdir().context("create temp dir")?;
     let mut assets_dir = tmp.path().join("assets");
@@ -18464,17 +18503,49 @@ fn run_installer_smoke_npm() -> Result<()> {
     }
 
     if build_assets {
+        if let Some(assets_builder) = &assets_builder {
+            run_path_command_checked(
+                &root,
+                assets_builder,
+                &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+            )?;
+        } else {
+            run_path_command_checked(
+                &root,
+                &self_bin,
+                &[
+                    "build",
+                    "self",
+                    "assets",
+                    "--version",
+                    &version,
+                    "--out-dir",
+                    assets_dir.to_str().unwrap_or_default(),
+                ],
+            )?;
+        }
+    }
+    if let Some(npm_builder) = &npm_builder {
         run_path_command_checked(
             &root,
-            &root.join("tools").join("release").join("build-cli-release-assets.sh"),
-            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+            npm_builder,
+            &["--version", &version, "--out-dir", npm_out.to_str().unwrap_or_default()],
+        )?;
+    } else {
+        run_path_command_checked(
+            &root,
+            &self_bin,
+            &[
+                "build",
+                "npm",
+                "package",
+                "--version",
+                &version,
+                "--out-dir",
+                npm_out.to_str().unwrap_or_default(),
+            ],
         )?;
     }
-    run_path_command_checked(
-        &root,
-        &root.join("tools").join("release").join("npm").join("build-npm-package.sh"),
-        &["--version", &version, "--out-dir", npm_out.to_str().unwrap_or_default()],
-    )?;
 
     let tarball = find_npm_package_tarball(&npm_out)?;
     run_command_checked(
@@ -18518,8 +18589,8 @@ fn run_installer_smoke_docker() -> Result<()> {
         eprintln!("SKIP: docker is not available; skipping Docker installer smoke tests");
         return Ok(());
     }
-    if !Path::new(&source_dir).join("tools").join("install-si.sh").exists() {
-        return Err(anyhow!("FAIL: installer not found under source dir: {}", source_dir));
+    if !Path::new(&source_dir).join("Cargo.toml").exists() {
+        return Err(anyhow!("FAIL: repo root not found under source dir: {}", source_dir));
     }
 
     println!("==> Build root smoke image: {smoke_image}");
@@ -18578,6 +18649,8 @@ fn run_installer_smoke_docker() -> Result<()> {
 
 fn run_installer_smoke_homebrew() -> Result<()> {
     let root = std::env::current_dir().context("resolve repo root")?;
+    let self_bin = std::env::current_exe().context("resolve current si binary")?;
+    let assets_builder = override_executable("SI_BUILD_ASSETS_EXEC");
     if StdCommand::new("brew").arg("--version").output().is_err() {
         eprintln!("SKIP: brew is not available; skipping Homebrew installer smoke");
         return Ok(());
@@ -18601,18 +18674,50 @@ fn run_installer_smoke_homebrew() -> Result<()> {
             std::fs::copy(provided.join("checksums.txt"), assets_dir.join("checksums.txt"))
                 .context("copy prebuilt checksums")?;
         } else {
-            run_path_command_checked(
-                &root,
-                &root.join("tools").join("release").join("build-cli-release-assets.sh"),
-                &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-            )?;
+            if let Some(assets_builder) = &assets_builder {
+                run_path_command_checked(
+                    &root,
+                    assets_builder,
+                    &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+                )?;
+            } else {
+                run_path_command_checked(
+                    &root,
+                    &self_bin,
+                    &[
+                        "build",
+                        "self",
+                        "assets",
+                        "--version",
+                        &version,
+                        "--out-dir",
+                        assets_dir.to_str().unwrap_or_default(),
+                    ],
+                )?;
+            }
         }
     } else {
-        run_path_command_checked(
-            &root,
-            &root.join("tools").join("release").join("build-cli-release-assets.sh"),
-            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-        )?;
+        if let Some(assets_builder) = &assets_builder {
+            run_path_command_checked(
+                &root,
+                assets_builder,
+                &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+            )?;
+        } else {
+            run_path_command_checked(
+                &root,
+                &self_bin,
+                &[
+                    "build",
+                    "self",
+                    "assets",
+                    "--version",
+                    &version,
+                    "--out-dir",
+                    assets_dir.to_str().unwrap_or_default(),
+                ],
+            )?;
+        }
     }
 
     let checksums_path = assets_dir.join("checksums.txt");
@@ -18695,8 +18800,24 @@ fn run_build_image(
 ) -> Result<()> {
     let repo_root = resolve_release_repo_root(repo_root)?;
     if !skip_preflight {
-        let preflight = repo_root.join("tools").join("si-image").join("preflight-codex-upgrade.sh");
-        run_command_checked(&repo_root, "bash", [preflight.to_str().unwrap_or_default()])?;
+        if let Some(preflight) = override_executable("SI_PREFLIGHT_CODEX_UPGRADE_EXEC") {
+            run_path_command_checked(&repo_root, &preflight, &[])?;
+        } else {
+            run_command_checked(
+                &repo_root,
+                "cargo",
+                [
+                    "run",
+                    "--quiet",
+                    "--locked",
+                    "--manifest-path",
+                    "rust/crates/si-agents/Cargo.toml",
+                    "--bin",
+                    "preflight-codex-upgrade",
+                    "--",
+                ],
+            )?;
+        }
     }
 
     let image =
@@ -18796,6 +18917,14 @@ fn run_path_command_expect_fail(dir: &Path, path: &Path, args: &[&str]) -> Resul
         return Err(anyhow!("expected command to fail: {}", path.display()));
     }
     Ok(())
+}
+
+fn override_executable(var: &str) -> Option<PathBuf> {
+    std::env::var(var)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 fn run_publish_npm_from_vault(
@@ -19319,6 +19448,7 @@ fn normalize_root_command(command: Command) -> Command {
 fn removed_root_command_replacement(root: &str) -> Option<&'static str> {
     match root {
         "paths" => Some("si settings"),
+        "paas" => Some("si orbit"),
         "providers" => Some("si orbit list"),
         "cloudflare" => Some("si orbit cloudflare ..."),
         "apple" => Some("si orbit apple ..."),
@@ -34958,7 +35088,8 @@ fn resolve_surf_program(
 }
 
 fn resolve_surf_build_fallback(settings: &SurfSettings) -> Result<PathBuf> {
-    build_surf_binary(resolve_surf_repo(settings)?)
+    let repo = resolve_surf_repo(settings)?;
+    existing_checkout_binary(&repo, "surf").map(Ok).unwrap_or_else(|| build_surf_binary(repo))
 }
 
 fn resolve_surf_repo(settings: &SurfSettings) -> Result<PathBuf> {
@@ -35005,7 +35136,8 @@ fn resolve_viva_program(
 }
 
 fn resolve_viva_build_fallback(settings: &VivaSettings) -> Result<PathBuf> {
-    build_viva_binary(resolve_viva_repo(settings)?)
+    let repo = resolve_viva_repo(settings)?;
+    existing_checkout_binary(&repo, "viva").map(Ok).unwrap_or_else(|| build_viva_binary(repo))
 }
 
 fn resolve_viva_repo(settings: &VivaSettings) -> Result<PathBuf> {
@@ -35022,10 +35154,47 @@ fn discover_checkout_viva_repo() -> Option<PathBuf> {
 }
 
 fn discover_checkout_repo(name: &str) -> Option<PathBuf> {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let si_repo = manifest_dir.ancestors().nth(3)?;
-    let repo = si_repo.parent()?.join(name);
-    repo.join("Cargo.toml").exists().then_some(repo)
+    if let Ok(current_dir) = std::env::current_dir() {
+        if let Some(repo) = discover_checkout_repo_from_base(&current_dir, name) {
+            return Some(repo);
+        }
+    }
+
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(repo) = discover_checkout_repo_from_base(&current_exe, name) {
+            return Some(repo);
+        }
+    }
+
+    discover_checkout_repo_from_base(Path::new(env!("CARGO_MANIFEST_DIR")), name)
+}
+
+fn discover_checkout_repo_from_base(base: &Path, name: &str) -> Option<PathBuf> {
+    for anchor in base.ancestors() {
+        if anchor.file_name().map(|part| part == name).unwrap_or(false)
+            && anchor.join("Cargo.toml").exists()
+        {
+            return Some(anchor.to_path_buf());
+        }
+
+        let sibling = anchor.join(name);
+        if sibling.join("Cargo.toml").exists() {
+            return Some(sibling);
+        }
+    }
+
+    None
+}
+
+fn existing_checkout_binary(repo: &Path, name: &str) -> Option<PathBuf> {
+    let binary_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() };
+    for profile in ["debug", "release"] {
+        let candidate = repo.join("target").join(profile).join(&binary_name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn build_viva_binary(repo: PathBuf) -> Result<PathBuf> {
@@ -35676,7 +35845,8 @@ fn resolve_fort_program(
 }
 
 fn resolve_fort_build_fallback(settings: &FortSettings) -> Result<PathBuf> {
-    build_fort_binary(resolve_fort_repo(settings)?)
+    let repo = resolve_fort_repo(settings)?;
+    existing_checkout_binary(&repo, "fort").map(Ok).unwrap_or_else(|| build_fort_binary(repo))
 }
 
 fn resolve_fort_repo(settings: &FortSettings) -> Result<PathBuf> {
@@ -35686,10 +35856,7 @@ fn resolve_fort_repo(settings: &FortSettings) -> Result<PathBuf> {
 }
 
 fn discover_checkout_fort_repo() -> Option<PathBuf> {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let si_repo = manifest_dir.ancestors().nth(3)?;
-    let fort_repo = si_repo.parent()?.join("fort");
-    fort_repo.join("Cargo.toml").exists().then_some(fort_repo)
+    discover_checkout_repo("fort")
 }
 
 fn build_fort_binary(repo: PathBuf) -> Result<PathBuf> {
@@ -36147,11 +36314,10 @@ fn load_codex_profiles_for_display(
     )
 }
 
-fn resolve_codex_profile_with_mode(
+fn resolve_codex_profile(
     settings: &Settings,
     paths: &SiPaths,
     profile: Option<&str>,
-    _mode: CodexProfileSelectionMode,
     purpose: &str,
 ) -> Result<String> {
     let profiles = load_codex_profiles_for_display(settings, paths, None);
@@ -36179,41 +36345,7 @@ fn resolve_codex_requested_profile(
     paths: &SiPaths,
     profile: Option<&str>,
 ) -> Result<String> {
-    let active = resolve_codex_active_profile_id(settings);
-    let mut profiles = settings
-        .codex
-        .profiles
-        .entries
-        .iter()
-        .map(|(profile_id, entry)| codex_profile_view(paths, active.as_deref(), profile_id, entry))
-        .collect::<Vec<_>>();
-    profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
-
-    if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
-        let candidates = find_codex_profile_candidates(&profiles, query);
-        return match candidates.as_slice() {
-            [index] => Ok(profiles[*index].profile.clone()),
-            [] => Err(codex_profile_resolution_error(query, &profiles)),
-            _ => Err(anyhow!("codex profile {:?} matched multiple configured profiles", query)),
-        };
-    }
-
-    if let Some(active_profile) = active
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .filter(|value| settings.codex.profiles.entries.contains_key(value))
-    {
-        return Ok(active_profile);
-    }
-
-    if codex_profile_prompt_available() {
-        profiles = enrich_codex_profiles_with_live_status(profiles, None);
-        return prompt_for_codex_profile("codex", &profiles);
-    }
-
-    anyhow::bail!(
-        "codex profile is required; pass one explicitly or run in a TTY to choose from the configured profiles"
-    )
+    resolve_codex_profile(settings, paths, profile, "codex")
 }
 
 fn default_codex_profile_auth_path(paths: &SiPaths, profile: &str) -> String {
@@ -36504,13 +36636,7 @@ fn show_codex_profile(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "show",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "show")?;
     let entry = settings
         .codex
         .profiles
@@ -36594,13 +36720,7 @@ fn remove_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "remove",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "remove")?;
     let mut document = load_settings_document(&settings_path)?;
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
@@ -36638,13 +36758,7 @@ fn login_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "login",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "login")?;
     let entry = settings
         .codex
         .profiles
@@ -36737,13 +36851,7 @@ fn swap_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "swap",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "swap")?;
     let entry = settings
         .codex
         .profiles
@@ -36793,26 +36901,6 @@ fn load_codex_runtime_settings(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     Ok((home, settings))
-}
-
-fn update_codex_active_profile_in_settings(
-    home: &Path,
-    settings_file: Option<&Path>,
-    profile_id: &str,
-) -> Result<()> {
-    let settings_path = settings_file
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| home.join(".si").join("settings.toml"));
-    let mut document = load_settings_document(&settings_path)?;
-    if !document.contains_key("schema_version") {
-        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
-    }
-    let codex = ensure_toml_table(&mut document, "codex")?;
-    let profiles = ensure_toml_table(codex, "profiles")?;
-    set_toml_string(profiles, "active", Some(profile_id.to_owned()));
-    set_toml_string(codex, "profile", Some(profile_id.to_owned()));
-    write_settings_document(&settings_path, &document)?;
-    Ok(())
 }
 
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
@@ -65156,13 +65244,7 @@ fn show_codex_spawn_start(
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile.as_deref(),
-        CodexProfileSelectionMode::PromptOnMissing,
-        "spawn",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "spawn")?;
 
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
@@ -66228,13 +66310,6 @@ fn run_codex_warmup(
         }
     }
 
-    if let Some(next_active) = select_codex_warmup_active_profile(
-        &results,
-        resolve_codex_active_profile_id(&settings).as_deref(),
-    ) {
-        update_codex_active_profile_in_settings(&home_dir, Some(&settings_path), next_active)?;
-    }
-
     state.version = si_rs_warmup::WARMUP_STATE_VERSION;
     state.updated_at = updated_at.to_rfc3339();
     save_warmup_state(&state_path, &state)?;
@@ -66271,42 +66346,6 @@ fn run_codex_warmup(
     Ok(())
 }
 
-fn codex_warmup_profile_is_usable(profile: &CodexWarmupRunProfileView) -> bool {
-    profile.result.eq_ignore_ascii_case("warmed")
-        && profile.five_hour_left_pct.is_some_and(|value| value > 0.0)
-        && profile.weekly_left_pct.is_some_and(|value| value > 0.0)
-}
-
-fn select_codex_warmup_active_profile<'a>(
-    profiles: &'a [CodexWarmupRunProfileView],
-    current_active: Option<&'a str>,
-) -> Option<&'a str> {
-    if let Some(active_profile) =
-        current_active.map(str::trim).filter(|value| !value.is_empty()).filter(|active_profile| {
-            profiles.iter().any(|profile| {
-                profile.profile_id == *active_profile && codex_warmup_profile_is_usable(profile)
-            })
-        })
-    {
-        return Some(active_profile);
-    }
-
-    profiles
-        .iter()
-        .filter(|profile| codex_warmup_profile_is_usable(profile))
-        .max_by(|left, right| {
-            left.weekly_left_pct
-                .partial_cmp(&right.weekly_left_pct)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    left.five_hour_left_pct
-                        .partial_cmp(&right.five_hour_left_pct)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        })
-        .map(|profile| profile.profile_id.as_str())
-}
-
 fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -> Result<()> {
     let (home, _settings) = load_codex_runtime_settings(None, None)?;
     let runtime_containers =
@@ -66321,8 +66360,14 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
             "no running codex containers found; run `si codex spawn --profile <profile>` or `si codex warmup run --all` first"
         );
     }
-    let target =
-        resolve_codex_container_for_profile(profile, "tmux", true, Some(home.clone()), None, None)?;
+    let target = resolve_codex_container_for_profile(
+        profile,
+        "tmux",
+        false,
+        Some(home.clone()),
+        None,
+        None,
+    )?;
     let profile_display_name = target.profile_name.as_deref();
     let container = target.container_name.clone();
     let legacy_session_name = codex_tmux_session_name(&container);
@@ -66527,13 +66572,7 @@ fn run_codex_respawn_plan(
 ) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile_with_mode(
-        &settings,
-        &paths,
-        profile,
-        CodexProfileSelectionMode::PromptOnMissing,
-        "respawn",
-    )?;
+    let profile_id = resolve_codex_profile(&settings, &paths, profile, "respawn")?;
     let discovered = if profile_containers.is_empty() {
         read_codex_containers(None)?
             .into_iter()

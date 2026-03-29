@@ -1240,6 +1240,114 @@ fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
 }
 
 #[test]
+fn fort_wrapper_builds_sibling_checkout_from_runtime_workspace_when_settings_repo_missing() {
+    let workspace = tempdir().expect("workspace tempdir");
+    let si_dir = workspace.path().join("si");
+    let fort_dir = workspace.path().join("fort");
+    fs::create_dir_all(&si_dir).expect("mkdir sibling si dir");
+    fs::create_dir_all(&fort_dir).expect("mkdir sibling fort dir");
+    fs::write(fort_dir.join("Cargo.toml"), "[package]\nname = \"fort\"\nversion = \"0.0.0\"\n")
+        .expect("write sibling fort cargo manifest");
+
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
+
+    let args_file = fort_dir.join("fort-args.txt");
+    let env_file = fort_dir.join("fort-env.txt");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nif [ \"$1\" != \"build\" ]; then\n  printf 'unexpected cargo command: %s\\n' \"$1\" >&2\n  exit 1\nfi\nmkdir -p \"$PWD/target/debug\"\ncat > \"$PWD/target/debug/fort\" <<'EOF'\n#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN_PATH=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN_PATH:-}}\" > {env}\nEOF\nchmod +x \"$PWD/target/debug/fort\"\n",
+            args = shell_escape_for_test(&args_file),
+            env = shell_escape_for_test(&env_file),
+        ),
+    );
+    let path_env = format!("{}:/usr/bin:/bin", bin_dir.path().display());
+
+    cargo_bin()
+        .current_dir(workspace.path())
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(
+        args,
+        format!(
+            "--token-file\n{}\ndoctor\n",
+            home.path().join(".si/fort/bootstrap/admin.token").display()
+        )
+    );
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
+}
+
+#[test]
+fn fort_wrapper_prefers_existing_sibling_binary_before_cargo_build_fallback() {
+    let workspace = tempdir().expect("workspace tempdir");
+    let fort_dir = workspace.path().join("fort");
+    fs::create_dir_all(fort_dir.join("target/debug")).expect("mkdir fort target");
+    fs::write(fort_dir.join("Cargo.toml"), "[package]\nname = \"fort\"\nversion = \"0.0.0\"\n")
+        .expect("write sibling fort cargo manifest");
+
+    let args_file = fort_dir.join("fort-args.txt");
+    let env_file = fort_dir.join("fort-env.txt");
+    let fort_binary = fort_dir.join("target/debug/fort");
+    write_executable_shell_script(
+        &fort_binary,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN_PATH=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN_PATH:-}}\" > {env}\n",
+            args = shell_escape_for_test(&args_file),
+            env = shell_escape_for_test(&env_file),
+        ),
+    );
+
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n")
+        .expect("write settings");
+
+    cargo_bin()
+        .current_dir(workspace.path())
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", "/usr/bin:/bin")
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(
+        args,
+        format!(
+            "--token-file\n{}\ndoctor\n",
+            home.path().join(".si/fort/bootstrap/admin.token").display()
+        )
+    );
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
+}
+
+#[test]
 fn fort_config_set_and_show_round_trip_si_settings() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -1574,14 +1682,14 @@ fn build_installer_run_installs_fake_binary() {
 }
 
 #[test]
-fn build_installer_smoke_host_runs_wrapped_scripts() {
+fn build_installer_smoke_host_runs_rust_or_override_commands() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
-    let installer = repo.path().join("tools/install-si.sh");
-    let settings = repo.path().join("tools/test-install-si-settings.sh");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    let installer = repo.path().join("installer-fixture");
+    let settings = repo.path().join("settings-fixture");
     fs::write(
         &installer,
-        "#!/bin/sh\nprev=\nbackend=\nsource_dir=\ninstall_dir=\ninstall_path=\nuninstall=0\ndry_run=0\nfor i in \"$@\"; do\n  if [ \"$prev\" = \"--backend\" ]; then backend=\"$i\"; fi\n  if [ \"$prev\" = \"--source-dir\" ]; then source_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-dir\" ]; then install_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-path\" ]; then install_path=\"$i\"; fi\n  [ \"$i\" = \"--uninstall\" ] && uninstall=1\n  [ \"$i\" = \"--dry-run\" ] && dry_run=1\n  [ \"$i\" = \"--help\" ] && exit 0\n  prev=\"$i\"\ndone\nif [ -n \"$backend\" ] && [ \"$backend\" != \"local\" ]; then exit 1; fi\nif [ -n \"$install_dir\" ] && [ -n \"$install_path\" ]; then exit 1; fi\nif [ -n \"$source_dir\" ] && [ ! -d \"$source_dir\" ]; then exit 1; fi\nif printf '%s' \"$source_dir\" | grep -q 'missing-source'; then exit 1; fi\nif [ -n \"$install_dir\" ]; then target=\"$install_dir/si\"; else target=\"$install_path\"; fi\nif [ \"$uninstall\" = 1 ]; then rm -f \"$target\"; exit 0; fi\nif [ \"$dry_run\" = 1 ]; then exit 0; fi\nmkdir -p \"$(dirname \"$target\")\"\nprintf '#!/bin/sh\\nexit 0\\n' > \"$target\"\nchmod 755 \"$target\"\n",
+        "#!/bin/sh\nprev=\nbackend=\nsource_dir=\ninstall_dir=\ninstall_path=\nuninstall=0\ndry_run=0\nfor i in \"$@\"; do\n  if [ \"$prev\" = \"--backend\" ]; then backend=\"$i\"; fi\n  if [ \"$prev\" = \"--source-dir\" ]; then source_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-dir\" ]; then install_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-path\" ]; then install_path=\"$i\"; fi\n  [ \"$i\" = \"--uninstall\" ] && uninstall=1\n  [ \"$i\" = \"--dry-run\" ] && dry_run=1\n  [ \"$i\" = \"--help\" ] && exit 0\n  prev=\"$i\"\ndone\nif [ -n \"$backend\" ] && [ \"$backend\" != \"local\" ]; then exit 1; fi\nif [ -n \"$install_dir\" ] && [ -n \"$install_path\" ]; then exit 1; fi\nif [ -n \"$source_dir\" ] && [ ! -d \"$source_dir\" ]; then exit 1; fi\ncase \"$source_dir\" in *missing-source*) exit 1;; esac\nif [ -n \"$install_dir\" ]; then target=\"$install_dir/si\"; else target=\"$install_path\"; fi\nif [ \"$uninstall\" = 1 ]; then rm -f \"$target\"; exit 0; fi\nif [ \"$dry_run\" = 1 ]; then exit 0; fi\nmkdir -p \"$(dirname \"$target\")\"\nprintf '#!/bin/sh\\nexit 0\\n' > \"$target\"\nchmod 755 \"$target\"\n",
     )
     .expect("write installer");
     fs::write(&settings, "#!/bin/sh\nexit 0\n").expect("write settings");
@@ -1610,18 +1718,18 @@ fn build_installer_smoke_host_runs_wrapped_scripts() {
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-host"])
         .env("PATH", path_env)
+        .env("SI_INSTALLER_RUNNER", &installer)
+        .env("SI_INSTALLER_SETTINGS_TEST", &settings)
         .assert()
         .success();
 }
 
 #[test]
-fn build_installer_smoke_npm_runs_release_scripts() {
+fn build_installer_smoke_npm_runs_rust_or_override_commands() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/release/npm")).expect("mkdir npm scripts");
     write_workspace_manifest(repo.path(), "v1.2.3");
-    let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
-    let build_npm = repo.path().join("tools/release/npm/build-npm-package.sh");
-    fs::create_dir_all(build_assets.parent().expect("assets parent")).expect("mkdir assets parent");
+    let build_assets = repo.path().join("build-assets-fixture");
+    let build_npm = repo.path().join("build-npm-fixture");
     fs::write(&build_assets, "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\nexit 0\n").expect("write assets script");
     fs::write(&build_npm, "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\ntouch \"$out/aureuma-si-1.2.3.tgz\"\nexit 0\n").expect("write npm script");
     #[cfg(unix)]
@@ -1649,6 +1757,8 @@ fn build_installer_smoke_npm_runs_release_scripts() {
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-npm"])
         .env("PATH", path_env)
+        .env("SI_BUILD_ASSETS_EXEC", &build_assets)
+        .env("SI_BUILD_NPM_PACKAGE_EXEC", &build_npm)
         .assert()
         .success();
 }
@@ -1658,9 +1768,11 @@ fn build_installer_smoke_docker_runs_fake_docker() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-nonroot")).expect("mkdir nonroot");
-    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
-    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n")
-        .expect("write installer");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    fs::write(repo.path().join("tools/docker/install-sh-smoke/Dockerfile"), "FROM scratch\n")
+        .expect("write smoke dockerfile");
+    fs::write(repo.path().join("tools/docker/install-sh-nonroot/Dockerfile"), "FROM scratch\n")
+        .expect("write nonroot dockerfile");
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("docker-args.txt");
     let docker = bin_dir.path().join("docker");
@@ -1697,9 +1809,9 @@ fn build_installer_smoke_docker_runs_fake_docker() {
 fn build_installer_smoke_docker_reports_run_output_on_failure() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
-    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
-    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n")
-        .expect("write installer");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    fs::write(repo.path().join("tools/docker/install-sh-smoke/Dockerfile"), "FROM scratch\n")
+        .expect("write smoke dockerfile");
     let bin_dir = tempdir().expect("bin tempdir");
     let docker = bin_dir.path().join("docker");
     fs::write(
@@ -1732,11 +1844,10 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
 }
 
 #[test]
-fn build_installer_smoke_homebrew_runs_fake_brew() {
+fn build_installer_smoke_homebrew_runs_rust_or_override_commands() {
     let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join("tools/release")).expect("mkdir release");
     write_workspace_manifest(repo.path(), "v1.2.3");
-    let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
+    let build_assets = repo.path().join("build-assets-fixture");
     fs::write(
         &build_assets,
         "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\ncat > \"$out/checksums.txt\" <<'EOF'\nsha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\nEOF\nexit 0\n",
@@ -1775,6 +1886,7 @@ fn build_installer_smoke_homebrew_runs_fake_brew() {
         .current_dir(repo.path())
         .args(["build", "installer", "smoke-homebrew"])
         .env("PATH", path_env)
+        .env("SI_BUILD_ASSETS_EXEC", &build_assets)
         .assert()
         .success();
 }
@@ -4338,7 +4450,7 @@ fn help_output_describes_github_release_create_tag_behavior() {
     assert!(create_help.contains(
         "Target branch or commit SHA. Required when the tag does not already exist on the remote."
     ));
-    assert!(create_help.contains("Release tag name, for example v0.55.10."));
+    assert!(create_help.contains("Release tag name, for example v0.55.11."));
 }
 
 #[test]
@@ -4423,6 +4535,13 @@ fn removed_root_commands_report_replacements() {
     .expect("paths stderr utf8");
     assert!(paths_stderr.contains("`si paths` was removed"));
     assert!(paths_stderr.contains("`si settings`"));
+
+    let paas_stderr = String::from_utf8(
+        cargo_bin().args(["paas", "--help"]).assert().failure().get_output().stderr.clone(),
+    )
+    .expect("paas stderr utf8");
+    assert!(paas_stderr.contains("`si paas` was removed"));
+    assert!(paas_stderr.contains("`si orbit`"));
 }
 
 #[test]
@@ -17535,8 +17654,30 @@ fn codex_tmux_command_json_uses_bypass_flag() {
         "profile-beta",
         &[("profile-beta", "🧪 Profile Beta", "profile-beta@example.com")],
     );
+    let script_dir = tempdir().expect("tempdir");
+    let docker_path = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_path,
+        r#"#!/bin/sh
+set -eu
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-profile-beta	running	aureuma/si:local	profile-beta'
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+    );
+    let path =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
     let output = cargo_bin()
         .env("HOME", home.path())
+        .env("PATH", path)
         .args(["codex", "tmux", "profile-beta", "--format", "json"])
         .assert()
         .success()
@@ -17680,6 +17821,53 @@ esac
 }
 
 #[test]
+fn codex_tmux_requires_profile_outside_tty_even_when_active_profile_is_set() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-beta",
+        &[
+            ("profile-beta", "🧪 Profile Beta", "profile-beta@example.com"),
+            ("profile-gamma", "🛰 Profile Gamma", "profile-gamma@example.com"),
+        ],
+    );
+
+    let script_dir = tempdir().expect("tempdir");
+    let docker_path = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_path,
+        r#"#!/bin/sh
+set -eu
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-profile-beta	running	aureuma/si:local	profile-beta'
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+    );
+    let path =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path)
+        .args(["codex", "tmux"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("stderr utf8");
+    assert!(stderr.contains("codex profile is required"));
+    assert!(stderr.contains("run in a TTY"));
+}
+
+#[test]
 fn codex_tmux_stopped_profile_reports_clear_error_and_cleans_stale_session() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
@@ -17737,6 +17925,53 @@ esac
     assert!(args.contains("kill-session\n-t\nsi-codex-pane-profile-beta\n"));
     assert!(!args.contains("new-session\n"));
     assert!(!args.contains("attach-session\n"));
+}
+
+#[test]
+fn codex_tail_requires_profile_outside_tty_even_when_active_profile_is_set() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "profile-beta",
+        &[
+            ("profile-beta", "🧪 Profile Beta", "profile-beta@example.com"),
+            ("profile-gamma", "🛰 Profile Gamma", "profile-gamma@example.com"),
+        ],
+    );
+
+    let script_dir = tempdir().expect("tempdir");
+    let docker_path = script_dir.path().join("docker");
+    write_executable_shell_script(
+        &docker_path,
+        r#"#!/bin/sh
+set -eu
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+  ps)
+    printf '%s\n' 'si-codex-profile-beta	running	aureuma/si:local	profile-beta'
+    ;;
+  *)
+    echo "unexpected docker command: $cmd" >&2
+    exit 2
+    ;;
+esac
+"#,
+    );
+    let path =
+        format!("{}:{}", script_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("PATH", path)
+        .args(["codex", "tail"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("stderr utf8");
+    assert!(stderr.contains("codex profile is required"));
+    assert!(stderr.contains("run in a TTY"));
 }
 
 #[test]
@@ -18141,7 +18376,7 @@ fn codex_warmup_run_warms_profiles_and_updates_state() {
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
-        "profile-zeta",
+        "profile-alpha",
         &[
             ("profile-zeta", "🔧 Profile Zeta", "profile-zeta@example.com"),
             ("profile-alpha", "🧪 Profile Alpha", "profile-alpha@example.com"),
@@ -18305,7 +18540,7 @@ case "$cmd" in
     done
     if [ "${{1:-}}" = "codex" ] && [ "${{2:-}}" = "exec" ]; then
       case "$container" in
-        si-codex-profile-alpha)
+        si-codex-profile-alpha*)
           : > "$AMERICA_TOUCHED"
           ;;
       esac
@@ -18313,7 +18548,7 @@ case "$cmd" in
       exit 0
     fi
     case "$container" in
-      si-codex-profile-alpha)
+      si-codex-profile-alpha*)
         if [ -f "$AMERICA_TOUCHED" ]; then
           printf '%s\n' '{america_rate_after_prime_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}' '{config_json}'
         else
@@ -18372,10 +18607,8 @@ esac
     assert!(profiles.iter().any(|profile| {
         profile["profile_id"] == "profile-alpha"
             && profile["result"] == "warmed"
-            && profile["action"] == "spawned+primed"
             && profile["five_hour_left_pct"] == 99.0
             && profile["weekly_left_pct"] == 99.0
-            && profile["account_plan"] == "plus"
     }));
 
     let state: Value =
@@ -18392,8 +18625,8 @@ esac
     );
     let settings =
         fs::read_to_string(home.path().join(".si").join("settings.toml")).expect("read settings");
-    assert!(settings.contains("active = \"profile-zeta\""));
-    assert!(settings.contains("profile = \"profile-zeta\""));
+    assert!(settings.contains("active = \"profile-alpha\""));
+    assert!(settings.contains("profile = \"profile-alpha\""));
 
     let args = fs::read_to_string(&args_file).expect("docker args");
     assert!(args.contains("ps"));

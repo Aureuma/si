@@ -11,7 +11,7 @@ This doc tracks the source-formula path needed for eventual submission to Homebr
 ## Refresh the core formula template
 
 ```bash
-tools/release/homebrew/render-core-formula.sh \
+si build homebrew core \
   --version vX.Y.Z \
   --output packaging/homebrew-core/si.rb
 ```

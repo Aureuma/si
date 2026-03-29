@@ -48,10 +48,10 @@ brew install aureuma/si/si
 
 Homebrew uses `user/repo/formula` for external taps, so `brew install aureuma/si` is not a valid formula path.
 
-Direct installer script remains available:
+Direct source install remains available:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh | bash
+cargo run --quiet --locked -p si-rs-cli -- build installer run --force
 ```
 
 ## Quickstart
@@ -129,7 +129,7 @@ Full command surface: run `si --help` and command-specific help (`si <command> -
 Run module tests:
 
 ```bash
-./tools/test.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
 ```
 
 Run the staged Rust workspace checks:
@@ -143,26 +143,26 @@ cargo test --workspace
 Run installer smoke tests:
 
 ```bash
-./tools/test-install-si.sh
-./tools/test-install-si-docker.sh
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
 ```
 
 Run strict vault-focused tests:
 
 ```bash
-./tools/test-vault.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- vault
 ```
 
 Run the full local test stack in one command:
 
 ```bash
-./tools/test-all.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all
 ```
 
 Run the Rust host matrix for the direct `si`/`fort`/`surf` chain:
 
 ```bash
-./tools/test-rust-host-matrix.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-rust-host-matrix --
 ```
 
 Scenario coverage and expected behavior are documented in [`docs/HOST_TEST_MATRIX.md`](docs/HOST_TEST_MATRIX.md).
@@ -187,7 +187,7 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 
 Local preflight command:
 - `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
-- `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
+- `./.artifacts/cargo-target/release/si-rs build npm vault --version vX.Y.Z` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 ## License
 

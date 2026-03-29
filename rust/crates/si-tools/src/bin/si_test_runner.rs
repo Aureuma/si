@@ -129,27 +129,56 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
     }
     if !skip_installer {
         eprintln!("==> Installer host smoke");
-        if run_script(root, "./tools/test-install-si.sh") != ExitCode::SUCCESS {
+        if run_command(Command::new("cargo").current_dir(root).args([
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "si-rs-cli",
+            "--",
+            "build",
+            "installer",
+            "smokehost",
+        ])) != ExitCode::SUCCESS
+        {
             return ExitCode::from(1);
         }
     }
     if !skip_npm {
         eprintln!("==> npm installer smoke");
-        if run_script(root, "./tools/test-install-si-npm.sh") != ExitCode::SUCCESS {
+        if run_command(Command::new("cargo").current_dir(root).args([
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "si-rs-cli",
+            "--",
+            "build",
+            "installer",
+            "smokenpm",
+        ])) != ExitCode::SUCCESS
+        {
             return ExitCode::from(1);
         }
     }
     if !skip_docker {
         eprintln!("==> Installer docker smoke");
-        if run_script(root, "./tools/test-install-si-docker.sh") != ExitCode::SUCCESS {
+        if run_command(Command::new("cargo").current_dir(root).args([
+            "run",
+            "--quiet",
+            "--locked",
+            "-p",
+            "si-rs-cli",
+            "--",
+            "build",
+            "installer",
+            "smokedocker",
+        ])) != ExitCode::SUCCESS
+        {
             return ExitCode::from(1);
         }
     }
     ExitCode::SUCCESS
-}
-
-fn run_script(root: &PathBuf, script: &str) -> ExitCode {
-    run_command(Command::new(script).current_dir(root))
 }
 
 fn run_command(command: &mut Command) -> ExitCode {

@@ -129,12 +129,12 @@ Useful environment variables (set on the host before `si dyad spawn start`, or p
 
 ## Offline Smoke Tests (No Codex Auth)
 
-If you want to validate tmux + parsing + turn-taking without Codex auth, you can run the dyad loop against `tools/dyad/fake-codex.sh`.
+If you want to validate tmux + parsing + turn-taking without Codex auth, you can run the dyad loop against the Rust `fake-codex` helper binary.
 
 Example:
 
 ```bash
-export DYAD_CODEX_START_CMD='cd /workspace && exec /workspace/tools/dyad/fake-codex.sh'
+export DYAD_CODEX_START_CMD='cd /workspace && exec cargo run --quiet --locked --manifest-path /workspace/rust/crates/si-tools/Cargo.toml --bin fake-codex --'
 export SI_HOST_UID=1000
 export SI_HOST_GID=1000
 export DYAD_LOOP_ENABLED=1
