@@ -14,9 +14,9 @@ Defaults:
   --identity-file ~/.si/vault/keys/age.key
 
 Examples:
-  tools/vault/import-dotenv-to-si-vault.sh --src .
-  tools/vault/import-dotenv-to-si-vault.sh --src . --section app-dev
-  tools/vault/import-dotenv-to-si-vault.sh --src . --dry-run
+  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --src .
+  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --src . --section app-dev
+  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --dry-run
 
 Notes:
   - This reads plaintext .env files. Use for migration/bootstrap only.

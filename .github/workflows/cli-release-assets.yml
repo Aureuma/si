@@ -58,69 +58,14 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          if [[ -x "tools/release/validate-release-version.sh" ]]; then
-            tools/release/validate-release-version.sh --tag "${tag}"
-            exit 0
-          fi
-          cargo run --quiet -p si-rs-cli -- build self validate-release-version --tag "${tag}"
+          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${tag}"
 
       - name: Build all release archives and checksums
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          if [[ -x "tools/release/build-cli-release-assets.sh" ]]; then
-            tools/release/build-cli-release-assets.sh --version "${tag}" --out-dir dist
-            ls -lah dist
-            exit 0
-          fi
-
-          version_nov="${tag#v}"
-          mkdir -p dist
-
-          build_one() {
-            local goos="$1"
-            local goarch="$2"
-            local goarm="${3:-}"
-            local arch_label="$goarch"
-            if [[ "${goarch}" == "arm" ]]; then
-              arch_label="armv${goarm}"
-            fi
-
-            local stem="si_${version_nov}_${goos}_${arch_label}"
-            local tmp_dir
-            tmp_dir="$(mktemp -d)"
-            local stage="${tmp_dir}/${stem}"
-            mkdir -p "${stage}"
-
-            local envs=("CGO_ENABLED=0" "GOOS=${goos}" "GOARCH=${goarch}")
-            if [[ -n "${goarm}" ]]; then
-              envs+=("GOARM=${goarm}")
-            fi
-
-            env "${envs[@]}" CARGO_TARGET_DIR="${tmp_dir}/cargo-target" cargo build --release --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs
-            cp "${tmp_dir}/cargo-target/release/si-rs" "${stage}/si"
-            chmod 0755 "${stage}/si"
-            [[ -f README.md ]] && cp README.md "${stage}/README.md"
-            [[ -f LICENSE ]] && cp LICENSE "${stage}/LICENSE"
-
-            tar -C "${tmp_dir}" -czf "dist/${stem}.tar.gz" "${stem}"
-            rm -rf "${tmp_dir}"
-          }
-
-          build_one linux amd64
-          build_one linux arm64
-          build_one linux arm 7
-          build_one darwin amd64
-          build_one darwin arm64
-
-          (
-            cd dist
-            : > checksums.txt
-            for f in *.tar.gz; do
-              sha256sum "${f}" >> checksums.txt
-            done
-          )
+          cargo run --quiet --locked --release -p si-rs-cli -- build self assets --version "${tag}" --out-dir dist
           ls -lah dist
 
       - name: Verify locally built release archives
@@ -128,12 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          if [[ -x "tools/release/verify-cli-release-assets.sh" ]]; then
-            tools/release/verify-cli-release-assets.sh --version "${tag}" --out-dir dist
-            exit 0
-          fi
-
-          echo "tools/release/verify-cli-release-assets.sh is missing on this checkout; skipping local archive verification."
+          cargo run --quiet --locked --release -p si-rs-cli -- build self verify --version "${tag}" --out-dir dist
 
       - name: Upload assets to GitHub Release
         shell: bash
@@ -193,12 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          if [[ -x "tools/release/npm/publish-npm-package.sh" ]]; then
-            tools/release/npm/publish-npm-package.sh --version "${tag}"
-            exit 0
-          fi
-
-          echo "tools/release/npm/publish-npm-package.sh is missing on this checkout; skipping npm publish for ${tag}."
+          cargo run --quiet --locked --release -p si-rs-cli -- build npm publish --version "${tag}"
 
   verify-homebrew-local-install:
     name: Verify local Homebrew install path
@@ -221,7 +156,7 @@ jobs:
           HOMEBREW_NO_ENV_HINTS: "1"
         run: |
           set -euo pipefail
-          ./tools/test-install-si-homebrew.sh
+          cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
 
   update-homebrew-tap:
     name: Update homebrew-si tap formula
@@ -305,7 +240,7 @@ jobs:
           git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
           git -C "${tap_dir}" config user.name "github-actions[bot]"
 
-          tools/release/homebrew/update-tap-repo.sh \
+          cargo run --quiet --locked --release -p si-rs-cli -- build homebrew update \
             --version "${tag}" \
             --checksums "${tmp_dir}/checksums.txt" \
             --tap-dir "${tap_dir}" \

@@ -4,7 +4,7 @@ This is the strong local validation baseline for the Rust-only `si` chain on a r
 Run it from the `si` repo root:
 
 ```bash
-./tools/test-rust-host-matrix.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-rust-host-matrix --
 ```
 
 The matrix covers the direct runtime dependency chain:
@@ -19,7 +19,7 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 
 | Scenario | Command | Expected behavior |
 | --- | --- | --- |
-| Installer smoke | `./tools/test-install-si.sh` | local installer build/install/uninstall completes successfully |
+| Installer smoke | `cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host` | local installer build/install/uninstall completes successfully |
 | SI CLI integration | `cargo test -p si-rs-cli --test cli --quiet` | command-surface and integration tests pass |
 | SI vault package | `cargo test -p si-rs-vault --quiet` | vault package tests pass |
 | Fort repo validation | `cargo test --quiet --manifest-path ../fort/Cargo.toml` | sibling `fort` workspace tests pass |
@@ -29,7 +29,7 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 
 ## Why this exists
 
-- `./tools/test-all.sh` is still the broad local stack.
+- `cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all` is still the broad local stack.
 - This matrix is the narrower Rust-host gate for the operational chain that must work together on a developer machine.
 - It verifies behavior that previously regressed in practice:
   - stale `.artifacts` binaries shadowing current Rust source

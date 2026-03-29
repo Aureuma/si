@@ -23,7 +23,4 @@ RUN apt-get update \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.86.0 \
   && chmod -R a+rwx /opt/rust
 
-COPY run.sh /usr/local/bin/run.sh
-RUN chmod +x /usr/local/bin/run.sh
-
-ENTRYPOINT ["/usr/local/bin/run.sh"]
+ENTRYPOINT ["cargo","run","--quiet","--locked","--manifest-path","/workspace/si/rust/crates/si-tools/Cargo.toml","--bin","si-install-smoke-root","--"]

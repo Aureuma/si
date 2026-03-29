@@ -69,7 +69,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run codex image preflight lanes
-        run: ./tools/si-image/preflight-codex-upgrade.sh
+        run: cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
 
   host-smoke:
     name: Host installer smoke (${{ matrix.os }})
@@ -88,7 +88,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run host installer smoke tests
-        run: ./tools/test-install-si.sh
+        run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 
   npm-smoke:
     name: npm installer smoke (ubuntu)
@@ -108,7 +108,7 @@ jobs:
           node-version: 20
 
       - name: Run npm installer smoke tests
-        run: ./tools/test-install-si-npm.sh
+        run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 
   docker-smoke:
     name: Docker installer smoke (ubuntu)
@@ -123,4 +123,4 @@ jobs:
         uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run docker installer smoke tests
-        run: ./tools/test-install-si-docker.sh
+        run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker

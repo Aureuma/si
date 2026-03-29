@@ -49,7 +49,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 - Run:
   - `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
-  - `tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight`
+  - `./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.Z --out-dir .artifacts/release-preflight`
 - Confirms archive packaging/checksum generation before publishing a GitHub Release.
 
 ## 6. Publish GitHub release
@@ -101,12 +101,12 @@ Notes:
   - `npm install --global --prefix "$RUNNER_TEMP/si-npm-verify" @aureuma/si@X.Y.Z`
   - `SI_NPM_RELEASE_BASE_URL="https://github.com/Aureuma/si/releases/download/vX.Y.Z" "$RUNNER_TEMP/si-npm-verify/bin/si" version`
 - npm publish using SI vault-managed token:
-  - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z`
+  - `si build npm vault --version vX.Y.Z`
   - default token key: `NPM_GAT_AUREUMA_VANGUARDA`
 - Homebrew tap:
   - `curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb | grep 'version \"'`
   - Formula version should match `X.Y.Z`.
-  - local smoke: `./tools/test-install-si-homebrew.sh`
+  - local smoke: `si build installer smoke-homebrew`
 
 Workflow `.github/workflows/cli-release-assets.yml` now performs a final
 distribution verification job that checks:
@@ -114,4 +114,4 @@ distribution verification job that checks:
 - required GitHub release assets are present
 - npm package visibility/version plus installed-launcher verification against the published release assets (when `NPM_TOKEN` is configured)
 - Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` or fallback `GH_PAT_AUREUMA` is configured)
-- and a separate macOS Homebrew smoke job exercises `./tools/test-install-si-homebrew.sh` on a brew-capable runner before the final gate
+- and a separate macOS Homebrew smoke job exercises `si build installer smoke-homebrew` on a brew-capable runner before the final gate

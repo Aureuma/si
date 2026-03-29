@@ -2,34 +2,30 @@
 
 ## Rust workspace layout
 This repo is Rust-only for build, test, and runtime flows.
-Run commands from the repo root so the workspace `Cargo.toml` and helper scripts resolve correctly.
+Run commands from the repo root so the workspace `Cargo.toml` and Rust helper binaries resolve correctly.
 
 ## Running tests
 Use the repo test runner from the root:
 
 ```bash
-si test workspace
-# compatibility alias:
-./tools/test.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
 ```
 
 That runner executes `cargo test --workspace`.
 No secondary language toolchain is required.
-Use `./tools/test.sh --help` for a quick usage reminder.
-Use `./tools/test.sh --list` to print the active test lane without running it.
+Use `cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace --help` for a quick usage reminder.
+Use `cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace --list` to print the active test lane without running it.
 
 For one-command local coverage of the standard test stack, run:
 
 ```bash
-si test all
-# compatibility alias:
-./tools/test-all.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all
 ```
 
 For the direct Rust host matrix across `si`, sibling `fort`, and sibling `surf`, run:
 
 ```bash
-./tools/test-rust-host-matrix.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-rust-host-matrix --
 ```
 
 That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
@@ -50,47 +46,43 @@ cargo test -p si-rs-provider-aws
 To validate the `si` installer script end-to-end, run:
 
 ```bash
-./tools/test-install-si.sh
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 ```
 
-Use `./tools/test-install-si.sh --help` for a quick usage reminder.
+Use `si build installer host --help` for a quick usage reminder.
 
 To validate the npm launcher package end-to-end, run:
 
 ```bash
-./tools/test-install-si-npm.sh
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 ```
 
 To validate the Homebrew tap install path end-to-end, run:
 
 ```bash
-./tools/test-install-si-homebrew.sh
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
 ```
 
 For containerized smoke coverage (root + non-root installer paths), run:
 
 ```bash
-./tools/test-install-si-docker.sh
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
 ```
 
-Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 ./tools/test-install-si-docker.sh` to skip
+Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker` to skip
 the non-root leg during local iteration.
 
 ## Vault strict suite
 Run the dedicated vault suite:
 
 ```bash
-si test vault
-# compatibility alias:
-./tools/test-vault.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- vault
 ```
 
 Compatibility flag:
 
 ```bash
-si test vault --quick
-# compatibility alias:
-./tools/test-vault.sh --quick
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- vault --quick
 ```
 
 `--quick` is retained as a compatibility no-op; the Rust vault lane already runs as a single package suite.
@@ -99,7 +91,7 @@ si test vault --quick
 Run the Fort integration matrix:
 
 ```bash
-./tools/test-fort-spawn-matrix.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin test-fort-spawn-matrix --
 ```
 
 This matrix validates:
@@ -175,7 +167,7 @@ After CLI command-surface changes, run targeted help checks:
 Run the preflight directly:
 
 ```bash
-./tools/si-image/preflight-codex-upgrade.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
 ```
 
 Skip preflight only when you explicitly need a fast local image iteration:

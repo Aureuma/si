@@ -28,7 +28,4 @@ USER si
 WORKDIR /home/si
 ENV HOME=/home/si
 
-COPY --chown=si:si run.sh /home/si/run.sh
-RUN chmod +x /home/si/run.sh
-
-ENTRYPOINT ["/home/si/run.sh"]
+ENTRYPOINT ["cargo","run","--quiet","--locked","--manifest-path","/workspace/si/rust/crates/si-tools/Cargo.toml","--bin","si-install-smoke-nonroot","--"]
