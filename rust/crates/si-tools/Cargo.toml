@@ -23,6 +23,18 @@ name = "si-test-runner"
 path = "src/bin/si_test_runner.rs"
 
 [[bin]]
+name = "si-install-smoke-root"
+path = "src/bin/si_install_smoke_root.rs"
+
+[[bin]]
+name = "si-install-smoke-nonroot"
+path = "src/bin/si_install_smoke_nonroot.rs"
+
+[[bin]]
+name = "si-rust-host-matrix"
+path = "src/bin/si_rust_host_matrix.rs"
+
+[[bin]]
 name = "si-codex-init"
 path = "src/bin/si_codex_init.rs"
 
@@ -44,6 +56,7 @@ libc.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

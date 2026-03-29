@@ -62,13 +62,13 @@ Update release version metadata:
 
 ### 4) Verify and commit the release prep
 ```
-./tools/test.sh
-./tools/test-install-si.sh
-./tools/test-install-si-npm.sh
-./tools/test-install-si-homebrew.sh
-./tools/test-install-si-docker.sh
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
 ./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
-tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml
 git commit -m "Bump version to vX.Y.Z"
 ```
@@ -163,7 +163,7 @@ builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` is configured, or by fallback to `GH_PAT_AUREUMA` when that token has tap push access)
 - verifies release assets + npm + Homebrew sync in a final gate job
-- runs a macOS Homebrew smoke install lane through `./tools/test-install-si-homebrew.sh`
+- runs a macOS Homebrew smoke install lane through `si build installer smoke-homebrew`
 
 Supported targets:
 - `linux/amd64`
@@ -194,12 +194,12 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 
 Notes:
 - The workflow validates that the workspace `Cargo.toml` version matches the release tag.
-- The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path and `tools/release/verify-cli-release-assets.sh` as the local archive verification path before upload.
+- The workflow uses `si build self assets` as the single build path and `si build self verify` as the local archive verification path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
-- Use `tools/release/npm/publish-npm-package.sh --version vX.Y.Z --dry-run` for local npm publish rehearsal.
-- Use `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
-- Use `tools/release/homebrew/render-core-formula.sh --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
+- Use `si build npm publish --version vX.Y.Z --dry-run` for local npm publish rehearsal.
+- Use `si build npm vault --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
+- Use `si build homebrew core --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 
 ### 10) Verify repo-boundary stability for Viva integrations
 When a release changes `si viva`, Viva-related settings, or shared orchestration/config behavior, validate the adjacent Viva repo before closing the release:
