@@ -10,6 +10,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use tar::Archive;
 use tempfile::tempdir;
@@ -25,6 +26,11 @@ fn repo_root_for_test() -> PathBuf {
         .join("..")
         .canonicalize()
         .expect("canonical repo root")
+}
+
+fn codex_tmux_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(())).lock().expect("lock codex tmux test guard")
 }
 
 fn expected_version_line() -> String {
@@ -17049,6 +17055,7 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
 
 #[test]
 fn codex_tmux_command_json_uses_bypass_flag() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -17102,6 +17109,7 @@ esac
 
 #[test]
 fn codex_tmux_executes_local_tmux_attach_flow() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -17166,6 +17174,7 @@ esac
 
 #[test]
 fn codex_tmux_repository_config_enables_mouse_wheel_scrolling() {
+    let _guard = codex_tmux_test_guard();
     let config = fs::read_to_string(
         repo_root_for_test().join("tools").join("tmux").join("codex-session.tmux.conf"),
     )
@@ -17179,6 +17188,7 @@ fn codex_tmux_repository_config_enables_mouse_wheel_scrolling() {
 
 #[test]
 fn codex_tmux_without_running_containers_reports_clear_error() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -17223,6 +17233,7 @@ esac
 
 #[test]
 fn codex_tmux_requires_profile_outside_tty_even_when_active_profile_is_set() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -17269,6 +17280,7 @@ esac
 
 #[test]
 fn codex_tmux_stopped_profile_reports_clear_error_and_cleans_stale_session() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
@@ -17329,6 +17341,7 @@ esac
 
 #[test]
 fn codex_tail_requires_profile_outside_tty_even_when_active_profile_is_set() {
+    let _guard = codex_tmux_test_guard();
     let home = tempdir().expect("tempdir");
     write_named_codex_profile_settings(
         home.path(),
