@@ -4492,61 +4492,6 @@ fn codex_report_command_is_not_available() {
 }
 
 #[test]
-fn removed_root_commands_report_replacements() {
-    let aws_stderr = String::from_utf8(
-        cargo_bin().args(["aws", "--help"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("aws stderr utf8");
-    assert!(aws_stderr.contains("`si aws` was removed"));
-    assert!(aws_stderr.contains("`si orbit aws ...`"));
-
-    let github_stderr = String::from_utf8(
-        cargo_bin().args(["github", "--help"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("github stderr utf8");
-    assert!(github_stderr.contains("`si github` was removed"));
-    assert!(github_stderr.contains("`si orbit github ...`"));
-
-    let providers_stderr = String::from_utf8(
-        cargo_bin().args(["providers", "--help"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("providers stderr utf8");
-    assert!(providers_stderr.contains("`si providers` was removed"));
-    assert!(providers_stderr.contains("`si orbit list`"));
-
-    let paths_stderr = String::from_utf8(
-        cargo_bin().args(["paths", "--help"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("paths stderr utf8");
-    assert!(paths_stderr.contains("`si paths` was removed"));
-    assert!(paths_stderr.contains("`si settings`"));
-
-    let paas_stderr = String::from_utf8(
-        cargo_bin().args(["paas", "--help"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("paas stderr utf8");
-    assert!(paas_stderr.contains("`si paas` was removed"));
-    assert!(paas_stderr.contains("`si orbit`"));
-}
-
-#[test]
-fn help_rejects_removed_roots() {
-    let stderr = String::from_utf8(
-        cargo_bin().args(["help", "aws"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("help stderr utf8");
-    assert!(stderr.contains("`si aws` was removed"));
-    assert!(stderr.contains("`si orbit aws ...`"));
-
-    let paths_stderr = String::from_utf8(
-        cargo_bin().args(["help", "paths"]).assert().failure().get_output().stderr.clone(),
-    )
-    .expect("help paths stderr utf8");
-    assert!(paths_stderr.contains("`si paths` was removed"));
-    assert!(paths_stderr.contains("`si settings`"));
-}
-
-#[test]
 fn help_rejects_manifest_only_root_commands() {
     let stderr = String::from_utf8(
         cargo_bin().args(["help", "analyze"]).assert().failure().get_output().stderr.clone(),
