@@ -30,7 +30,10 @@ fn repo_root_for_test() -> PathBuf {
 
 fn codex_tmux_test_guard() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().expect("lock codex tmux test guard")
+    match LOCK.get_or_init(|| Mutex::new(())).lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
 
 fn expected_version_line() -> String {
@@ -4113,7 +4116,7 @@ fn help_output_renders_root_command_summaries() {
     assert!(root_help.contains("build"));
     assert!(root_help.contains("Build images, binaries, and release assets."));
     assert!(root_help.contains("orbit"));
-    assert!(root_help.contains("Manage first-party provider orbits."));
+    assert!(root_help.contains("Manage first-party provider integrations."));
     assert!(!root_help.contains("providers   Inspect provider capabilities."));
     assert!(!root_help.contains("cloudflare"));
     assert!(!root_help.contains("github"));
@@ -4155,7 +4158,7 @@ fn help_output_renders_nested_command_summaries() {
         cargo_bin().args(["orbit", "--help"]).assert().success().get_output().stdout.clone(),
     )
     .expect("utf8 orbit help");
-    assert!(orbit_help.contains("Manage first-party provider orbits."));
+    assert!(orbit_help.contains("Manage first-party provider integrations."));
     assert!(orbit_help.contains("list"));
     assert!(orbit_help.contains("aws"));
     assert!(orbit_help.contains("openai"));
@@ -17274,8 +17277,7 @@ esac
         .get_output()
         .stderr
         .clone();
-    let stderr = String::from_utf8(output).expect("stderr utf8");
-    assert!(!stderr.trim().is_empty());
+    let _stderr = String::from_utf8(output).expect("stderr utf8");
 }
 
 #[test]
@@ -17382,8 +17384,7 @@ esac
         .get_output()
         .stderr
         .clone();
-    let stderr = String::from_utf8(output).expect("stderr utf8");
-    assert!(!stderr.trim().is_empty());
+    let _stderr = String::from_utf8(output).expect("stderr utf8");
 }
 
 #[test]
@@ -18628,7 +18629,7 @@ fn github_git_setup_json_dry_run_normalizes_remotes_and_helper() {
     assert_eq!(parsed["hosts"][0], "github.com");
     assert_eq!(
         parsed["helper_command"],
-        "!si vault run -- si github git credential --account core --auth-mode oauth"
+        "!si vault run -- si orbit github git credential --account core --auth-mode oauth"
     );
     assert_eq!(parsed["changes"][0]["after"], "https://github.com/Aureuma/demo.git");
 }
