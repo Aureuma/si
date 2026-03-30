@@ -32808,7 +32808,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["commands", "list"] => Some("List visible SI root commands."),
         ["settings"] => Some("Show resolved SI settings."),
         ["settings", "show"] => Some("Show resolved SI settings."),
-        ["orbit"] => Some("Manage first-party provider orbits."),
+        ["orbit"] => Some("Manage first-party provider integrations."),
         ["orbit", "list"] => Some("List orbit capabilities and provider traits."),
         ["orbit", "cloudflare"] => Some("Cloudflare orbit commands."),
         ["orbit", "apple"] => Some("Apple orbit commands."),
@@ -46345,7 +46345,7 @@ fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str)
         Ok(())
     } else {
         anyhow::bail!(
-            "{} requires oauth mode; run with --mode oauth and login via `si google youtube auth login`",
+            "{} requires oauth mode; run with --mode oauth and login via `si orbit google youtube auth login`",
             operation
         )
     }
@@ -62437,7 +62437,12 @@ fn build_github_credential_helper_command(
         }
         parts.extend(["--".to_owned(), "si".to_owned()]);
     }
-    parts.extend(["github".to_owned(), "git".to_owned(), "credential".to_owned()]);
+    parts.extend([
+        "orbit".to_owned(),
+        "github".to_owned(),
+        "git".to_owned(),
+        "credential".to_owned(),
+    ]);
     append_helper_arg(&mut parts, "--account", account);
     append_helper_arg(&mut parts, "--owner", owner);
     append_helper_arg(&mut parts, "--base-url", base_url);

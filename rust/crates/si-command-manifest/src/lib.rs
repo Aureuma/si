@@ -62,7 +62,7 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         name: "orbit",
         aliases: &[],
         category: CommandCategory::Provider,
-        summary: "Manage first-party provider orbits.",
+        summary: "Manage first-party provider integrations.",
         hidden: false,
     },
     CommandSpec {
