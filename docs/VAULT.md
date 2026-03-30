@@ -25,7 +25,7 @@ Architecture boundary:
 ## `si fort` Wrapper Contract
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
-- Host bootstrap/admin auth for `si codex spawn ...` and `si dyad spawn ...` provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
+- Host bootstrap/admin auth for `si codex spawn ...` provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
 - Runtime container sessions use file-backed token paths for the short-lived access token and rotating refresh token.
 - Wrapper behavior:
   - prefers caller-supplied runtime token paths (`FORT_TOKEN_PATH`, `FORT_REFRESH_TOKEN_PATH`) and refreshes those file-backed sessions in place when possible

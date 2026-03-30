@@ -18,10 +18,6 @@ path = "src/bin/agents_status.rs"
 name = "preflight-codex-upgrade"
 path = "src/bin/preflight_codex_upgrade.rs"
 
-[[bin]]
-name = "critic"
-path = "src/bin/critic.rs"
-
 [dependencies]
 chrono.workspace = true
 libc.workspace = true

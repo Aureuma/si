@@ -49,7 +49,7 @@ Color control:
 
 | Domain | Commands |
 | --- | --- |
-| Runtime and orchestration | `si dyad`, `si codex`, `si surf`, `si viva` |
+| Runtime and orchestration | `si codex`, `si surf`, `si viva` |
 | Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
 | Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple`, `si orbit stripe`, `si image` |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
@@ -60,8 +60,8 @@ Color control:
 
 ```bash
 si build image
-si dyad spawn start --name app-hardening --workspace "$PWD"
-si dyad status app-hardening
+si codex spawn --profile default --workspace "$PWD"
+si codex list
 ```
 
 ### Viva tunnel via SI wrapper

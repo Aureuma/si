@@ -45,6 +45,6 @@ si surf proxy --upstream http://127.0.0.1:8932
 
 - `si surf start` can build the image automatically unless `--skip-build` is set.
 - `si surf start` attaches the browser runtime to the SI Docker network (`si` by default, override with `--network` / `SI_BROWSER_NETWORK`).
-- SI-managed codex/dyad containers auto-register MCP server `si_browser` to the browser MCP endpoint.
+- SI-managed codex containers auto-register MCP server `si_browser` to the browser MCP endpoint.
 - Keep profile directories isolated per environment.
 - Use `si surf logs --follow` during smoke tests and rollout checks.

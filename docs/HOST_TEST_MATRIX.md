@@ -25,7 +25,6 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 | Fort repo validation | `cargo test --quiet --manifest-path ../fort/Cargo.toml` | sibling `fort` workspace tests pass |
 | Surf repo validation | `cargo test --workspace --quiet --manifest-path ../surf/Cargo.toml` | sibling `surf` workspace tests pass |
 | Live fort wrapper smoke | included in script | `si fort -- --json doctor` reaches a Fort-shaped HTTP stub and returns `health_status=200`, `ready_status=200` |
-| Dyad lifecycle smoke | included in script | `si dyad spawn start` plus `status/logs/exec/stop/start/remove` succeeds against a deterministic fake Docker shim |
 
 ## Why this exists
 
@@ -47,5 +46,4 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 
 - Installer failures usually mean packaging or wrapper issues.
 - `si fort` smoke failures usually mean wrapper resolution, repo discovery, or Fort request-path regressions.
-- Dyad smoke failures usually mean docker command construction or status/log parsing regressions.
 - Dependent repo failures should be fixed in the owning repo, then the full matrix rerun.

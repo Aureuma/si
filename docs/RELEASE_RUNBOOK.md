@@ -22,7 +22,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 1. Edit `CHANGELOG.md`.
 1. Add a new top section for the version/date, e.g.:
    - `## [vX.Y.Z] - YYYY-MM-DD`
-1. Add bullets grouped by area (Dyad, CLI, Image, Docs, Vault, etc.).
+1. Add bullets grouped by area (CLI, Image, Docs, Vault, Providers, etc.).
 1. Ensure the items are user-facing (what changed) and include important migration notes.
 1. Update root `Cargo.toml`:
    - `workspace.package.version = "X.Y.Z"`
@@ -75,10 +75,10 @@ Notes:
 - Image version:
   - `si build image`
   - `docker run --rm aureuma/si:local si version`
-- Dyad smoke:
-  - `HOME=/home/<user> si dyad spawn start --name <name> --workspace "$PWD"`
-  - `HOME=/home/<user> si dyad status <name>`
-  - `HOME=/home/<user> si dyad remove <name>`
+- Codex smoke:
+  - `HOME=/home/<user> si codex spawn --profile <profile> --workspace "$PWD"`
+  - `HOME=/home/<user> si codex list`
+  - `HOME=/home/<user> si codex remove --profile <profile>`
 - Viva compatibility smoke when the change touches `si viva`, Viva settings, or shared orchestration/config paths:
   - `si viva config show --format json`
   - `si viva config set --repo /home/<user>/Development/viva --build true`

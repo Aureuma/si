@@ -12,7 +12,6 @@ members = [
     "rust/crates/si-vault",
     "rust/crates/si-warmup",
     "rust/crates/si-codex",
-    "rust/crates/si-dyad",
     "rust/crates/si-provider-github",
     "rust/crates/si-provider-aws",
     "rust/crates/si-provider-gcp",
