@@ -1,6 +1,25 @@
 # Orbit Provider Migration Plan
 
 Date: 2026-03-28
+Status: completed
+Completed: 2026-03-30
+
+## Completion note
+
+This migration is complete.
+
+Final state:
+
+- `si orbit <provider> ...` is the public provider namespace
+- `si orbit list` replaced the old `si providers characteristics` path
+- removed public top-level provider roots now fail with replacement guidance
+- stale public Orbitals residue was removed or rewritten in the active docs/help/skills surface
+- provider help and representative auth/status flows remain covered by the Rust CLI test suite
+
+Intentional leftovers:
+
+- historical changelog entries that describe the old command surface remain as historical record
+- regression tests that assert removed roots like `si aws` and `si github` still fail with replacement guidance remain in place on purpose
 
 ## Goal
 
