@@ -17,14 +17,14 @@ si orbit list
 
 2. Run the smallest read-only probe for the target provider:
 ```bash
-si openai models list --limit 1
-si github repos list --limit 1
-si cloudflare zones list --limit 1
+si orbit openai models list --limit 1
+si orbit github repos list --limit 1
+si orbit cloudflare zones list --limit 1
 ```
 
 3. If probe fails, run raw request form to inspect HTTP status/body:
 ```bash
-si <provider> raw --method GET --path <path>
+si orbit <provider> raw --method GET --path <path>
 ```
 
 ## Root-cause checklist
