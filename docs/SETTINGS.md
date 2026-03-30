@@ -102,29 +102,6 @@ CLI and runtime behavior:
 - Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files.
 - Runtime container token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
-### `[dyad]`
-Defaults for dyad spawns.
-- `dyad.actor_image` (string): default `aureuma/si:local`
-- `dyad.critic_image` (string): default `aureuma/si:local`
-- `dyad.codex_model` (string)
-- `dyad.codex_effort_actor` (string)
-- `dyad.codex_effort_critic` (string)
-- `dyad.codex_model_low` (string)
-- `dyad.codex_model_medium` (string)
-- `dyad.codex_model_high` (string)
-- `dyad.codex_effort_low` (string)
-- `dyad.codex_effort_medium` (string)
-- `dyad.codex_effort_high` (string)
-- `dyad.workspace` (string): host path for workspace bind.
-  - If unset, `si dyad spawn` commands resolve from `--workspace` or current directory.
-  - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
-- `dyad.configs` (string): host path for configs.
-  - If unset, SI prefers a source-tree `configs/` near the selected workspace and otherwise materializes managed defaults under `~/.si/configs`.
-  - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
-- `dyad.forward_ports` (string): port range, e.g. `1455-1465`
-- `dyad.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
-- `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
-
 ### `[stripe]`
 Defaults for `si orbit stripe` account and environment context.
 - `stripe.organization` (string): optional organization label
@@ -413,14 +390,6 @@ name = "🧪 Profile Alpha"
 email = "example@example.com"
 auth_path = "~/.si/codex/profiles/profile-alpha/auth.json"
 auth_updated = "2026-01-26T00:00:00Z"
-
-[dyad]
-actor_image = "aureuma/si:local"
-critic_image = "aureuma/si:local"
-codex_model = "gpt-5.2-codex"
-forward_ports = "1455-1465"
-docker_socket = true
-workspace = "/path/to/your/repo"
 
 [stripe]
 organization = "main-org"

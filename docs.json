@@ -48,7 +48,6 @@
           {
             "group": "Runtime",
             "pages": [
-              "docs/DYAD",
               "docs/VAULT",
               "docs/SUN",
               "docs/BROWSER",
@@ -56,8 +55,7 @@
               "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
               "docs/PROVIDERS",
               "docs/API_CHARACTERISTICS",
-              "docs/INTEGRATION_ECOSYSTEM",
-              "docs/codex-model-policy"
+              "docs/INTEGRATION_ECOSYSTEM"
             ]
           },
           {
