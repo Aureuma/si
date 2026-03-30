@@ -19,7 +19,6 @@ Final state:
 Intentional leftovers:
 
 - historical changelog entries that describe the old command surface remain as historical record
-- regression tests that assert removed roots like `si aws` and `si github` still fail with replacement guidance remain in place on purpose
 
 ## Goal
 
