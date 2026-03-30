@@ -35,8 +35,6 @@ pub struct Settings {
     #[serde(default)]
     pub workos: WorkOSSettings,
     #[serde(default)]
-    pub dyad: DyadSettings,
-    #[serde(default)]
     pub surf: SurfSettings,
     #[serde(default)]
     pub viva: VivaSettings,
@@ -94,7 +92,6 @@ impl Settings {
             oci: OCISettings::default(),
             github: GitHubSettings::default(),
             workos: WorkOSSettings::default(),
-            dyad: DyadSettings::default(),
             surf: SurfSettings::default(),
             viva: VivaSettings::default(),
         }
@@ -149,7 +146,6 @@ impl Settings {
                 self.oci = payload.oci;
                 self.github = payload.github;
                 self.workos = payload.workos;
-                self.dyad = payload.dyad;
             }
             SettingsModule::Surf => {
                 let payload: SurfSettingsModule = toml::from_str(source)?;
@@ -194,10 +190,6 @@ impl Settings {
         self.oci.normalize();
         self.github.normalize();
         self.workos.normalize();
-        normalize_option_string(&mut self.dyad.actor_image);
-        normalize_option_string(&mut self.dyad.critic_image);
-        normalize_option_string(&mut self.dyad.workspace);
-        normalize_option_string(&mut self.dyad.configs);
         self.surf.normalize();
         self.viva.normalize();
     }
@@ -232,8 +224,6 @@ struct CoreSettingsModule {
     pub github: GitHubSettings,
     #[serde(default)]
     pub workos: WorkOSSettings,
-    #[serde(default)]
-    pub dyad: DyadSettings,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -1106,14 +1096,6 @@ impl WorkOSAccountEntry {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct DyadSettings {
-    pub actor_image: Option<String>,
-    pub critic_image: Option<String>,
-    pub workspace: Option<String>,
-    pub configs: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SurfSettings {
     #[serde(default)]
     pub repo: String,
@@ -1655,9 +1637,6 @@ workspace = "~/Development/si"
 workdir = "/workspace"
 profile = "profile-delta"
 
-[dyad]
-workspace = "~/Development"
-configs = "~/Development/si/configs"
 "#,
         )
         .expect("write settings");
@@ -1669,8 +1648,6 @@ configs = "~/Development/si/configs"
         assert_eq!(settings.codex.workspace.as_deref(), Some("~/Development/si"));
         assert_eq!(settings.codex.workdir.as_deref(), Some("/workspace"));
         assert_eq!(settings.codex.profile.as_deref(), Some("profile-delta"));
-        assert_eq!(settings.dyad.workspace.as_deref(), Some("~/Development"));
-        assert_eq!(settings.dyad.configs.as_deref(), Some("~/Development/si/configs"));
     }
 
     #[test]

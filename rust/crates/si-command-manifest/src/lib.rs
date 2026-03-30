@@ -73,13 +73,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "dyad",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Manage actor/critic dyad runtimes.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "codex",
         aliases: &[],
         category: CommandCategory::Codex,

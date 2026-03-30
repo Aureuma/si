@@ -21,7 +21,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
-| `si dyad` | Manage actor/critic pairs | `spawn`, `list`, `status`, `peek`, `exec`, `logs`, `start`, `stop`, `restart`, `remove`, `cleanup` | [Dyad](./DYAD) |
 | `si codex` | Manage profile-bound Codex containers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `exec`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |

@@ -984,19 +984,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn builds_docker_list_command_with_custom_format() {
-        let command = docker_container_list_with_format_command(
-            "docker",
-            "app=si-dyad",
-            true,
-            "{{.Names}}\t{{.ID}}",
-        )
-        .expect("list command");
-
-        assert_eq!(
-            command.args_slice(),
-            ["ps", "--all", "--filter", "label=app=si-dyad", "--format", "{{.Names}}\t{{.ID}}",]
-        );
-    }
 }

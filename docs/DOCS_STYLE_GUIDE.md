@@ -9,7 +9,7 @@ This guide defines how SI docs should be written and maintained for Mintlify.
 
 ## Why this guide exists
 
-SI has broad scope: dyads, codex runtime, provider orbits, browser MCP, and secure runtime operations. Without consistent docs standards, operators lose time and trust.
+SI has broad scope: codex runtime, provider orbits, browser MCP, and secure runtime operations. Without consistent docs standards, operators lose time and trust.
 
 Use this guide as the default contract for every docs PR.
 

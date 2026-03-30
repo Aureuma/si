@@ -22,12 +22,10 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.55.0] - 2026-03-21
 ### Added
-- Added broad Rust-native parity coverage for provider, codex, dyad, fort, installer, release, and host-matrix workflows across the SI CLI surface.
 
 ### Changed
 - Changed SI to a Rust-only workspace for build, test, runtime, wrapper, and release flows, with `si-rs` now serving as the primary shipped CLI binary.
 - Changed installer, npm, Homebrew, release-asset, and image-build paths to use the Rust-owned self-build and packaging surfaces by default.
-- Changed Fort, Codex, and Dyad runtime coordination to use the Rust-owned planning, session, and file-backed auth flows throughout the standard operator path.
 
 ### Fixed
 - Fixed stable-image compatibility for SI runtime tools and agents.
@@ -66,7 +64,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.53.1] - 2026-03-14
 ### Added
-- Added first-run workspace-root and runtime-path persistence for installed SI environments so codex, dyad, viva, remote-control, and related wrappers no longer depend on checkout-specific host paths.
 
 ### Changed
 - Changed workspace and config resolution to prefer `~/.si/settings.toml` path settings, infer sensible defaults from the current repo when possible, and prompt to persist those defaults during interactive first use.
@@ -74,7 +71,6 @@ All notable changes to this project will be documented in this file.
 - Removed the retired legacy platform/cloud command families, their docs/workflows/tests, and the obsolete backend checkout.
 
 ### Fixed
-- Fixed `si spawn`, `si dyad spawn`, `si viva node bootstrap`, and related wrapper flows to fall back cleanly when saved workspace/config paths are stale or no longer exist.
 - Fixed shared CLI utility coverage after removing the legacy command families by relocating common helpers into neutral shared code.
 
 ## [v0.52.0] - 2026-03-09
@@ -113,7 +109,6 @@ All notable changes to this project will be documented in this file.
 ## [v0.50.0] - 2026-02-27
 ### Added
 - Added remote per-key vault KV mirroring (`vault_kv.<scope>/<KEY>`) with revision history via `si vault history`.
-- Added SSH directory and agent socket mounts for dyad Docker runtimes to support in-container Git/SSH workflows.
 - Added the `si viva` wrapper command and migrated browser runtime integration to `surf bridge`.
 
 ### Changed
@@ -166,7 +161,6 @@ All notable changes to this project will be documented in this file.
 ## [v0.47.0] - 2026-02-19
 ### Added
 - Added the historical Orbitals command surface (`si orbits`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
-- Added `si browser` Docker runtime integration for Playwright MCP and wired browser MCP endpoints into spawned codex and dyad containers.
 - Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support, including contract/run/status/restore operations.
 - Added GitHub git-credential helper and remote normalization workflows under `si github git`, plus expanded PAT OAuth guidance for multi-repo operations.
 - Added first-run workspace defaults prompting/persistence and a strict vault-focused regression suite with explicit default vault-file management.
@@ -179,9 +173,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Fixed settings loading/ownership edge cases that produced permission-denied warnings for `~/.si/settings.toml` on host-driven executions.
-- Fixed mixed boolean flag reordering behavior and dyad `--skip-auth` boolean parsing edge cases.
 - Fixed installer smoke and website-sentry workflow output handling, plus environment-dependent codex/platform test flakiness.
-- Fixed host/container tooling parity by mounting host Docker config + SI Go toolchain into codex/dyad containers and resolving preflight/analyze Go without host PATH dependence.
 
 ### Removed
 - Removed internal planning/taskboard/market-research artifacts and retired related automation surfaces from tracked docs/workflows.
@@ -229,7 +221,6 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Reworked Stripe to direct HTTP requests (no `stripe-go` runtime dependency), including improved retry and error normalization.
 - Hardened vault parsing/format fidelity and command safety checks, including stricter header parsing, quote validation, non-interactive keyring restrictions, and clearer macOS Keychain failure diagnostics.
-- Fixed dyad/codex workspace mount and loop handoff edge cases, including prompt readiness and recovery controls.
 
 ### Removed
 - Removed vault submodule-oriented flags and initialization/status plumbing (`--vault-dir`, submodule bootstrap wiring, and `.gitmodules`-specific helpers) in favor of file-based targeting.
@@ -290,8 +281,6 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Added automatic login URL opening with Safari profile support and overrides.
 - Added device code clipboard copy for macOS and Linux.
-- Added docker socket mount toggles for codex and dyad spawns, including one-off exec.
-- Added `codex.docker_socket` and `dyad.docker_socket` settings defaults.
 ### Changed
 - Updated the release process guide with end-to-end steps, tagging, and GitHub release flow.
 ### Fixed
@@ -299,15 +288,11 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.40.0] - 2026-01-27
 ### Added
-- Added the unified `aureuma/si:local` image build for codex and dyad runtimes.
 ### Changed
-- Defaulted codex and dyad images to `aureuma/si:local`.
-- Updated dyad runtime entrypoints and HOME/CODEX_HOME defaults for the unified image.
 - Refreshed CLI help and docs to match the new image layout and flag ordering.
 ### Removed
 - Removed the separate base, codex, actor, and critic Docker image definitions.
 ### Fixed
-- Corrected dyad exec and copy-login usage guidance for flag ordering.
 
 ## [v0.39.1] - 2026-01-26
 ### Changed
@@ -326,7 +311,6 @@ All notable changes to this project will be documented in this file.
 - Added shell prompt rendering driven by settings without editing `.bashrc`.
 
 ### Changed
-- Defaulted workspace mounts to the current directory for codex spawn/respawn and dyad spawn when `--workspace` is omitted.
 - Aligned CLI table widths using Unicode-aware display widths.
 - Replaced host `.bashrc` injection with settings-driven configuration.
 
@@ -356,10 +340,8 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.34.0] - 2026-01-23
 ### Added
-- Added dyad Codex tooling and updated guidance.
 
 ### Fixed
-- Hardened critic Codex loop and dyad runtime behavior.
 - Fixed image build and dependency issues.
 
 ## [v0.33.0] - 2026-01-22
@@ -397,7 +379,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.27.0] - 2025-12-29
 ### Added
-- Added credentials MCP service/registry and routing secrets via credentials dyad.
 - Added Gatekeeper policies for secret references and expanded policy scope.
 
 ## [v0.26.0] - 2025-12-28
@@ -405,12 +386,10 @@ All notable changes to this project will be documented in this file.
 - Added k3s image build/import helper and ReleaseParty backend Dockerfile.
 
 ### Fixed
-- Fixed dyad bootstrap RBAC/task encoding and set the SOPS age recipient.
 
 ## [v0.25.0] - 2025-12-28
 ### Added
 - Added Codex loop automation, parser, and beam activity helpers.
-- Added Temporal dyad bootstrap beam and restored login script permissions.
 
 ## [v0.24.0] - 2025-12-28
 ### Added
@@ -433,7 +412,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.20.0] - 2025-12-26
 ### Added
-- Added dyad roster config with assignment policy enforcement and tests.
 
 ## [v0.19.0] - 2025-12-26
 ### Added
@@ -442,7 +420,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.18.0] - 2025-12-26
 ### Added
-- Added Go test runner, test layout docs, and dyad comm checks.
 
 ### Changed
 - Reorganized test scripts and improved run-task TTY handling.
@@ -459,7 +436,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.16.0] - 2025-12-25
 ### Added
-- Added dyad registry entries with enforcement and documentation.
 - Added Codex monitor account email display.
 
 ### Changed
@@ -472,7 +448,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.14.0] - 2025-12-24
 ### Added
-- Added dyad task board, beams, codex loop driver, and router/PM agents.
 - Added dashboard UI and ReleaseParty scaffold with compose services.
 
 ## [v0.13.0] - 2025-12-16
@@ -485,7 +460,6 @@ All notable changes to this project will be documented in this file.
 ## [v0.12.0] - 2025-12-16
 ### Added
 - Integrated Docker MCP Gateway and Codex MCP config helper.
-- Added dyad profile contexts, capability office guidance, and comms bridge.
 
 ## [v0.11.0] - 2025-12-16
 ### Added
@@ -504,7 +478,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.8.0] - 2025-12-16
 ### Added
-- Added web team dyads, delivery flow, and review cron helper.
 
 ### Changed
 - Added cleanup script and maintenance guide.
@@ -521,7 +494,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.5.0] - 2025-12-16
 ### Added
-- Added dyad departments/list helper and feedback endpoint.
 - Added sample Go service and testing harness docs.
 
 ## [v0.4.0] - 2025-12-16
@@ -533,7 +505,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.3.0] - 2025-12-16
 ### Added
-- Added dyad actor/critic containers with manager and dynamic spawn scripts.
 
 ## [v0.2.0] - 2025-12-13
 ### Added

@@ -19,7 +19,6 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## What si covers
 
-- Dyads: actor + critic paired containers, closed-loop execution, status/log/exec workflows.
 - Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `exec`, `report`, `clone`, `remove`, `respawn`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
@@ -30,9 +29,8 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 - `rust/`: primary Rust workspace and shipping CLI implementation.
 - `tools/si-browser`: browser runtime Docker assets.
-- `tools/si-image`: unified runtime image used by codex and dyad containers.
+- `tools/si-image`: unified runtime image used by codex and runtime-side tooling.
 - `docs/`: Markdown + Mintlify docs content.
-- `agents/`: dyad runtime components.
 
 ## Install
 
@@ -69,7 +67,7 @@ Build local CLI + runtime image:
 cd /path/to/si
 cargo build --release --locked --bin si-rs
 
-# runtime image for dyads/codex
+# runtime image for codex
 ./.artifacts/cargo-target/release/si-rs build image
 ```
 
@@ -82,14 +80,14 @@ si build self --timings
 
 ## Common workflows
 
-Dyad lifecycle:
+Codex lifecycle:
 
 ```bash
-./si dyad spawn start --name <name> --workspace "$PWD"
-./si dyad status <name>
-./si dyad logs <name>
-./si dyad exec --member actor <name> -- bash
-./si dyad remove <name>
+./si codex spawn --profile <profile> --workspace "$PWD"
+./si codex list
+./si codex exec --profile <profile> -- bash
+./si codex tail --profile <profile>
+./si codex remove --profile <profile>
 ```
 
 Browser runtime:
@@ -102,7 +100,7 @@ Browser runtime:
 ./si browser stop
 ```
 
-When running, SI-managed codex and dyad containers auto-register MCP server `si_browser`
+When running, SI-managed codex containers auto-register MCP server `si_browser`
 to the browser runtime endpoint on the shared Docker network.
 
 Mintlify docs tooling:
@@ -115,7 +113,7 @@ Mintlify docs tooling:
 
 ## Command map
 
-- `si dyad ...` / `si codex ...`: agent runtime operations.
+- `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
 - `si orbit ...`: provider bridges and provider capability inventory.
 - `si browser ...`: Playwright MCP browser runtime.
