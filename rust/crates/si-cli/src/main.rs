@@ -15261,8 +15261,6 @@ struct CodexSpawnStartArgs {
     #[arg(long = "port")]
     ports: Vec<String>,
     #[arg(long)]
-    cmd: Option<String>,
-    #[arg(long)]
     docker_bin: Option<PathBuf>,
 }
 
@@ -32600,7 +32598,6 @@ fn main() -> Result<()> {
                 env,
                 labels,
                 ports,
-                cmd,
                 docker_bin,
             }) => show_codex_spawn_start(
                 profile,
@@ -32623,7 +32620,6 @@ fn main() -> Result<()> {
                 env,
                 labels,
                 ports,
-                cmd,
                 docker_bin,
             )?,
             CodexCommand::Remove { profile, all, volumes, format, docker_bin } => {
@@ -63453,7 +63449,6 @@ fn show_codex_spawn_start(
     env: Vec<String>,
     labels: Vec<String>,
     ports: Vec<String>,
-    cmd: Option<String>,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
@@ -63496,7 +63491,8 @@ fn show_codex_spawn_start(
         },
         &host_ctx,
     )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
+    let spec =
+        build_container_spec(&plan, &SpawnContainerOptions { command: None, labels, ports })?;
     let command = spec.docker_run_command(docker_program.display().to_string())?;
     let output = ProcessRunner.run(&command, &RunOptions::default())?;
     if !output.status.success() {
@@ -63931,8 +63927,14 @@ fn run_codex_shell(
     docker_bin: Option<PathBuf>,
     command: Vec<String>,
 ) -> Result<()> {
-    let target =
-        resolve_codex_container_for_profile(profile, "shell", true, None, None, docker_bin.clone())?;
+    let target = resolve_codex_container_for_profile(
+        profile,
+        "shell",
+        true,
+        None,
+        None,
+        docker_bin.clone(),
+    )?;
     let artifacts = build_remove_artifacts(&target.container_name)?;
     if command.is_empty() {
         anyhow::bail!("shell command is required");
@@ -64208,9 +64210,6 @@ fn read_codex_status_with_retry(
 }
 
 const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
-const CODEX_WARMUP_PRIME_MAX_ATTEMPTS: usize = 3;
-const CODEX_WARMUP_PRIME_STATUS_POLLS: usize = 6;
-const CODEX_WARMUP_PRIME_STATUS_POLL_SECS: u64 = 5;
 
 fn codex_profile_auth_path_from_settings(
     paths: &SiPaths,
@@ -64240,93 +64239,6 @@ fn sync_codex_profile_auth_from_settings(
     }
     sync_codex_auth_to_running_container(profile_id, &auth_path, docker_bin)?;
     Ok(())
-}
-
-fn codex_weekly_quota_is_fully_reset(status: &CodexStatusView) -> bool {
-    status.weekly_left_pct.is_some_and(|value| value >= 100.0)
-}
-
-fn codex_warmup_touch_line_count(attempt: usize) -> usize {
-    match attempt {
-        0 => 128,
-        1 => 256,
-        _ => 384,
-    }
-}
-
-fn codex_warmup_touch_prompt(line_count: usize) -> String {
-    format!(
-        "Reply directly in plain text without using tools, commands, or file operations. Print exactly {line_count} lines. Each line must be in the form 'warmup-XXXX alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega', with XXXX counting from 0001 to {line_count:04}."
-    )
-}
-
-fn run_codex_weekly_quota_touch(
-    container_name: &str,
-    docker_program: &Path,
-    attempt: usize,
-) -> Result<()> {
-    let prompt = codex_warmup_touch_prompt(codex_warmup_touch_line_count(attempt));
-    let thread_raw = run_app_server_requests_for_container(
-        container_name,
-        docker_program,
-        build_app_server_thread_start_input("/home/si"),
-    )?;
-    let thread_id =
-        parse_app_server_thread_id(&thread_raw, 2).context("start app-server warmup thread")?;
-    let turn_raw = run_app_server_requests_for_container(
-        container_name,
-        docker_program,
-        build_app_server_turn_start_input(&thread_id, "/home/si", &prompt),
-    )?;
-    parse_app_server_turn_completion(&turn_raw, 2).context("complete app-server warmup turn")?;
-    Ok(())
-}
-
-fn read_codex_status_until_weekly_consumed(
-    container_name: &str,
-    docker_program: &Path,
-) -> Result<CodexStatusView> {
-    let mut last_status: Option<CodexStatusView> = None;
-    for attempt in 0..CODEX_WARMUP_PRIME_STATUS_POLLS {
-        let status = read_codex_status_with_retry(container_name, docker_program)?;
-        if !codex_weekly_quota_is_fully_reset(&status) {
-            return Ok(status);
-        }
-        last_status = Some(status);
-        if attempt + 1 < CODEX_WARMUP_PRIME_STATUS_POLLS {
-            std::thread::sleep(std::time::Duration::from_secs(CODEX_WARMUP_PRIME_STATUS_POLL_SECS));
-        }
-    }
-    last_status.ok_or_else(|| anyhow!("codex weekly quota status was unavailable"))
-}
-
-fn prime_codex_weekly_quota_if_needed(
-    profile_id: &str,
-    container_name: &str,
-    mut status: CodexStatusView,
-    docker_program: &Path,
-) -> Result<(CodexStatusView, bool)> {
-    let mut primed = false;
-    for attempt in 0..CODEX_WARMUP_PRIME_MAX_ATTEMPTS {
-        if !codex_weekly_quota_is_fully_reset(&status) {
-            return Ok((status, primed));
-        }
-        run_codex_weekly_quota_touch(container_name, docker_program, attempt)
-            .with_context(|| format!("prime weekly codex quota for {}", profile_id))?;
-        primed = true;
-        status = read_codex_status_until_weekly_consumed(container_name, docker_program)
-            .with_context(|| format!("refresh weekly codex quota for {}", profile_id))?;
-    }
-
-    if codex_weekly_quota_is_fully_reset(&status) {
-        anyhow::bail!(
-            "weekly quota for {} remained at 100% after {} warmup touch attempts",
-            profile_id,
-            CODEX_WARMUP_PRIME_MAX_ATTEMPTS
-        );
-    }
-
-    Ok((status, primed))
 }
 
 fn codex_warmup_profile_jitter_seconds(profile_id: &str) -> i64 {
@@ -64414,24 +64326,17 @@ fn run_codex_warmup(
             Ok(ensure) => {
                 let action = ensure.action.clone();
                 let container_name = ensure.container_name.clone();
-                let warm_result = (|| -> Result<(CodexStatusView, bool)> {
+                let warm_result = (|| -> Result<CodexStatusView> {
                     sync_codex_profile_auth_from_settings(
                         &paths,
                         &settings,
                         &profile_id,
                         docker_bin.clone(),
                     )?;
-                    let status =
-                        read_codex_status_with_retry(&container_name, docker_program.as_path())?;
-                    prime_codex_weekly_quota_if_needed(
-                        &profile_id,
-                        &container_name,
-                        status,
-                        docker_program.as_path(),
-                    )
+                    read_codex_status_with_retry(&container_name, docker_program.as_path())
                 })();
                 match warm_result {
-                    Ok((status, primed_weekly)) => {
+                    Ok(status) => {
                         let weekly_used_pct =
                             status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
                         entry.last_result = "warmed".to_owned();
@@ -64450,11 +64355,7 @@ fn run_codex_warmup(
                         entry.paused = false;
                         results.push(CodexWarmupRunProfileView {
                             profile_id,
-                            action: if primed_weekly {
-                                format!("{}+primed", action)
-                            } else {
-                                action.clone()
-                            },
+                            action: action.clone(),
                             result: "warmed".to_owned(),
                             error: None,
                             account_email: status.account_email,
@@ -64792,11 +64693,7 @@ fn run_codex_respawn_plan(
     Ok(())
 }
 
-fn build_app_server_request(
-    id: i64,
-    method: &str,
-    params: serde_json::Value,
-) -> serde_json::Value {
+fn build_app_server_request(id: i64, method: &str, params: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -64834,173 +64731,6 @@ fn build_app_server_status_input() -> Vec<u8> {
         build_app_server_request(3, "account/read", serde_json::json!({})),
         build_app_server_request(4, "config/read", serde_json::json!({})),
     ])
-}
-
-fn build_app_server_thread_start_input(cwd: &str) -> Vec<u8> {
-    serialize_app_server_requests(&[
-        build_app_server_initialize_request(1),
-        build_app_server_request(
-            2,
-            "thread/start",
-            serde_json::json!({
-                "approvalPolicy": "never",
-                "cwd": cwd,
-                "ephemeral": false,
-                "sandbox": "read-only",
-                "serviceName": "si-warmup",
-            }),
-        ),
-    ])
-}
-
-fn build_app_server_turn_start_input(thread_id: &str, cwd: &str, prompt: &str) -> Vec<u8> {
-    serialize_app_server_requests(&[
-        build_app_server_initialize_request(1),
-        build_app_server_request(
-            2,
-            "turn/start",
-            serde_json::json!({
-                "approvalPolicy": "never",
-                "cwd": cwd,
-                "input": [
-                    {
-                        "type": "text",
-                        "text": prompt,
-                    }
-                ],
-                "threadId": thread_id,
-            }),
-        ),
-    ])
-}
-
-fn run_app_server_requests_for_container(
-    container_name: &str,
-    docker_program: &Path,
-    input: Vec<u8>,
-) -> Result<String> {
-    let command = docker_container_exec_command(
-        docker_program.display().to_string(),
-        &ContainerExecSpec::new(container_name)
-            .user("si")
-            .interactive(true)
-            .tty(false)
-            .env("HOME", "/home/si")
-            .env("CODEX_HOME", "/home/si/.codex")
-            .env("TERM", "xterm-256color")
-            .command(["codex", "app-server", "--listen", "stdio://"]),
-    )?;
-    let output = ProcessRunner.run(
-        &command,
-        &RunOptions { stdin: StdinBehavior::Bytes(input), ..RunOptions::default() },
-    )?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let mut combined = stdout.trim().to_owned();
-    if !stderr.trim().is_empty() {
-        if !combined.is_empty() {
-            combined.push('\n');
-        }
-        combined.push_str(stderr.trim());
-    }
-    if !output.status.success() {
-        anyhow::bail!(if combined.is_empty() { "docker exec failed".to_owned() } else { combined });
-    }
-    Ok(combined)
-}
-
-fn parse_app_server_error_message(value: &serde_json::Value) -> Option<String> {
-    value
-        .get("error")
-        .and_then(|error| error.get("message"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn parse_app_server_thread_id(raw: &str, request_id: i64) -> Result<String> {
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        if value
-            .get("id")
-            .and_then(parse_app_server_id)
-            .is_some_and(|id| id == request_id)
-        {
-            if let Some(message) = parse_app_server_error_message(&value) {
-                anyhow::bail!(message);
-            }
-            if let Some(thread_id) = value
-                .pointer("/result/thread/id")
-                .and_then(serde_json::Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                return Ok(thread_id.to_owned());
-            }
-        }
-        if value.get("method").and_then(serde_json::Value::as_str) == Some("thread/started") {
-            if let Some(thread_id) = value
-                .pointer("/params/thread/id")
-                .and_then(serde_json::Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                return Ok(thread_id.to_owned());
-            }
-        }
-    }
-    anyhow::bail!("app-server thread/start missing thread id")
-}
-
-fn parse_app_server_turn_completion(raw: &str, request_id: i64) -> Result<()> {
-    let mut completion_seen = false;
-    let mut last_error: Option<String> = None;
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        if value
-            .get("id")
-            .and_then(parse_app_server_id)
-            .is_some_and(|id| id == request_id)
-        {
-            if let Some(message) = parse_app_server_error_message(&value) {
-                last_error = Some(message);
-            }
-        }
-        match value.get("method").and_then(serde_json::Value::as_str) {
-            Some("turn/completed") => completion_seen = true,
-            Some("error") => {
-                if let Some(message) = value
-                    .pointer("/params/message")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    last_error = Some(message.to_owned());
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(message) = last_error {
-        anyhow::bail!(message);
-    }
-    if !completion_seen {
-        anyhow::bail!("app-server turn did not complete");
-    }
-    Ok(())
 }
 
 fn parse_app_server_status(raw: &str) -> Result<CodexStatusView> {
