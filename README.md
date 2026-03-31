@@ -19,7 +19,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## What si covers
 
-- Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `exec`, `report`, `clone`, `remove`, `respawn`).
+- Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `shell`, `report`, `clone`, `remove`, `respawn`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
@@ -85,7 +85,7 @@ Codex lifecycle:
 ```bash
 ./si codex spawn --profile <profile> --workspace "$PWD"
 ./si codex list
-./si codex exec --profile <profile> -- bash
+./si codex shell --profile <profile> -- bash
 ./si codex tail --profile <profile>
 ./si codex remove --profile <profile>
 ```

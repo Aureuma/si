@@ -15383,7 +15383,7 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
-    Exec {
+    Shell {
         profile: Option<String>,
         #[arg(long)]
         workdir: Option<PathBuf>,
@@ -32632,7 +32632,7 @@ fn main() -> Result<()> {
             CodexCommand::Tail { profile, tail, docker_bin } => {
                 run_codex_container_logs(profile.as_deref(), &tail, true, docker_bin)?
             }
-            CodexCommand::Exec {
+            CodexCommand::Shell {
                 profile,
                 workdir,
                 interactive,
@@ -32641,7 +32641,7 @@ fn main() -> Result<()> {
                 user,
                 docker_bin,
                 command,
-            } => run_codex_exec(
+            } => run_codex_shell(
                 profile.as_deref(),
                 workdir,
                 interactive,
@@ -32845,7 +32845,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "spawn"] => Some("Spawn a Codex container for a chosen profile."),
         ["codex", "remove"] => Some("Remove a Codex container or volume set."),
         ["codex", "tail"] => Some("Tail Codex container logs."),
-        ["codex", "exec"] => Some("Run a command in a Codex container."),
+        ["codex", "shell"] => Some("Run a shell command in a Codex container."),
         ["codex", "list"] => Some("List Codex containers."),
         ["codex", "tmux"] => Some("Attach to a Codex tmux session."),
         ["codex", "warmup"] => Some("Inspect Codex warmup state."),
@@ -63921,7 +63921,7 @@ fn run_codex_container_logs(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_codex_exec(
+fn run_codex_shell(
     profile: Option<&str>,
     workdir: Option<PathBuf>,
     interactive: bool,
@@ -63932,10 +63932,10 @@ fn run_codex_exec(
     command: Vec<String>,
 ) -> Result<()> {
     let target =
-        resolve_codex_container_for_profile(profile, "exec", true, None, None, docker_bin.clone())?;
+        resolve_codex_container_for_profile(profile, "shell", true, None, None, docker_bin.clone())?;
     let artifacts = build_remove_artifacts(&target.container_name)?;
     if command.is_empty() {
-        anyhow::bail!("exec command is required");
+        anyhow::bail!("shell command is required");
     }
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
@@ -64005,7 +64005,7 @@ fn read_codex_status_for_container_name(
     let output = ProcessRunner.run(
         &command,
         &RunOptions {
-            stdin: StdinBehavior::Bytes(build_app_server_input()),
+            stdin: StdinBehavior::Bytes(build_app_server_status_input()),
             ..RunOptions::default()
         },
     )?;
@@ -64256,7 +64256,7 @@ fn codex_warmup_touch_line_count(attempt: usize) -> usize {
 
 fn codex_warmup_touch_prompt(line_count: usize) -> String {
     format!(
-        "Print exactly {line_count} lines. Each line must be in the form 'warmup-XXXX alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega', with XXXX counting from 0001 to {line_count:04}."
+        "Reply directly in plain text without using tools, commands, or file operations. Print exactly {line_count} lines. Each line must be in the form 'warmup-XXXX alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega', with XXXX counting from 0001 to {line_count:04}."
     )
 }
 
@@ -64266,40 +64266,20 @@ fn run_codex_weekly_quota_touch(
     attempt: usize,
 ) -> Result<()> {
     let prompt = codex_warmup_touch_prompt(codex_warmup_touch_line_count(attempt));
-    let command = docker_container_exec_command(
-        docker_program.display().to_string(),
-        &ContainerExecSpec::new(container_name)
-            .user("si")
-            .interactive(false)
-            .tty(false)
-            .workdir("/home/si")
-            .env("HOME", "/home/si")
-            .env("CODEX_HOME", "/home/si/.codex")
-            .command([
-                "codex",
-                "exec",
-                "--skip-git-repo-check",
-                "--color",
-                "never",
-                "--dangerously-bypass-approvals-and-sandbox",
-                prompt.as_str(),
-            ]),
+    let thread_raw = run_app_server_requests_for_container(
+        container_name,
+        docker_program,
+        build_app_server_thread_start_input("/home/si"),
     )?;
-    let output = ProcessRunner.run(&command, &RunOptions::default())?;
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    let detail = if !stderr.is_empty() {
-        stderr
-    } else if !stdout.is_empty() {
-        stdout
-    } else {
-        "codex exec failed".to_owned()
-    };
-    anyhow::bail!(detail);
+    let thread_id =
+        parse_app_server_thread_id(&thread_raw, 2).context("start app-server warmup thread")?;
+    let turn_raw = run_app_server_requests_for_container(
+        container_name,
+        docker_program,
+        build_app_server_turn_start_input(&thread_id, "/home/si", &prompt),
+    )?;
+    parse_app_server_turn_completion(&turn_raw, 2).context("complete app-server warmup turn")?;
+    Ok(())
 }
 
 fn read_codex_status_until_weekly_consumed(
@@ -64812,29 +64792,215 @@ fn run_codex_respawn_plan(
     Ok(())
 }
 
-fn build_app_server_input() -> Vec<u8> {
-    let requests = [
+fn build_app_server_request(
+    id: i64,
+    method: &str,
+    params: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params,
+    })
+}
+
+fn build_app_server_initialize_request(id: i64) -> serde_json::Value {
+    build_app_server_request(
+        id,
+        "initialize",
         serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "clientInfo": {
-                    "name": "si",
-                    "version": si_rs_core::version::current_version(),
-                }
+            "clientInfo": {
+                "name": "si",
+                "version": si_rs_core::version::current_version(),
             }
         }),
-        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read", "params": null}),
-        serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "account/read", "params": {}}),
-        serde_json::json!({"jsonrpc": "2.0", "id": 4, "method": "config/read", "params": {}}),
-    ];
+    )
+}
+
+fn serialize_app_server_requests(requests: &[serde_json::Value]) -> Vec<u8> {
     let mut payload = Vec::new();
     for request in requests {
-        payload.extend(serde_json::to_vec(&request).expect("app server request json"));
+        payload.extend(serde_json::to_vec(request).expect("app server request json"));
         payload.push(b'\n');
     }
     payload
+}
+
+fn build_app_server_status_input() -> Vec<u8> {
+    serialize_app_server_requests(&[
+        build_app_server_initialize_request(1),
+        build_app_server_request(2, "account/rateLimits/read", serde_json::Value::Null),
+        build_app_server_request(3, "account/read", serde_json::json!({})),
+        build_app_server_request(4, "config/read", serde_json::json!({})),
+    ])
+}
+
+fn build_app_server_thread_start_input(cwd: &str) -> Vec<u8> {
+    serialize_app_server_requests(&[
+        build_app_server_initialize_request(1),
+        build_app_server_request(
+            2,
+            "thread/start",
+            serde_json::json!({
+                "approvalPolicy": "never",
+                "cwd": cwd,
+                "ephemeral": false,
+                "sandbox": "read-only",
+                "serviceName": "si-warmup",
+            }),
+        ),
+    ])
+}
+
+fn build_app_server_turn_start_input(thread_id: &str, cwd: &str, prompt: &str) -> Vec<u8> {
+    serialize_app_server_requests(&[
+        build_app_server_initialize_request(1),
+        build_app_server_request(
+            2,
+            "turn/start",
+            serde_json::json!({
+                "approvalPolicy": "never",
+                "cwd": cwd,
+                "input": [
+                    {
+                        "type": "text",
+                        "text": prompt,
+                    }
+                ],
+                "threadId": thread_id,
+            }),
+        ),
+    ])
+}
+
+fn run_app_server_requests_for_container(
+    container_name: &str,
+    docker_program: &Path,
+    input: Vec<u8>,
+) -> Result<String> {
+    let command = docker_container_exec_command(
+        docker_program.display().to_string(),
+        &ContainerExecSpec::new(container_name)
+            .user("si")
+            .interactive(true)
+            .tty(false)
+            .env("HOME", "/home/si")
+            .env("CODEX_HOME", "/home/si/.codex")
+            .env("TERM", "xterm-256color")
+            .command(["codex", "app-server", "--listen", "stdio://"]),
+    )?;
+    let output = ProcessRunner.run(
+        &command,
+        &RunOptions { stdin: StdinBehavior::Bytes(input), ..RunOptions::default() },
+    )?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut combined = stdout.trim().to_owned();
+    if !stderr.trim().is_empty() {
+        if !combined.is_empty() {
+            combined.push('\n');
+        }
+        combined.push_str(stderr.trim());
+    }
+    if !output.status.success() {
+        anyhow::bail!(if combined.is_empty() { "docker exec failed".to_owned() } else { combined });
+    }
+    Ok(combined)
+}
+
+fn parse_app_server_error_message(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("error")
+        .and_then(|error| error.get("message"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn parse_app_server_thread_id(raw: &str, request_id: i64) -> Result<String> {
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if value
+            .get("id")
+            .and_then(parse_app_server_id)
+            .is_some_and(|id| id == request_id)
+        {
+            if let Some(message) = parse_app_server_error_message(&value) {
+                anyhow::bail!(message);
+            }
+            if let Some(thread_id) = value
+                .pointer("/result/thread/id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                return Ok(thread_id.to_owned());
+            }
+        }
+        if value.get("method").and_then(serde_json::Value::as_str) == Some("thread/started") {
+            if let Some(thread_id) = value
+                .pointer("/params/thread/id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                return Ok(thread_id.to_owned());
+            }
+        }
+    }
+    anyhow::bail!("app-server thread/start missing thread id")
+}
+
+fn parse_app_server_turn_completion(raw: &str, request_id: i64) -> Result<()> {
+    let mut completion_seen = false;
+    let mut last_error: Option<String> = None;
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if value
+            .get("id")
+            .and_then(parse_app_server_id)
+            .is_some_and(|id| id == request_id)
+        {
+            if let Some(message) = parse_app_server_error_message(&value) {
+                last_error = Some(message);
+            }
+        }
+        match value.get("method").and_then(serde_json::Value::as_str) {
+            Some("turn/completed") => completion_seen = true,
+            Some("error") => {
+                if let Some(message) = value
+                    .pointer("/params/message")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    last_error = Some(message.to_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(message) = last_error {
+        anyhow::bail!(message);
+    }
+    if !completion_seen {
+        anyhow::bail!("app-server turn did not complete");
+    }
+    Ok(())
 }
 
 fn parse_app_server_status(raw: &str) -> Result<CodexStatusView> {
