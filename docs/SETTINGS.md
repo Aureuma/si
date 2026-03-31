@@ -342,7 +342,7 @@ Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
 - `service` (string, required): upstream service URL or `http_status:404`.
 
 ### `[shell.prompt]`
-Prompt rendering for `si codex exec` interactive shells. This applies without modifying `.bashrc`.
+Prompt rendering for `si codex shell` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
 - `shell.prompt.git_enabled` (bool): include git branch when available
 - `shell.prompt.prefix_template` (string): template for profile prefix. Use `{profile}` placeholder.

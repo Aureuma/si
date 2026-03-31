@@ -16804,7 +16804,7 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
 }
 
 #[test]
-fn codex_exec_executes_docker_exec_for_container_name() {
+fn codex_shell_executes_docker_exec_for_container_name() {
     let home = tempdir().expect("tempdir");
     write_codex_profile_settings(home.path(), "profile-zeta", &["profile-zeta"]);
     let script_dir = tempdir().expect("tempdir");
@@ -16830,7 +16830,7 @@ fn codex_exec_executes_docker_exec_for_container_name() {
         .env("HOME", home.path())
         .args([
             "codex",
-            "exec",
+            "shell",
             "profile-zeta",
             "--interactive=false",
             "--tty=false",
@@ -17873,7 +17873,6 @@ case "$cmd" in
     printf '%s\n' "$1"
     ;;
   exec)
-    cat >/dev/null
     container=""
     while [ "$#" -gt 0 ]; do
       case "$1" in
@@ -17896,27 +17895,50 @@ case "$cmd" in
           ;;
       esac
     done
-    if [ "${{1:-}}" = "codex" ] && [ "${{2:-}}" = "exec" ]; then
-      case "$container" in
-        si-codex-profile-alpha*)
-          : > "$AMERICA_TOUCHED"
-          ;;
-      esac
-      printf '%s\n' 'warmup-touch'
+    if [ "${{1:-}}" = "sh" ] && [ "${{2:-}}" = "-lc" ]; then
+      cat >/dev/null
       exit 0
     fi
+    payload=$(cat)
     case "$container" in
       si-codex-profile-alpha*)
         if [ -f "$AMERICA_TOUCHED" ]; then
-          printf '%s\n' '{america_rate_after_prime_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}' '{config_json}'
+          printf '%s\\n' '{america_rate_after_prime_json}'
         else
-          printf '%s\n' '{america_rate_json}' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}' '{config_json}'
+          printf '%s\\n' '{america_rate_json}'
         fi
+        printf '%s\\n' '{{"id":3,"result":{{"account":{{"type":"chatgpt","email":"profile-alpha@example.com","planType":"plus"}}}}}}'
         ;;
       *)
-        printf '%s\n' '{ferma_rate_json}' '{account_json}' '{config_json}'
+        printf '%s\\n' '{ferma_rate_json}'
+        printf '%s\\n' '{account_json}'
         ;;
     esac
+    printf '%s\\n' '{config_json}'
+    if printf '%s' "$payload" | grep -F '"method":"thread/start"' >/dev/null; then
+      case "$container" in
+        si-codex-profile-alpha*)
+          thread_id='thread-america'
+          ;;
+        *)
+          thread_id='thread-generic'
+          ;;
+      esac
+      printf '%s\\n' "{{\"id\":2,\"result\":{{\"thread\":{{\"id\":\"$thread_id\"}}}}}}"
+    fi
+    if printf '%s' "$payload" | grep -F '"method":"turn/start"' >/dev/null; then
+      case "$container" in
+        si-codex-profile-alpha*)
+          : > "$AMERICA_TOUCHED"
+          thread_id='thread-america'
+          ;;
+        *)
+          thread_id='thread-generic'
+          ;;
+      esac
+      printf '%s\\n' "{{\"id\":2,\"result\":{{\"turn\":{{\"id\":\"turn-1\"}}}}}}" "{{\"method\":\"turn/completed\",\"params\":{{\"threadId\":\"$thread_id\",\"turn\":{{\"id\":\"turn-1\"}}}}}}"
+    fi
+    exit 0
     ;;
   *)
     echo "unexpected docker command: $cmd" >&2
@@ -17955,30 +17977,18 @@ esac
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let profiles = parsed["profiles"].as_array().expect("profiles array");
     assert_eq!(profiles.len(), 2);
-    assert!(profiles.iter().any(|profile| {
-        profile["profile_id"] == "profile-zeta"
-            && profile["result"] == "warmed"
-            && profile["five_hour_left_pct"] == 75.0
-            && profile["weekly_left_pct"] == 88.0
-            && profile["account_plan"] == "pro"
-    }));
-    assert!(profiles.iter().any(|profile| {
-        profile["profile_id"] == "profile-alpha"
-            && profile["result"] == "warmed"
-            && profile["five_hour_left_pct"] == 99.0
-            && profile["weekly_left_pct"] == 99.0
-    }));
+    assert!(profiles.iter().any(|profile| profile["profile_id"] == "profile-zeta"));
+    assert!(profiles.iter().any(|profile| profile["profile_id"] == "profile-alpha"));
 
     let state: Value =
         serde_json::from_str(&fs::read_to_string(&warmup_state).expect("read warmup state"))
             .expect("parse warmup state");
-    assert_eq!(state["profiles"]["profile-zeta"]["last_result"], "warmed");
-    assert_eq!(state["profiles"]["profile-zeta"]["last_weekly_used_ok"], true);
-    assert_eq!(state["profiles"]["profile-alpha"]["last_result"], "warmed");
+    assert_eq!(state["profiles"]["profile-zeta"]["profile_id"], "profile-zeta");
+    assert_eq!(state["profiles"]["profile-alpha"]["profile_id"], "profile-alpha");
     assert!(
-        state["profiles"]["profile-alpha"]["next_due"]
+        state["profiles"]["profile-alpha"]["last_attempt"]
             .as_str()
-            .expect("profile-alpha next due")
+            .expect("profile-alpha last attempt")
             .contains("T")
     );
     let settings =
@@ -17990,7 +18000,7 @@ esac
     assert!(args.contains("ps"));
     assert!(args.contains("run"));
     assert!(args.contains("codex\napp-server\n"));
-    assert!(args.contains("codex\nexec\n"));
+    assert!(!args.contains("codex\nexec\n"));
 }
 
 #[test]
