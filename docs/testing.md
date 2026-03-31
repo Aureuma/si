@@ -99,7 +99,7 @@ This matrix validates:
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
 - host-side bootstrap admin token resolved from `~/.si/fort/bootstrap/admin.token` and passed to Fort as `--token-file`
 - runtime token-path flow remains file-backed; pass explicit token-file paths to native Fort commands when running through `si fort -- ...`
-- in-container access through `si codex exec` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
+- in-container access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
 - `si codex respawn --volumes` auth continuity
