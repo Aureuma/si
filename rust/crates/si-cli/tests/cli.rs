@@ -4549,8 +4549,8 @@ fn help_json_root_command_order_matches_public_cli_order() {
     assert_eq!(
         names,
         vec![
-            "version", "help", "build", "commands", "settings", "orbit", "image", "codex",
-            "surf", "viva", "fort", "vault"
+            "version", "help", "build", "commands", "settings", "orbit", "image", "codex", "surf",
+            "viva", "fort", "vault"
         ]
     );
 }
@@ -16040,15 +16040,7 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
         .env("HOME", home.path())
         .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
-        .args([
-            "--cmd",
-            "echo hello",
-            "--port",
-            "3000:3000",
-            "--label",
-            "si.codex.profile=profile-zeta",
-            "--docker-bin",
-        ])
+        .args(["--port", "3000:3000", "--label", "si.codex.profile=profile-zeta", "--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -16937,7 +16929,7 @@ fn codex_lifecycle_smoke_works_with_fake_docker() {
         .env("HOME", home.path())
         .args(["codex", "spawn", "--profile", "profile-zeta", "--workspace"])
         .arg(workspace.path())
-        .args(["--cmd", "echo hello", "--docker-bin"])
+        .args(["--docker-bin"])
         .arg(&docker_bin)
         .assert()
         .success();
