@@ -49,7 +49,6 @@
             "group": "Runtime",
             "pages": [
               "docs/VAULT",
-              "docs/SUN",
               "docs/BROWSER",
               "docs/PLUGIN_MARKETPLACE",
               "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
