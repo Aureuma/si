@@ -1739,7 +1739,7 @@ default_profile = "dev"
 [viva.tunnel.profiles.dev]
 container_name = "viva-cloudflared-dev-browser"
 network_mode = "viva-shared"
-additional_networks = ["si", "viva-shared", " ", "supabase_default"]
+additional_networks = ["si", "viva-shared", " ", "viva-ls-dev_default"]
 vault_env_file = "/work/safe/sampleapp/.env.dev"
 vault_repo = "sampleapp"
 vault_env = "dev"
@@ -1758,7 +1758,7 @@ service = "http://127.0.0.1:3000"
         assert_eq!(settings.viva.tunnel.default_profile, "dev");
         let profile = settings.viva.tunnel.profiles.get("dev").expect("dev profile");
         assert_eq!(profile.container_name, "viva-cloudflared-dev-browser");
-        assert_eq!(profile.additional_networks, vec!["si", "supabase_default"]);
+        assert_eq!(profile.additional_networks, vec!["si", "viva-ls-dev_default"]);
         assert_eq!(profile.routes.len(), 1);
         assert_eq!(profile.routes[0].hostname, "dev.example.app");
     }
