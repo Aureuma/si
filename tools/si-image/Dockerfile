@@ -7,7 +7,7 @@ COPY rust ./rust
 RUN cargo build --release -p si-tools --bin codex-stdout-parser --bin si-codex-init --bin si-entrypoint \
     && cargo build --release -p si-rs-cli --bin si-rs
 
-FROM node:22-bookworm
+FROM node:22-bookworm-slim
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg gh git socat tini tmux \
@@ -19,7 +19,8 @@ RUN apt-get update -y \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm i -g @openai/codex
+RUN npm i -g @openai/codex \
+    && npm cache clean --force
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
