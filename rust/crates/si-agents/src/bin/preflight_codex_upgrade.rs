@@ -46,7 +46,6 @@ fn main() -> ExitCode {
     };
     let test_groups = [
         ("si-rs-codex", "[preflight] cargo test -p si-rs-codex"),
-        ("si-rs-docker", "[preflight] cargo test -p si-rs-docker"),
         ("si-tools", "[preflight] cargo test -p si-tools"),
     ];
 

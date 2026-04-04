@@ -41,7 +41,7 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         name: "build",
         aliases: &[],
         category: CommandCategory::Build,
-        summary: "Build images, binaries, and release assets.",
+        summary: "Build binaries and release assets.",
         hidden: false,
     },
     CommandSpec {
@@ -76,7 +76,7 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         name: "codex",
         aliases: &[],
         category: CommandCategory::Codex,
-        summary: "Manage profile-bound Codex containers and profile registry state.",
+        summary: "Manage profile-bound Codex workers and profile registry state.",
         hidden: false,
     },
     CommandSpec {

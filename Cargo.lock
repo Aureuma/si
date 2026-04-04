@@ -1864,7 +1864,6 @@ dependencies = [
  "si-rs-command-manifest",
  "si-rs-config",
  "si-rs-core",
- "si-rs-docker",
  "si-rs-fort",
  "si-rs-process",
  "si-rs-provider-apple",
@@ -1878,7 +1877,6 @@ dependencies = [
  "si-rs-provider-openai",
  "si-rs-provider-stripe",
  "si-rs-provider-workos",
- "si-rs-runtime",
  "si-rs-vault",
  "si-rs-warmup",
  "tar",
@@ -1891,9 +1889,6 @@ dependencies = [
 name = "si-rs-codex"
 version = "0.55.11"
 dependencies = [
- "si-rs-docker",
- "si-rs-runtime",
- "tempfile",
  "thiserror",
 ]
 
@@ -1918,15 +1913,6 @@ dependencies = [
 [[package]]
 name = "si-rs-core"
 version = "0.55.11"
-
-[[package]]
-name = "si-rs-docker"
-version = "0.55.11"
-dependencies = [
- "si-rs-process",
- "tempfile",
- "thiserror",
-]
 
 [[package]]
 name = "si-rs-fort"
@@ -2079,14 +2065,6 @@ dependencies = [
  "serde",
  "serde_json",
  "si-rs-config",
-]
-
-[[package]]
-name = "si-rs-runtime"
-version = "0.55.11"
-dependencies = [
- "si-rs-docker",
- "tempfile",
 ]
 
 [[package]]

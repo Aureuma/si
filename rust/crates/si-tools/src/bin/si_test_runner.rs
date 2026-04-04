@@ -91,7 +91,6 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
     let mut skip_vault = false;
     let mut skip_installer = false;
     let mut skip_npm = false;
-    let mut skip_docker = false;
 
     for arg in args {
         match arg.as_str() {
@@ -99,16 +98,15 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--skip-vault" => skip_vault = true,
             "--skip-installer" => skip_installer = true,
             "--skip-npm" => skip_npm = true,
-            "--skip-docker" => skip_docker = true,
             "--help" | "-h" => {
                 println!(
-                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]"
+                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm]"
                 );
                 return ExitCode::SUCCESS;
             }
             _ => {
                 eprintln!(
-                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm] [--skip-docker]"
+                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm]"
                 );
                 return ExitCode::from(2);
             }
@@ -156,23 +154,6 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "build",
             "installer",
             "smokenpm",
-        ])) != ExitCode::SUCCESS
-        {
-            return ExitCode::from(1);
-        }
-    }
-    if !skip_docker {
-        eprintln!("==> Installer docker smoke");
-        if run_command(Command::new("cargo").current_dir(root).args([
-            "run",
-            "--quiet",
-            "--locked",
-            "-p",
-            "si-rs-cli",
-            "--",
-            "build",
-            "installer",
-            "smokedocker",
         ])) != ExitCode::SUCCESS
         {
             return ExitCode::from(1);

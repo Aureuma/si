@@ -27,7 +27,6 @@ si-rs-command-manifest = { path = "../si-command-manifest" }
 si-rs-codex = { path = "../si-codex" }
 si-rs-config = { path = "../si-config" }
 si-rs-core = { path = "../si-core" }
-si-rs-docker = { path = "../si-docker" }
 si-rs-fort = { path = "../si-fort" }
 si-rs-process = { path = "../si-process" }
 si-rs-provider-catalog = { path = "../si-provider-catalog" }
@@ -41,7 +40,6 @@ si-rs-provider-stripe = { path = "../si-provider-stripe" }
 si-rs-provider-workos = { path = "../si-provider-workos" }
 si-rs-provider-cloudflare = { path = "../si-provider-cloudflare" }
 si-rs-provider-apple = { path = "../si-provider-apple" }
-si-rs-runtime = { path = "../si-runtime" }
 si-rs-vault = { path = "../si-vault" }
 si-rs-warmup = { path = "../si-warmup" }
 

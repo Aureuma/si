@@ -27,7 +27,7 @@ pub struct PersistedSessionState {
     #[serde(default)]
     pub host: String,
     #[serde(default)]
-    pub container_host: String,
+    pub runtime_host: String,
     #[serde(default)]
     pub access_token_path: String,
     #[serde(default)]
@@ -58,11 +58,11 @@ pub struct BootstrapView {
     pub agent_id: String,
     pub session_id: String,
     pub host_url: String,
-    pub container_host_url: String,
+    pub runtime_host_url: String,
     pub access_token_path: String,
     pub refresh_token_path: String,
-    pub access_token_container_path: String,
-    pub refresh_token_container_path: String,
+    pub access_token_runtime_path: String,
+    pub refresh_token_runtime_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -156,8 +156,8 @@ pub enum PersistedSessionError {
     InvalidRefreshExpiryUnix { value: i64 },
     #[error("profile id required")]
     MissingProfileID,
-    #[error("fort container host is missing in session state")]
-    MissingContainerHost,
+    #[error("fort runtime host is missing in session state")]
+    MissingRuntimeHost,
 }
 
 #[derive(Debug, Error)]
@@ -195,7 +195,7 @@ impl PersistedSessionState {
             agent_id: self.agent_id.trim().to_owned(),
             session_id: self.session_id.trim().to_owned(),
             host: self.host.trim().to_owned(),
-            container_host: self.container_host.trim().to_owned(),
+            runtime_host: self.runtime_host.trim().to_owned(),
             access_token_path: self.access_token_path.trim().to_owned(),
             refresh_token_path: self.refresh_token_path.trim().to_owned(),
             access_expires_at: self.access_expires_at.trim().to_owned(),
@@ -239,8 +239,8 @@ pub fn build_bootstrap_view(
     profile_id_override: Option<&str>,
     access_token_path: &str,
     refresh_token_path: &str,
-    access_token_container_path: &str,
-    refresh_token_container_path: &str,
+    access_token_runtime_path: &str,
+    refresh_token_runtime_path: &str,
 ) -> Result<BootstrapView, PersistedSessionError> {
     let state = state.normalized();
     let profile_id = profile_id_override
@@ -257,24 +257,24 @@ pub fn build_bootstrap_view(
     } else {
         state.agent_id.trim().to_owned()
     };
-    let container_host_url = if state.container_host.trim().is_empty() {
-        container_host_for_runtime(&state.host)
+    let runtime_host_url = if state.runtime_host.trim().is_empty() {
+        runtime_host_for_agent(&state.host)
     } else {
-        state.container_host.trim().to_owned()
+        state.runtime_host.trim().to_owned()
     };
-    if container_host_url.trim().is_empty() {
-        return Err(PersistedSessionError::MissingContainerHost);
+    if runtime_host_url.trim().is_empty() {
+        return Err(PersistedSessionError::MissingRuntimeHost);
     }
     Ok(BootstrapView {
         profile_id,
         agent_id,
         session_id: state.session_id.trim().to_owned(),
         host_url: state.host.trim().to_owned(),
-        container_host_url,
+        runtime_host_url,
         access_token_path: access_token_path.trim().to_owned(),
         refresh_token_path: refresh_token_path.trim().to_owned(),
-        access_token_container_path: access_token_container_path.trim().to_owned(),
-        refresh_token_container_path: refresh_token_container_path.trim().to_owned(),
+        access_token_runtime_path: access_token_runtime_path.trim().to_owned(),
+        refresh_token_runtime_path: refresh_token_runtime_path.trim().to_owned(),
     })
 }
 
@@ -556,29 +556,8 @@ fn clear_state_file(path: impl AsRef<Path>) -> Result<(), SessionStateFileError>
     }
 }
 
-fn container_host_for_runtime(host_url: &str) -> String {
-    let host_url = host_url.trim();
-    if host_url.is_empty() {
-        return String::new();
-    }
-    let Ok(mut parsed) = url::Url::parse(host_url) else {
-        return host_url.to_owned();
-    };
-    let Some(hostname) = parsed.host_str().map(str::trim) else {
-        return host_url.to_owned();
-    };
-    if hostname == "127.0.0.1"
-        || hostname == "localhost"
-        || hostname == "0.0.0.0"
-        || hostname == "::1"
-    {
-        let port = parsed.port().unwrap_or(8088);
-        if parsed.set_host(Some("host.docker.internal")).is_ok() {
-            let _ = parsed.set_port(Some(port));
-            return parsed.to_string();
-        }
-    }
-    host_url.to_owned()
+fn runtime_host_for_agent(host_url: &str) -> String {
+    host_url.trim().to_owned()
 }
 
 fn non_empty_string(value: String) -> Option<String> {
@@ -809,7 +788,7 @@ mod tests {
             agent_id: " agent-profile-zeta ".to_owned(),
             session_id: " session-123 ".to_owned(),
             host: " https://fort.example.test ".to_owned(),
-            container_host: " http://fort.internal:8088 ".to_owned(),
+            runtime_host: " http://fort.internal:8088 ".to_owned(),
             access_token_path: " /tmp/access.token ".to_owned(),
             refresh_token_path: " /tmp/refresh.token ".to_owned(),
             access_expires_at: " 2030-01-01T00:00:00Z ".to_owned(),
@@ -824,7 +803,7 @@ mod tests {
         assert_eq!(loaded.agent_id, "agent-profile-zeta");
         assert_eq!(loaded.session_id, "session-123");
         assert_eq!(loaded.host, "https://fort.example.test");
-        assert_eq!(loaded.container_host, "http://fort.internal:8088");
+        assert_eq!(loaded.runtime_host, "http://fort.internal:8088");
         #[cfg(unix)]
         {
             let mode =
@@ -1060,7 +1039,7 @@ mod tests {
     }
 
     #[test]
-    fn build_bootstrap_view_defaults_agent_and_container_host() {
+    fn build_bootstrap_view_defaults_agent_and_runtime_host() {
         let view = build_bootstrap_view(
             &PersistedSessionState {
                 profile_id: "profile-zeta".to_owned(),
@@ -1082,11 +1061,11 @@ mod tests {
                 agent_id: "si-codex-profile-zeta".to_owned(),
                 session_id: String::new(),
                 host_url: "http://127.0.0.1:8088".to_owned(),
-                container_host_url: "http://host.docker.internal:8088/".to_owned(),
+                runtime_host_url: "http://127.0.0.1:8088".to_owned(),
                 access_token_path: "/tmp/access.token".to_owned(),
                 refresh_token_path: "/tmp/refresh.token".to_owned(),
-                access_token_container_path: "/home/si/.si/access.token".to_owned(),
-                refresh_token_container_path: "/home/si/.si/refresh.token".to_owned(),
+                access_token_runtime_path: "/home/si/.si/access.token".to_owned(),
+                refresh_token_runtime_path: "/home/si/.si/refresh.token".to_owned(),
             }
         );
     }
