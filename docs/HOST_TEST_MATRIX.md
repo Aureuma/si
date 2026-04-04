@@ -38,7 +38,6 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 ## Requirements
 
 - `cargo`
-- `docker`
 - `python3`
 - sibling checkouts at `../fort` and `../surf`
 

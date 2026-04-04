@@ -21,10 +21,10 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
-| `si codex` | Manage profile-bound Codex containers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
-| `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
+| `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
+| `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
-| `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
+| `si surf` | Local Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si viva` | Manage Viva runtime and node helper commands | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |
 | `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
 | `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
@@ -53,7 +53,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Purpose | Typical usage |
 | --- | --- | --- |
-| `si build image` | Build local runtime image | `si build image` |
 | `si build self` | Build or upgrade `si` binary | `si build self` |
 | `si build self check` | Fast typecheck for the SI CLI | `si build self check --timings` |
 | `si build self assets` | Build all release archives + `checksums.txt` locally | `si build self assets --version vX.Y.Z` |
@@ -93,7 +92,7 @@ si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z" --target
 ## Guardrails
 
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
-- For SI runtime containers, use `si fort ...` for secret access.
+- For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` bootstrap/admin auth is file-backed and prefers explicit `--token-file` injection from `~/.si/fort/bootstrap/admin.token` when present.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.

@@ -20,13 +20,13 @@ Architecture boundary:
 - SI Vault does not implement remote policy/auth decisions.
 - Fort does not implement independent secret persistence or crypto key generation.
 - Runtime agents should consume secrets through Fort; SI Vault CLI remains the local maintenance/admin tool.
-- Inside SI runtime containers, local `si vault` secret commands are blocked by default and must use `si fort`.
+- Inside SI runtime workers, local `si vault` secret commands are blocked by default and must use `si fort`.
 
 ## `si fort` Wrapper Contract
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
 - Host bootstrap/admin auth for `si codex spawn ...` provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
-- Runtime container sessions use file-backed token paths for the short-lived access token and rotating refresh token.
+- Runtime worker sessions use file-backed token paths for the short-lived access token and rotating refresh token.
 - Wrapper behavior:
   - prefers caller-supplied runtime token paths (`FORT_TOKEN_PATH`, `FORT_REFRESH_TOKEN_PATH`) and refreshes those file-backed sessions in place when possible
   - otherwise prefers the active profile-scoped Fort session under `~/.si/codex/profiles/<profile>/fort/` and refreshes that file-backed session in place when possible
@@ -92,9 +92,9 @@ Run commands with decrypted env at runtime:
 si vault run --env-file .env --env dev -- cargo run --bin server
 ```
 
-For SI runtime containers:
+For SI runtime workers:
 - Use `si fort ...` for secret access.
-- Direct local `si vault` secret commands are blocked in-container.
+- Direct local `si vault` secret commands are blocked in worker sessions.
 
 ## Encryption Behavior
 
@@ -127,4 +127,3 @@ It resolves `si` in this order: `SI_BIN`, a repo-local `./si`, then `si` on `PAT
 - `si vault get`
 - `si vault list` / `si vault ls`
 - `si vault run`
-- `si vault docker exec`

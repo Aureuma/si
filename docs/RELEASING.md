@@ -66,7 +66,6 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
 ./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml

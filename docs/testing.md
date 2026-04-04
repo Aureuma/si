@@ -63,15 +63,6 @@ To validate the Homebrew tap install path end-to-end, run:
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
 ```
 
-For containerized smoke coverage (root + non-root installer paths), run:
-
-```bash
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
-```
-
-Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker` to skip
-the non-root leg during local iteration.
-
 ## Vault strict suite
 Run the dedicated vault suite:
 
@@ -99,7 +90,7 @@ This matrix validates:
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
 - host-side bootstrap admin token resolved from `~/.si/fort/bootstrap/admin.token` and passed to Fort as `--token-file`
 - runtime token-path flow remains file-backed; pass explicit token-file paths to native Fort commands when running through `si fort -- ...`
-- in-container access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
+- worker-shell access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
 - `si codex respawn --volumes` auth continuity
@@ -161,28 +152,11 @@ After CLI command-surface changes, run targeted help checks:
 ./si surf --help
 ```
 
-## Image build smoke check
-`si build image` runs a Codex compatibility preflight before building the image.
-
+## Codex preflight check
 Run the preflight directly:
 
 ```bash
 cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
 ```
 
-Skip preflight only when you explicitly need a fast local image iteration:
-
-```bash
-./si build image --skip-preflight
-```
-
-The canonical local image build command is:
-
-```bash
-./si build image
-```
-
-Build mode behavior:
-- If `docker buildx` is available, SI runs `docker buildx build --load` directly.
-- If `docker buildx` is unavailable or probe fails, SI uses classic `docker build`.
-- SI no longer retries/falls back mid-build after a buildx start; mode is selected once up front.
+Use the preflight as a standalone compatibility gate before upgrading Codex-facing flows.

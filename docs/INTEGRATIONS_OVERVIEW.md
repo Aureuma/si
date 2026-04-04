@@ -74,7 +74,7 @@ This page is the canonical map of SI integration families.
 2. Confirm context/account/environment target.
 3. Run integration doctor/health command where available.
 4. Use `--json` mode for auditable outputs in automation.
-5. For host/admin flows, prefer `si vault run -- <cmd>` when injecting secrets. For SI runtime containers, use `si fort ...`.
+5. For host/admin flows, prefer `si vault run -- <cmd>` when injecting secrets. For SI runtime workers, use `si fort ...`.
 
 ## Related pages
 

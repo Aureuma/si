@@ -8,8 +8,8 @@ Current scope:
 - `.si` path defaults and staged modular settings parsing
 - runtime path resolution for workspace/config discovery
 - typed process execution foundations with capture, cwd/env overrides, and timeout handling
-- typed Docker run specs with early bind-mount validation
-- shared runtime core-mount planning for codex containers
+- typed runtime launch specs with early path validation
+- shared Codex worker-path planning for local sessions
 - initial codex spawn planning for names, volumes, env, workdir, and mount assembly
 - Rust CLI exposure for codex spawn planning via `si-rs codex spawn plan`
 - the primary Rust CLI entrypoint used for local and shipped runtime flows

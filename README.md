@@ -6,8 +6,7 @@
 
 <p align="center">
   <a href="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge" alt="License: AGPL-3.0"></a>
-  <a href="https://img.shields.io/badge/rust-1.88-000000?logo=rust&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/rust-1.88-000000?logo=rust&logoColor=white&style=for-the-badge" alt="Rust 1.88"></a>
-  <a href="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker required"></a>
+  <a href="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge" alt="Rust 1.86"></a>
   <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
   <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
   <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Formula: aureuma/si/si"></a>
@@ -19,17 +18,16 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 
 ## What si covers
 
-- Codex containers: profile-scoped lifecycle under `si codex` (`profile`, `spawn`, `status`, `shell`, `report`, `clone`, `remove`, `respawn`).
+- Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `shell`, `tail`, `list`, `remove`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
-- Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
+- Browser runtime: local Playwright MCP runtime (`si browser ...`).
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
 ## Repo layout
 
 - `rust/`: primary Rust workspace and shipping CLI implementation.
-- `tools/si-browser`: browser runtime Docker assets.
-- `tools/si-image`: unified runtime image used by codex and runtime-side tooling.
+- `tools/si-browser`: browser runtime helpers.
 - `docs/`: Markdown + Mintlify docs content.
 
 ## Install
@@ -56,19 +54,14 @@ cargo run --quiet --locked -p si-rs-cli -- build installer run --force
 
 Prerequisites:
 
-- Docker Engine available on host.
 - Latest stable Rust toolchain for local source builds.
 - `si-rs` is the runtime entrypoint.
 
-Build local CLI + runtime image:
+Build local CLI:
 
 ```bash
-# host build (Rust-primary CLI)
 cd /path/to/si
 cargo build --release --locked --bin si-rs
-
-# runtime image for codex
-./.artifacts/cargo-target/release/si-rs build image
 ```
 
 Fast local iteration:
@@ -100,8 +93,8 @@ Browser runtime:
 ./si browser stop
 ```
 
-When running, SI-managed codex containers auto-register MCP server `si_browser`
-to the browser runtime endpoint on the shared Docker network.
+When running, SI-managed codex workers can auto-register MCP server `si_browser`
+to the configured browser runtime endpoint.
 
 Mintlify docs tooling:
 
@@ -118,7 +111,7 @@ Mintlify docs tooling:
 - `si orbit ...`: provider bridges and provider capability inventory.
 - `si browser ...`: Playwright MCP browser runtime.
 - `si mintlify ...`: docs site bootstrap/validation/dev wrappers.
-- `si build ...`: local image + self-build workflows.
+- `si build ...`: self-build and release workflows.
 
 Full command surface: run `si --help` and command-specific help (`si <command> --help`).
 
@@ -142,7 +135,6 @@ Run installer smoke tests:
 
 ```bash
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
 ```
 
 Run strict vault-focused tests:
