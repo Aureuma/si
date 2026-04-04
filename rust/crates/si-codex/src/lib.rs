@@ -1,87 +1,18 @@
-use si_rs_docker::{BindMount, ContainerSpec, PublishedPort, VolumeMount};
-use si_rs_runtime::{ContainerCoreMountPlan, HostMountContext, build_container_core_mounts};
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 use thiserror::Error;
 
-pub const DEFAULT_IMAGE: &str = "aureuma/si:local";
-pub const DEFAULT_NETWORK: &str = "si";
-pub const DEFAULT_WORKSPACE_PRIMARY: &str = "/workspace";
-pub const DEFAULT_CONTAINER_HOME: &str = "/home/si";
-pub const DEFAULT_SKILLS_VOLUME: &str = "si-codex-skills";
-pub const DEFAULT_CONTAINER_USER: &str = "si";
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SpawnRequest {
-    pub profile_id: String,
-    pub instance_name: Option<String>,
-    pub image: Option<String>,
-    pub network_name: Option<String>,
-    pub workspace_host: PathBuf,
-    pub workdir: Option<String>,
-    pub codex_volume: Option<String>,
-    pub skills_volume: Option<String>,
-    pub gh_volume: Option<String>,
-    pub repo: Option<String>,
-    pub gh_pat: Option<String>,
-    pub docker_socket: bool,
-    pub clean_slate: bool,
-    pub detach: bool,
-    pub container_home: Option<PathBuf>,
-    pub host_vault_env_file: Option<PathBuf>,
-    pub include_host_si: bool,
-    pub additional_env: Vec<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SpawnPlan {
-    pub profile_id: String,
-    pub name: String,
-    pub container_name: String,
-    pub image: String,
-    pub network_name: String,
-    pub workspace_host: PathBuf,
-    pub workspace_primary_target: PathBuf,
-    pub workspace_mirror_target: PathBuf,
-    pub workdir: PathBuf,
-    pub codex_volume: String,
-    pub skills_volume: String,
-    pub gh_volume: String,
-    pub docker_socket: bool,
-    pub clean_slate: bool,
-    pub detach: bool,
-    pub env: Vec<String>,
-    pub mounts: Vec<BindMount>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RemoveArtifacts {
-    pub name: String,
-    pub container_name: String,
-    pub slug: String,
-    pub codex_volume: String,
-    pub gh_volume: String,
-}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RespawnRequest {
     pub profile_id: String,
-    pub profile_container_names: Vec<String>,
+    pub profile_session_names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RespawnPlan {
     pub profile_id: String,
-    pub remove_targets: Vec<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TmuxPlan {
-    pub session_name: String,
-    pub target: String,
-    pub launch_command: String,
-    pub resume_command: String,
+    pub reset_targets: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -97,173 +28,19 @@ pub struct ReportParseResult {
     pub report: String,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SpawnContainerOptions {
-    pub command: Option<String>,
-    pub labels: Vec<String>,
-    pub ports: Vec<String>,
-}
-
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum SpawnPlanError {
-    #[error("spawn profile is required")]
-    MissingProfile,
-    #[error("workspace host must be an absolute directory")]
-    InvalidWorkspace,
-}
-
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum RemoveArtifactsError {
-    #[error("remove target name is required")]
-    MissingName,
-}
-
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum RespawnPlanError {
     #[error("respawn profile is required")]
     MissingProfile,
 }
 
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum TmuxPlanError {
-    #[error("container name is required")]
-    MissingContainerName,
+pub fn codex_worker_name(profile_id: &str) -> String {
+    profile_id.trim().to_owned()
 }
 
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum SpawnContainerSpecError {
-    #[error("invalid env entry {entry:?}")]
-    InvalidEnvEntry { entry: String },
-    #[error("invalid label entry {entry:?}")]
-    InvalidLabelEntry { entry: String },
-    #[error("invalid published port mapping {entry:?}")]
-    InvalidPublishedPort { entry: String },
-}
-
-pub fn build_spawn_plan(
-    request: &SpawnRequest,
-    host_ctx: &HostMountContext,
-) -> Result<SpawnPlan, SpawnPlanError> {
-    let name = request.profile_id.trim();
-    if name.is_empty() {
-        return Err(SpawnPlanError::MissingProfile);
-    }
-    let profile_id = name.to_owned();
-    let name = default_named_value(request.instance_name.as_deref(), &profile_id);
-
-    let workspace_host = request.workspace_host.clone();
-    if !workspace_host.is_absolute() || !workspace_host.is_dir() {
-        return Err(SpawnPlanError::InvalidWorkspace);
-    }
-
-    let workspace_primary_target = PathBuf::from(DEFAULT_WORKSPACE_PRIMARY);
-    let workspace_mirror_target = workspace_host.clone();
-    let requested_workdir = request.workdir.as_deref().map(str::trim).unwrap_or("");
-    let workdir = if requested_workdir.is_empty() || requested_workdir == DEFAULT_WORKSPACE_PRIMARY
-    {
-        workspace_mirror_target.clone()
-    } else {
-        PathBuf::from(requested_workdir)
-    };
-    let codex_volume =
-        default_named_value(request.codex_volume.as_deref(), &format!("si-codex-{name}"));
-    let skills_volume =
-        default_named_value(request.skills_volume.as_deref(), DEFAULT_SKILLS_VOLUME);
-    let gh_volume = default_named_value(request.gh_volume.as_deref(), &format!("si-gh-{name}"));
-    let container_home =
-        request.container_home.clone().unwrap_or_else(|| PathBuf::from(DEFAULT_CONTAINER_HOME));
-
-    let mut env = vec![
-        format!("HOME={}", container_home.display()),
-        format!("CODEX_HOME={}/.codex", container_home.display()),
-        format!("SI_WORKSPACE_PRIMARY={}", workspace_primary_target.display()),
-        format!("SI_WORKSPACE_MIRROR={}", workspace_mirror_target.display()),
-        format!("SI_WORKSPACE_HOST={}", workspace_host.display()),
-        format!("SI_CODEX_PROFILE_ID={profile_id}"),
-    ];
-    if let Some(repo) = request.repo.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
-        env.push(format!("SI_REPO={repo}"));
-    }
-    if let Some(gh_pat) = request.gh_pat.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
-        env.push(format!("SI_GH_PAT={gh_pat}"));
-        env.push(format!("GH_TOKEN={gh_pat}"));
-        env.push(format!("GITHUB_TOKEN={gh_pat}"));
-    }
-    env.extend(
-        request
-            .additional_env
-            .iter()
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned),
-    );
-
-    let mounts = build_container_core_mounts(
-        &ContainerCoreMountPlan {
-            workspace_host: workspace_host.clone(),
-            workspace_primary_target: workspace_primary_target.clone(),
-            workspace_mirror_target: Some(workspace_mirror_target.clone()),
-            container_home: container_home.clone(),
-            include_host_si: request.include_host_si,
-            host_vault_env_file: request.host_vault_env_file.clone(),
-        },
-        host_ctx,
-    );
-
-    Ok(SpawnPlan {
-        profile_id,
-        name: name.clone(),
-        container_name: codex_container_name(&name),
-        image: default_named_value(request.image.as_deref(), DEFAULT_IMAGE),
-        network_name: default_named_value(request.network_name.as_deref(), DEFAULT_NETWORK),
-        workspace_host,
-        workspace_primary_target,
-        workspace_mirror_target,
-        workdir,
-        codex_volume,
-        skills_volume,
-        gh_volume,
-        docker_socket: request.docker_socket,
-        clean_slate: request.clean_slate,
-        detach: request.detach,
-        env,
-        mounts,
-    })
-}
-
-pub fn codex_container_name(name: &str) -> String {
-    let name = name.trim();
-    if name.is_empty() {
-        return String::new();
-    }
-    if name.starts_with("si-codex-") {
-        return name.to_owned();
-    }
-    format!("si-codex-{name}")
-}
-
-pub fn codex_container_slug(name: &str) -> String {
-    let name = name.trim();
-    if name.is_empty() {
-        return String::new();
-    }
-    name.strip_prefix("si-codex-").unwrap_or(name).to_owned()
-}
-
-pub fn build_remove_artifacts(name: &str) -> Result<RemoveArtifacts, RemoveArtifactsError> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(RemoveArtifactsError::MissingName);
-    }
-    let container_name = codex_container_name(trimmed);
-    let slug = codex_container_slug(&container_name);
-    Ok(RemoveArtifacts {
-        name: trimmed.to_owned(),
-        container_name: container_name.clone(),
-        slug: slug.clone(),
-        codex_volume: format!("si-codex-{slug}"),
-        gh_volume: format!("si-gh-{slug}"),
-    })
+pub fn codex_tmux_session_name(profile_id: &str) -> String {
+    let suffix = codex_worker_name(profile_id);
+    if suffix.is_empty() { TMUX_SESSION_PREFIX.to_owned() } else { format!("{TMUX_SESSION_PREFIX}{suffix}") }
 }
 
 pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
@@ -272,54 +49,13 @@ pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, Respa
         return Err(RespawnPlanError::MissingProfile);
     }
     let mut targets = BTreeSet::new();
-    for item in &request.profile_container_names {
-        let item = codex_container_name(item);
-        if !item.trim().is_empty() {
-            targets.insert(item);
+    for item in &request.profile_session_names {
+        let item = item.trim();
+        if !item.is_empty() {
+            targets.insert(item.to_owned());
         }
     }
-    Ok(RespawnPlan {
-        profile_id: profile_id.to_owned(),
-        remove_targets: targets.into_iter().collect(),
-    })
-}
-
-pub fn codex_tmux_session_name(container_name: &str) -> String {
-    let slug = codex_container_slug(container_name);
-    let suffix = if slug.trim().is_empty() { container_name.trim() } else { slug.trim() };
-    format!("{TMUX_SESSION_PREFIX}{suffix}")
-}
-
-pub fn build_tmux_plan(
-    container_name: &str,
-    host_cwd: &str,
-    resume_session_id: &str,
-    resume_profile_key: &str,
-) -> Result<TmuxPlan, TmuxPlanError> {
-    let container_name = container_name.trim();
-    if container_name.is_empty() {
-        return Err(TmuxPlanError::MissingContainerName);
-    }
-    let session_name = codex_tmux_session_name(container_name);
-    Ok(TmuxPlan {
-        target: format!("{session_name}:0.0"),
-        launch_command: build_tmux_command(container_name, host_cwd),
-        resume_command: build_tmux_resume_command(
-            container_name,
-            host_cwd,
-            resume_session_id,
-            resume_profile_key,
-        ),
-        session_name,
-    })
-}
-
-pub fn build_tmux_command_for_container(container_name: &str) -> Result<String, TmuxPlanError> {
-    let container_name = container_name.trim();
-    if container_name.is_empty() {
-        return Err(TmuxPlanError::MissingContainerName);
-    }
-    Ok(build_tmux_command(container_name, ""))
+    Ok(RespawnPlan { profile_id: profile_id.to_owned(), reset_targets: targets.into_iter().collect() })
 }
 
 pub fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> {
@@ -365,161 +101,11 @@ pub fn parse_report_capture(
 ) -> ReportParseResult {
     let segments = parse_prompt_segments_dual(clean, raw);
     let report = if prompt_index < segments.len() {
-        extract_report_lines_from_lines(
-            &segments[prompt_index].raw,
-            &segments[prompt_index].lines,
-            ansi,
-        )
+        extract_report_lines_from_lines(&segments[prompt_index].raw, &segments[prompt_index].lines, ansi)
     } else {
         String::new()
     };
     ReportParseResult { segments, report }
-}
-
-pub fn build_container_spec(
-    plan: &SpawnPlan,
-    options: &SpawnContainerOptions,
-) -> Result<ContainerSpec, SpawnContainerSpecError> {
-    let mut spec = ContainerSpec::new(plan.image.clone())
-        .name(plan.container_name.clone())
-        .detach(plan.detach)
-        .auto_remove(false)
-        .network(plan.network_name.clone())
-        .restart_policy("unless-stopped")
-        .workdir(plan.workdir.clone())
-        .user("root")
-        .label("si.component", "codex")
-        .label("si.name", plan.name.clone())
-        .label("si.codex.profile", plan.profile_id.clone())
-        .label("si.codex.instance", plan.name.clone())
-        .volume_mount(VolumeMount::new(
-            plan.codex_volume.clone(),
-            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex"),
-        ))
-        .volume_mount(VolumeMount::new(
-            plan.skills_volume.clone(),
-            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex").join("skills"),
-        ))
-        .volume_mount(VolumeMount::new(
-            plan.gh_volume.clone(),
-            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".config").join("gh"),
-        ));
-    for mount in &plan.mounts {
-        spec = spec.mount(mount.clone());
-    }
-    for entry in &plan.env {
-        let Some((key, value)) = entry.split_once('=') else {
-            return Err(SpawnContainerSpecError::InvalidEnvEntry { entry: entry.clone() });
-        };
-        spec = spec.env(key.trim(), value);
-    }
-    for entry in &options.labels {
-        let Some((key, value)) = entry.split_once('=') else {
-            return Err(SpawnContainerSpecError::InvalidLabelEntry { entry: entry.clone() });
-        };
-        let key = key.trim();
-        if key.is_empty() {
-            return Err(SpawnContainerSpecError::InvalidLabelEntry { entry: entry.clone() });
-        }
-        spec = spec.label(key, value);
-    }
-    for entry in &options.ports {
-        let Some((host_port, container_port)) = entry.split_once(':') else {
-            return Err(SpawnContainerSpecError::InvalidPublishedPort { entry: entry.clone() });
-        };
-        let host_port = host_port.trim();
-        let container_port = container_port
-            .trim()
-            .parse::<u16>()
-            .map_err(|_| SpawnContainerSpecError::InvalidPublishedPort { entry: entry.clone() })?;
-        spec = spec.published_port(PublishedPort::new(host_port, container_port));
-    }
-    let shell_command = options.command.as_deref().map(str::trim).filter(|value| !value.is_empty());
-    let cmd = shell_command.unwrap_or("sleep infinity");
-    Ok(spec.command(["bash", "-lc", cmd]))
-}
-
-fn default_named_value(value: Option<&str>, fallback: &str) -> String {
-    value.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(fallback).to_owned()
-}
-
-fn build_tmux_command(container_name: &str, host_cwd: &str) -> String {
-    let start_dir = host_cwd.trim();
-    let cd_start = if !start_dir.is_empty() && start_dir.starts_with('/') {
-        format!("cd {} 2>/dev/null || ", shell_single_quote(start_dir))
-    } else {
-        String::new()
-    };
-    let inner = "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; ".to_owned()
-        + &cd_start
-        + "cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; "
-        + "codex --dangerously-bypass-approvals-and-sandbox; status=$?; "
-        + "printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; "
-        + "exec bash -il";
-    let base = format!(
-        "docker exec -it --user {} {} bash -lc {}",
-        shell_single_quote(DEFAULT_CONTAINER_USER),
-        shell_single_quote(container_name),
-        shell_single_quote(&inner)
-    );
-    format!("{base} || sudo -n {base}")
-}
-
-fn build_tmux_resume_command(
-    container_name: &str,
-    host_cwd: &str,
-    session_id: &str,
-    profile_key: &str,
-) -> String {
-    let session_id = session_id.trim();
-    if session_id.is_empty() {
-        return String::new();
-    }
-    let start_dir = host_cwd.trim();
-    let cd_start = if !start_dir.is_empty() && start_dir.starts_with('/') {
-        format!("cd {} 2>/dev/null || ", shell_single_quote(start_dir))
-    } else {
-        String::new()
-    };
-    let profile_label = {
-        let value = profile_key.trim();
-        if value.is_empty() { codex_container_slug(container_name) } else { value.to_owned() }
-    };
-    let inner = "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; ".to_owned()
-        + &cd_start
-        + "cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; "
-        + &format!(
-            "printf '\\n[si] tmux session unavailable; attempting codex resume %s for profile %s.\\n' {} {}; ",
-            shell_single_quote(session_id),
-            shell_single_quote(profile_label.trim())
-        )
-        + &format!(
-            "codex resume {} --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox; ",
-            shell_single_quote(session_id)
-        )
-        + "status=$?; "
-        + "printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; "
-        + "exec bash -il";
-    let base = format!(
-        "docker exec -it --user {} {} bash -lc {}",
-        shell_single_quote(DEFAULT_CONTAINER_USER),
-        shell_single_quote(container_name),
-        shell_single_quote(&inner)
-    );
-    format!("{base} || sudo -n {base}")
-}
-
-fn shell_single_quote(value: &str) -> String {
-    let mut quoted = String::from("'");
-    for ch in value.chars() {
-        if ch == '\'' {
-            quoted.push_str("'\"'\"'");
-        } else {
-            quoted.push(ch);
-        }
-    }
-    quoted.push('\'');
-    quoted
 }
 
 fn extract_report_lines_from_lines(
@@ -616,338 +202,25 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, RespawnPlanError, RespawnRequest,
-        SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError, SpawnRequest,
-        TmuxPlanError, build_container_spec, build_remove_artifacts, build_respawn_plan,
-        build_spawn_plan, build_tmux_command_for_container, build_tmux_plan, codex_container_name,
-        codex_container_slug, codex_tmux_session_name, parse_prompt_segments_dual,
-        parse_report_capture,
+        RespawnPlanError, RespawnRequest, build_respawn_plan, codex_tmux_session_name,
+        parse_prompt_segments_dual, parse_report_capture,
     };
-    use si_rs_runtime::HostMountContext;
-    use std::path::{Path, PathBuf};
-    use tempfile::tempdir;
 
     #[test]
-    fn build_spawn_plan_uses_profile_for_name_and_container() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        assert_eq!(plan.profile_id, "profile-zeta");
-        assert_eq!(plan.name, "profile-zeta");
-        assert_eq!(plan.container_name, "si-codex-profile-zeta");
-        assert_eq!(plan.codex_volume, "si-codex-profile-zeta");
-        assert_eq!(plan.gh_volume, "si-gh-profile-zeta");
-        assert_eq!(plan.skills_volume, DEFAULT_SKILLS_VOLUME);
-    }
-
-    #[test]
-    fn build_spawn_plan_defaults_workdir_to_workspace_mirror() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                workdir: Some("/workspace".to_owned()),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        assert_eq!(plan.workspace_primary_target, PathBuf::from("/workspace"));
-        assert_eq!(plan.workspace_mirror_target, workspace.path());
-        assert_eq!(plan.workdir, workspace.path());
-    }
-
-    #[test]
-    fn build_spawn_plan_keeps_explicit_non_default_workdir() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                workdir: Some("/custom".to_owned()),
-                detach: false,
-                docker_socket: false,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        assert_eq!(plan.workdir, PathBuf::from("/custom"));
-        assert!(!plan.detach);
-        assert!(!plan.docker_socket);
-    }
-
-    #[test]
-    fn build_spawn_plan_assembles_workspace_and_repo_env() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                repo: Some("acme/repo".to_owned()),
-                gh_pat: Some("token-123".to_owned()),
-                additional_env: vec!["EXTRA=1".to_owned()],
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        assert!(plan.env.contains(&format!("SI_WORKSPACE_HOST={}", workspace.path().display())));
-        assert!(plan.env.contains(&format!("SI_WORKSPACE_MIRROR={}", workspace.path().display())));
-        assert!(plan.env.contains(&"SI_CODEX_PROFILE_ID=profile-zeta".to_owned()));
-        assert!(plan.env.contains(&"SI_REPO=acme/repo".to_owned()));
-        assert!(plan.env.contains(&"SI_GH_PAT=token-123".to_owned()));
-        assert!(plan.env.contains(&"GH_TOKEN=token-123".to_owned()));
-        assert!(plan.env.contains(&"GITHUB_TOKEN=token-123".to_owned()));
-        assert!(plan.env.contains(&"EXTRA=1".to_owned()));
-    }
-
-    #[test]
-    fn build_spawn_plan_reuses_runtime_core_mounts() {
-        let home = tempdir().expect("tempdir");
-        std::fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
-        let workspace = tempdir().expect("tempdir");
-        let ctx =
-            HostMountContext { home_dir: Some(home.path().to_path_buf()), ssh_auth_sock: None };
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                include_host_si: true,
-                detach: true,
-                docker_socket: true,
-                ..SpawnRequest::default()
-            },
-            &ctx,
-        )
-        .expect("spawn plan");
-
-        assert_eq!(plan.mounts[0].source(), workspace.path());
-        assert_eq!(plan.mounts[0].target(), Path::new("/workspace"));
-        assert_eq!(plan.mounts[1].source(), workspace.path());
-        assert_eq!(plan.mounts[1].target(), workspace.path());
-        assert!(plan.mounts.iter().any(|mount| mount.target() == Path::new("/home/si/.si")));
-    }
-
-    #[test]
-    fn build_spawn_plan_rejects_missing_profile() {
-        let workspace = tempdir().expect("tempdir");
-        let err = build_spawn_plan(
-            &SpawnRequest {
-                workspace_host: workspace.path().to_path_buf(),
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect_err("missing profile");
-
-        assert_eq!(err, SpawnPlanError::MissingProfile);
-    }
-
-    #[test]
-    fn build_spawn_plan_rejects_invalid_workspace() {
-        let err = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: PathBuf::from("relative"),
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect_err("invalid workspace");
-
-        assert_eq!(err, SpawnPlanError::InvalidWorkspace);
-    }
-
-    #[test]
-    fn build_container_spec_renders_named_volumes_and_shell_command() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                image: Some("ghcr.io/aureuma/si:latest".to_owned()),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        let spec = build_container_spec(
-            &plan,
-            &SpawnContainerOptions {
-                command: Some("echo hello".to_owned()),
-                labels: vec!["si.codex.profile=profile-zeta".to_owned()],
-                ports: vec!["3000:3000".to_owned()],
-            },
-        )
-        .expect("container spec");
-
-        let args = spec.docker_run_args().expect("docker args");
-        assert!(args.contains(&"-d".to_owned()));
-        assert!(args.contains(&"--user".to_owned()));
-        assert!(args.contains(&"root".to_owned()));
-        assert!(args.contains(&"--label".to_owned()));
-        assert!(args.contains(&"si.component=codex".to_owned()));
-        assert!(args.contains(&"si.codex.profile=profile-zeta".to_owned()));
-        assert!(args.contains(&"si.codex.instance=profile-zeta".to_owned()));
-        assert!(args.contains(&"-p".to_owned()));
-        assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
-        assert!(args.contains(&"--restart".to_owned()));
-        assert!(args.iter().any(|arg| arg.contains("type=volume")));
-        assert!(args.contains(&"ghcr.io/aureuma/si:latest".to_owned()));
-        assert_eq!(args.last().map(String::as_str), Some("echo hello"));
-    }
-
-    #[test]
-    fn build_container_spec_rejects_malformed_env_entry() {
-        let workspace = tempdir().expect("tempdir");
-        let mut plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-        plan.env.push("BROKEN".to_owned());
-
-        let err = build_container_spec(&plan, &SpawnContainerOptions::default())
-            .expect_err("malformed env entry should fail");
-
-        assert_eq!(err, SpawnContainerSpecError::InvalidEnvEntry { entry: "BROKEN".to_owned() });
-    }
-
-    #[test]
-    fn build_container_spec_rejects_invalid_label_entry() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        let err = build_container_spec(
-            &plan,
-            &SpawnContainerOptions {
-                command: None,
-                labels: vec!["=".to_owned()],
-                ports: Vec::new(),
-            },
-        )
-        .expect_err("invalid label should fail");
-
-        assert_eq!(err, SpawnContainerSpecError::InvalidLabelEntry { entry: "=".to_owned() });
-    }
-
-    #[test]
-    fn build_container_spec_rejects_invalid_port_mapping() {
-        let workspace = tempdir().expect("tempdir");
-        let plan = build_spawn_plan(
-            &SpawnRequest {
-                profile_id: "profile-zeta".to_owned(),
-                workspace_host: workspace.path().to_path_buf(),
-                detach: true,
-                docker_socket: true,
-                include_host_si: false,
-                ..SpawnRequest::default()
-            },
-            &HostMountContext::default(),
-        )
-        .expect("spawn plan");
-
-        let err = build_container_spec(
-            &plan,
-            &SpawnContainerOptions {
-                command: None,
-                labels: Vec::new(),
-                ports: vec!["bad".to_owned()],
-            },
-        )
-        .expect_err("invalid port mapping should fail");
-
-        assert_eq!(err, SpawnContainerSpecError::InvalidPublishedPort { entry: "bad".to_owned() });
-    }
-
-    #[test]
-    fn codex_container_name_preserves_existing_prefix() {
-        assert_eq!(codex_container_name("si-codex-profile-zeta"), "si-codex-profile-zeta");
-        assert_eq!(codex_container_name("profile-zeta"), "si-codex-profile-zeta");
-    }
-
-    #[test]
-    fn codex_container_slug_strips_prefix_when_present() {
-        assert_eq!(codex_container_slug("si-codex-profile-zeta"), "profile-zeta");
-        assert_eq!(codex_container_slug("profile-zeta"), "profile-zeta");
-    }
-
-    #[test]
-    fn build_remove_artifacts_defaults_legacy_volume_names() {
-        let artifacts = build_remove_artifacts("profile-zeta").expect("remove artifacts");
-        assert_eq!(artifacts.container_name, "si-codex-profile-zeta");
-        assert_eq!(artifacts.slug, "profile-zeta");
-        assert_eq!(artifacts.codex_volume, "si-codex-profile-zeta");
-        assert_eq!(artifacts.gh_volume, "si-gh-profile-zeta");
-    }
-
-    #[test]
-    fn build_remove_artifacts_rejects_empty_name() {
-        let err = build_remove_artifacts("   ").expect_err("missing name");
-        assert_eq!(err, RemoveArtifactsError::MissingName);
-    }
-
-    #[test]
-    fn build_respawn_plan_collects_sorted_unique_remove_targets() {
+    fn build_respawn_plan_collects_sorted_unique_targets() {
         let plan = build_respawn_plan(&RespawnRequest {
             profile_id: "profile-zeta".to_owned(),
-            profile_container_names: vec![
-                "si-codex-profile-zeta".to_owned(),
-                "si-codex-alpha".to_owned(),
-                "alpha".to_owned(),
+            profile_session_names: vec![
+                "si-codex-pane-profile-zeta".to_owned(),
+                "si-codex-pane-profile-alpha".to_owned(),
+                "si-codex-pane-profile-zeta".to_owned(),
             ],
         })
         .expect("respawn plan");
 
-        assert_eq!(plan.profile_id, "profile-zeta");
         assert_eq!(
-            plan.remove_targets,
-            vec!["si-codex-alpha".to_owned(), "si-codex-profile-zeta".to_owned()]
+            plan.reset_targets,
+            vec!["si-codex-pane-profile-alpha".to_owned(), "si-codex-pane-profile-zeta".to_owned()]
         );
     }
 
@@ -955,81 +228,33 @@ mod tests {
     fn build_respawn_plan_rejects_empty_profile() {
         let err =
             build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn profile");
-
         assert_eq!(err, RespawnPlanError::MissingProfile);
     }
 
     #[test]
-    fn codex_tmux_session_name_uses_slug() {
-        assert_eq!(
-            codex_tmux_session_name("si-codex-profile-delta"),
-            "si-codex-pane-profile-delta"
-        );
+    fn codex_tmux_session_name_uses_profile_slug() {
+        assert_eq!(codex_tmux_session_name("profile-delta"), "si-codex-pane-profile-delta");
     }
 
     #[test]
-    fn build_tmux_plan_uses_bypass_flag_and_start_dir() {
-        let plan = build_tmux_plan("si-codex-profile-beta", "/home/ubuntu/Development/si", "", "")
-            .expect("tmux plan");
-
-        assert_eq!(plan.session_name, "si-codex-pane-profile-beta");
-        assert_eq!(plan.target, "si-codex-pane-profile-beta:0.0");
-        assert!(plan.launch_command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
-        assert!(plan.launch_command.contains("--user 'si'"));
-        assert!(plan.launch_command.contains("exec bash -il"));
-        assert!(plan.launch_command.contains("sudo -n"));
-        assert!(plan.launch_command.contains("/home/ubuntu/Development/si"));
-        assert!(plan.resume_command.is_empty());
-    }
-
-    #[test]
-    fn build_tmux_plan_includes_resume_flow_when_session_present() {
-        let plan =
-            build_tmux_plan("si-codex-profile-beta", "/workspace/app", "sess-123", "profile-beta")
-                .expect("tmux plan");
-
-        assert!(plan.resume_command.contains("codex resume"));
-        assert!(plan.resume_command.contains("sess-123"));
-        assert!(plan.resume_command.contains("tmux session unavailable; attempting codex resume"));
-        assert!(plan.resume_command.contains("'profile-beta'"));
-    }
-
-    #[test]
-    fn build_tmux_plan_rejects_empty_container_name() {
-        let err = build_tmux_plan("   ", "/workspace", "", "").expect_err("missing container");
-        assert_eq!(err, TmuxPlanError::MissingContainerName);
-    }
-
-    #[test]
-    fn build_tmux_command_for_container_uses_bypass_flag() {
-        let command = build_tmux_command_for_container("abc123").expect("tmux command");
-
-        assert!(command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
-        assert!(command.contains("--user 'si'"));
-    }
-
-    #[test]
-    fn parse_prompt_segments_dual_splits_on_prompt_lines() {
-        let parsed = parse_prompt_segments_dual(
-            "› first\nline a\n› second\nline b",
-            "› first\nline a\n› second\nline b",
-        );
-
+    fn parse_prompt_segments_dual_pairs_clean_and_raw() {
+        let clean = "› first\nline a\n› second\nline b";
+        let raw = "› first\nraw a\n› second\nraw b";
+        let parsed = parse_prompt_segments_dual(clean, raw);
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].prompt, "first");
         assert_eq!(parsed[0].lines, vec!["line a".to_owned()]);
+        assert_eq!(parsed[0].raw, vec!["raw a".to_owned()]);
         assert_eq!(parsed[1].prompt, "second");
-        assert_eq!(parsed[1].lines, vec!["line b".to_owned()]);
     }
 
     #[test]
     fn parse_report_capture_extracts_report_block_for_prompt_index() {
-        let clean = "› prompt\n• Did the thing\n  detail line\nWorked for 4s\n› next\n";
+        let clean = "› prompt\n• Did the thing\n  detail\n  worked for 42s\n";
         let raw = clean;
         let parsed = parse_report_capture(clean, raw, 0, false);
-
-        assert_eq!(parsed.segments.len(), 2);
-        assert!(parsed.report.contains("• Did the thing"));
-        assert!(parsed.report.contains("Worked for 4s"));
+        assert_eq!(parsed.segments.len(), 1);
+        assert!(parsed.report.contains("Did the thing"));
+        assert!(parsed.report.contains("worked for 42s"));
     }
 }

@@ -21,7 +21,6 @@ fn run() -> Result<(), String> {
     let surf_root = root.parent().unwrap_or(&root).join("surf");
 
     need_cmd("cargo")?;
-    need_cmd("docker")?;
     need_cmd("python3")?;
     need_dir(&fort_root)?;
     need_dir(&surf_root)?;

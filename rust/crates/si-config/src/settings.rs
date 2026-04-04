@@ -274,8 +274,6 @@ pub struct SettingsPaths {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CodexSettings {
-    pub image: Option<String>,
-    pub network: Option<String>,
     pub workspace: Option<String>,
     pub workdir: Option<String>,
     pub profile: Option<String>,
@@ -285,8 +283,6 @@ pub struct CodexSettings {
 
 impl CodexSettings {
     fn normalize(&mut self) {
-        normalize_option_string(&mut self.image);
-        normalize_option_string(&mut self.network);
         normalize_option_string(&mut self.workspace);
         normalize_option_string(&mut self.workdir);
         normalize_option_string(&mut self.profile);
@@ -340,7 +336,7 @@ pub struct FortSettings {
     pub bin: Option<String>,
     pub build: Option<bool>,
     pub host: Option<String>,
-    pub container_host: Option<String>,
+    pub runtime_host: Option<String>,
 }
 
 impl FortSettings {
@@ -348,7 +344,7 @@ impl FortSettings {
         normalize_option_string(&mut self.repo);
         normalize_option_string(&mut self.bin);
         normalize_option_string(&mut self.host);
-        normalize_option_string(&mut self.container_host);
+        normalize_option_string(&mut self.runtime_host);
     }
 }
 
@@ -1192,21 +1188,14 @@ pub struct VivaTunnelProfile {
     #[serde(default)]
     pub name: String,
     #[serde(default)]
-    pub container_name: String,
+    pub runtime_name: String,
     #[serde(default)]
     pub tunnel_id_env_key: String,
     #[serde(default)]
     pub credentials_env_key: String,
     #[serde(default)]
     pub metrics_addr: String,
-    #[serde(default)]
-    pub image: String,
-    #[serde(default)]
-    pub network_mode: String,
-    #[serde(default)]
-    pub additional_networks: Vec<String>,
     pub no_autoupdate: Option<bool>,
-    pub pull_image: Option<bool>,
     #[serde(default)]
     pub runtime_dir: String,
     #[serde(default)]
@@ -1222,7 +1211,7 @@ pub struct VivaTunnelProfile {
 impl VivaTunnelProfile {
     fn normalized(mut self) -> Self {
         trim_string(&mut self.name);
-        trim_string(&mut self.container_name);
+        trim_string(&mut self.runtime_name);
         trim_string(&mut self.tunnel_id_env_key);
         if self.tunnel_id_env_key.is_empty() {
             self.tunnel_id_env_key = "VIVA_CLOUDFLARE_TUNNEL_ID".to_owned();
@@ -1232,21 +1221,8 @@ impl VivaTunnelProfile {
             self.credentials_env_key = "CLOUDFLARE_TUNNEL_CREDENTIALS_JSON".to_owned();
         }
         trim_string(&mut self.metrics_addr);
-        trim_string(&mut self.image);
-        if self.image.is_empty() {
-            self.image = "cloudflare/cloudflared:latest".to_owned();
-        }
-        trim_string(&mut self.network_mode);
-        if self.network_mode.is_empty() {
-            self.network_mode = "host".to_owned();
-        }
-        self.additional_networks =
-            normalize_unique_names(&self.additional_networks, Some(&self.network_mode));
         if self.no_autoupdate.is_none() {
             self.no_autoupdate = Some(true);
-        }
-        if self.pull_image.is_none() {
-            self.pull_image = Some(true);
         }
         trim_string(&mut self.runtime_dir);
         trim_string(&mut self.vault_env_file);
@@ -1737,9 +1713,7 @@ bin = "/work/viva/bin/viva"
 default_profile = "dev"
 
 [viva.tunnel.profiles.dev]
-container_name = "viva-cloudflared-dev-browser"
-network_mode = "viva-shared"
-additional_networks = ["si", "viva-shared", " ", "viva-ls-dev_default"]
+runtime_name = "viva-cloudflared-dev-browser"
 vault_env_file = "/work/safe/sampleapp/.env.dev"
 vault_repo = "sampleapp"
 vault_env = "dev"
@@ -1757,8 +1731,7 @@ service = "http://127.0.0.1:3000"
         assert_eq!(settings.viva.bin, "/work/viva/bin/viva");
         assert_eq!(settings.viva.tunnel.default_profile, "dev");
         let profile = settings.viva.tunnel.profiles.get("dev").expect("dev profile");
-        assert_eq!(profile.container_name, "viva-cloudflared-dev-browser");
-        assert_eq!(profile.additional_networks, vec!["si", "viva-ls-dev_default"]);
+        assert_eq!(profile.runtime_name, "viva-cloudflared-dev-browser");
         assert_eq!(profile.routes.len(), 1);
         assert_eq!(profile.routes[0].hostname, "dev.example.app");
     }

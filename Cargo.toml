@@ -6,8 +6,6 @@ members = [
     "rust/crates/si-command-manifest",
     "rust/crates/si-provider-catalog",
     "rust/crates/si-process",
-    "rust/crates/si-docker",
-    "rust/crates/si-runtime",
     "rust/crates/si-fort",
     "rust/crates/si-vault",
     "rust/crates/si-warmup",
