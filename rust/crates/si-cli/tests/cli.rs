@@ -4293,7 +4293,7 @@ fn help_output_describes_github_release_create_tag_behavior() {
     assert!(create_help.contains(
         "Target branch or commit SHA. Required when the tag does not already exist on the remote."
     ));
-    assert!(create_help.contains("Release tag name, for example v0.55.11."));
+    assert!(create_help.contains("Release tag name, for example v0.55.12."));
 }
 
 #[test]
