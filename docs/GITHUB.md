@@ -58,7 +58,7 @@ si vault run -- si orbit github git setup --root ~/Development --account core --
 
 Note:
 - `si vault run` usage here is host/admin-side.
-- In SI runtime containers, use `si fort ...` for secret access paths.
+- For SI runtime workers, use `si fort ...` for secret access paths.
 
 Optional custom vault scope for helper auth:
 

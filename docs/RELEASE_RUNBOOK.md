@@ -72,9 +72,6 @@ Notes:
 
 - Local version:
   - `si version`
-- Image version:
-  - `si build image`
-  - `docker run --rm aureuma/si:local si version`
 - Codex smoke:
   - `HOME=/home/<user> si codex spawn --profile <profile> --workspace "$PWD"`
   - `HOME=/home/<user> si codex list`

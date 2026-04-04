@@ -59,7 +59,6 @@ Color control:
 ### Runtime setup
 
 ```bash
-si build image
 si codex spawn --profile default --workspace "$PWD"
 si codex list
 ```
@@ -115,7 +114,7 @@ si build self --timings
 ## Safety guidance
 
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
-- In SI runtime containers, use `si fort ...` for secret access.
+- For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` wrapper passes explicit Fort file-path auth flags when defaults are available: `--host` from settings and `--token-file` from `~/.si/fort/bootstrap/admin.token`.
 - If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.

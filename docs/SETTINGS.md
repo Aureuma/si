@@ -58,20 +58,18 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
 Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
-Warmup only inspects persistent Codex container status and schedules the next run from the reported reset windows with a small jitter.
+Warmup only inspects persistent Codex worker status and schedules the next run from the reported reset windows with a small jitter.
 
 ### `[codex]`
-Defaults for `si codex` profile-bound container commands.
-- Every `si codex` container must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
+Defaults for `si codex` profile-bound worker commands.
+- Every `si codex` worker must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
 - `si codex profile add|show|list|login|swap|remove` manages the profile registry in `~/.si/settings.toml`.
-- `codex.image` (string): docker image for `si codex spawn` (default: `aureuma/si:local`)
-- `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind.
   - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
-- `codex.workdir` (string): container working directory
+- `codex.workdir` (string): worker working directory
 - `codex.profile` (string): legacy compatibility field for the most recently selected Codex profile.
-- Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime/container behavior stays under `si codex ...`.
+- Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
@@ -90,7 +88,7 @@ Defaults for the `si fort` wrapper (hosted Fort API access).
 - `fort.bin` (string): fort binary path used by wrapper execution
 - `fort.build` (bool): default build-before-run behavior for wrapper calls
 - `fort.host` (string): hosted Fort endpoint URL (must be HTTPS for production runtime)
-- `fort.container_host` (string): Fort endpoint URL intended for runtime containers (defaults to `fort.host` when unset)
+- `fort.runtime_host` (string): Fort endpoint URL intended for runtime workers (defaults to `fort.host` when unset)
 
 CLI and runtime behavior:
 - `si fort config show` reads these values.
@@ -100,7 +98,7 @@ CLI and runtime behavior:
 - `si fort` otherwise prefers the active Codex profile Fort session under `paths.codex_profiles_dir/<profile>/fort/` and refreshes that file-backed session in place when possible.
 - `si fort` only falls back to the host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` when no runtime session is available or runtime refresh fails.
 - Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files.
-- Runtime container token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
+- Runtime worker token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
 ### `[stripe]`
 Defaults for `si orbit stripe` account and environment context.
@@ -324,14 +322,11 @@ Defaults for `si viva` wrapper and Viva tunnel profile config.
 #### `[viva.tunnel.profiles.<name>]`
 Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
 - `name` (string): logical tunnel name.
-- `container_name` (string): docker container name for cloudflared.
+- `runtime_name` (string): process label used for the Cloudflared runtime.
 - `tunnel_id_env_key` (string): dotenv key for Cloudflare tunnel id (default: `VIVA_CLOUDFLARE_TUNNEL_ID`).
 - `credentials_env_key` (string): dotenv key for tunnel credentials JSON (default: `CLOUDFLARE_TUNNEL_CREDENTIALS_JSON`).
 - `metrics_addr` (string): cloudflared metrics bind address.
-- `image` (string): cloudflared image (default: `cloudflare/cloudflared:latest`).
-- `network_mode` (string): docker network mode (default: `host`).
 - `no_autoupdate` (bool): pass `--no-autoupdate`.
-- `pull_image` (bool): pull image before run.
 - `runtime_dir` (string): host runtime directory for generated files.
 - `vault_env_file` (string): encrypted dotenv file path used by `si fort`.
 - `vault_repo` (string): repo argument passed to `si fort` (default: `viva`).

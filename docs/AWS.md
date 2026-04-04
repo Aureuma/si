@@ -32,7 +32,7 @@ si orbit aws doctor --account core --region us-east-1 --public --json
 ```
 
 For host/admin automation, use `si vault run -- <cmd>` when injecting sensitive env values.
-For SI runtime containers, use `si fort ...` for secret access.
+For SI runtime workers, use `si fort ...` for secret access.
 
 ## Core operations
 

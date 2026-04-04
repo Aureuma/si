@@ -76,13 +76,11 @@ All notable changes to this project will be documented in this file.
 ## [v0.52.0] - 2026-03-09
 ### Added
 - Added `fort-vault-ci` workflow preflight checks for required Fort cross-repo credentials and repository access before integration execution.
-- Added CI build of `aureuma/si:local` before SI↔Fort spawn-matrix integration tests to satisfy container image runtime dependencies.
 
 ### Changed
 - Changed SI Vault backend resolution to strict Fort-only mode (`vault.sync_backend` / `SI_VAULT_SYNC_BACKEND` accept only `fort`).
 - Changed vault credential hydration and secret-read helpers to resolve from SI Vault dotenv files instead of legacy Sun KV compatibility paths.
 - Changed SI↔Fort spawn-matrix integration harness to be Fort-CLI-version-compatible across auth flag models (`--token-file` and legacy `--token`).
-- Changed Fort matrix integration readiness checks to probe `/v1/health` + `/v1/ready` directly and surface container logs on startup failures.
 
 ### Removed
 - Removed legacy SI vault Sun-compatibility code paths (`vault_sun_backend.go`, `vault_sun_kv.go`) from the vault secret path.
@@ -148,7 +146,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Updated GitHub and Cloudflare auth resolution so account credentials can be sourced directly from SI vault key references.
 - Improved `si login` browser/headless behavior and clarified Safari accessibility guidance for profile-aware URL opening.
-- Simplified `si build image` mode selection while preserving native `docker buildx` progress output behavior.
 
 ### Fixed
 - Stabilized SI CI lanes by fixing empty-env headless detection and formatting gate regressions.
@@ -169,7 +166,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Reorganized and expanded Mintlify docs structure, command references, and integration guides for complete current command coverage.
 - Hardened CI/workflow behavior with docs-scope gating, workflow sanity checks, installer smoke lanes, and segmented plugin matrix runners.
-- Hardened installer and image build flows for docker root/non-root environments and BuildKit/buildx fallback behavior.
 
 ### Fixed
 - Fixed settings loading/ownership edge cases that produced permission-denied warnings for `~/.si/settings.toml` on host-driven executions.
@@ -183,11 +179,10 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.46.1] - 2026-02-18
 ### Fixed
-- Fixed release version metadata by updating the `si version` output to report `v0.46.1` in built binaries/images.
+- Fixed release version metadata by updating the `si version` output to report `v0.46.1` in built binaries.
 
 ## [v0.46.0] - 2026-02-18
 ### Added
-- Added the initial platform management surface, including target storage/bootstrap, connectivity checks, compatibility preflight checks, Traefik ingress secret helpers, deploy strategy fan-out, webhook ingest/mapping, and compose-only blue/green cutover policy controls.
 - Added platform operational workflows for deploy event recording, health rollback orchestration with failure taxonomy, release bundle metadata, scrubbed metadata export/import, context vault namespace controls, logs/events live backends, operational alert routing, and operator callback acknowledge hooks.
 - Added incident and automation features: unified audit event model, incident queue retention, incident schema taxonomy dedupe, event bridge collectors, codex runtime adapter, live agent command backend, remediation policy engine, scheduler self-heal locks, offline fake-codex smoke loop, and agent-run audit artifact capture.
 - Added state and governance artifacts, including context state layout/init, state-classification storage policy, isolation guardrails, addon lifecycle/magic-variable merge validation, security checklist and threat model, failure-injection rollback drills, regression coverage, backup/restore policy, and context/incident operations runbooks.
@@ -195,14 +190,12 @@ All notable changes to this project will be documented in this file.
 - Added `si apple appstore` direct API automation with JWT auth/context, bundle/app onboarding, localized listing updates, metadata apply workflows, provider telemetry registration, and raw App Store Connect API access.
 
 ### Changed
-- Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
+- Defaulted existing-session `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
 - Unified user-facing datetime rendering to GitHub-style relative dates and updated `si status`/weekly reset displays to show date-only absolute values plus relative countdowns.
-- Hardened Docker runtime compatibility for Colima-based macOS setups (including profile/context socket detection) and made `si build image` gracefully skip build secrets when `docker buildx` is unavailable.
 
 ### Fixed
 - Fixed an alerting crash path by guarding nil-map access in operational alert dispatch.
-- Fixed `tools/si` module dependency metadata drift so image builds no longer fail with `go: updates to go.mod needed`.
-- Fixed `si build image` to disable BuildKit (`DOCKER_BUILDKIT=0`) when `docker buildx` is missing or broken, preventing BuildKit hard-fail errors on Colima-only hosts.
+- Fixed `tools/si` module dependency metadata drift so release builds no longer fail with `go: updates to go.mod needed`.
 
 ## [v0.45.0] - 2026-02-11
 ### Added
@@ -212,7 +205,6 @@ All notable changes to this project will be documented in this file.
 - Added expanded vault workflows: `si vault decrypt` (in-place and `--stdout`), `si vault keygen`, `si vault run --shell`, and support for arbitrary env file paths.
 
 ### Changed
-- Moved build operations under `si build` (`si build image`, `si build self`, `si build self upgrade`, `si build self run`).
 - Removed the top-level `si self` command surface in favor of `si build self`.
 - Completed direct Go HTTP execution paths for core integrations (Cloudflare, GitHub, Google Places, YouTube, Stripe) using shared runtime/retry semantics.
 - Simplified vault targeting from repo/submodule-oriented directories to a file-first model (`vault.file` default + optional `--file`) across commands, trust, help text, and docs.
@@ -230,7 +222,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.44.0] - 2026-02-08
 ### Added
-- Added `si vault` git-based encrypted credentials management (age recipients, TOFU trust store, formatter, audit log, and Docker-friendly runtime injection).
 - Added `si github` command family with GitHub App-only auth, account context management, and direct REST/GraphQL bridge support.
 - Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) plus raw API access.
 - Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`), session lifecycle helpers, and raw API access.
@@ -266,13 +257,13 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.42.0] - 2026-02-07
 ### Added
-- Added profile-indexed spawn guards so codex profiles cannot create multiple containers.
-- Added deterministic profile-container selection tests for spawn/respawn enforcement.
+- Added profile-indexed spawn guards so codex profiles cannot create multiple worker sessions.
+- Added deterministic profile-session selection tests for spawn/respawn enforcement.
 ### Changed
 - Merged `si profile` behavior into `si status`, including list/default/single-profile flows.
 - Defaulted `si status` to include profile usage columns and added `--no-status` for classic output.
-- Defaulted spawn/respawn profile flows to use the profile ID as the container name.
-- Hardened respawn profile flows to clean up legacy duplicate containers for the same profile.
+- Defaulted spawn/respawn profile flows to use the profile ID as the worker-session name.
+- Hardened respawn profile flows to clean up legacy duplicate worker sessions for the same profile.
 ### Fixed
 - Treated expired usage API tokens as stale profile auth instead of hard status errors.
 - Fixed status/profile argument parsing so flags work both before and after positional values.
@@ -291,12 +282,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Refreshed CLI help and docs to match the new image layout and flag ordering.
 ### Removed
-- Removed the separate base, codex, actor, and critic Docker image definitions.
 ### Fixed
 
 ## [v0.39.1] - 2026-01-26
 ### Changed
-- Promoted Codex container commands to top-level (for example `si run`, alias `si exec`).
 - Renamed the markdown profile command to `si persona`.
 
 ### Removed
@@ -306,7 +295,6 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Introduced Codex profiles and the `si codex profile` command.
 - Added profile-aware `si codex login` with host auth caching.
-- Added container file read support for auth caching.
 - Added `~/.si/settings.toml` for unified configuration and prompt theming.
 - Added shell prompt rendering driven by settings without editing `.bashrc`.
 
@@ -319,7 +307,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.38.0] - 2026-01-26
 ### Added
-- Added a base image and streamlined Codex containers.
 
 ### Changed
 - Simplified layout/tooling and removed stack services.
@@ -353,14 +340,12 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.32.0] - 2026-01-22
 ### Added
-- Added standalone `si codex` container workflow.
 
 ### Fixed
 - Stabilized the Codex image entrypoint and made `si` symlink-safe.
 
 ## [v0.31.0] - 2026-01-22
 ### Removed
-- Removed Temporal and JS/Svelte stacks and consolidated Docker tooling.
 
 ## [v0.30.0] - 2025-12-31
 ### Added
@@ -383,7 +368,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.26.0] - 2025-12-28
 ### Added
-- Added k3s image build/import helper and ReleaseParty backend Dockerfile.
 
 ### Fixed
 
@@ -393,7 +377,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.24.0] - 2025-12-28
 ### Added
-- Added SOPS+age secrets workflow and tini in agent containers.
+- Added SOPS+age secrets workflow and hardened agent runtime supervision.
 
 ## [v0.23.0] - 2025-12-27
 ### Added
@@ -401,13 +385,10 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.22.0] - 2025-12-27
 ### Added
-- Added Kubernetes-aware test scripts and secret-sourced Telegram chat IDs.
 - Added Codex monitor reporting for weekly usage, model, and reasoning.
 
 ## [v0.21.0] - 2025-12-26
 ### Added
-- Added Temporal-backed manager state/worker and Kubernetes scaffolding.
-- Added Kubernetes manifests, refactors, and build/test updates.
 - Added Temporal Postgres persistence configuration.
 
 ## [v0.20.0] - 2025-12-26
@@ -429,10 +410,8 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.17.0] - 2025-12-26
 ### Added
-- Added Swarm stack/bootstrap helpers and updated docs/configs.
 
 ### Changed
-- Resolved Swarm service targets and archived legacy compose.
 
 ## [v0.16.0] - 2025-12-25
 ### Added
@@ -448,18 +427,17 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.14.0] - 2025-12-24
 ### Added
-- Added dashboard UI and ReleaseParty scaffold with compose services.
+- Added dashboard UI and ReleaseParty scaffold.
 
 ## [v0.13.0] - 2025-12-16
 ### Added
 - Added security audit checklists, host tooling docs, and install scripts.
 
 ### Changed
-- Disabled auto-enabling MCP servers and hardened MCP image defaults.
+- Disabled auto-enabling MCP servers and hardened MCP defaults.
 
 ## [v0.12.0] - 2025-12-16
 ### Added
-- Integrated Docker MCP Gateway and Codex MCP config helper.
 
 ## [v0.11.0] - 2025-12-16
 ### Added
@@ -508,10 +486,8 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.2.0] - 2025-12-13
 ### Added
-- Added coder agent container and compose setup.
 
 ### Changed
-- Dropped compose version field to silence warnings.
 
 ## [v0.1.0] - 2025-12-13
 ### Added
