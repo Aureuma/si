@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.55.12] - 2026-04-04
+### Changed
+- Bumped the patch release after removing the Docker runtime path and standardizing on local Codex workers.
+
 ## [v0.55.2] - 2026-03-24
 ### Changed
 - Changed the main operational CLI surface to prefer single-word command names such as `spawnplan`, `releaseassets`, `statusread`, and `itemadd`, while keeping the previous hyphenated forms as compatibility aliases.
