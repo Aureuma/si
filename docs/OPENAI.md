@@ -35,7 +35,7 @@ si orbit openai doctor --account core --public --json
 
 `si orbit openai auth` supports two modes:
 - `api` (default): validates OpenAI API-key auth against `api.openai.com`.
-- `codex`: validates ChatGPT/Codex plan-token auth from SI codex profiles (OpenClaw-style non-API-key flow).
+- `codex`: validates ChatGPT/Codex account auth from SI codex profiles (non-API-key flow).
 
 ## Model and project administration
 

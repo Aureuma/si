@@ -59,8 +59,8 @@ Supported credential sources (highest priority first):
 ./si orbit google play raw --account core --method GET \
   --path /androidpublisher/v3/applications/com.example.app/edits
 
-# release metadata planning (ReleaseMind namespace)
-./si releasemind play plan --repo-path /path/to/mobile-repo --planner-repo /path/to/releasemind --write /tmp/play-plan.json
+# release metadata planning
+# use external planning/release tooling outside the current `si` CLI surface
 ```
 
 ## Metadata apply flow

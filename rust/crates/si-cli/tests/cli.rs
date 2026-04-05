@@ -3959,7 +3959,8 @@ fn help_output_uses_single_word_operational_subcommands() {
         cargo_bin().args(["build", "--help"]).assert().success().get_output().stdout.clone(),
     )
     .expect("utf8 build help");
-    assert!(build_help.contains("image"));
+    assert!(build_help.contains("installer"));
+    assert!(!build_help.contains("image"));
 }
 
 #[test]
