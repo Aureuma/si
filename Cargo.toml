@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "rust/crates/si-agents",
     "rust/crates/si-core",
     "rust/crates/si-config",
     "rust/crates/si-command-manifest",

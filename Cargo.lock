@@ -1833,17 +1833,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "si-agents"
-version = "0.55.12"
-dependencies = [
- "chrono",
- "libc",
- "regex",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "si-rs-cli"
 version = "0.55.12"
 dependencies = [
