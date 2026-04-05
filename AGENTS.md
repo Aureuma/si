@@ -5,8 +5,11 @@
 
 # Release Discipline
 
-- After each minor SI improvement or fix that should result in a fresh usable SI binary, bump the workspace patch version.
-- After bumping the patch version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
+- Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
+- For ordinary SI changes that should result in a fresh usable SI binary, bump the workspace patch version.
+- Bump the minor version only when the change is genuinely larger and deserves a broader version step.
+- When the SI version changes, that one version change applies everywhere in SI at once.
+- After bumping the version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
 - Prefer rebuild paths that reuse cached Cargo artifacts so incremental follow-up builds stay fast.
 - Patch versions may be bumped sequentially as often as needed; do not avoid a patch bump merely because another recent patch bump already happened.
 
