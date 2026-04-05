@@ -9,6 +9,7 @@ members = [
     "rust/crates/si-vault",
     "rust/crates/si-warmup",
     "rust/crates/si-codex",
+    "rust/crates/si-nucleus-core",
     "rust/crates/si-provider-github",
     "rust/crates/si-provider-aws",
     "rust/crates/si-provider-gcp",
@@ -35,7 +36,7 @@ rust-version = "1.88"
 anyhow = "1.0.98"
 assert_cmd = "2.0.17"
 base64 = "0.22.1"
-chrono = { version = "0.4.41", features = ["clock"] }
+chrono = { version = "0.4.41", features = ["clock", "serde"] }
 clap = { version = "4.5.39", features = ["derive"] }
 libc = "0.2.172"
 reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"] }
