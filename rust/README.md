@@ -9,9 +9,9 @@ Current scope:
 - runtime path resolution for workspace/config discovery
 - typed process execution foundations with capture, cwd/env overrides, and timeout handling
 - typed runtime launch specs with early path validation
-- shared Codex worker-path planning for local sessions
-- initial codex spawn planning for names, volumes, env, workdir, and mount assembly
-- Rust CLI exposure for codex spawn planning via `si-rs codex spawn plan`
+- shared Codex worker-path and workspace binding for local sessions
+- local Codex worker spawn assembly for names, environment, workdir, and process launch inputs
+- Rust CLI exposure for Codex worker lifecycle commands under `si-rs codex ...`
 - the primary Rust CLI entrypoint used for local and shipped runtime flows
 
 Current entrypoint:
