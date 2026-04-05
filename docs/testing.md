@@ -152,11 +152,12 @@ After CLI command-surface changes, run targeted help checks:
 ./si surf --help
 ```
 
-## Codex preflight check
-Run the preflight directly:
+## Codex upgrade compatibility check
+Run the Codex-facing test suites directly from the repo root:
 
 ```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
+cargo test -p si-rs-codex
+cargo test -p si-tools
 ```
 
-Use the preflight as a standalone compatibility gate before upgrading Codex-facing flows.
+Use these suites as the compatibility gate before upgrading Codex-facing flows.
