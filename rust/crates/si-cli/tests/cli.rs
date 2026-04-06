@@ -932,6 +932,20 @@ fn clear_live_session_thread_id(state_root: &Path, session_id: &str) {
     .expect("write session json");
 }
 
+fn write_live_session_lifecycle_state(state_root: &Path, session_id: &str, lifecycle_state: &str) {
+    let session_path =
+        state_root.join("state").join("sessions").join(session_id).join("session.json");
+    let mut persisted_session: Value =
+        serde_json::from_slice(&fs::read(&session_path).expect("read session json"))
+            .expect("parse session json");
+    persisted_session["lifecycle_state"] = Value::String(lifecycle_state.to_owned());
+    fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&persisted_session).expect("serialize session json"),
+    )
+    .expect("write session json");
+}
+
 #[test]
 fn surf_and_viva_wrappers_render_help() {
     for command in ["surf", "viva"] {
@@ -3460,6 +3474,64 @@ fn nucleus_session_create_does_not_reuse_session_with_conflicting_active_run_on_
 
     let completed = wait_for_cli_task_status(&ws_url, &task_id, "done");
     assert_eq!(completed["checkpoint_summary"], "nucleus-smoke");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_blocks_when_referenced_session_is_missing_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-missing-session-live",
+        "Missing session task",
+        "Attempt to route through a missing session",
+        "america",
+        Some("si-session-missing"),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(task["blocked_reason"], "session_broken");
+    assert!(task["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_blocks_behind_non_reusable_session_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    write_live_session_lifecycle_state(&state_root, &session_id, "broken");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-broken-session-live",
+        "Broken session task",
+        "Attempt to route through a broken session",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(task["blocked_reason"], "session_broken");
+    assert!(task["latest_run_id"].is_null());
 }
 
 #[test]
