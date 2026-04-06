@@ -6949,6 +6949,119 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn startup_rewrites_diverged_markdown_summaries_from_canonical_state() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+
+        let (worker_id, session_id, run_id) = {
+            let service = NucleusService::open_with_runtime(
+                NucleusConfig {
+                    bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                    state_dir: state_dir.clone(),
+                    auth_token: None,
+                },
+                Arc::new(FakeRuntime::default()),
+            )
+            .expect("service");
+
+            let session = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("session-diverged-summary"),
+                    method: "session.create".to_owned(),
+                    params: json!({
+                        "profile": "america",
+                        "home_dir": temp.path().join("home"),
+                        "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                        "workdir": temp.path(),
+                    }),
+                })
+                .await;
+            assert!(session.ok);
+            let worker_id = session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned();
+            let session_id = session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned();
+
+            let task = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("task-diverged-summary"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Diverged summaries",
+                        "instructions": "Reply with nucleus-smoke",
+                        "profile": "america",
+                        "session_id": session_id,
+                    }),
+                })
+                .await;
+            assert!(task.ok);
+            let task_id =
+                task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+            let run = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("run-diverged-summary"),
+                    method: "run.submit_turn".to_owned(),
+                    params: json!({
+                        "session_id": session_id,
+                        "task_id": task_id,
+                        "prompt": "Reply with nucleus-smoke",
+                    }),
+                })
+                .await;
+            assert!(run.ok);
+            let run_id = run
+                .result
+                .as_ref()
+                .and_then(|item| item["run_id"].as_str())
+                .expect("run id")
+                .to_owned();
+
+            thread::sleep(Duration::from_millis(150));
+            (worker_id, session_id, run_id)
+        };
+
+        let paths = NucleusPaths::new(state_dir.clone());
+        let worker_id = WorkerId::new(worker_id).expect("worker id");
+        let session_id = SessionId::new(session_id).expect("session id");
+        let run_id = RunId::new(run_id).expect("run id");
+
+        fs::write(paths.worker_summary_path(&worker_id), "Status: `failed`\n")
+            .expect("write divergent worker summary");
+        fs::write(paths.session_summary_path(&session_id), "Summary: `stale`\n")
+            .expect("write divergent session summary");
+        fs::write(paths.run_summary_path(&run_id), "Checkpoint: `stale`\n")
+            .expect("write divergent run summary");
+
+        let reopened = NucleusStore::open(state_dir).expect("reopen store");
+        let worker_summary = fs::read_to_string(reopened.paths().worker_summary_path(&worker_id))
+            .expect("read rebuilt worker summary");
+        let session_summary =
+            fs::read_to_string(reopened.paths().session_summary_path(&session_id))
+                .expect("read rebuilt session summary");
+        let run_summary = fs::read_to_string(reopened.paths().run_summary_path(&run_id))
+            .expect("read rebuilt run summary");
+
+        assert!(worker_summary.contains("Status: `ready`"));
+        assert!(!worker_summary.contains("Status: `failed`"));
+        assert!(session_summary.contains("Summary: `nucleus-smoke`"));
+        assert!(!session_summary.contains("Summary: `stale`"));
+        assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
+        assert!(!run_summary.contains("Checkpoint: `stale`"));
+
+        let persisted_run = reopened.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(persisted_run.status, RunStatus::Completed);
+    }
+
+    #[tokio::test]
     async fn persisted_run_events_use_canonical_si_event_names() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
