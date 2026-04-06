@@ -102,68 +102,52 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
 }
 
 fn spawn_live_nucleus_service(state_dir: &Path) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind nucleus addr");
-    let addr = listener.local_addr().expect("nucleus addr");
-    drop(listener);
-
-    let state_dir = state_dir.to_path_buf();
-    thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("tokio runtime");
-        runtime.block_on(async move {
-            NucleusService::open(NucleusConfig { bind_addr: addr, state_dir, auth_token: None })
-                .expect("open nucleus service")
-                .serve()
-                .await
-                .expect("serve nucleus service");
-        });
-    });
-
-    let base_url = format!("http://{addr}");
-    let client = BlockingClient::builder()
-        .timeout(Duration::from_millis(250))
-        .build()
-        .expect("build reqwest client");
-    for _ in 0..50 {
-        if let Ok(response) = client.get(format!("{base_url}/status")).send()
-            && response.status().is_success()
-        {
-            return base_url;
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-    panic!("nucleus service did not become ready at {base_url}");
+    spawn_live_nucleus_service_with_options(state_dir, "127.0.0.1", "127.0.0.1", None, None)
 }
 
 fn spawn_live_nucleus_service_with_runtime(
     state_dir: &Path,
     runtime: Arc<dyn NucleusRuntime>,
 ) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind nucleus addr");
+    spawn_live_nucleus_service_with_options(
+        state_dir,
+        "127.0.0.1",
+        "127.0.0.1",
+        None,
+        Some(runtime),
+    )
+}
+
+fn spawn_live_nucleus_service_with_options(
+    state_dir: &Path,
+    bind_host: &str,
+    client_host: &str,
+    auth_token: Option<&str>,
+    runtime: Option<Arc<dyn NucleusRuntime>>,
+) -> String {
+    let listener = TcpListener::bind(format!("{bind_host}:0")).expect("bind nucleus addr");
     let addr = listener.local_addr().expect("nucleus addr");
     drop(listener);
 
     let state_dir = state_dir.to_path_buf();
+    let auth_token = auth_token.map(str::to_owned);
     thread::spawn(move || {
         let tokio_runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("tokio runtime");
         tokio_runtime.block_on(async move {
-            NucleusService::open_with_runtime(
-                NucleusConfig { bind_addr: addr, state_dir, auth_token: None },
-                runtime,
-            )
-            .expect("open nucleus service")
-            .serve()
-            .await
-            .expect("serve nucleus service");
+            let config = NucleusConfig { bind_addr: addr, state_dir, auth_token };
+            let service = match runtime {
+                Some(runtime) => NucleusService::open_with_runtime(config, runtime),
+                None => NucleusService::open(config),
+            }
+            .expect("open nucleus service");
+            service.serve().await.expect("serve nucleus service");
         });
     });
 
-    let base_url = format!("http://{addr}");
+    let base_url = format!("http://{client_host}:{}", addr.port());
     let client = BlockingClient::builder()
         .timeout(Duration::from_millis(250))
         .build()
@@ -714,6 +698,43 @@ fn inspect_run_via_cli(ws_url: &str, run_id: &str) -> Value {
     serde_json::from_slice(&output).expect("parse run inspect")
 }
 
+fn create_session_via_cli_with_options(
+    ws_url: &str,
+    profile: &str,
+    worker_id: Option<&str>,
+    thread_id: Option<&str>,
+    home_dir: &Path,
+    codex_home: &Path,
+    workdir: &Path,
+) -> Value {
+    let mut command = cargo_bin();
+    command
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            profile,
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            workdir.to_str().expect("workdir"),
+            "--endpoint",
+            ws_url,
+            "--format",
+            "json",
+        ]);
+    if let Some(worker_id) = worker_id {
+        command.args(["--worker-id", worker_id]);
+    }
+    if let Some(thread_id) = thread_id {
+        command.args(["--thread-id", thread_id]);
+    }
+    let output = command.assert().success().get_output().stdout.clone();
+    serde_json::from_slice(&output).expect("parse session create")
+}
+
 fn inspect_session_via_cli(ws_url: &str, session_id: &str) -> Value {
     let output = cargo_bin()
         .args([
@@ -848,29 +869,7 @@ fn create_session_via_cli(
     codex_home: &Path,
     workdir: &Path,
 ) -> Value {
-    let output = cargo_bin()
-        .args([
-            "nucleus",
-            "session",
-            "create",
-            "america",
-            "--home-dir",
-            home_dir.to_str().expect("home dir"),
-            "--codex-home",
-            codex_home.to_str().expect("codex home"),
-            "--workdir",
-            workdir.to_str().expect("workdir"),
-            "--endpoint",
-            ws_url,
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    serde_json::from_slice(&output).expect("parse session create")
+    create_session_via_cli_with_options(ws_url, "america", None, None, home_dir, codex_home, workdir)
 }
 
 fn write_fort_session_state(codex_home: &Path, profile: &str) {
@@ -3248,6 +3247,59 @@ fn nucleus_live_run_streams_output_and_finishes_on_expected_profile() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let first = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = first["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    let thread_id = first["session"]["app_server_thread_id"]
+        .as_str()
+        .expect("thread id")
+        .to_owned();
+
+    let resumed = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        Some(&worker_id),
+        Some(&thread_id),
+        &home_dir,
+        &codex_home,
+        temp.path(),
+    );
+    let resumed_session_id = resumed["session"]["session_id"].as_str().expect("session id").to_owned();
+    assert_eq!(resumed["worker"]["worker_id"], worker_id);
+    assert_eq!(resumed["session"]["worker_id"], worker_id);
+    assert_eq!(resumed["session"]["app_server_thread_id"], thread_id);
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-session-resume",
+        "Resume session task",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&resumed_session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("latest run id");
+    let run = inspect_run_via_cli(&ws_url, run_id);
+    let session = inspect_session_via_cli(&ws_url, &resumed_session_id);
+    assert_eq!(task["checkpoint_summary"], "nucleus-smoke");
+    assert_eq!(run["session_id"], resumed_session_id);
+    assert_eq!(session["app_server_thread_id"], thread_id);
+    assert_eq!(session["summary_state"], "nucleus-smoke");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
@@ -3337,6 +3389,70 @@ fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() 
     assert_eq!(task["blocked_reason"], "worker_unavailable");
     assert_eq!(run["status"], "blocked");
     assert_eq!(worker_inspect["worker"]["status"], "failed");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let base_url = spawn_live_nucleus_service_with_options(
+        &state_root,
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        None,
+    );
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success();
+
+    let mutation = cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Auth gated task",
+            "This should require a bearer token",
+            "--profile",
+            "america",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(mutation.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("unauthorized: missing bearer token"));
+
+    let created = cargo_bin()
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Auth gated task",
+            "This should succeed with a bearer token",
+            "--profile",
+            "america",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&created).expect("parse task create");
+    assert_eq!(payload["title"], "Auth gated task");
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
