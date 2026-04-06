@@ -3793,6 +3793,68 @@ fn nucleus_session_create_reuses_worker_and_codex_home_per_profile_on_live_servi
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_session_create_prefers_stable_lexical_worker_id_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    for worker_suffix in ["b", "a"] {
+        let codex_home = home_dir.join(format!(".si/codex/profiles/america-{worker_suffix}"));
+        cargo_bin()
+            .args([
+                "nucleus",
+                "worker",
+                "probe",
+                "america",
+                "--worker-id",
+                &format!("si-worker-{worker_suffix}"),
+                "--home-dir",
+                home_dir.to_str().expect("home dir"),
+                "--codex-home",
+                codex_home.to_str().expect("codex home"),
+                "--workdir",
+                temp.path().to_str().expect("workdir"),
+                "--endpoint",
+                &ws_url,
+                "--format",
+                "json",
+            ])
+            .assert()
+            .success();
+    }
+
+    let session = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &home_dir.join(".si/codex/profiles/america"),
+        temp.path(),
+    );
+    assert_eq!(session["worker"]["worker_id"], "si-worker-a");
+    let worker_list_output = cargo_bin()
+        .args(["nucleus", "worker", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let workers: Value = serde_json::from_slice(&worker_list_output).expect("parse worker list");
+    let workers = workers.as_array().expect("worker list array");
+    assert_eq!(workers.len(), 2);
+    assert!(workers.iter().any(|worker| worker["worker_id"] == "si-worker-a"));
+    assert!(workers.iter().any(|worker| worker["worker_id"] == "si-worker-b"));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
