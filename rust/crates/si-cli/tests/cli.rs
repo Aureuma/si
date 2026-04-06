@@ -884,6 +884,164 @@ fn nucleus_profile_list_requests_gateway_profile_list_method() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_task_create_requests_gateway_task_create_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "task.create");
+        assert_eq!(payload["params"]["title"], "Inspect issue");
+        assert_eq!(payload["params"]["instructions"], "Summarize the current blocked reason.");
+        assert_eq!(payload["params"]["profile"], "america");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "task_id": "si-task-123",
+                "title": "Inspect issue",
+                "instructions": "Summarize the current blocked reason.",
+                "profile": "america",
+                "status": "queued"
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Inspect issue",
+            "Summarize the current blocked reason.",
+            "--profile",
+            "america",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["task_id"], "si-task-123");
+    assert_eq!(payload["status"], "queued");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_list_requests_gateway_task_list_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "task.list");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": [
+                {
+                    "task_id": "si-task-123",
+                    "title": "Inspect issue",
+                    "status": "queued"
+                }
+            ]
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "list",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload[0]["task_id"], "si-task-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_inspect_requests_gateway_task_inspect_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "task.inspect");
+        assert_eq!(payload["params"]["task_id"], "si-task-123");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "task_id": "si-task-123",
+                "title": "Inspect issue",
+                "status": "queued"
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "inspect",
+            "si-task-123",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["task_id"], "si-task-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_cancel_requests_gateway_task_cancel_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
