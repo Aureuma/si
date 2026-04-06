@@ -211,6 +211,10 @@ impl NucleusPaths {
         self.worker_dir(worker_id).join("runtime.json")
     }
 
+    pub fn worker_summary_path(&self, worker_id: &WorkerId) -> PathBuf {
+        self.worker_dir(worker_id).join("summary.md")
+    }
+
     pub fn session_dir(&self, session_id: &SessionId) -> PathBuf {
         self.sessions_state_dir.join(session_id.as_str())
     }
@@ -219,12 +223,20 @@ impl NucleusPaths {
         self.session_dir(session_id).join("session.json")
     }
 
+    pub fn session_summary_path(&self, session_id: &SessionId) -> PathBuf {
+        self.session_dir(session_id).join("summary.md")
+    }
+
     pub fn run_dir(&self, run_id: &RunId) -> PathBuf {
         self.runs_state_dir.join(run_id.as_str())
     }
 
     pub fn run_path(&self, run_id: &RunId) -> PathBuf {
         self.run_dir(run_id).join("run.json")
+    }
+
+    pub fn run_summary_path(&self, run_id: &RunId) -> PathBuf {
+        self.run_dir(run_id).join("summary.md")
     }
 
     pub fn profile_path(&self, profile: &ProfileName) -> PathBuf {
@@ -341,6 +353,43 @@ impl NucleusStore {
 
     pub fn run_count(&self) -> Result<usize> {
         Ok(self.list_runs()?.len())
+    }
+
+    fn write_worker_projection_locked(
+        &self,
+        worker: &WorkerRecord,
+        runtime: Option<&WorkerRuntimeView>,
+    ) -> Result<()> {
+        write_json_atomic(&self.paths.worker_path(&worker.worker_id), worker)?;
+        if let Some(runtime) = runtime {
+            write_json_atomic(&self.paths.worker_runtime_path(&worker.worker_id), runtime)?;
+        }
+        let runtime = match runtime {
+            Some(runtime) => Some(runtime.clone()),
+            None => self.read_worker_runtime_locked(&worker.worker_id)?,
+        };
+        let summary = render_worker_summary(worker, runtime.as_ref());
+        write_markdown_atomic(&self.paths.worker_summary_path(&worker.worker_id), &summary)
+    }
+
+    fn write_session_projection_locked(&self, session: &SessionRecord) -> Result<()> {
+        write_json_atomic(&self.paths.session_path(&session.session_id), session)?;
+        let summary = render_session_summary(session);
+        write_markdown_atomic(&self.paths.session_summary_path(&session.session_id), &summary)
+    }
+
+    fn write_run_projection_locked(
+        &self,
+        run: &RunRecord,
+        task: Option<&TaskRecord>,
+    ) -> Result<()> {
+        write_json_atomic(&self.paths.run_path(&run.run_id), run)?;
+        let owned_task = match task {
+            Some(task) => Some(task.clone()),
+            None => self.read_task_locked(&run.task_id)?,
+        };
+        let summary = render_run_summary(run, owned_task.as_ref());
+        write_markdown_atomic(&self.paths.run_summary_path(&run.run_id), &summary)
     }
 
     fn create_task(&self, input: CreateTaskInput) -> Result<Vec<CanonicalEvent>> {
@@ -641,8 +690,7 @@ impl NucleusStore {
                 .map(ToOwned::to_owned)
                 .or_else(|| Some(payload.to_string())),
         };
-        let worker_path = self.paths.worker_path(&worker.worker_id);
-        write_json_atomic(&worker_path, &worker)?;
+        self.write_worker_projection_locked(&worker, None)?;
         let mut events = Vec::new();
         let profile = ProfileRecord {
             profile: spec.profile.clone(),
@@ -704,8 +752,7 @@ impl NucleusStore {
                 .map(ToOwned::to_owned)
                 .or_else(|| Some(payload.to_string())),
         };
-        write_json_atomic(&self.paths.worker_path(&worker.worker_id), &worker)?;
-        write_json_atomic(&self.paths.worker_runtime_path(&worker.worker_id), &started.runtime)?;
+        self.write_worker_projection_locked(&worker, Some(&started.runtime))?;
         let profile = ProfileRecord {
             profile: spec.profile.clone(),
             account_identity: payload
@@ -741,7 +788,7 @@ impl NucleusStore {
         session.app_server_thread_id = Some(thread_id.clone());
         session.workdir = Some(workdir.display().to_string());
         session.transition_to(SessionLifecycleState::Ready).map_err(anyhow::Error::new)?;
-        write_json_atomic(&self.paths.session_path(&session_id), &session)?;
+        self.write_session_projection_locked(&session)?;
         let event = self.append_event_locked(
             if created {
                 CanonicalEventType::SessionCreated
@@ -778,7 +825,7 @@ impl NucleusStore {
                 }
             }
         }
-        write_json_atomic(&self.paths.run_path(&run.run_id), &run)?;
+        self.write_run_projection_locked(&run, Some(&task))?;
         if task.session_id.is_none() {
             task.session_id = Some(run.session_id.clone());
         }
@@ -809,7 +856,7 @@ impl NucleusStore {
                         run.transition_to(RunStatus::Running).map_err(anyhow::Error::new)?;
                     }
                     run.app_server_turn_id = turn_id;
-                    write_json_atomic(&self.paths.run_path(&run_id), &run)?;
+                    self.write_run_projection_locked(&run, None)?;
                 }
                 if let Some(session_id) = primary.data.session_id.clone() {
                     if let Some(mut session) = self.read_session_locked(&session_id)? {
@@ -817,7 +864,7 @@ impl NucleusStore {
                             session
                                 .transition_to(SessionLifecycleState::Busy)
                                 .map_err(anyhow::Error::new)?;
-                            write_json_atomic(&self.paths.session_path(&session_id), &session)?;
+                            self.write_session_projection_locked(&session)?;
                         }
                     }
                 }
@@ -856,6 +903,18 @@ impl NucleusStore {
                             task.checkpoint_seq = Some(primary.seq);
                             task.updated_at = Utc::now();
                             write_json_atomic(&self.paths.task_path(&task_id), &task)?;
+                            if let Some(session_id) = primary.data.session_id.clone() {
+                                if let Some(mut session) = self.read_session_locked(&session_id)? {
+                                    session.summary_state = Some(delta.to_owned());
+                                    session.updated_at = Utc::now();
+                                    self.write_session_projection_locked(&session)?;
+                                }
+                            }
+                            if let Some(run_id) = primary.data.run_id.clone() {
+                                if let Some(run) = self.read_run_locked(&run_id)? {
+                                    self.write_run_projection_locked(&run, Some(&task))?;
+                                }
+                            }
                         }
                     }
                 }
@@ -927,22 +986,35 @@ impl NucleusStore {
         task_event_type: Option<CanonicalEventType>,
         events: &mut Vec<CanonicalEvent>,
     ) -> Result<()> {
+        let mut refreshed_run = None;
         if let Some(run_id) = event.data.run_id.clone() {
             if let Some(mut run) = self.read_run_locked(&run_id)? {
                 if run.status != run_status {
                     run.transition_to(run_status).map_err(anyhow::Error::new)?;
                 }
-                write_json_atomic(&self.paths.run_path(&run_id), &run)?;
+                self.write_run_projection_locked(&run, None)?;
+                refreshed_run = Some(run);
             }
         }
         if let Some(session_id) = event.data.session_id.clone() {
             if let Some(mut session) = self.read_session_locked(&session_id)? {
+                if let Some(summary) = event
+                    .data
+                    .payload
+                    .get("final_output")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    session.summary_state = Some(summary.to_owned());
+                    session.updated_at = Utc::now();
+                }
                 if session.lifecycle_state == SessionLifecycleState::Busy {
                     session
                         .transition_to(SessionLifecycleState::Ready)
                         .map_err(anyhow::Error::new)?;
-                    write_json_atomic(&self.paths.session_path(&session_id), &session)?;
                 }
+                self.write_session_projection_locked(&session)?;
             }
         }
         if let Some(task_id) = event.data.task_id.clone() {
@@ -963,6 +1035,9 @@ impl NucleusStore {
                     task.checkpoint_seq = Some(event.seq);
                 }
                 write_json_atomic(&self.paths.task_path(&task_id), &task)?;
+                if let Some(run) = refreshed_run.as_ref() {
+                    self.write_run_projection_locked(run, Some(&task))?;
+                }
                 events.push(self.append_event_locked(
                     task_event_type.unwrap_or(CanonicalEventType::TaskUpdated),
                     CanonicalEventSource::Nucleus,
@@ -1014,6 +1089,20 @@ impl NucleusStore {
         let run = serde_json::from_slice::<RunRecord>(&bytes)
             .with_context(|| format!("parse {}", path.display()))?;
         Ok(Some(run))
+    }
+
+    fn read_worker_runtime_locked(
+        &self,
+        worker_id: &WorkerId,
+    ) -> Result<Option<WorkerRuntimeView>> {
+        let path = self.paths.worker_runtime_path(worker_id);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let runtime = serde_json::from_slice::<WorkerRuntimeView>(&bytes)
+            .with_context(|| format!("parse {}", path.display()))?;
+        Ok(Some(runtime))
     }
 
     fn find_task_by_producer_dedup_locked(
@@ -1127,7 +1216,7 @@ impl NucleusStore {
             worker
                 .transition_to(si_nucleus_core::WorkerStatus::Failed)
                 .map_err(anyhow::Error::new)?;
-            write_json_atomic(&self.paths.worker_path(worker_id), &worker)?;
+            self.write_worker_projection_locked(&worker, None)?;
         }
         let event = self.append_event_locked(
             CanonicalEventType::WorkerFailed,
@@ -1157,7 +1246,7 @@ impl NucleusStore {
         };
         if session.lifecycle_state != SessionLifecycleState::Broken {
             session.transition_to(SessionLifecycleState::Broken).map_err(anyhow::Error::new)?;
-            write_json_atomic(&self.paths.session_path(session_id), &session)?;
+            self.write_session_projection_locked(&session)?;
         }
         let event = self.append_event_locked(
             CanonicalEventType::SessionBroken,
@@ -1269,7 +1358,7 @@ impl NucleusStore {
         ) {
             session.transition_to(SessionLifecycleState::Ready).map_err(anyhow::Error::new)?;
         }
-        write_json_atomic(&self.paths.session_path(session_id), &session)?;
+        self.write_session_projection_locked(&session)?;
         Ok(())
     }
 }
@@ -1669,6 +1758,133 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     fs::rename(&tmp_path, path)
         .with_context(|| format!("rename {} -> {}", tmp_path.display(), path.display()))?;
     Ok(())
+}
+
+fn write_markdown_atomic(path: &Path, contents: &str) -> Result<()> {
+    let parent = path.parent().ok_or_else(|| anyhow!("missing parent for {}", path.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    let tmp_path = parent.join(format!(".tmp-{}", temp_suffix()));
+    fs::write(&tmp_path, contents).with_context(|| format!("write {}", tmp_path.display()))?;
+    fs::rename(&tmp_path, path)
+        .with_context(|| format!("rename {} -> {}", tmp_path.display(), path.display()))?;
+    Ok(())
+}
+
+fn render_worker_summary(worker: &WorkerRecord, runtime: Option<&WorkerRuntimeView>) -> String {
+    let mut summary = format!(
+        "# Worker {}\n\n- Profile: `{}`\n- Status: `{}`\n",
+        worker.worker_id,
+        worker.profile,
+        serde_json::to_string(&worker.status)
+            .unwrap_or_else(|_| "\"unknown\"".to_owned())
+            .trim_matches('"'),
+    );
+    push_optional_markdown_line(
+        &mut summary,
+        "Capability version",
+        worker.capability_version.as_deref(),
+    );
+    push_optional_markdown_line(
+        &mut summary,
+        "Last heartbeat",
+        worker.last_heartbeat_at.as_ref().map(format_timestamp).as_deref(),
+    );
+    summary.push_str(&format!("- `CODEX_HOME`: `{}`\n", worker.codex_home));
+    push_optional_markdown_line(&mut summary, "Home dir", worker.home_dir.as_deref());
+    push_optional_markdown_line(&mut summary, "Workdir", worker.workdir.as_deref());
+    push_optional_markdown_line(
+        &mut summary,
+        "Account state",
+        worker.effective_account_state.as_deref(),
+    );
+    if !worker.extra_env.is_empty() {
+        let keys = worker.extra_env.keys().map(String::as_str).collect::<Vec<_>>().join(", ");
+        summary.push_str(&format!("- Extra env keys: `{keys}`\n"));
+    }
+    if let Some(runtime) = runtime {
+        summary.push_str("\n## Runtime\n\n");
+        summary.push_str(&format!("- Runtime: `{}`\n", runtime.runtime_name));
+        summary.push_str(&format!("- PID: `{}`\n", runtime.pid));
+        summary.push_str(&format!("- Started at: `{}`\n", format_timestamp(&runtime.started_at)));
+        summary.push_str(&format!("- Last checked: `{}`\n", format_timestamp(&runtime.checked_at)));
+    }
+    summary
+}
+
+fn render_session_summary(session: &SessionRecord) -> String {
+    let mut summary = format!(
+        "# Session {}\n\n- Worker: `{}`\n- Lifecycle: `{}`\n",
+        session.session_id,
+        session.worker_id,
+        serde_json::to_string(&session.lifecycle_state)
+            .unwrap_or_else(|_| "\"unknown\"".to_owned())
+            .trim_matches('"'),
+    );
+    push_optional_markdown_line(
+        &mut summary,
+        "Profile",
+        session.profile.as_ref().map(ProfileName::as_str),
+    );
+    push_optional_markdown_line(&mut summary, "Thread", session.app_server_thread_id.as_deref());
+    push_optional_markdown_line(&mut summary, "Workdir", session.workdir.as_deref());
+    push_optional_markdown_line(&mut summary, "Summary", session.summary_state.as_deref());
+    summary.push_str(&format!("- Created at: `{}`\n", format_timestamp(&session.created_at)));
+    summary.push_str(&format!("- Updated at: `{}`\n", format_timestamp(&session.updated_at)));
+    summary
+}
+
+fn render_run_summary(run: &RunRecord, task: Option<&TaskRecord>) -> String {
+    let mut summary = format!(
+        "# Run {}\n\n- Task: `{}`\n- Session: `{}`\n- Status: `{}`\n",
+        run.run_id,
+        run.task_id,
+        run.session_id,
+        serde_json::to_string(&run.status)
+            .unwrap_or_else(|_| "\"unknown\"".to_owned())
+            .trim_matches('"'),
+    );
+    push_optional_markdown_line(
+        &mut summary,
+        "Started at",
+        run.started_at.as_ref().map(format_timestamp).as_deref(),
+    );
+    push_optional_markdown_line(
+        &mut summary,
+        "Ended at",
+        run.ended_at.as_ref().map(format_timestamp).as_deref(),
+    );
+    push_optional_markdown_line(&mut summary, "Turn", run.app_server_turn_id.as_deref());
+    if let Some(task) = task {
+        summary.push_str("\n## Task Projection\n\n");
+        summary.push_str(&format!("- Title: {}\n", task.title));
+        summary.push_str(&format!(
+            "- Task status: `{}`\n",
+            serde_json::to_string(&task.status)
+                .unwrap_or_else(|_| "\"unknown\"".to_owned())
+                .trim_matches('"'),
+        ));
+        push_optional_markdown_line(&mut summary, "Checkpoint", task.checkpoint_summary.as_deref());
+        push_optional_markdown_line(
+            &mut summary,
+            "Blocked reason",
+            task.blocked_reason
+                .as_ref()
+                .and_then(|reason| serde_json::to_string(reason).ok())
+                .as_deref()
+                .map(|value| value.trim_matches('"')),
+        );
+    }
+    summary
+}
+
+fn push_optional_markdown_line(summary: &mut String, label: &str, value: Option<&str>) {
+    if let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) {
+        summary.push_str(&format!("- {label}: `{value}`\n"));
+    }
+}
+
+fn format_timestamp(timestamp: &DateTime<Utc>) -> String {
+    timestamp.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -4793,6 +5009,13 @@ mod tests {
         assert_eq!(service.status().expect("status").worker_count, 1);
         let profile = ProfileName::new("america").expect("profile");
         assert_eq!(payload["worker"]["profile"], json!(profile.as_str()));
+        let worker_id = WorkerId::new(worker_id).expect("worker id");
+        let worker_summary =
+            fs::read_to_string(service.store.paths().worker_summary_path(&worker_id))
+                .expect("read worker summary");
+        assert!(worker_summary.contains("# Worker"));
+        assert!(worker_summary.contains("Profile: `america`"));
+        assert!(worker_summary.contains("Status: `ready`"));
     }
 
     #[tokio::test]
@@ -4972,6 +5195,27 @@ mod tests {
         let task = inspected_task.result.expect("task");
         assert_eq!(task["status"], json!("done"));
         assert_eq!(task["checkpoint_summary"], json!("nucleus-smoke"));
+
+        let session_id = SessionId::new(session_id).expect("session id");
+        let run_id = RunId::new(run_id).expect("run id");
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.summary_state.as_deref(), Some("nucleus-smoke"));
+
+        let session_summary =
+            fs::read_to_string(service.store.paths().session_summary_path(&session_id))
+                .expect("read session summary");
+        assert!(session_summary.contains("# Session"));
+        assert!(session_summary.contains("Summary: `nucleus-smoke`"));
+
+        let run_summary = fs::read_to_string(service.store.paths().run_summary_path(&run_id))
+            .expect("read run summary");
+        assert!(run_summary.contains("# Run"));
+        assert!(run_summary.contains("Task status: `done`"));
+        assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
     }
 
     #[tokio::test]
