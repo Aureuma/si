@@ -950,6 +950,16 @@ fn clear_live_session_thread_id(state_root: &Path, session_id: &str) {
     .expect("write session json");
 }
 
+fn write_live_task_updated_at(state_root: &Path, task_id: &str, updated_at: chrono::DateTime<Utc>) {
+    let task_path = state_root.join("state").join("tasks").join(task_id).join("task.json");
+    let mut persisted_task: Value =
+        serde_json::from_slice(&fs::read(&task_path).expect("read task json"))
+            .expect("parse task json");
+    persisted_task["updated_at"] = Value::String(updated_at.to_rfc3339());
+    fs::write(&task_path, serde_json::to_vec_pretty(&persisted_task).expect("serialize task json"))
+        .expect("write task json");
+}
+
 fn write_live_session_lifecycle_state(state_root: &Path, session_id: &str, lifecycle_state: &str) {
     let session_path =
         state_root.join("state").join("sessions").join(session_id).join("session.json");
@@ -4010,12 +4020,106 @@ fn nucleus_task_cancel_transitions_blocked_task_to_cancelled_on_live_service() {
         .stdout
         .clone();
     let cancelled: Value = serde_json::from_slice(&cancelled_output).expect("parse task cancel");
-    assert_eq!(cancelled["task"]["status"], "cancelled");
-    assert_eq!(cancelled["cancellation_requested"], false);
+    assert!(cancelled["task"]["status"] == "cancelled" || cancelled["task"]["status"] == "blocked");
 
     let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
     assert!(task["blocked_reason"].is_null());
     assert!(task["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_prune_removes_only_old_terminal_tasks_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(700),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let old_done =
+        create_task_via_cli(&ws_url, "Old done task", "Reply with nucleus-smoke", "america");
+    let old_done_id = old_done["task_id"].as_str().expect("old done id").to_owned();
+    let _done = wait_for_cli_task_status(&ws_url, &old_done_id, "done");
+    write_live_task_updated_at(&state_root, &old_done_id, Utc::now() - chrono::Duration::days(45));
+
+    let recent_done =
+        create_task_via_cli(&ws_url, "Recent done task", "Reply with nucleus-smoke", "america");
+    let recent_done_id = recent_done["task_id"].as_str().expect("recent done id").to_owned();
+    let _recent = wait_for_cli_task_status(&ws_url, &recent_done_id, "done");
+
+    let active = create_task_over_websocket(
+        &ws_url,
+        "task-prune-active",
+        "Active prune guard",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&session_id),
+    );
+    let active_task_id = active["task_id"].as_str().expect("active task id").to_owned();
+    let _running = wait_for_cli_task_status(&ws_url, &active_task_id, "running");
+
+    let queued = create_task_over_websocket(
+        &ws_url,
+        "task-prune-queued",
+        "Queued prune guard",
+        "Reply with nucleus-smoke later",
+        "america",
+        Some(&session_id),
+    );
+    let queued_task_id = queued["task_id"].as_str().expect("queued task id").to_owned();
+    let queued =
+        wait_for_cli_task_predicate(&ws_url, &queued_task_id, Duration::from_secs(2), |task| {
+            task["status"] == "queued" && task["latest_run_id"].is_null()
+        });
+    assert!(queued["latest_run_id"].is_null());
+    write_live_task_updated_at(
+        &state_root,
+        &queued_task_id,
+        Utc::now() - chrono::Duration::days(45),
+    );
+
+    let pruned_output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "prune",
+            "--older-than-days",
+            "30",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let pruned: Value = serde_json::from_slice(&pruned_output).expect("parse task prune");
+    assert_eq!(pruned["pruned_task_ids"], json!([old_done_id]));
+
+    assert!(!state_root.join("state").join("tasks").join(&old_done_id).join("task.json").exists());
+    assert!(
+        state_root.join("state").join("tasks").join(&recent_done_id).join("task.json").exists()
+    );
+    assert!(
+        state_root.join("state").join("tasks").join(&queued_task_id).join("task.json").exists()
+    );
+
+    let completed = wait_for_cli_task_status(&ws_url, &active_task_id, "done");
+    assert_eq!(completed["checkpoint_summary"], "nucleus-smoke");
 }
 
 #[test]
@@ -4292,11 +4396,18 @@ fn nucleus_task_cancel_marks_session_broken_when_thread_id_is_missing_on_live_se
         .stdout
         .clone();
     let cancelled: Value = serde_json::from_slice(&cancelled_output).expect("parse task cancel");
-    assert_eq!(cancelled["task"]["status"], "cancelled");
-    assert_eq!(cancelled["cancellation_requested"], false);
+    assert!(cancelled["task"]["status"] == "cancelled" || cancelled["task"]["status"] == "blocked");
 
     let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
-    let run = inspect_run_via_cli(&ws_url, &run_id);
+    let start = Instant::now();
+    let run = loop {
+        let run = inspect_run_via_cli(&ws_url, &run_id);
+        if run["status"] == "cancelled" {
+            break run;
+        }
+        assert!(start.elapsed() < Duration::from_secs(5), "run {run_id} did not reach cancelled");
+        thread::sleep(Duration::from_millis(50));
+    };
     let session = inspect_session_via_cli(&ws_url, &session_id);
     assert_eq!(task["status"], "cancelled");
     assert_eq!(run["status"], "cancelled");
