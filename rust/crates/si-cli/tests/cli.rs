@@ -7027,6 +7027,12 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/TaskRecord")
     );
+    assert_eq!(body["paths"]["/tasks"]["post"]["requestBody"]["required"], json!(true));
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/TaskCreateParams")
+    );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]
             ["$ref"],
