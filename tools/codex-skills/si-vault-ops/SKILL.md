@@ -1,6 +1,6 @@
 ---
 name: si-vault-ops
-description: Use this skill when working with SI vault encryption, trust, and secure env workflows (`si vault ...`) including init/check/status/get/set/run operations.
+description: Use this skill when working with SI vault encryption and secure env workflows (`si vault ...`) including keypair/check/status/get/set/run operations.
 ---
 
 # SI Vault Ops
@@ -16,7 +16,7 @@ si vault check
 ```
 2. If needed, initialize:
 ```bash
-si vault init
+si vault keypair
 ```
 3. Read or update keys:
 ```bash
@@ -34,11 +34,7 @@ si vault run -- <cmd>
 - Never print full secret values unless explicitly requested.
 - Prefer `si vault run` over exporting decrypted variables into shell history.
 - Keep file paths explicit when not using defaults (`--file`).
-- For trust issues, inspect recipients and trust store before rotating:
-```bash
-si vault recipients
-si vault trust
-```
+- For local key issues, inspect `si vault status` and re-run `si vault keypair` before rotating.
 
 ## Validation
 

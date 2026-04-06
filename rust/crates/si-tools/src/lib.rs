@@ -11,7 +11,7 @@ pub const USAGE_TEXT: &str = r#"Import plaintext .env files into si vault (nativ
 Defaults:
   --src .
   --section default
-  --identity-file ~/.si/vault/keys/age.key
+  --identity-file ~/.si/vault/si-vault-keyring.json
 
 Examples:
   cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --src .
