@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -18,14 +19,16 @@ use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use chrono::Utc;
+use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
+use cron::Schedule;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use si_nucleus_core::{
     BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
-    EventId, ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState,
-    SessionRecord, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId, WorkerRecord,
+    EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
+    SessionLifecycleState, SessionRecord, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId,
+    WorkerRecord,
 };
 use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
@@ -200,6 +203,18 @@ impl NucleusPaths {
     pub fn run_path(&self, run_id: &RunId) -> PathBuf {
         self.run_dir(run_id).join("run.json")
     }
+
+    pub fn profile_path(&self, profile: &ProfileName) -> PathBuf {
+        self.profiles_state_dir.join(format!("{}.json", profile.as_str()))
+    }
+
+    pub fn cron_rule_path(&self, rule_name: &str) -> PathBuf {
+        self.cron_state_dir.join(format!("{rule_name}.json"))
+    }
+
+    pub fn hook_rule_path(&self, rule_name: &str) -> PathBuf {
+        self.hook_state_dir.join(format!("{rule_name}.json"))
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -227,6 +242,37 @@ pub struct WorkerInspectView {
     pub worker: WorkerRecord,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime: Option<WorkerRuntimeView>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum CronScheduleKind {
+    OnceAt,
+    Every,
+    Cron,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+struct CronRuleRecord {
+    name: String,
+    enabled: bool,
+    schedule_kind: CronScheduleKind,
+    schedule: String,
+    instructions: String,
+    last_emitted_at: Option<DateTime<Utc>>,
+    next_due_at: Option<DateTime<Utc>>,
+    version: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+struct HookRuleRecord {
+    name: String,
+    enabled: bool,
+    match_event_type: String,
+    instructions: String,
+    #[serde(default)]
+    last_processed_event_seq: u64,
+    version: u32,
 }
 
 pub struct NucleusStore {
@@ -297,6 +343,58 @@ impl NucleusStore {
             },
         )?;
         Ok(vec![event])
+    }
+
+    fn create_producer_task(
+        &self,
+        input: CreateTaskInput,
+        producer_rule_name: &str,
+        producer_dedup_key: &str,
+    ) -> Result<Option<(TaskRecord, Vec<CanonicalEvent>)>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        if self
+            .find_task_by_producer_dedup_locked(
+                input.source,
+                producer_rule_name,
+                producer_dedup_key,
+            )?
+            .is_some()
+        {
+            return Ok(None);
+        }
+
+        let mut task =
+            TaskRecord::new(TaskId::generate(), input.source, input.title, input.instructions);
+        task.profile = input.profile;
+        task.session_id = input.session_id;
+        task.producer_rule_name = Some(producer_rule_name.to_owned());
+        task.producer_dedup_key = Some(producer_dedup_key.to_owned());
+        if let Some(max_retries) = input.max_retries {
+            task.max_retries = Some(max_retries);
+        }
+        if let Some(timeout_seconds) = input.timeout_seconds {
+            task.timeout_seconds = Some(timeout_seconds);
+        }
+        let task_path = self.paths.task_path(&task.task_id);
+        write_json_atomic(&task_path, &task)?;
+        let event = self.append_event_locked(
+            CanonicalEventType::TaskCreated,
+            source_from_task_source(task.source),
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: None,
+                session_id: task.session_id.clone(),
+                run_id: None,
+                profile: task.profile.clone(),
+                payload: json!({
+                    "title": task.title,
+                    "status": task.status,
+                    "producer_rule_name": task.producer_rule_name,
+                    "producer_dedup_key": task.producer_dedup_key,
+                }),
+            },
+        )?;
+        Ok(Some((task, vec![event])))
     }
 
     pub fn list_tasks(&self) -> Result<Vec<TaskRecord>> {
@@ -450,6 +548,22 @@ impl NucleusStore {
         Ok(profiles)
     }
 
+    pub fn list_profile_records(&self) -> Result<Vec<ProfileRecord>> {
+        let mut profiles = Vec::new();
+        for entry in fs::read_dir(&self.paths.profiles_state_dir)
+            .with_context(|| format!("read {}", self.paths.profiles_state_dir.display()))?
+        {
+            let entry = entry?;
+            if !entry.path().is_file() {
+                continue;
+            }
+            let bytes = fs::read(entry.path())?;
+            profiles.push(serde_json::from_slice::<ProfileRecord>(&bytes)?);
+        }
+        profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
+        Ok(profiles)
+    }
+
     fn append_event_locked(
         &self,
         event_type: CanonicalEventType,
@@ -500,6 +614,20 @@ impl NucleusStore {
         let worker_path = self.paths.worker_path(&worker.worker_id);
         write_json_atomic(&worker_path, &worker)?;
         let mut events = Vec::new();
+        let profile = ProfileRecord {
+            profile: spec.profile.clone(),
+            account_identity: payload
+                .get("account_email")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            codex_home: spec.codex_home.display().to_string(),
+            auth_mode: None,
+            preferred_model: payload.get("model").and_then(Value::as_str).map(ToOwned::to_owned),
+            runtime_defaults: BTreeMap::new(),
+        };
+        if let Some(event) = self.persist_profile_locked(profile, CanonicalEventSource::System)? {
+            events.push(event);
+        }
         for draft in runtime.probe_events(spec, probe)? {
             events.push(self.append_event_draft_locked(draft)?);
         }
@@ -548,6 +676,20 @@ impl NucleusStore {
         };
         write_json_atomic(&self.paths.worker_path(&worker.worker_id), &worker)?;
         write_json_atomic(&self.paths.worker_runtime_path(&worker.worker_id), &started.runtime)?;
+        let profile = ProfileRecord {
+            profile: spec.profile.clone(),
+            account_identity: payload
+                .get("account_email")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            codex_home: spec.codex_home.display().to_string(),
+            auth_mode: None,
+            preferred_model: payload.get("model").and_then(Value::as_str).map(ToOwned::to_owned),
+            runtime_defaults: BTreeMap::new(),
+        };
+        if let Some(event) = self.persist_profile_locked(profile, CanonicalEventSource::System)? {
+            events.push(event);
+        }
         for draft in runtime.probe_events(spec, &started.probe)? {
             events.push(self.append_event_draft_locked(draft)?);
         }
@@ -844,6 +986,33 @@ impl NucleusStore {
         Ok(Some(run))
     }
 
+    fn find_task_by_producer_dedup_locked(
+        &self,
+        source: TaskSource,
+        producer_rule_name: &str,
+        producer_dedup_key: &str,
+    ) -> Result<Option<TaskRecord>> {
+        for entry in fs::read_dir(&self.paths.tasks_state_dir)
+            .with_context(|| format!("read {}", self.paths.tasks_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path().join("task.json");
+            if !path.exists() {
+                continue;
+            }
+            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+            let task = serde_json::from_slice::<TaskRecord>(&bytes)
+                .with_context(|| format!("parse {}", path.display()))?;
+            if task.source == source
+                && task.producer_rule_name.as_deref() == Some(producer_rule_name)
+                && task.producer_dedup_key.as_deref() == Some(producer_dedup_key)
+            {
+                return Ok(Some(task));
+            }
+        }
+        Ok(None)
+    }
+
     fn read_worker_locked(&self, worker_id: &WorkerId) -> Result<Option<WorkerRecord>> {
         let path = self.paths.worker_path(worker_id);
         if !path.exists() {
@@ -853,6 +1022,37 @@ impl NucleusStore {
         let worker = serde_json::from_slice::<WorkerRecord>(&bytes)
             .with_context(|| format!("parse {}", path.display()))?;
         Ok(Some(worker))
+    }
+
+    fn persist_profile_locked(
+        &self,
+        profile: ProfileRecord,
+        source: CanonicalEventSource,
+    ) -> Result<Option<CanonicalEvent>> {
+        let path = self.paths.profile_path(&profile.profile);
+        let existed = path.exists();
+        write_json_atomic(&path, &profile)?;
+        if existed {
+            return Ok(None);
+        }
+        let event = self.append_event_locked(
+            CanonicalEventType::ProfileLoaded,
+            source,
+            EventDataEnvelope {
+                task_id: None,
+                worker_id: None,
+                session_id: None,
+                run_id: None,
+                profile: Some(profile.profile),
+                payload: json!({
+                    "codex_home": profile.codex_home,
+                    "account_identity": profile.account_identity,
+                    "auth_mode": profile.auth_mode,
+                    "preferred_model": profile.preferred_model,
+                }),
+            },
+        )?;
+        Ok(Some(event))
     }
 
     fn append_system_warning(&self, message: &str, payload: Value) -> Result<CanonicalEvent> {
@@ -1010,16 +1210,131 @@ fn derive_task_profile(
     task: &TaskRecord,
     sessions: &HashMap<SessionId, SessionRecord>,
     workers: &HashMap<WorkerId, WorkerRecord>,
+    available_profiles: &[ProfileRecord],
 ) -> Option<ProfileName> {
     task.profile.clone().or_else(|| {
-        task.session_id.as_ref().and_then(|session_id| sessions.get(session_id)).and_then(
-            |session| {
+        task.session_id
+            .as_ref()
+            .and_then(|session_id| sessions.get(session_id))
+            .and_then(|session| {
                 session.profile.clone().or_else(|| {
                     workers.get(&session.worker_id).map(|worker| worker.profile.clone())
                 })
-            },
-        )
+            })
+            .or_else(|| choose_single_profile_candidate(sessions, workers, available_profiles))
     })
+}
+
+fn choose_single_profile_candidate(
+    sessions: &HashMap<SessionId, SessionRecord>,
+    workers: &HashMap<WorkerId, WorkerRecord>,
+    available_profiles: &[ProfileRecord],
+) -> Option<ProfileName> {
+    let mut candidates = BTreeSet::<ProfileName>::new();
+    for worker in workers.values() {
+        candidates.insert(worker.profile.clone());
+    }
+    for session in sessions.values() {
+        if let Some(profile) = session.profile.as_ref() {
+            candidates.insert(profile.clone());
+        }
+    }
+    for profile in available_profiles {
+        candidates.insert(profile.profile.clone());
+    }
+    if candidates.len() == 1 { candidates.into_iter().next() } else { None }
+}
+
+fn cron_due_key(rule_name: &str, due_at: DateTime<Utc>) -> String {
+    format!("{rule_name}:{}", due_at.to_rfc3339_opts(SecondsFormat::Secs, true))
+}
+
+fn hook_event_key(rule_name: &str, seq: u64) -> String {
+    format!("{rule_name}:{seq}")
+}
+
+fn parse_every_duration(schedule: &str) -> Result<ChronoDuration> {
+    let schedule = schedule.trim();
+    if schedule.is_empty() {
+        anyhow::bail!("every schedule cannot be empty");
+    }
+    let digits_len = schedule.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    if digits_len == 0 {
+        anyhow::bail!("every schedule must start with digits");
+    }
+    let amount: i64 = schedule[..digits_len].parse().context("parse every schedule amount")?;
+    let unit = schedule[digits_len..].trim();
+    let duration = match unit {
+        "s" => ChronoDuration::seconds(amount),
+        "m" => ChronoDuration::minutes(amount),
+        "h" => ChronoDuration::hours(amount),
+        "d" => ChronoDuration::days(amount),
+        "" => ChronoDuration::seconds(amount),
+        _ => anyhow::bail!("unsupported every schedule unit: {unit}"),
+    };
+    if duration <= ChronoDuration::zero() {
+        anyhow::bail!("every schedule must be positive");
+    }
+    Ok(duration)
+}
+
+fn next_cron_due_after(
+    rule: &CronRuleRecord,
+    after: DateTime<Utc>,
+) -> Result<Option<DateTime<Utc>>> {
+    match rule.schedule_kind {
+        CronScheduleKind::OnceAt => {
+            let due_at = DateTime::parse_from_rfc3339(rule.schedule.trim())
+                .context("parse once_at schedule")?
+                .with_timezone(&Utc);
+            Ok((due_at > after).then_some(due_at))
+        }
+        CronScheduleKind::Every => Ok(Some(after + parse_every_duration(&rule.schedule)?)),
+        CronScheduleKind::Cron => {
+            let schedule =
+                Schedule::from_str(rule.schedule.trim()).context("parse cron schedule")?;
+            Ok(schedule.after(&after).next())
+        }
+    }
+}
+
+fn load_json_records_from_dir<T>(dir: &Path) -> Result<Vec<T>>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let mut paths = fs::read_dir(dir)
+        .with_context(|| format!("read {}", dir.display()))?
+        .filter_map(|entry| entry.ok().map(|value| value.path()))
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    paths.sort();
+
+    let mut records = Vec::with_capacity(paths.len());
+    for path in paths {
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        records.push(
+            serde_json::from_slice::<T>(&bytes)
+                .with_context(|| format!("parse {}", path.display()))?,
+        );
+    }
+    Ok(records)
+}
+
+fn load_canonical_events(path: &Path) -> Result<Vec<CanonicalEvent>> {
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let reader = BufReader::new(file);
+    let mut events = Vec::new();
+    for (index, line) in reader.lines().enumerate() {
+        let line = line.with_context(|| format!("read {} line {}", path.display(), index + 1))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        events.push(
+            serde_json::from_str::<CanonicalEvent>(&line)
+                .with_context(|| format!("parse {} line {}", path.display(), index + 1))?,
+        );
+    }
+    Ok(events)
 }
 
 fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
@@ -1159,6 +1474,8 @@ impl NucleusService {
         }
         self.reconcile_worker_runtime_state()?;
         self.reconcile_inflight_runs(true)?;
+        self.process_cron_producers_at(Utc::now())?;
+        self.process_hook_producers()?;
         self.dispatch_queued_tasks()?;
         let service = self.clone();
         thread::spawn(move || service.background_runtime_loop());
@@ -1182,6 +1499,8 @@ impl NucleusService {
     fn reconcile_and_dispatch_once(&self) -> Result<()> {
         self.reconcile_worker_runtime_state()?;
         self.reconcile_inflight_runs(false)?;
+        self.process_cron_producers_at(Utc::now())?;
+        self.process_hook_producers()?;
         self.dispatch_queued_tasks()?;
         Ok(())
     }
@@ -1207,6 +1526,165 @@ impl NucleusService {
             }
         }
         Ok(())
+    }
+
+    fn process_cron_producers_at(&self, now: DateTime<Utc>) -> Result<()> {
+        for mut rule in
+            load_json_records_from_dir::<CronRuleRecord>(&self.store.paths().cron_state_dir)?
+        {
+            if let Err(error) = self.process_single_cron_rule(&mut rule, now) {
+                if let Ok(event) = self.store.append_system_warning(
+                    "cron producer iteration failed",
+                    json!({
+                        "rule_name": rule.name,
+                        "error": error.to_string(),
+                    }),
+                ) {
+                    let _ = self.events.send(event);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn process_single_cron_rule(
+        &self,
+        rule: &mut CronRuleRecord,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        ProfileName::new(rule.name.clone()).context("validate cron rule name")?;
+        if !rule.enabled {
+            return Ok(());
+        }
+        if rule.next_due_at.is_none() {
+            rule.next_due_at = next_cron_due_after(rule, now - ChronoDuration::seconds(1))?;
+            self.write_cron_rule(rule)?;
+        }
+
+        let mut changed = false;
+        while let Some(due_at) = rule.next_due_at {
+            if due_at > now {
+                break;
+            }
+            let dedup_key = cron_due_key(&rule.name, due_at);
+            let title = format!(
+                "Cron {} @ {}",
+                rule.name,
+                due_at.to_rfc3339_opts(SecondsFormat::Secs, true)
+            );
+            let instructions = format!(
+                "{}\n\nCron rule: {}\nScheduled fire time: {}",
+                rule.instructions,
+                rule.name,
+                due_at.to_rfc3339_opts(SecondsFormat::Secs, true)
+            );
+            if let Some((_, events)) = self.store.create_producer_task(
+                CreateTaskInput {
+                    title,
+                    instructions,
+                    source: TaskSource::Cron,
+                    profile: None,
+                    session_id: None,
+                    max_retries: None,
+                    timeout_seconds: None,
+                },
+                &rule.name,
+                &dedup_key,
+            )? {
+                for event in events {
+                    let _ = self.events.send(event);
+                }
+            }
+            rule.last_emitted_at = Some(due_at);
+            rule.next_due_at = next_cron_due_after(rule, due_at)?;
+            changed = true;
+        }
+        if changed {
+            self.write_cron_rule(rule)?;
+        }
+        Ok(())
+    }
+
+    fn process_hook_producers(&self) -> Result<()> {
+        let events = load_canonical_events(&self.store.paths().events_path)?;
+        for mut rule in
+            load_json_records_from_dir::<HookRuleRecord>(&self.store.paths().hook_state_dir)?
+        {
+            if let Err(error) = self.process_single_hook_rule(&mut rule, &events) {
+                if let Ok(event) = self.store.append_system_warning(
+                    "hook producer iteration failed",
+                    json!({
+                        "rule_name": rule.name,
+                        "error": error.to_string(),
+                    }),
+                ) {
+                    let _ = self.events.send(event);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn process_single_hook_rule(
+        &self,
+        rule: &mut HookRuleRecord,
+        events: &[CanonicalEvent],
+    ) -> Result<()> {
+        ProfileName::new(rule.name.clone()).context("validate hook rule name")?;
+        if !rule.enabled {
+            return Ok(());
+        }
+        let mut changed = false;
+        for event in events {
+            if event.seq <= rule.last_processed_event_seq {
+                continue;
+            }
+            let self_triggered = event.source == CanonicalEventSource::Hook
+                && event.data.payload.get("producer_rule_name").and_then(Value::as_str)
+                    == Some(rule.name.as_str());
+            if event.event_type.as_str() == rule.match_event_type && !self_triggered {
+                let dedup_key = hook_event_key(&rule.name, event.seq);
+                let title =
+                    format!("Hook {} @ {} #{}", rule.name, event.event_type.as_str(), event.seq);
+                let instructions = format!(
+                    "{}\n\nCanonical event type: {}\nCanonical event sequence: {}",
+                    rule.instructions,
+                    event.event_type.as_str(),
+                    event.seq
+                );
+                if let Some((_, emitted)) = self.store.create_producer_task(
+                    CreateTaskInput {
+                        title,
+                        instructions,
+                        source: TaskSource::Hook,
+                        profile: None,
+                        session_id: None,
+                        max_retries: None,
+                        timeout_seconds: None,
+                    },
+                    &rule.name,
+                    &dedup_key,
+                )? {
+                    for appended in emitted {
+                        let _ = self.events.send(appended);
+                    }
+                }
+            }
+            rule.last_processed_event_seq = event.seq;
+            changed = true;
+        }
+        if changed {
+            self.write_hook_rule(rule)?;
+        }
+        Ok(())
+    }
+
+    fn write_cron_rule(&self, rule: &CronRuleRecord) -> Result<()> {
+        write_json_atomic(&self.store.paths().cron_rule_path(&rule.name), rule)
+    }
+
+    fn write_hook_rule(&self, rule: &HookRuleRecord) -> Result<()> {
+        write_json_atomic(&self.store.paths().hook_rule_path(&rule.name), rule)
     }
 
     fn reconcile_inflight_runs(&self, block_ambiguous_healthy_runs: bool) -> Result<()> {
@@ -1331,6 +1809,7 @@ impl NucleusService {
             .into_iter()
             .map(|worker| (worker.worker_id.clone(), worker))
             .collect::<HashMap<_, _>>();
+        let profiles = self.store.list_profile_records()?;
         let runs = self.store.list_runs()?;
         let runs_by_id =
             runs.into_iter().map(|run| (run.run_id.clone(), run)).collect::<HashMap<_, _>>();
@@ -1365,7 +1844,7 @@ impl NucleusService {
                     continue;
                 }
             }
-            let Some(profile) = derive_task_profile(&task, &sessions, &workers) else {
+            let Some(profile) = derive_task_profile(&task, &sessions, &workers, &profiles) else {
                 continue;
             };
             if !selected_profiles.insert(profile.clone()) {
@@ -2187,13 +2666,18 @@ impl GatewayResponse {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::fs;
+    use std::path::Path;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
-    use super::{GatewayRequest, NucleusConfig, NucleusService};
+    use super::{
+        CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord, NucleusConfig,
+        NucleusService, cron_due_key, write_json_atomic,
+    };
     use anyhow::Result;
-    use chrono::Utc;
+    use chrono::{Duration as ChronoDuration, Utc};
     use serde_json::json;
     use si_nucleus_core::{
         CanonicalEventSource, CanonicalEventType, EventDataEnvelope, ProfileName, RunId, RunRecord,
@@ -2426,6 +2910,42 @@ mod tests {
         let task =
             service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         panic!("expected task {} status {:?}, got {:?}", task_id, expected, task.status);
+    }
+
+    fn write_cron_rule(state_root: &Path, rule: &CronRuleRecord) {
+        let path = state_root
+            .join("state")
+            .join("producers")
+            .join("cron")
+            .join(format!("{}.json", rule.name));
+        write_json_atomic(&path, rule).expect("write cron rule");
+    }
+
+    fn write_hook_rule(state_root: &Path, rule: &HookRuleRecord) {
+        let path = state_root
+            .join("state")
+            .join("producers")
+            .join("hook")
+            .join(format!("{}.json", rule.name));
+        write_json_atomic(&path, rule).expect("write hook rule");
+    }
+
+    fn read_cron_rule(state_root: &Path, rule_name: &str) -> CronRuleRecord {
+        let path = state_root
+            .join("state")
+            .join("producers")
+            .join("cron")
+            .join(format!("{rule_name}.json"));
+        serde_json::from_slice(&fs::read(path).expect("read cron rule")).expect("parse cron rule")
+    }
+
+    fn read_hook_rule(state_root: &Path, rule_name: &str) -> HookRuleRecord {
+        let path = state_root
+            .join("state")
+            .join("producers")
+            .join("hook")
+            .join(format!("{rule_name}.json"));
+        serde_json::from_slice(&fs::read(path).expect("read hook rule")).expect("parse hook rule")
     }
 
     #[test]
@@ -2855,6 +3375,166 @@ mod tests {
             .expect("inspect session")
             .expect("session exists");
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[test]
+    fn cron_producer_emits_due_task_once_across_replay() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+        write_cron_rule(
+            &state_root,
+            &CronRuleRecord {
+                name: "nightly".to_owned(),
+                enabled: true,
+                schedule_kind: CronScheduleKind::Every,
+                schedule: "60s".to_owned(),
+                instructions: "Run nightly maintenance".to_owned(),
+                last_emitted_at: None,
+                next_due_at: Some(now - ChronoDuration::seconds(30)),
+                version: 1,
+            },
+        );
+
+        service.process_cron_producers_at(now).expect("process cron");
+        let tasks = service.store.list_tasks().expect("list tasks");
+        let expected_dedup = cron_due_key("nightly", now - ChronoDuration::seconds(30));
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].source, si_nucleus_core::TaskSource::Cron);
+        assert_eq!(tasks[0].producer_rule_name.as_deref(), Some("nightly"));
+        assert_eq!(tasks[0].producer_dedup_key.as_deref(), Some(expected_dedup.as_str()));
+
+        let stored = read_cron_rule(&state_root, "nightly");
+        assert_eq!(stored.last_emitted_at, Some(now - ChronoDuration::seconds(30)));
+        assert!(stored.next_due_at.is_some_and(|value| value > now));
+
+        service.process_cron_producers_at(now).expect("replay cron");
+        let reopened = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root,
+            auth_token: None,
+        })
+        .expect("reopen service");
+        reopened.process_cron_producers_at(now).expect("replay cron after restart");
+        assert_eq!(reopened.store.list_tasks().expect("list tasks").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn hook_producer_emits_task_once_for_matching_event_and_advances_cursor() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "task-created".to_owned(),
+                enabled: true,
+                match_event_type: "task.created".to_owned(),
+                instructions: "Investigate newly created task".to_owned(),
+                last_processed_event_seq: 0,
+                version: 1,
+            },
+        );
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!(1),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Primary task",
+                    "instructions": "Create hook input",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+
+        service.process_hook_producers().expect("process hooks");
+        service.process_hook_producers().expect("process hooks replay");
+        let tasks = service.store.list_tasks().expect("list tasks");
+        assert_eq!(tasks.len(), 2);
+        let hook_task = tasks
+            .iter()
+            .find(|task| task.source == si_nucleus_core::TaskSource::Hook)
+            .expect("hook task");
+        assert_eq!(hook_task.producer_rule_name.as_deref(), Some("task-created"));
+        let stored = read_hook_rule(&state_root, "task-created");
+        assert_eq!(stored.last_processed_event_seq, 2);
+
+        let reopened = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root,
+            auth_token: None,
+        })
+        .expect("reopen service");
+        reopened.process_hook_producers().expect("process hooks after restart");
+        assert_eq!(reopened.store.list_tasks().expect("list tasks").len(), 2);
+    }
+
+    #[tokio::test]
+    async fn producer_created_task_can_route_when_one_profile_is_available() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: state_root.clone(),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-producer"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        let now = Utc::now();
+        write_cron_rule(
+            &state_root,
+            &CronRuleRecord {
+                name: "maintenance".to_owned(),
+                enabled: true,
+                schedule_kind: CronScheduleKind::OnceAt,
+                schedule: (now - ChronoDuration::seconds(5)).to_rfc3339(),
+                instructions: "Reply with nucleus-smoke".to_owned(),
+                last_emitted_at: None,
+                next_due_at: Some(now - ChronoDuration::seconds(5)),
+                version: 1,
+            },
+        );
+
+        service.process_cron_producers_at(now).expect("process cron");
+        service.reconcile_and_dispatch_once().expect("dispatch producer task");
+
+        let cron_task = service
+            .store
+            .list_tasks()
+            .expect("list tasks")
+            .into_iter()
+            .find(|task| task.source == si_nucleus_core::TaskSource::Cron)
+            .expect("cron task");
+        wait_for_task_status(&service, cron_task.task_id.as_str(), TaskStatus::Done);
     }
 
     #[tokio::test]
