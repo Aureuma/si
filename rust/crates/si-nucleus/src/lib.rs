@@ -5187,6 +5187,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn task_create_rejects_non_slug_profile_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("create-invalid-profile"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Persist task",
+                    "instructions": "Write the task to disk and emit an event",
+                    "profile": "America"
+                }),
+            })
+            .await;
+        assert!(!created.ok);
+        assert!(
+            created
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("profile name must match"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+    }
+
+    #[tokio::test]
     async fn gateway_status_reports_ws_endpoint() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
@@ -5205,6 +5237,43 @@ mod tests {
             .await;
         assert!(response.ok);
         assert_eq!(response.result.expect("status")["ws_url"], json!("ws://127.0.0.1:9898/ws"));
+    }
+
+    #[tokio::test]
+    async fn session_create_rejects_non_slug_profile_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-invalid-profile"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "America",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/America"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(!session.ok);
+        assert!(
+            session
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("profile name must match"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_sessions().expect("list sessions").len(), 0);
+        assert_eq!(service.store.list_workers().expect("list workers").len(), 0);
     }
 
     #[tokio::test]
@@ -7296,6 +7365,51 @@ mod tests {
         assert_eq!(stored.version, current_persisted_version());
     }
 
+    #[test]
+    fn cron_producer_invalid_rule_name_emits_system_warning() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+        write_cron_rule(
+            &state_root,
+            &CronRuleRecord {
+                name: "Nightly".to_owned(),
+                enabled: true,
+                schedule_kind: CronScheduleKind::Every,
+                schedule: "60s".to_owned(),
+                instructions: "Run nightly maintenance".to_owned(),
+                last_emitted_at: None,
+                next_due_at: Some(now),
+                version: current_persisted_version().to_owned(),
+            },
+        );
+
+        service.process_cron_producers_at(now).expect("process cron");
+
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+        let warning = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| {
+                event.event_type == CanonicalEventType::SystemWarning
+                    && event.data.payload["message"] == json!("cron producer iteration failed")
+            })
+            .expect("warning event");
+        assert_eq!(warning.data.payload["details"]["rule_name"], json!("Nightly"));
+        assert!(
+            warning.data.payload["details"]["error"]
+                .as_str()
+                .expect("warning error")
+                .contains("validate cron rule name")
+        );
+    }
+
     #[tokio::test]
     async fn hook_producer_emits_task_once_for_matching_event_and_advances_cursor() {
         let temp = tempdir().expect("tempdir");
@@ -7473,6 +7587,61 @@ mod tests {
 
         let stored = read_hook_rule(&state_root, "task-created");
         assert_eq!(stored.version, current_persisted_version());
+    }
+
+    #[tokio::test]
+    async fn hook_producer_invalid_rule_name_emits_system_warning() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "Task-Created".to_owned(),
+                enabled: true,
+                match_event_type: "task.created".to_owned(),
+                instructions: "Investigate newly created task".to_owned(),
+                last_processed_event_seq: 0,
+                version: current_persisted_version().to_owned(),
+            },
+        );
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!(1),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Primary task",
+                    "instructions": "Create hook input",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+
+        service.process_hook_producers().expect("process hooks");
+
+        let tasks = service.store.list_tasks().expect("list tasks");
+        assert_eq!(tasks.len(), 1);
+        let warning = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| {
+                event.event_type == CanonicalEventType::SystemWarning
+                    && event.data.payload["message"] == json!("hook producer iteration failed")
+            })
+            .expect("warning event");
+        assert_eq!(warning.data.payload["details"]["rule_name"], json!("Task-Created"));
+        assert!(
+            warning.data.payload["details"]["error"]
+                .as_str()
+                .expect("warning error")
+                .contains("validate hook rule name")
+        );
     }
 
     #[tokio::test]
