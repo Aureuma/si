@@ -277,6 +277,10 @@ pub struct TaskRecord {
     pub checkpoint_at: Option<DateTime<Utc>>,
     pub checkpoint_seq: Option<u64>,
     pub parent_task_id: Option<TaskId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub producer_rule_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub producer_dedup_key: Option<String>,
     pub blocked_reason: Option<BlockedReason>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -305,6 +309,8 @@ impl TaskRecord {
             checkpoint_at: None,
             checkpoint_seq: None,
             parent_task_id: None,
+            producer_rule_name: None,
+            producer_dedup_key: None,
             blocked_reason: None,
             created_at: now,
             updated_at: now,
