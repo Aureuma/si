@@ -3548,6 +3548,39 @@ fn nucleus_rest_task_cancel_matches_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_missing_targets_return_canonical_not_found_envelopes() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
+    let client = BlockingClient::new();
+
+    for (method, path) in [
+        ("GET", "/tasks/si-task-missing"),
+        ("GET", "/workers/si-worker-missing"),
+        ("GET", "/sessions/si-session-missing"),
+        ("GET", "/runs/si-run-missing"),
+        ("POST", "/tasks/si-task-missing/cancel"),
+    ] {
+        let response = match method {
+            "GET" => client.get(format!("{base_url}{path}")).send().expect("send rest get"),
+            "POST" => client.post(format!("{base_url}{path}")).send().expect("send rest post"),
+            other => panic!("unexpected method: {other}"),
+        };
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND, "{method} {path}");
+        let body: Value = response.json().expect("parse not found body");
+        assert_eq!(body["error"]["code"], "not_found", "{method} {path}");
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("not found"))
+                .unwrap_or(false),
+            "{method} {path} missing not-found message"
+        );
+        assert!(body["error"]["details"].is_null(), "{method} {path} expected null details");
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_websocket_task_matches_cli_state_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
