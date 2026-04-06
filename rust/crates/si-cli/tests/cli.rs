@@ -7161,6 +7161,18 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/SessionRecord")
     );
     assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["summary"],
+        json!("Inspect one session")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["description"],
+        json!("Read one durable session projection by session id.")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["x-si-purpose"],
+        json!("Use this to inspect worker/session binding and reusable thread identity from external tooling.")
+    );
+    assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["schema"]["type"],
         json!("string")
     );
