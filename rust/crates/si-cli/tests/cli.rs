@@ -3718,6 +3718,76 @@ fn nucleus_worker_restart_clears_exhausted_auto_restart_boundary_on_live_service
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_rejects_active_run_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_config(TestRuntimeConfig {
+        run_delay: Duration::from_millis(900),
+        step_delay: Duration::from_millis(0),
+        output_deltas: vec!["nucleus-smoke".to_owned()],
+        fail_execute: false,
+        block_when_worker_missing: false,
+        fail_start_worker: false,
+        fail_ensure_session: false,
+    });
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-worker-restart-active-live",
+        "Do not restart active worker",
+        "Keep running while restart is attempted",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    let restart = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let restart_stderr =
+        String::from_utf8(restart.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(restart_stderr.contains("worker has active runs"));
+
+    let still_running =
+        wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+            task["status"] == "running" || task["status"] == "done"
+        });
+    assert_ne!(still_running["status"], "blocked");
+    assert_ne!(still_running["status"], "cancelled");
+
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_ne!(run["status"], "blocked");
+    assert_ne!(run["status"], "cancelled");
+
+    let completed = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(completed["checkpoint_summary"], "nucleus-smoke");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_worker_repair_auth_clears_exhausted_auto_restart_boundary_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
