@@ -378,6 +378,10 @@ enum NucleusCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    Service {
+        #[command(subcommand)]
+        command: NucleusServiceCommand,
+    },
     Task {
         #[command(subcommand)]
         command: NucleusTaskCommand,
@@ -393,6 +397,51 @@ enum NucleusCommand {
     Run {
         #[command(subcommand)]
         command: NucleusRunCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusServiceCommand {
+    Install {
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        #[arg(long)]
+        bind_addr: Option<String>,
+        #[arg(long)]
+        service_dir: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Uninstall {
+        #[arg(long)]
+        service_dir: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Start {
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Stop {
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Restart {
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Status {
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    #[command(hide = true)]
+    Run {
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        #[arg(long)]
+        bind_addr: Option<String>,
+        #[arg(long)]
+        nucleus_bin: Option<PathBuf>,
     },
 }
 
@@ -15830,6 +15879,40 @@ struct NucleusGatewayResponse {
     error: Option<NucleusGatewayError>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NucleusServicePlatform {
+    SystemdUser,
+    LaunchdAgent,
+}
+
+impl NucleusServicePlatform {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::SystemdUser => "systemd-user",
+            Self::LaunchdAgent => "launchd-agent",
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct NucleusServiceActionView {
+    platform: String,
+    action: String,
+    definition_path: String,
+    service_name: String,
+    logs_hint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manager_command: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manager_stdout: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    manager_stderr: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state_dir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bind_addr: Option<String>,
+}
+
 fn default_nucleus_metadata_path() -> PathBuf {
     default_home_dir().join(".si").join("nucleus").join("gateway").join("metadata.json")
 }
@@ -15930,6 +16013,420 @@ fn parse_env_assignments(entries: &[String]) -> Result<BTreeMap<String, String>>
 fn run_nucleus_status(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
     let payload = run_nucleus_gateway_request(endpoint.as_deref(), "nucleus.status", json!({}))?;
     print_nucleus_output(format, &payload)
+}
+
+fn default_nucleus_state_dir() -> PathBuf {
+    default_home_dir().join(".si").join("nucleus")
+}
+
+fn default_nucleus_bind_addr() -> &'static str {
+    "127.0.0.1:4747"
+}
+
+fn resolve_nucleus_service_platform() -> Result<NucleusServicePlatform> {
+    if let Ok(value) = env::var("SI_NUCLEUS_SERVICE_PLATFORM") {
+        match value.trim() {
+            "linux" | "systemd" | "systemd-user" => {
+                return Ok(NucleusServicePlatform::SystemdUser);
+            }
+            "macos" | "darwin" | "launchd" | "launchd-agent" => {
+                return Ok(NucleusServicePlatform::LaunchdAgent);
+            }
+            other if !other.is_empty() => {
+                anyhow::bail!("unsupported nucleus service platform: {other}")
+            }
+            _ => {}
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return Ok(NucleusServicePlatform::SystemdUser);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return Ok(NucleusServicePlatform::LaunchdAgent);
+    }
+    #[allow(unreachable_code)]
+    Err(anyhow!("nucleus service management is only implemented for Linux and macOS"))
+}
+
+fn default_nucleus_service_dir(platform: NucleusServicePlatform) -> PathBuf {
+    match platform {
+        NucleusServicePlatform::SystemdUser => {
+            default_home_dir().join(".config").join("systemd").join("user")
+        }
+        NucleusServicePlatform::LaunchdAgent => {
+            default_home_dir().join("Library").join("LaunchAgents")
+        }
+    }
+}
+
+fn nucleus_service_name(platform: NucleusServicePlatform) -> &'static str {
+    match platform {
+        NucleusServicePlatform::SystemdUser => "si-nucleus.service",
+        NucleusServicePlatform::LaunchdAgent => "com.aureuma.si.nucleus",
+    }
+}
+
+fn nucleus_service_definition_path(
+    platform: NucleusServicePlatform,
+    service_dir: Option<PathBuf>,
+) -> PathBuf {
+    let dir = service_dir.unwrap_or_else(|| default_nucleus_service_dir(platform));
+    match platform {
+        NucleusServicePlatform::SystemdUser => dir.join(nucleus_service_name(platform)),
+        NucleusServicePlatform::LaunchdAgent => {
+            dir.join(format!("{}.plist", nucleus_service_name(platform)))
+        }
+    }
+}
+
+fn nucleus_service_logs_hint(platform: NucleusServicePlatform) -> String {
+    match platform {
+        NucleusServicePlatform::SystemdUser => {
+            format!("journalctl --user-unit {} -f", nucleus_service_name(platform))
+        }
+        NucleusServicePlatform::LaunchdAgent => {
+            "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si-rs\"'".to_owned()
+        }
+    }
+}
+
+fn nucleus_service_manager_exec(platform: NucleusServicePlatform) -> String {
+    match platform {
+        NucleusServicePlatform::SystemdUser => env::var("SI_NUCLEUS_SYSTEMCTL_EXEC")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "systemctl".to_owned()),
+        NucleusServicePlatform::LaunchdAgent => env::var("SI_NUCLEUS_LAUNCHCTL_EXEC")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "launchctl".to_owned()),
+    }
+}
+
+fn nucleus_service_program_args(
+    si_binary: &Path,
+    state_dir: &Path,
+    bind_addr: &str,
+) -> Vec<String> {
+    vec![
+        si_binary.display().to_string(),
+        "nucleus".to_owned(),
+        "service".to_owned(),
+        "run".to_owned(),
+        "--state-dir".to_owned(),
+        state_dir.display().to_string(),
+        "--bind-addr".to_owned(),
+        bind_addr.to_owned(),
+    ]
+}
+
+fn systemd_quote_arg(arg: &str) -> String {
+    let escaped = arg.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+fn xml_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn render_nucleus_systemd_unit(si_binary: &Path, state_dir: &Path, bind_addr: &str) -> String {
+    let exec_start = nucleus_service_program_args(si_binary, state_dir, bind_addr)
+        .into_iter()
+        .map(|arg| systemd_quote_arg(&arg))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\nExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
+    )
+}
+
+fn render_nucleus_launchd_plist(si_binary: &Path, state_dir: &Path, bind_addr: &str) -> String {
+    let program_arguments = nucleus_service_program_args(si_binary, state_dir, bind_addr)
+        .into_iter()
+        .map(|arg| format!("    <string>{}</string>\n", xml_escape(&arg)))
+        .collect::<String>();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>{}</string>\n  <key>ProgramArguments</key>\n  <array>\n{}  </array>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n</dict>\n</plist>\n",
+        nucleus_service_name(NucleusServicePlatform::LaunchdAgent),
+        program_arguments
+    )
+}
+
+fn launchd_domain_target() -> String {
+    format!("gui/{}", unsafe { libc::geteuid() })
+}
+
+fn run_nucleus_service_manager_command(
+    platform: NucleusServicePlatform,
+    args: &[String],
+    capture_output: bool,
+) -> Result<(Vec<String>, Option<String>, Option<String>)> {
+    let program = nucleus_service_manager_exec(platform);
+    let mut command = StdCommand::new(&program);
+    command.args(args);
+    if capture_output {
+        let output =
+            command.output().with_context(|| format!("run {program} {}", args.join(" ")))?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "{}",
+                String::from_utf8_lossy(&output.stderr).trim().to_owned().if_empty_then(
+                    || format!("{program} {} failed with {}", args.join(" "), output.status)
+                )
+            );
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Ok((
+            std::iter::once(program).chain(args.iter().cloned()).collect(),
+            (!stdout.is_empty()).then_some(stdout),
+            (!stderr.is_empty()).then_some(stderr),
+        ));
+    }
+    let status = command.status().with_context(|| format!("run {program} {}", args.join(" ")))?;
+    if !status.success() {
+        anyhow::bail!("{program} {} failed with {}", args.join(" "), status);
+    }
+    Ok((std::iter::once(program).chain(args.iter().cloned()).collect(), None, None))
+}
+
+trait IfEmptyThen {
+    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String;
+}
+
+impl IfEmptyThen for String {
+    fn if_empty_then(self, fallback: impl FnOnce() -> String) -> String {
+        if self.trim().is_empty() { fallback() } else { self }
+    }
+}
+
+fn print_nucleus_service_view(format: OutputFormat, view: &NucleusServiceActionView) -> Result<()> {
+    print_nucleus_output(format, &serde_json::to_value(view)?)
+}
+
+fn run_nucleus_service_install(
+    state_dir: Option<PathBuf>,
+    bind_addr: Option<String>,
+    service_dir: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let platform = resolve_nucleus_service_platform()?;
+    let state_dir = state_dir.unwrap_or_else(default_nucleus_state_dir);
+    let bind_addr = bind_addr.unwrap_or_else(|| default_nucleus_bind_addr().to_owned());
+    let definition_path = nucleus_service_definition_path(platform, service_dir);
+    let si_binary = env::current_exe().context("resolve current si executable")?;
+    let definition = match platform {
+        NucleusServicePlatform::SystemdUser => {
+            render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr)
+        }
+        NucleusServicePlatform::LaunchdAgent => {
+            render_nucleus_launchd_plist(&si_binary, &state_dir, &bind_addr)
+        }
+    };
+    let parent = definition_path
+        .parent()
+        .ok_or_else(|| anyhow!("missing parent for {}", definition_path.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    fs::write(&definition_path, definition)
+        .with_context(|| format!("write {}", definition_path.display()))?;
+
+    let manager_command = if platform == NucleusServicePlatform::SystemdUser {
+        Some(
+            run_nucleus_service_manager_command(
+                platform,
+                &["--user".to_owned(), "daemon-reload".to_owned()],
+                false,
+            )?
+            .0,
+        )
+    } else {
+        None
+    };
+
+    print_nucleus_service_view(
+        format,
+        &NucleusServiceActionView {
+            platform: platform.as_str().to_owned(),
+            action: "install".to_owned(),
+            definition_path: definition_path.display().to_string(),
+            service_name: nucleus_service_name(platform).to_owned(),
+            logs_hint: nucleus_service_logs_hint(platform),
+            manager_command,
+            manager_stdout: None,
+            manager_stderr: None,
+            state_dir: Some(state_dir.display().to_string()),
+            bind_addr: Some(bind_addr),
+        },
+    )
+}
+
+fn run_nucleus_service_uninstall(service_dir: Option<PathBuf>, format: OutputFormat) -> Result<()> {
+    let platform = resolve_nucleus_service_platform()?;
+    let definition_path = nucleus_service_definition_path(platform, service_dir);
+    if definition_path.exists() {
+        fs::remove_file(&definition_path)
+            .with_context(|| format!("remove {}", definition_path.display()))?;
+    }
+    let manager_command = if platform == NucleusServicePlatform::SystemdUser {
+        Some(
+            run_nucleus_service_manager_command(
+                platform,
+                &["--user".to_owned(), "daemon-reload".to_owned()],
+                false,
+            )?
+            .0,
+        )
+    } else {
+        None
+    };
+    print_nucleus_service_view(
+        format,
+        &NucleusServiceActionView {
+            platform: platform.as_str().to_owned(),
+            action: "uninstall".to_owned(),
+            definition_path: definition_path.display().to_string(),
+            service_name: nucleus_service_name(platform).to_owned(),
+            logs_hint: nucleus_service_logs_hint(platform),
+            manager_command,
+            manager_stdout: None,
+            manager_stderr: None,
+            state_dir: None,
+            bind_addr: None,
+        },
+    )
+}
+
+fn run_nucleus_service_action(action: &str, format: OutputFormat) -> Result<()> {
+    let platform = resolve_nucleus_service_platform()?;
+    let definition_path = nucleus_service_definition_path(platform, None);
+    let args = match (platform, action) {
+        (NucleusServicePlatform::SystemdUser, "start") => {
+            vec!["--user".to_owned(), "start".to_owned(), nucleus_service_name(platform).to_owned()]
+        }
+        (NucleusServicePlatform::SystemdUser, "stop") => {
+            vec!["--user".to_owned(), "stop".to_owned(), nucleus_service_name(platform).to_owned()]
+        }
+        (NucleusServicePlatform::SystemdUser, "restart") => vec![
+            "--user".to_owned(),
+            "restart".to_owned(),
+            nucleus_service_name(platform).to_owned(),
+        ],
+        (NucleusServicePlatform::LaunchdAgent, "start") => vec![
+            "bootstrap".to_owned(),
+            launchd_domain_target(),
+            definition_path.display().to_string(),
+        ],
+        (NucleusServicePlatform::LaunchdAgent, "stop") => vec![
+            "bootout".to_owned(),
+            format!("{}/{}", launchd_domain_target(), nucleus_service_name(platform)),
+        ],
+        (NucleusServicePlatform::LaunchdAgent, "restart") => vec![
+            "kickstart".to_owned(),
+            "-k".to_owned(),
+            format!("{}/{}", launchd_domain_target(), nucleus_service_name(platform)),
+        ],
+        _ => anyhow::bail!("unsupported nucleus service action: {action}"),
+    };
+    let (manager_command, manager_stdout, manager_stderr) =
+        run_nucleus_service_manager_command(platform, &args, false)?;
+    print_nucleus_service_view(
+        format,
+        &NucleusServiceActionView {
+            platform: platform.as_str().to_owned(),
+            action: action.to_owned(),
+            definition_path: definition_path.display().to_string(),
+            service_name: nucleus_service_name(platform).to_owned(),
+            logs_hint: nucleus_service_logs_hint(platform),
+            manager_command: Some(manager_command),
+            manager_stdout,
+            manager_stderr,
+            state_dir: None,
+            bind_addr: None,
+        },
+    )
+}
+
+fn run_nucleus_service_status(format: OutputFormat) -> Result<()> {
+    let platform = resolve_nucleus_service_platform()?;
+    let definition_path = nucleus_service_definition_path(platform, None);
+    let args = match platform {
+        NucleusServicePlatform::SystemdUser => vec![
+            "--user".to_owned(),
+            "status".to_owned(),
+            "--no-pager".to_owned(),
+            nucleus_service_name(platform).to_owned(),
+        ],
+        NucleusServicePlatform::LaunchdAgent => vec![
+            "print".to_owned(),
+            format!("{}/{}", launchd_domain_target(), nucleus_service_name(platform)),
+        ],
+    };
+    let (manager_command, manager_stdout, manager_stderr) =
+        run_nucleus_service_manager_command(platform, &args, true)?;
+    print_nucleus_service_view(
+        format,
+        &NucleusServiceActionView {
+            platform: platform.as_str().to_owned(),
+            action: "status".to_owned(),
+            definition_path: definition_path.display().to_string(),
+            service_name: nucleus_service_name(platform).to_owned(),
+            logs_hint: nucleus_service_logs_hint(platform),
+            manager_command: Some(manager_command),
+            manager_stdout,
+            manager_stderr,
+            state_dir: None,
+            bind_addr: None,
+        },
+    )
+}
+
+fn resolve_nucleus_service_binary(explicit: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(path) = explicit {
+        return Ok(path);
+    }
+    if let Ok(value) = env::var("SI_NUCLEUS_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(PathBuf::from(trimmed));
+        }
+    }
+    let current = env::current_exe().context("resolve current si executable")?;
+    if let Some(parent) = current.parent() {
+        let sibling = parent.join("si-nucleus");
+        if sibling.is_file() {
+            return Ok(sibling);
+        }
+    }
+    Ok(PathBuf::from("si-nucleus"))
+}
+
+fn run_nucleus_service_run(
+    state_dir: Option<PathBuf>,
+    bind_addr: Option<String>,
+    nucleus_bin: Option<PathBuf>,
+) -> Result<()> {
+    let nucleus_bin = resolve_nucleus_service_binary(nucleus_bin)?;
+    let mut command = StdCommand::new(&nucleus_bin);
+    if let Some(state_dir) = state_dir {
+        command.env("SI_NUCLEUS_STATE_DIR", state_dir);
+    }
+    if let Some(bind_addr) = bind_addr {
+        command.env("SI_NUCLEUS_BIND_ADDR", bind_addr);
+    }
+    let status = command
+        .status()
+        .with_context(|| format!("run nucleus service binary {}", nucleus_bin.display()))?;
+    if !status.success() {
+        anyhow::bail!("nucleus service binary exited with {}", status);
+    }
+    Ok(())
 }
 
 fn run_nucleus_task_create(
@@ -32865,6 +33362,27 @@ fn main() -> Result<()> {
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
+            NucleusCommand::Service { command } => match command {
+                NucleusServiceCommand::Install { state_dir, bind_addr, service_dir, format } => {
+                    run_nucleus_service_install(state_dir, bind_addr, service_dir, format)?
+                }
+                NucleusServiceCommand::Uninstall { service_dir, format } => {
+                    run_nucleus_service_uninstall(service_dir, format)?
+                }
+                NucleusServiceCommand::Start { format } => {
+                    run_nucleus_service_action("start", format)?
+                }
+                NucleusServiceCommand::Stop { format } => {
+                    run_nucleus_service_action("stop", format)?
+                }
+                NucleusServiceCommand::Restart { format } => {
+                    run_nucleus_service_action("restart", format)?
+                }
+                NucleusServiceCommand::Status { format } => run_nucleus_service_status(format)?,
+                NucleusServiceCommand::Run { state_dir, bind_addr, nucleus_bin } => {
+                    run_nucleus_service_run(state_dir, bind_addr, nucleus_bin)?
+                }
+            },
             NucleusCommand::Task { command } => match command {
                 NucleusTaskCommand::Create { title, instructions, endpoint, profile, format } => {
                     run_nucleus_task_create(endpoint, title, instructions, profile, format)?
@@ -33056,6 +33574,18 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["build", "self", "assets"] => Some("Build all release assets."),
         ["build", "self", "validate"] => Some("Validate a release version tag."),
         ["build", "self", "verify"] => Some("Verify release assets."),
+        ["nucleus"] => Some("Manage the SI Nucleus control plane."),
+        ["nucleus", "service"] => Some("Manage the local SI Nucleus user service."),
+        ["nucleus", "service", "install"] => {
+            Some("Install the local SI Nucleus user-service definition.")
+        }
+        ["nucleus", "service", "uninstall"] => {
+            Some("Remove the local SI Nucleus user-service definition.")
+        }
+        ["nucleus", "service", "start"] => Some("Start the local SI Nucleus user service."),
+        ["nucleus", "service", "stop"] => Some("Stop the local SI Nucleus user service."),
+        ["nucleus", "service", "restart"] => Some("Restart the local SI Nucleus user service."),
+        ["nucleus", "service", "status"] => Some("Show SI Nucleus service status and log hints."),
         ["codex"] => Some("Manage Codex profiles and worker sessions."),
         ["codex", "profile"] => Some("Manage Codex profiles."),
         ["codex", "spawn"] => Some("Start a Codex worker for a chosen profile."),
