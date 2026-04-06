@@ -7039,6 +7039,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["items"]["$ref"],
         json!("#/components/schemas/TaskRecord")
     );
+    assert_eq!(
+        body["paths"]["/tasks"]["get"]["responses"]["200"]["description"],
+        json!("All durable tasks.")
+    );
     assert_eq!(body["paths"]["/tasks"]["get"]["summary"], json!("List tasks"));
     assert_eq!(
         body["paths"]["/tasks"]["get"]["description"],
@@ -7185,6 +7189,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["items"]["$ref"],
         json!("#/components/schemas/WorkerRecord")
+    );
+    assert_eq!(
+        body["paths"]["/workers"]["get"]["responses"]["200"]["description"],
+        json!("All durable workers.")
     );
     assert_eq!(body["paths"]["/workers"]["get"]["summary"], json!("List workers"));
     assert_eq!(
