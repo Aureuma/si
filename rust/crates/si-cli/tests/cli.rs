@@ -3864,6 +3864,41 @@ fn nucleus_session_list_and_show_reflect_live_sessions_on_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_run_inspect_reflects_live_completed_run_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-run-inspect-live",
+        "Inspect live run state",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("latest run id");
+
+    let run = inspect_run_via_cli(&ws_url, run_id);
+    assert_eq!(run["run_id"], run_id);
+    assert_eq!(run["task_id"], task_id);
+    assert_eq!(run["session_id"], session_id);
+    assert_eq!(run["status"], "completed");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_create_reuses_worker_and_codex_home_per_profile_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
