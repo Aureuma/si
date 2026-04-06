@@ -2574,7 +2574,8 @@ impl NucleusService {
             runtime.stop_worker(worker_id)?;
         }
         let started = runtime.start_worker(&spec)?;
-        let (worker, runtime_view, events) = self.store.record_worker_start(&spec, &started, runtime.as_ref())?;
+        let (worker, runtime_view, events) =
+            self.store.record_worker_start(&spec, &started, runtime.as_ref())?;
         for event in events {
             let _ = self.events.send(event);
         }

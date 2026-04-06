@@ -732,11 +732,8 @@ fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
 
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
-    fs::write(
-        metadata_dir.join("metadata.json"),
-        format!(r#"{{"ws_url":"ws://{addr}/ws"}}"#),
-    )
-    .expect("write metadata");
+    fs::write(metadata_dir.join("metadata.json"), format!(r#"{{"ws_url":"ws://{addr}/ws"}}"#))
+        .expect("write metadata");
 
     thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
@@ -852,7 +849,15 @@ fn nucleus_profile_list_requests_gateway_profile_list_method() {
     });
 
     let output = cargo_bin()
-        .args(["nucleus", "profile", "list", "--endpoint", &format!("ws://{addr}/ws"), "--format", "json"])
+        .args([
+            "nucleus",
+            "profile",
+            "list",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()

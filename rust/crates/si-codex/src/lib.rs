@@ -40,7 +40,11 @@ pub fn codex_worker_name(profile_id: &str) -> String {
 
 pub fn codex_tmux_session_name(profile_id: &str) -> String {
     let suffix = codex_worker_name(profile_id);
-    if suffix.is_empty() { TMUX_SESSION_PREFIX.to_owned() } else { format!("{TMUX_SESSION_PREFIX}{suffix}") }
+    if suffix.is_empty() {
+        TMUX_SESSION_PREFIX.to_owned()
+    } else {
+        format!("{TMUX_SESSION_PREFIX}{suffix}")
+    }
 }
 
 pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
@@ -55,7 +59,10 @@ pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, Respa
             targets.insert(item.to_owned());
         }
     }
-    Ok(RespawnPlan { profile_id: profile_id.to_owned(), reset_targets: targets.into_iter().collect() })
+    Ok(RespawnPlan {
+        profile_id: profile_id.to_owned(),
+        reset_targets: targets.into_iter().collect(),
+    })
 }
 
 pub fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> {
@@ -101,7 +108,11 @@ pub fn parse_report_capture(
 ) -> ReportParseResult {
     let segments = parse_prompt_segments_dual(clean, raw);
     let report = if prompt_index < segments.len() {
-        extract_report_lines_from_lines(&segments[prompt_index].raw, &segments[prompt_index].lines, ansi)
+        extract_report_lines_from_lines(
+            &segments[prompt_index].raw,
+            &segments[prompt_index].lines,
+            ansi,
+        )
     } else {
         String::new()
     };
