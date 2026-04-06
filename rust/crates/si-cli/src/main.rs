@@ -14230,7 +14230,7 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
-        #[arg(long, help = "Release tag name, for example v0.55.12.")]
+        #[arg(long, help = "Release tag name, for example v0.56.0.")]
         tag: Option<String>,
         #[arg(long, help = "Release title shown in GitHub.")]
         title: Option<String>,

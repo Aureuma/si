@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.56.0] - 2026-04-06
+### Changed
+- Bumped the minor release after completing the current Nucleus architecture and live contract verification set.
+
 ## [v0.55.12] - 2026-04-04
 ### Changed
 - Bumped the patch release after removing the Docker runtime path and standardizing on local Codex workers.
