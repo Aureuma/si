@@ -5202,15 +5202,59 @@ mod tests {
         assert_eq!(body["openapi"], json!("3.1.0"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(
+            body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/NucleusStatusView")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            json!("array")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"],
+            json!("#/components/schemas/TaskRecord")
+        );
+        assert_eq!(
             body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
                 ["$ref"],
             json!("#/components/schemas/TaskCreateParams")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/TaskRecord")
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/TaskRecord")
         );
         assert_eq!(
             body["paths"]["/tasks/{task_id}/cancel"]["post"]["x-si-purpose"],
             json!(
                 "Use this for bounded external cancellation requests and then re-read the task or run to observe final state."
             )
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/TaskCancelResultView")
+        );
+        assert_eq!(
+            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            json!("array")
+        );
+        assert_eq!(
+            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"],
+            json!("#/components/schemas/WorkerRecord")
+        );
+        assert_eq!(
+            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/WorkerInspectView")
+        );
+        assert_eq!(
+            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/SessionRecord")
+        );
+        assert_eq!(
+            body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RunRecord")
         );
         assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
         assert_eq!(body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"], json!([]));
@@ -5265,6 +5309,14 @@ mod tests {
         assert!(body["paths"]["/workers/{worker_id}"]["get"]["security"].is_null());
         assert!(body["paths"]["/sessions/{session_id}"]["get"]["security"].is_null());
         assert!(body["paths"]["/runs/{run_id}"]["get"]["security"].is_null());
+        assert_eq!(
+            body["components"]["schemas"]["TaskCancelResultView"]["required"],
+            json!(["task", "cancellation_requested"])
+        );
+        assert_eq!(
+            body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["$ref"],
+            json!("#/components/schemas/WorkerRecord")
+        );
     }
 
     #[tokio::test]
