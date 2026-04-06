@@ -7038,6 +7038,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_restart_does_not_requeue_other_profile_tasks() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-america-restart-scope"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let america_worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-britain-restart-scope"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not requeue other profile task",
+                    "instructions": "Stay blocked until a britain worker is repaired or restarted",
+                    "profile": "britain",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let britain_task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        runtime.fail_next_starts(1);
+        service.reconcile_and_dispatch_once().expect("dispatch britain blocked task");
+
+        let blocked = service
+            .store
+            .inspect_task(&britain_task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-scope"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": america_worker_id.as_str() }),
+            })
+            .await;
+        assert!(restarted.ok);
+
+        let still_blocked = service
+            .store
+            .inspect_task(&britain_task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(still_blocked.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
     async fn worker_repair_auth_requeues_auth_required_tasks_for_profile() {
         let temp = tempdir().expect("tempdir");
         let codex_home = temp.path().join("home/.si/codex/profiles/america");
@@ -7359,6 +7448,123 @@ mod tests {
             service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         assert_eq!(still_blocked.status, TaskStatus::Blocked);
         assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(still_blocked.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn worker_repair_auth_does_not_requeue_other_profile_tasks() {
+        let temp = tempdir().expect("tempdir");
+        let america_codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let britain_codex_home = temp.path().join("home/.si/codex/profiles/britain");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let america_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-america-auth-scope"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": america_codex_home.clone(),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(america_session.ok);
+        let america_worker_id = WorkerId::new(
+            america_session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let britain_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-britain-auth-scope"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "britain",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": britain_codex_home.clone(),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(britain_session.ok);
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-britain-auth-scope"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not requeue other profile auth task",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "britain",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let britain_task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch britain auth-blocked task");
+
+        let blocked = service
+            .store
+            .inspect_task(&britain_task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::AuthRequired));
+
+        write_fort_session_state(
+            &america_codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-auth-scope"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": america_worker_id.as_str() }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let still_blocked = service
+            .store
+            .inspect_task(&britain_task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::AuthRequired));
         assert!(still_blocked.latest_run_id.is_none());
     }
 
