@@ -9103,6 +9103,108 @@ mod tests {
         assert!(reopened.store.list_runs().expect("runs").is_empty());
     }
 
+    #[tokio::test]
+    async fn task_cancel_transitions_blocked_task_to_cancelled() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("blocked-cancel-session"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(created_session.ok);
+        let session_id = SessionId::new(
+            created_session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let mut session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&session)
+            .expect("persist session without thread id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("blocked-cancel-task"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel blocked task",
+                    "instructions": "Create a blocked task before cancellation",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("block queued task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(blocked.latest_run_id.is_none());
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("blocked-cancel"),
+                method: "task.cancel".to_owned(),
+                params: json!({ "task_id": task_id.as_str() }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["task"]["status"].as_str()),
+            Some("cancelled")
+        );
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["cancellation_requested"].as_bool()),
+            Some(false)
+        );
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        assert_eq!(task.blocked_reason, None);
+        assert!(task.latest_run_id.is_none());
+    }
+
     #[test]
     fn cron_producer_emits_due_task_once_across_replay() {
         let temp = tempdir().expect("tempdir");
