@@ -3759,6 +3759,113 @@ fn nucleus_worker_repair_auth_requeues_fort_unavailable_task_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_does_not_requeue_other_profile_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let america_session = create_session_via_cli(&ws_url, &home_dir, &america_codex_home, temp.path());
+    let america_worker_id =
+        america_session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    runtime.set_fail_start_worker(true);
+    let britain_created = create_task_via_cli(
+        &ws_url,
+        "Do not requeue other profile live task",
+        "Stay blocked until a britain worker is repaired or restarted",
+        "britain",
+    );
+    let britain_task_id = britain_created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &britain_task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "worker_unavailable");
+
+    runtime.set_fail_start_worker(false);
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &america_worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let still_blocked =
+        wait_for_cli_task_predicate(&ws_url, &britain_task_id, Duration::from_secs(2), |task| {
+            task["status"] == "blocked"
+        });
+    assert_eq!(still_blocked["blocked_reason"], "worker_unavailable");
+    assert!(still_blocked["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_does_not_requeue_session_broken_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    runtime.set_fail_ensure_session(true);
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-broken-auth-live",
+        "Do not requeue broken session live task",
+        "Use si fort status before continuing",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "session_broken");
+
+    runtime.set_fail_ensure_session(false);
+    write_fort_session_state(&codex_home, "america");
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let still_blocked =
+        wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+            task["status"] == "blocked"
+        });
+    assert_eq!(still_blocked["blocked_reason"], "session_broken");
+    assert!(still_blocked["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
