@@ -331,9 +331,11 @@ impl NucleusStore {
         let last_seq = load_last_event_seq(&paths.events_path)?;
         let store =
             Self { paths, next_event_seq: AtomicU64::new(last_seq), write_lock: Mutex::new(()) };
-        for warning in store.rebuild_markdown_projections()? {
+        let mut warnings = store.rebuild_markdown_projections()?;
+        warnings.extend(store.scan_persisted_state_health()?);
+        for warning in warnings {
             store.append_system_warning(
-                "skipped malformed persisted object during markdown projection rebuild",
+                "isolated malformed persisted object during startup recovery",
                 warning,
             )?;
         }
@@ -511,6 +513,80 @@ impl NucleusStore {
             };
             let summary = render_run_summary(&run, task.as_ref());
             write_markdown_atomic(&self.paths.run_summary_path(&run.run_id), &summary)?;
+        }
+        Ok(())
+    }
+
+    fn scan_persisted_state_health(&self) -> Result<Vec<Value>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let mut warnings = Vec::new();
+        self.scan_tasks_locked(&mut warnings)?;
+        self.scan_profiles_locked(&mut warnings)?;
+        self.scan_cron_rules_locked(&mut warnings)?;
+        self.scan_hook_rules_locked(&mut warnings)?;
+        Ok(warnings)
+    }
+
+    fn scan_tasks_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.tasks_state_dir)
+            .with_context(|| format!("read {}", self.paths.tasks_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path().join("task.json");
+            if !path.exists() {
+                continue;
+            }
+            if let Err(error) = read_json_path::<TaskRecord>(&path) {
+                warnings.push(malformed_state_warning("task", &path, &error.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn scan_profiles_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.profiles_state_dir)
+            .with_context(|| format!("read {}", self.paths.profiles_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if let Err(error) = read_json_path::<ProfileRecord>(&path) {
+                warnings.push(malformed_state_warning("profile", &path, &error.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn scan_cron_rules_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.cron_state_dir)
+            .with_context(|| format!("read {}", self.paths.cron_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if let Err(error) = read_json_path::<CronRuleRecord>(&path) {
+                warnings.push(malformed_state_warning("cron_rule", &path, &error.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn scan_hook_rules_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.hook_state_dir)
+            .with_context(|| format!("read {}", self.paths.hook_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if let Err(error) = read_json_path::<HookRuleRecord>(&path) {
+                warnings.push(malformed_state_warning("hook_rule", &path, &error.to_string()));
+            }
         }
         Ok(())
     }
@@ -1875,6 +1951,14 @@ fn load_last_event_seq(path: &Path) -> Result<u64> {
 fn read_json_path<T: DeserializeOwned>(path: &Path) -> Result<T> {
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_slice::<T>(&bytes).with_context(|| format!("parse {}", path.display()))
+}
+
+fn malformed_state_warning(kind: &str, path: &Path, error: &str) -> Value {
+    json!({
+        "kind": kind,
+        "path": path.display().to_string(),
+        "error": error,
+    })
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -4662,6 +4746,37 @@ mod tests {
         let status = reopened.status().expect("status");
         assert_eq!(status.task_count, 1);
         assert_eq!(status.next_event_seq, 2);
+    }
+
+    #[test]
+    fn startup_isolates_malformed_task_state_and_emits_system_warning() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let store = NucleusStore::open(state_dir.clone()).expect("open store");
+        let broken_task_dir = store.paths().tasks_state_dir.join("broken-task");
+        fs::create_dir_all(&broken_task_dir).expect("create broken task dir");
+        fs::write(broken_task_dir.join("task.json"), b"{\"task_id\":")
+            .expect("write broken task file");
+        drop(store);
+
+        let reopened = NucleusStore::open(state_dir).expect("reopen store");
+        let warning = load_canonical_events(&reopened.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| event.event_type == CanonicalEventType::SystemWarning)
+            .expect("system warning event");
+        assert_eq!(warning.source, CanonicalEventSource::System);
+        assert_eq!(
+            warning.data.payload["message"],
+            json!("isolated malformed persisted object during startup recovery"),
+        );
+        assert_eq!(warning.data.payload["details"]["kind"], json!("task"));
+        assert!(
+            warning.data.payload["details"]["path"]
+                .as_str()
+                .expect("warning path")
+                .ends_with("task.json")
+        );
     }
 
     #[tokio::test]
