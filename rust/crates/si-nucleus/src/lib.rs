@@ -5171,6 +5171,39 @@ mod tests {
     }
 
     #[test]
+    fn startup_isolates_malformed_session_state_and_emits_system_warning() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let store = NucleusStore::open(state_dir.clone()).expect("open store");
+        let broken_session_dir = store.paths().sessions_state_dir.join("broken-session");
+        fs::create_dir_all(&broken_session_dir).expect("create broken session dir");
+        fs::write(broken_session_dir.join("session.json"), b"{\"session_id\":")
+            .expect("write broken session file");
+        drop(store);
+
+        let reopened = NucleusStore::open(state_dir).expect("reopen store");
+        let warning = load_canonical_events(&reopened.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| {
+                event.event_type == CanonicalEventType::SystemWarning
+                    && event.data.payload["details"]["kind"] == json!("session")
+            })
+            .expect("session warning event");
+        assert_eq!(warning.source, CanonicalEventSource::System);
+        assert_eq!(
+            warning.data.payload["message"],
+            json!("isolated malformed persisted object during startup recovery"),
+        );
+        assert!(
+            warning.data.payload["details"]["path"]
+                .as_str()
+                .expect("warning path")
+                .ends_with("session.json")
+        );
+    }
+
+    #[test]
     fn startup_fails_clearly_when_canonical_event_ledger_is_unreadable() {
         let temp = tempdir().expect("tempdir");
         let state_dir = temp.path().join("nucleus");
