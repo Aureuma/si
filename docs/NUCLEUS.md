@@ -85,7 +85,7 @@ The metadata file is written by `si-nucleus` and includes the bound websocket UR
 The main control-plane transport is WebSocket:
 
 - default local endpoint: `ws://127.0.0.1:4747/ws`
-- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.list`, `session.show`, `run.inspect`, and `run.cancel`
+- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.create`, `session.list`, `session.show`, `run.submit_turn`, `run.inspect`, and `run.cancel`
 - server-pushed canonical events through `events.subscribe`
 
 The bounded REST surface is exposed by the same Nucleus service and source of truth:
