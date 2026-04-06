@@ -1947,6 +1947,62 @@ fn nucleus_websocket_task_matches_cli_state_on_live_service() {
     }
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_cli_task_matches_websocket_state_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let cli_output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "CLI parity task",
+            "Verify CLI-created tasks are visible through the websocket gateway.",
+            "--profile",
+            "america",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_create: Value = serde_json::from_slice(&cli_output).expect("parse cli create output");
+    let task_id = cli_create["task_id"].as_str().expect("task id").to_owned();
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let inspect_request = serde_json::json!({
+        "id": "task-inspect",
+        "method": "task.inspect",
+        "params": { "task_id": task_id }
+    });
+    socket
+        .send(WsMessage::Text(inspect_request.to_string().into()))
+        .expect("send websocket inspect");
+    let inspect_response = socket.read().expect("read websocket inspect");
+    let inspect_payload = match inspect_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse websocket inspect")
+        }
+        other => panic!("unexpected websocket response: {other:?}"),
+    };
+    assert_eq!(inspect_payload["ok"], true);
+    let ws_inspect = inspect_payload["result"].clone();
+
+    for field in ["task_id", "title", "instructions", "profile", "status"] {
+        assert_eq!(
+            cli_create[field], ws_inspect[field],
+            "field mismatch via websocket for cli-created task: {field}"
+        );
+    }
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
