@@ -1290,12 +1290,16 @@ fn build_npm_build_package_creates_tarball() {
     fs::write(repo.path().join("npm/si/index.js"), "console.log('si');\n").expect("write js");
 
     let bin_dir = tempdir().expect("bin tempdir");
+    let package_check = bin_dir.path().join("package-version.txt");
     let node_path = bin_dir.path().join("node");
     let npm_path = bin_dir.path().join("npm");
     fs::write(&node_path, "#!/bin/sh\necho v20.0.0\n").expect("write node");
     fs::write(
         &npm_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 10.0.0\n  exit 0\nfi\nif [ \"$1\" = \"pack\" ]; then\n  touch aureuma-si-1.2.3.tgz\n  exit 0\nfi\nexit 1\n",
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 10.0.0\n  exit 0\nfi\nif [ \"$1\" = \"pack\" ]; then\n  grep -q '\"version\": \"1.2.3\"' package.json\n  cp package.json {}\n  touch aureuma-si-1.2.3.tgz\n  exit 0\nfi\nexit 1\n",
+            shell_escape_for_test(&package_check)
+        ),
     )
     .expect("write npm");
     #[cfg(unix)]
@@ -1327,6 +1331,8 @@ fn build_npm_build_package_creates_tarball() {
         .success();
 
     assert!(out_dir.join("aureuma-si-1.2.3.tgz").exists());
+    let staged_package = fs::read_to_string(package_check).expect("read staged package");
+    assert!(staged_package.contains("\"version\": \"1.2.3\""));
 }
 
 #[test]
@@ -4565,6 +4571,7 @@ fn build_homebrew_render_tap_formula_writes_formula() {
         .success();
 
     let rendered = fs::read_to_string(output).expect("read formula");
+    assert!(rendered.contains("version \"1.2.3\""));
     assert!(rendered.contains("si_1.2.3_linux_amd64.tar.gz"));
     assert!(rendered.contains("sha4"));
     assert!(rendered.contains("bin.install binary => \"si\""));
