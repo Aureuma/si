@@ -918,6 +918,20 @@ fn load_event_log_values(state_root: &Path) -> Vec<Value> {
         .collect()
 }
 
+fn clear_live_session_thread_id(state_root: &Path, session_id: &str) {
+    let session_path =
+        state_root.join("state").join("sessions").join(session_id).join("session.json");
+    let mut persisted_session: Value =
+        serde_json::from_slice(&fs::read(&session_path).expect("read session json"))
+            .expect("parse session json");
+    persisted_session["app_server_thread_id"] = Value::Null;
+    fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&persisted_session).expect("serialize session json"),
+    )
+    .expect("write session json");
+}
+
 #[test]
 fn surf_and_viva_wrappers_render_help() {
     for command in ["surf", "viva"] {
@@ -3690,6 +3704,113 @@ fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
     let run = inspect_run_via_cli(&ws_url, &run_id);
     assert_eq!(task["status"], "cancelled");
     assert_eq!(run["status"], "cancelled");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_run_cancel_marks_session_broken_when_thread_id_is_missing_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-run-cancel-missing-thread-live",
+        "Cancel run after thread loss",
+        "Generate enough output to be cancellable",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    clear_live_session_thread_id(&state_root, &session_id);
+
+    let cancelled_output = cargo_bin()
+        .args(["nucleus", "run", "cancel", &run_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cancelled: Value = serde_json::from_slice(&cancelled_output).expect("parse run cancel");
+    assert_eq!(cancelled["status"], "cancelled");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    assert_eq!(task["status"], "cancelled");
+    assert_eq!(run["status"], "cancelled");
+    assert_eq!(session["lifecycle_state"], "broken");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_task_cancel_marks_session_broken_when_thread_id_is_missing_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-task-cancel-missing-thread-live",
+        "Cancel task after thread loss",
+        "Generate enough output to be cancellable",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    clear_live_session_thread_id(&state_root, &session_id);
+
+    let cancelled_output = cargo_bin()
+        .args(["nucleus", "task", "cancel", &task_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cancelled: Value = serde_json::from_slice(&cancelled_output).expect("parse task cancel");
+    assert_eq!(cancelled["task"]["status"], "cancelled");
+    assert_eq!(cancelled["cancellation_requested"], false);
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    assert_eq!(task["status"], "cancelled");
+    assert_eq!(run["status"], "cancelled");
+    assert_eq!(session["lifecycle_state"], "broken");
 }
 
 #[test]
