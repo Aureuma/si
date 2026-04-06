@@ -7026,6 +7026,8 @@ fn help_output_renders_root_command_summaries() {
     assert!(root_help.contains("SI CLI for providers, runtimes, and build flows."));
     assert!(root_help.contains("codex"));
     assert!(root_help.contains("Manage Codex profiles and worker sessions."));
+    assert!(root_help.contains("nucleus"));
+    assert!(root_help.contains("Manage the SI Nucleus control plane."));
     assert!(root_help.contains("build"));
     assert!(root_help.contains("Build binaries and release assets."));
     assert!(root_help.contains("orbit"));
@@ -7431,6 +7433,7 @@ fn help_json_lists_known_root_commands() {
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
     assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
+    assert!(commands.iter().any(|entry| entry["name"] == "nucleus"));
     assert!(commands.iter().any(|entry| entry["name"] == "vault"));
     assert!(commands.iter().any(|entry| entry["name"] == "fort"));
     assert!(!commands.iter().any(|entry| entry["name"] == "github"));
@@ -7462,8 +7465,8 @@ fn help_json_root_command_order_matches_public_cli_order() {
     assert_eq!(
         names,
         vec![
-            "version", "help", "build", "commands", "settings", "orbit", "image", "codex", "surf",
-            "viva", "fort", "vault"
+            "version", "help", "build", "commands", "settings", "orbit", "image", "codex",
+            "nucleus", "surf", "viva", "fort", "vault"
         ]
     );
 }
@@ -7500,6 +7503,7 @@ fn commands_root_defaults_to_list_output() {
     let commands = parsed["commands"].as_array().expect("commands array should be present");
     assert!(commands.iter().any(|entry| entry["name"] == "commands"));
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
+    assert!(commands.iter().any(|entry| entry["name"] == "nucleus"));
 }
 
 #[test]
