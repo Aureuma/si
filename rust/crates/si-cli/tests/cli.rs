@@ -607,6 +607,47 @@ fn nucleus_service_install_writes_systemd_unit_and_reloads_user_manager() {
 }
 
 #[test]
+fn nucleus_service_install_writes_launchd_agent_definition() {
+    let temp = tempdir().expect("tempdir");
+    let state_dir = temp.path().join("state");
+    let service_dir = temp.path().join("launch-agents");
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse json");
+    let definition_path = service_dir.join("com.aureuma.si.nucleus.plist");
+    assert_eq!(payload["definition_path"], definition_path.display().to_string());
+    assert_eq!(payload["service_name"], "com.aureuma.si.nucleus");
+    assert_eq!(
+        payload["logs_hint"],
+        "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si-rs\"'"
+    );
+    assert!(payload["manager_command"].is_null());
+
+    let plist = fs::read_to_string(&definition_path).expect("read plist");
+    assert!(plist.contains("<string>nucleus</string>"));
+    assert!(plist.contains("<string>service</string>"));
+    assert!(plist.contains("<string>run</string>"));
+    assert!(plist.contains(state_dir.to_str().expect("state dir")));
+}
+
+#[test]
 fn nucleus_service_start_and_status_use_systemctl_user_unit() {
     let temp = tempdir().expect("tempdir");
     let calls_file = temp.path().join("systemctl-calls.txt");
@@ -681,6 +722,60 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
     let env = fs::read_to_string(&env_file).expect("read env");
     assert!(env.contains(&format!("SI_NUCLEUS_STATE_DIR={}\n", state_dir.display())));
     assert!(env.contains("SI_NUCLEUS_BIND_ADDR=127.0.0.1:4888\n"));
+}
+
+#[test]
+fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
+    let home = tempdir().expect("home tempdir");
+    let metadata_dir = home.path().join(".si/nucleus/gateway");
+    fs::create_dir_all(&metadata_dir).expect("mkdir gateway metadata");
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    fs::write(
+        metadata_dir.join("metadata.json"),
+        format!(r#"{{"ws_url":"ws://{addr}/ws"}}"#),
+    )
+    .expect("write metadata");
+
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
+            .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "version": "metadata-test",
+                "bind_addr": addr.to_string(),
+                "ws_url": format!("ws://{addr}/ws"),
+                "state_dir": "/tmp/nucleus",
+                "task_count": 0,
+                "worker_count": 0,
+                "session_count": 0,
+                "run_count": 0,
+                "next_event_seq": 1
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args(["nucleus", "status", "--format", "json"])
+        .env("HOME", home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["version"], "metadata-test");
+    assert_eq!(payload["ws_url"], format!("ws://{addr}/ws"));
 }
 
 #[test]
