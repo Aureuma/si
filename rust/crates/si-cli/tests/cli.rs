@@ -8573,6 +8573,66 @@ fn fort_wrapper_prefers_existing_sibling_binary_before_cargo_build_fallback() {
 }
 
 #[test]
+fn fort_wrapper_builds_configured_repo_from_custom_target_dir() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    fs::write(bootstrap_dir.join("admin.token"), "bootstrap-token\n").expect("write admin token");
+    let repo = tempdir().expect("fort repo");
+    fs::create_dir_all(repo.path().join(".cargo")).expect("mkdir cargo dir");
+    fs::write(
+        repo.path().join(".cargo/config.toml"),
+        "[build]\ntarget-dir = \".artifacts/cargo-target\"\n",
+    )
+    .expect("write cargo config");
+    let args_file = repo.path().join("fort-args.txt");
+    let env_file = repo.path().join("fort-env.txt");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        format!(
+            "schema_version = 1\n[fort]\nrepo = \"{}\"\nhost = \"https://fort.example.test\"\n",
+            repo.path().display()
+        ),
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nif [ \"$1\" != \"build\" ]; then\n  printf 'unexpected cargo command: %s\\n' \"$1\" >&2\n  exit 1\nfi\nmkdir -p \"$PWD/.artifacts/cargo-target/debug\"\ncat > \"$PWD/.artifacts/cargo-target/debug/fort\" <<'EOF'\n#!/bin/sh\nprintf '%s\\n' \"$@\" > {args}\nprintf 'FORT_HOST=%s\\nFORT_BOOTSTRAP_TOKEN_FILE=%s\\nFORT_TOKEN_PATH=%s\\n' \"${{FORT_HOST:-}}\" \"${{FORT_BOOTSTRAP_TOKEN_FILE:-}}\" \"${{FORT_TOKEN_PATH:-}}\" > {env}\nEOF\nchmod +x \"$PWD/.artifacts/cargo-target/debug/fort\"\n",
+            args = shell_escape_for_test(&args_file),
+            env = shell_escape_for_test(&env_file),
+        ),
+    );
+    let path_env = format!("{}:/usr/bin:/bin", bin_dir.path().display());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert_eq!(
+        args,
+        format!(
+            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
+            home.path().join(".si/fort/bootstrap/admin.token").display()
+        )
+    );
+    let env = fs::read_to_string(&env_file).expect("read fort env");
+    assert!(env.contains("FORT_HOST="));
+    assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
+    assert!(env.contains("FORT_TOKEN_PATH="));
+}
+
+#[test]
 fn fort_config_set_and_show_round_trip_si_settings() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
