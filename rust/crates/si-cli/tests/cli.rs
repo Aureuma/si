@@ -3718,6 +3718,90 @@ fn nucleus_worker_restart_clears_exhausted_auto_restart_boundary_on_live_service
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_clears_exhausted_auto_restart_boundary_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    runtime.set_fail_start_worker(true);
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop test worker");
+
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(8) {
+        let events = load_event_log_values(&state_root);
+        if events.iter().any(|event| {
+            event["type"] == "system.warning"
+                && event["data"]["payload"]["message"] == "worker restart attempts exhausted"
+                && event["data"]["payload"]["details"]["worker_id"] == worker_id
+        }) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "system.warning"
+            && event["data"]["payload"]["message"] == "worker restart attempts exhausted"
+            && event["data"]["payload"]["details"]["worker_id"] == worker_id
+    }));
+
+    let failed_session = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let failed_session_stderr =
+        String::from_utf8(failed_session.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(failed_session_stderr.contains("worker restart attempts exhausted"));
+
+    runtime.set_fail_start_worker(false);
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let resumed_session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    assert_eq!(resumed_session["worker"]["worker_id"], worker_id);
+    assert_eq!(resumed_session["worker"]["status"], "ready");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_worker_restart_does_not_requeue_broken_session_task_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
