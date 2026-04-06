@@ -5,7 +5,7 @@ use base64::{
 };
 use chrono::Utc;
 use reqwest::blocking::Client as BlockingClient;
-use serde_json::Value;
+use serde_json::{Value, json};
 use si_nucleus::{NucleusConfig, NucleusService};
 use si_nucleus_core::{
     CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId, WorkerStatus,
@@ -3703,10 +3703,7 @@ fn nucleus_worker_restart_does_not_requeue_broken_session_task_on_live_service()
             task["status"] == "blocked"
         });
     assert_eq!(still_blocked["blocked_reason"], "worker_unavailable");
-    assert_eq!(
-        still_blocked["latest_run_id"].as_str().expect("latest run id"),
-        run_id
-    );
+    assert_eq!(still_blocked["latest_run_id"].as_str().expect("latest run id"), run_id);
 }
 
 #[test]
@@ -3834,6 +3831,72 @@ fn nucleus_worker_repair_auth_requeues_fort_unavailable_task_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_refreshes_profile_state_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let profile_path = state_root.join("state").join("profiles").join("america.json");
+    fs::write(
+        &profile_path,
+        serde_json::to_vec_pretty(&json!({
+            "profile": "america",
+            "account_identity": "stale@example.com",
+            "codex_home": temp.path().join("stale/.si/codex/profiles/america").display().to_string(),
+            "auth_mode": "stale-auth",
+            "preferred_model": "stale-model",
+            "runtime_defaults": { "model": "stale-model" }
+        }))
+        .expect("serialize stale profile"),
+    )
+    .expect("persist stale profile");
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let profiles_output = cargo_bin()
+        .args(["nucleus", "profile", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let profiles: Value = serde_json::from_slice(&profiles_output).expect("parse profile list");
+    let profile = profiles
+        .as_array()
+        .expect("profile list array")
+        .iter()
+        .find(|profile| profile["profile"] == "america")
+        .expect("america profile");
+    assert_eq!(profile["account_identity"], "america@example.com");
+    assert_eq!(profile["preferred_model"], "gpt-5.4");
+    assert_eq!(profile["codex_home"], codex_home.display().to_string());
+    assert!(profile["auth_mode"].is_null());
+    assert_eq!(profile["runtime_defaults"], json!({}));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_worker_restart_does_not_requeue_other_profile_task_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
@@ -3846,7 +3909,8 @@ fn nucleus_worker_restart_does_not_requeue_other_profile_task_on_live_service() 
 
     let home_dir = temp.path().join("home");
     let america_codex_home = home_dir.join(".si/codex/profiles/america");
-    let america_session = create_session_via_cli(&ws_url, &home_dir, &america_codex_home, temp.path());
+    let america_session =
+        create_session_via_cli(&ws_url, &home_dir, &america_codex_home, temp.path());
     let america_worker_id =
         america_session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
 
@@ -4076,24 +4140,17 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
         .stdout
         .clone();
     let listed: Value = serde_json::from_slice(&listed).expect("parse task list");
-    assert!(listed
-        .as_array()
-        .expect("task list array")
-        .iter()
-        .any(|task| task["task_id"] == payload["task_id"]));
+    assert!(
+        listed
+            .as_array()
+            .expect("task list array")
+            .iter()
+            .any(|task| task["task_id"] == payload["task_id"])
+    );
 
     cargo_bin()
         .env_remove("SI_NUCLEUS_AUTH_TOKEN")
-        .args([
-            "nucleus",
-            "task",
-            "inspect",
-            task_id,
-            "--endpoint",
-            &ws_url,
-            "--format",
-            "json",
-        ])
+        .args(["nucleus", "task", "inspect", task_id, "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success();
 }
@@ -7974,13 +8031,8 @@ fn help_json_for_specific_command_includes_aliases() {
 
 #[test]
 fn nucleus_help_surface_stays_bounded_to_plan_scope() {
-    let output = cargo_bin()
-        .args(["nucleus", "--help"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
+    let output =
+        cargo_bin().args(["nucleus", "--help"]).assert().success().get_output().stdout.clone();
 
     let help = String::from_utf8(output).expect("help output should be utf-8");
     for expected in [
@@ -7994,16 +8046,10 @@ fn nucleus_help_surface_stays_bounded_to_plan_scope() {
         "run",
         "events",
     ] {
-        assert!(
-            help.contains(expected),
-            "nucleus help output must expose {expected}"
-        );
+        assert!(help.contains(expected), "nucleus help output must expose {expected}");
     }
     for forbidden in ["thread", "turn", "tmux", "transcript", "auth-json", "authjson"] {
-        assert!(
-            !help.contains(forbidden),
-            "nucleus public surface must not expose {forbidden}"
-        );
+        assert!(!help.contains(forbidden), "nucleus public surface must not expose {forbidden}");
     }
 }
 
@@ -19482,11 +19528,7 @@ fn vault_hooks_install_status_and_uninstall_manage_pre_commit() {
     run_git(repo.path(), &["init"]);
     let hook_path = repo.path().join(".git").join("hooks").join("pre-commit");
 
-    cargo_bin()
-        .current_dir(repo.path())
-        .args(["vault", "hooks", "install"])
-        .assert()
-        .success();
+    cargo_bin().current_dir(repo.path()).args(["vault", "hooks", "install"]).assert().success();
 
     let hook = fs::read_to_string(&hook_path).expect("read hook");
     assert!(hook.contains("si-vault:hook pre-commit v2"));
@@ -19503,11 +19545,7 @@ fn vault_hooks_install_status_and_uninstall_manage_pre_commit() {
     let status = String::from_utf8(status).expect("utf8 status");
     assert!(status.contains("pre-commit: installed"));
 
-    cargo_bin()
-        .current_dir(repo.path())
-        .args(["vault", "hooks", "uninstall"])
-        .assert()
-        .success();
+    cargo_bin().current_dir(repo.path()).args(["vault", "hooks", "uninstall"]).assert().success();
     assert!(!hook_path.exists());
 }
 
@@ -19681,10 +19719,7 @@ fn vault_set_accepts_legacy_stdin_env_and_section_flags() {
         .get_output()
         .stdout
         .clone();
-    assert_eq!(
-        String::from_utf8(revealed).expect("utf8 revealed"),
-        "super-secret-from-stdin\n"
-    );
+    assert_eq!(String::from_utf8(revealed).expect("utf8 revealed"), "super-secret-from-stdin\n");
 }
 
 #[test]

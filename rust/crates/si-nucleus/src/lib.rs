@@ -1352,8 +1352,12 @@ impl NucleusStore {
         source: CanonicalEventSource,
     ) -> Result<Option<CanonicalEvent>> {
         let path = self.paths.profile_path(&profile.profile);
-        let existed = path.exists();
-        write_json_atomic(&path, &profile)?;
+        let existing =
+            if path.exists() { Some(read_json_path::<ProfileRecord>(&path)?) } else { None };
+        if existing.as_ref() != Some(&profile) {
+            write_json_atomic(&path, &profile)?;
+        }
+        let existed = existing.is_some();
         if existed {
             return Ok(None);
         }
@@ -4901,8 +4905,8 @@ mod tests {
     use serde_json::json;
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
-        EventId, ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState,
-        TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId, WorkerStatus,
+        EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
+        SessionLifecycleState, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId, WorkerStatus,
     };
     use si_nucleus_runtime::{
         CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
@@ -6968,6 +6972,83 @@ mod tests {
         assert_eq!(payload["worker"]["worker_id"], json!(worker_id));
         assert_eq!(payload["worker"]["status"], json!("ready"));
         assert_eq!(payload["runtime"]["worker_id"], json!(worker_id));
+    }
+
+    #[tokio::test]
+    async fn worker_repair_auth_refreshes_persisted_profile_state() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("probe-repair-auth-refresh-profile"),
+                method: "worker.probe".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(response.ok);
+        let worker_id = response
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["worker_id"].as_str())
+            .expect("worker id");
+
+        let profile_path = service
+            .store
+            .paths()
+            .profile_path(&ProfileName::new("america".to_owned()).expect("profile name"));
+        write_json_atomic(
+            &profile_path,
+            &ProfileRecord {
+                profile: ProfileName::new("america".to_owned()).expect("profile name"),
+                account_identity: Some("stale@example.com".to_owned()),
+                codex_home: temp
+                    .path()
+                    .join("stale/.si/codex/profiles/america")
+                    .display()
+                    .to_string(),
+                auth_mode: Some("stale-auth".to_owned()),
+                preferred_model: Some("stale-model".to_owned()),
+                runtime_defaults: BTreeMap::from([("model".to_owned(), "stale-model".to_owned())]),
+            },
+        )
+        .expect("persist stale profile");
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-repair-auth-refresh-profile"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let profiles = service.store.list_profile_records().expect("list profiles");
+        let profile = profiles
+            .into_iter()
+            .find(|profile| profile.profile.as_str() == "america")
+            .expect("america profile");
+        assert_eq!(profile.account_identity.as_deref(), Some("america@example.com"));
+        assert_eq!(profile.preferred_model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(
+            profile.codex_home,
+            temp.path().join("home/.si/codex/profiles/america").display().to_string()
+        );
+        assert!(profile.auth_mode.is_none());
+        assert!(profile.runtime_defaults.is_empty());
     }
 
     #[tokio::test]
