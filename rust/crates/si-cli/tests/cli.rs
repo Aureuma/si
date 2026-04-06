@@ -3356,6 +3356,117 @@ fn nucleus_rest_worker_session_and_run_match_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_task_cancel_matches_websocket_and_cli_state() {
+    let temp = tempdir().expect("tempdir");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let base_url =
+        spawn_live_nucleus_service_with_runtime(&temp.path().join("nucleus"), Arc::new(runtime));
+    let client = BlockingClient::new();
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let created = create_task_via_cli(
+        &ws_url,
+        "REST cancel parity task",
+        "Reply with nucleus-smoke",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let cancelled: Value = client
+        .post(format!("{base_url}/tasks/{task_id}/cancel"))
+        .send()
+        .expect("rest cancel")
+        .json()
+        .expect("parse rest cancel");
+    assert_eq!(cancelled["task"]["task_id"], task_id);
+    assert_eq!(cancelled["run"]["run_id"], run_id);
+
+    let cancelled_task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let rest_task_after: Value = client
+        .get(format!("{base_url}/tasks/{task_id}"))
+        .send()
+        .expect("rest inspect task after cancel")
+        .json()
+        .expect("parse rest task after cancel");
+    let rest_run_after: Value = client
+        .get(format!("{base_url}/runs/{run_id}"))
+        .send()
+        .expect("rest inspect run after cancel")
+        .json()
+        .expect("parse rest run after cancel");
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let task_request = serde_json::json!({
+        "id": "task-inspect-after-rest-cancel",
+        "method": "task.inspect",
+        "params": { "task_id": task_id }
+    });
+    socket
+        .send(WsMessage::Text(task_request.to_string().into()))
+        .expect("send websocket task inspect");
+    let task_response = socket.read().expect("read websocket task inspect");
+    let task_payload = match task_response {
+        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse task payload"),
+        other => panic!("unexpected websocket task response: {other:?}"),
+    };
+    assert_eq!(task_payload["ok"], true);
+    let ws_task = task_payload["result"].clone();
+
+    let run_request = serde_json::json!({
+        "id": "run-inspect-after-rest-cancel",
+        "method": "run.inspect",
+        "params": { "run_id": run_id }
+    });
+    socket
+        .send(WsMessage::Text(run_request.to_string().into()))
+        .expect("send websocket run inspect");
+    let run_response = socket.read().expect("read websocket run inspect");
+    let run_payload = match run_response {
+        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse run payload"),
+        other => panic!("unexpected websocket run response: {other:?}"),
+    };
+    assert_eq!(run_payload["ok"], true);
+    let ws_run = run_payload["result"].clone();
+
+    let cli_task_output = cargo_bin()
+        .args(["nucleus", "task", "inspect", &task_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_task: Value = serde_json::from_slice(&cli_task_output).expect("parse cli task inspect");
+    let cli_run = inspect_run_via_cli(&ws_url, &run_id);
+
+    for field in ["task_id", "status"] {
+        assert_eq!(
+            rest_task_after[field], ws_task[field],
+            "task field mismatch via websocket: {field}"
+        );
+        assert_eq!(rest_task_after[field], cli_task[field], "task field mismatch via cli: {field}");
+    }
+    for field in ["run_id", "status"] {
+        assert_eq!(
+            rest_run_after[field], ws_run[field],
+            "run field mismatch via websocket: {field}"
+        );
+        assert_eq!(rest_run_after[field], cli_run[field], "run field mismatch via cli: {field}");
+    }
+    assert_eq!(cancelled_task["status"], "cancelled");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_websocket_task_matches_cli_state_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
