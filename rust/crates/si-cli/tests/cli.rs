@@ -7141,6 +7141,101 @@ fn nucleus_live_rest_missing_targets_preserve_auth_split() {
     assert_eq!(authorized_body["error"]["code"], "not_found");
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_rest_error_envelopes_keep_canonical_shape() {
+    let temp = tempdir().expect("tempdir");
+
+    let auth_base_url = spawn_live_nucleus_service_with_options(
+        &temp.path().join("auth-nucleus"),
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(TestRuntime::default())),
+    );
+    let client = BlockingClient::new();
+
+    let unauthorized_create = client
+        .post(format!("{auth_base_url}/tasks"))
+        .json(&json!({
+            "title": "REST unauthorized envelope task",
+            "instructions": "This should require a bearer token.",
+            "profile": "america"
+        }))
+        .send()
+        .expect("unauthorized create");
+    assert_eq!(unauthorized_create.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let unauthorized_body: Value = unauthorized_create.json().expect("parse unauthorized body");
+    assert_eq!(unauthorized_body["error"]["code"], "unauthorized");
+    assert!(
+        unauthorized_body["error"]["message"]
+            .as_str()
+            .map(|value| !value.is_empty())
+            .unwrap_or(false)
+    );
+    assert!(unauthorized_body["error"]["details"].is_null());
+
+    let missing_task = client
+        .get(format!("{auth_base_url}/tasks/si-task-missing"))
+        .send()
+        .expect("missing task read");
+    assert_eq!(missing_task.status(), reqwest::StatusCode::NOT_FOUND);
+    let missing_body: Value = missing_task.json().expect("parse missing body");
+    assert_eq!(missing_body["error"]["code"], "not_found");
+    assert!(
+        missing_body["error"]["message"]
+            .as_str()
+            .map(|value| value.contains("not found"))
+            .unwrap_or(false)
+    );
+    assert!(missing_body["error"]["details"].is_null());
+
+    let source_state_root = temp.path().join("source-nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_secs(5),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let source_ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&source_state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&source_ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let created = create_task_over_websocket(
+        &source_ws_url,
+        "rest-envelope-unavailable-live",
+        "Keep active run for unavailable envelope",
+        "Keep running until cancellation is attempted",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let _running = wait_for_cli_task_status(&source_ws_url, &task_id, "running");
+
+    let snapshot_state_root = temp.path().join("snapshot-nucleus");
+    copy_dir_recursive(&source_state_root, &snapshot_state_root);
+    let snapshot_base_url = spawn_live_nucleus_service(&snapshot_state_root);
+
+    let unavailable_cancel = client
+        .post(format!("{snapshot_base_url}/tasks/{task_id}/cancel"))
+        .send()
+        .expect("unavailable cancel");
+    assert_eq!(unavailable_cancel.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
+    let unavailable_body: Value = unavailable_cancel.json().expect("parse unavailable body");
+    assert_eq!(unavailable_body["error"]["code"], "unavailable");
+    assert!(
+        unavailable_body["error"]["message"]
+            .as_str()
+            .map(|value| value.contains("runtime unavailable"))
+            .unwrap_or(false)
+    );
+    assert!(unavailable_body["error"]["details"].is_null());
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
