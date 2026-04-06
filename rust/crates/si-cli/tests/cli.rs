@@ -7027,7 +7027,32 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["404"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["503"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/status"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/openapi.json"]["get"]["responses"]["500"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
     );
