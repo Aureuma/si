@@ -2975,14 +2975,23 @@ impl NucleusService {
                     .store
                     .inspect_session(&run.session_id)?
                     .ok_or_else(|| anyhow!("session not found"))?;
-                let profile = task.profile.clone().or_else(|| session.profile.clone());
                 if let Some(turn_id) = run.app_server_turn_id.as_deref() {
+                    let Some(thread_id) = session.app_server_thread_id.clone() else {
+                        let (task, run) = self.cancel_active_run_without_interrupt(
+                            &task,
+                            &run,
+                            &session,
+                            "run cancelled after session lost app-server thread id",
+                            true,
+                        )?;
+                        return Ok(TaskCancelResultView {
+                            task,
+                            run: Some(run),
+                            cancellation_requested: false,
+                        });
+                    };
                     let runtime =
                         self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
-                    let thread_id = session
-                        .app_server_thread_id
-                        .clone()
-                        .ok_or_else(|| anyhow!("session missing app-server thread id"))?;
                     runtime.interrupt_turn(&session.worker_id, &thread_id, turn_id)?;
                     let task = self
                         .store
@@ -2992,27 +3001,18 @@ impl NucleusService {
                     return Ok(TaskCancelResultView { task, run, cancellation_requested: true });
                 }
 
-                let events = self.store.apply_runtime_event(CanonicalEventDraft {
-                    event_type: CanonicalEventType::RunCancelled,
-                    source: CanonicalEventSource::Nucleus,
-                    data: EventDataEnvelope {
-                        task_id: Some(task.task_id.clone()),
-                        worker_id: Some(session.worker_id.clone()),
-                        session_id: Some(session.session_id.clone()),
-                        run_id: Some(run.run_id.clone()),
-                        profile,
-                        payload: json!({
-                            "message": "run cancelled before the worker reported turn start",
-                        }),
-                    },
-                })?;
-                for event in events {
-                    let _ = self.events.send(event);
-                }
-                let task =
-                    self.store.inspect_task(task_id)?.ok_or_else(|| anyhow!("task not found"))?;
-                let run = self.store.inspect_run(&run.run_id)?;
-                return Ok(TaskCancelResultView { task, run, cancellation_requested: false });
+                let (task, run) = self.cancel_active_run_without_interrupt(
+                    &task,
+                    &run,
+                    &session,
+                    "run cancelled before the worker reported turn start",
+                    false,
+                )?;
+                return Ok(TaskCancelResultView {
+                    task,
+                    run: Some(run),
+                    cancellation_requested: false,
+                });
             }
         }
 
@@ -3039,6 +3039,44 @@ impl NucleusService {
             .transpose()?
             .flatten();
         Ok(TaskCancelResultView { task, run, cancellation_requested: false })
+    }
+
+    fn cancel_active_run_without_interrupt(
+        &self,
+        task: &TaskRecord,
+        run: &RunRecord,
+        session: &SessionRecord,
+        message: &str,
+        mark_session_broken: bool,
+    ) -> Result<(TaskRecord, RunRecord)> {
+        if mark_session_broken {
+            if let Some(event) = self.store.mark_session_broken(&session.session_id, message)? {
+                let _ = self.events.send(event);
+            }
+        }
+        let events = self.store.apply_runtime_event(CanonicalEventDraft {
+            event_type: CanonicalEventType::RunCancelled,
+            source: CanonicalEventSource::Nucleus,
+            data: EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: Some(session.worker_id.clone()),
+                session_id: Some(session.session_id.clone()),
+                run_id: Some(run.run_id.clone()),
+                profile: task.profile.clone().or_else(|| session.profile.clone()),
+                payload: json!({
+                    "message": message,
+                    "thread_id": session.app_server_thread_id,
+                    "turn_id": run.app_server_turn_id,
+                }),
+            },
+        })?;
+        for event in events {
+            let _ = self.events.send(event);
+        }
+        let task =
+            self.store.inspect_task(&task.task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+        let run = self.store.inspect_run(&run.run_id)?.ok_or_else(|| anyhow!("run not found"))?;
+        Ok((task, run))
     }
 
     fn find_reusable_session(
@@ -3543,26 +3581,47 @@ impl NucleusService {
                 }
             }
             "run.cancel" => {
-                let runtime =
-                    self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
                 let params: RunCancelParams =
                     serde_json::from_value(params).context("parse run.cancel params")?;
                 let run_id = RunId::new(params.run_id)?;
                 let run =
                     self.store.inspect_run(&run_id)?.ok_or_else(|| anyhow!("run not found"))?;
+                if !is_active_run_status(run.status) {
+                    return Ok(serde_json::to_value(run)?);
+                }
                 let session = self
                     .store
                     .inspect_session(&run.session_id)?
                     .ok_or_else(|| anyhow!("session not found"))?;
-                let thread_id = session
-                    .app_server_thread_id
-                    .clone()
-                    .ok_or_else(|| anyhow!("session missing app-server thread id"))?;
-                let turn_id = run
-                    .app_server_turn_id
-                    .clone()
-                    .ok_or_else(|| anyhow!("run has not started a turn yet"))?;
+                let task = self
+                    .store
+                    .inspect_task(&run.task_id)?
+                    .ok_or_else(|| anyhow!("task not found"))?;
+                let Some(turn_id) = run.app_server_turn_id.clone() else {
+                    let (_, run) = self.cancel_active_run_without_interrupt(
+                        &task,
+                        &run,
+                        &session,
+                        "run cancelled before the worker reported turn start",
+                        false,
+                    )?;
+                    return Ok(serde_json::to_value(run)?);
+                };
+                let Some(thread_id) = session.app_server_thread_id.clone() else {
+                    let (_, run) = self.cancel_active_run_without_interrupt(
+                        &task,
+                        &run,
+                        &session,
+                        "run cancelled after session lost app-server thread id",
+                        true,
+                    )?;
+                    return Ok(serde_json::to_value(run)?);
+                };
+                let runtime =
+                    self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
                 runtime.interrupt_turn(&session.worker_id, &thread_id, &turn_id)?;
+                let run =
+                    self.store.inspect_run(&run_id)?.ok_or_else(|| anyhow!("run not found"))?;
                 Ok(serde_json::to_value(run)?)
             }
             "events.subscribe" => Ok(json!({ "subscribed": true })),
@@ -4697,10 +4756,10 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
+        CreateTaskInput, CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        CreateTaskInput, append_jsonl_with_rotation, cron_due_key, current_persisted_version,
-        hook_event_key, load_canonical_events, load_last_event_seq, write_json_atomic,
+        append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
+        load_canonical_events, load_last_event_seq, write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -5434,7 +5493,10 @@ mod tests {
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
-        assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"], json!("opaque token"));
+        assert_eq!(
+            body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
+            json!("opaque token")
+        );
         for (path, method, expected_response) in [
             ("/status", "get", "200"),
             ("/tasks", "get", "200"),
@@ -5457,10 +5519,7 @@ mod tests {
                 "missing description for {method} {path}"
             );
             assert!(
-                operation["x-si-purpose"]
-                    .as_str()
-                    .map(|value| !value.is_empty())
-                    .unwrap_or(false),
+                operation["x-si-purpose"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
                 "missing x-si-purpose for {method} {path}"
             );
             assert!(
@@ -5471,13 +5530,23 @@ mod tests {
             assert!(
                 operation.get("requestBody").map(|value| value.is_object()).unwrap_or(false)
                     || operation.get("parameters").map(|value| value.is_array()).unwrap_or(false)
-                    || matches!((path, method), ("/status", "get") | ("/tasks", "get") | ("/workers", "get") | ("/openapi.json", "get")),
+                    || matches!(
+                        (path, method),
+                        ("/status", "get")
+                            | ("/tasks", "get")
+                            | ("/workers", "get")
+                            | ("/openapi.json", "get")
+                    ),
                 "missing request surface for {method} {path}"
             );
         }
         for (path, method) in [("/tasks", "post")] {
             let operation = &body["paths"][path][method];
-            assert_eq!(operation["requestBody"]["required"], json!(true), "requestBody must be required for {method} {path}");
+            assert_eq!(
+                operation["requestBody"]["required"],
+                json!(true),
+                "requestBody must be required for {method} {path}"
+            );
             assert!(
                 operation["requestBody"]["content"]["application/json"]["schema"].is_object(),
                 "missing request schema for {method} {path}"
@@ -5491,21 +5560,29 @@ mod tests {
             body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["required"],
             json!(["code", "message"])
         );
-        assert!(body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["properties"]["details"].is_object());
+        assert!(
+            body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["properties"]
+                ["details"]
+                .is_object()
+        );
         assert_eq!(
-            body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/NucleusStatusView")
         );
         assert_eq!(
-            body["paths"]["/status"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/status"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+                ["type"],
             json!("array")
         );
         assert_eq!(
-            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"],
+            body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+                ["items"]["$ref"],
             json!("#/components/schemas/TaskRecord")
         );
         assert_eq!(
@@ -5514,7 +5591,8 @@ mod tests {
             json!("#/components/schemas/TaskCreateParams")
         );
         assert_eq!(
-            body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/TaskRecord")
         );
         assert_eq!(
@@ -5522,11 +5600,13 @@ mod tests {
             json!("string")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/TaskRecord")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
@@ -5540,27 +5620,33 @@ mod tests {
             json!("string")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/TaskCancelResultView")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["404"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["503"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["503"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+                ["type"],
             json!("array")
         );
         assert_eq!(
-            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"],
+            body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+                ["items"]["$ref"],
             json!("#/components/schemas/WorkerRecord")
         );
         assert_eq!(
-            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/WorkerInspectView")
         );
         assert_eq!(
@@ -5568,11 +5654,13 @@ mod tests {
             json!("string")
         );
         assert_eq!(
-            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/SessionRecord")
         );
         assert_eq!(
@@ -5580,11 +5668,13 @@ mod tests {
             json!("string")
         );
         assert_eq!(
-            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RunRecord")
         );
         assert_eq!(
@@ -5592,57 +5682,73 @@ mod tests {
             json!("string")
         );
         assert_eq!(
-            body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
-        assert_eq!(body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"], json!([]));
         assert_eq!(
-            body["paths"]["/tasks"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"],
+            json!([])
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/workers"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/workers"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+                ["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/openapi.json"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            body["paths"]["/openapi.json"]["get"]["responses"]["500"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
-            body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["type"],
             json!("object")
         );
         assert!(body["paths"]["/status"]["get"]["security"].is_null());
@@ -5779,11 +5885,13 @@ mod tests {
             .expect("list response");
         assert_eq!(list_response.status(), StatusCode::OK);
         let listed = response_json(list_response).await;
-        assert!(listed
-            .as_array()
-            .expect("task list array")
-            .iter()
-            .any(|task| task["task_id"] == json!(task_id.clone())));
+        assert!(
+            listed
+                .as_array()
+                .expect("task list array")
+                .iter()
+                .any(|task| task["task_id"] == json!(task_id.clone()))
+        );
 
         let inspect_response = app
             .oneshot(
@@ -5853,7 +5961,7 @@ mod tests {
                     params: json!({}),
                 },
                 None,
-        )
+            )
             .await;
         assert!(read.ok);
     }
@@ -5883,10 +5991,8 @@ mod tests {
             )
             .await;
         assert!(created.ok);
-        let task_id = created.result.expect("created")["task_id"]
-            .as_str()
-            .expect("task id")
-            .to_owned();
+        let task_id =
+            created.result.expect("created")["task_id"].as_str().expect("task id").to_owned();
 
         let listed = service
             .dispatch_request_authorized(
@@ -5899,13 +6005,15 @@ mod tests {
             )
             .await;
         assert!(listed.ok);
-        assert!(listed
-            .result
-            .expect("task list")
-            .as_array()
-            .expect("task list array")
-            .iter()
-            .any(|task| task["task_id"] == json!(task_id.clone())));
+        assert!(
+            listed
+                .result
+                .expect("task list")
+                .as_array()
+                .expect("task list array")
+                .iter()
+                .any(|task| task["task_id"] == json!(task_id.clone()))
+        );
 
         let inspected = service
             .dispatch_request_authorized(
@@ -5921,8 +6029,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_only_gateway_and_rest_inspect_surfaces_remain_available_without_bearer_token_when_bound_beyond_loopback(
-    ) {
+    async fn read_only_gateway_and_rest_inspect_surfaces_remain_available_without_bearer_token_when_bound_beyond_loopback()
+     {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
             NucleusConfig {
@@ -5951,8 +6059,10 @@ mod tests {
             .await;
         assert!(session.ok);
         let session_payload = session.result.expect("session payload");
-        let worker_id = session_payload["worker"]["worker_id"].as_str().expect("worker id").to_owned();
-        let session_id = session_payload["session"]["session_id"].as_str().expect("session id").to_owned();
+        let worker_id =
+            session_payload["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+        let session_id =
+            session_payload["session"]["session_id"].as_str().expect("session id").to_owned();
 
         let task = service
             .dispatch_request_authorized(
@@ -5970,7 +6080,8 @@ mod tests {
             )
             .await;
         assert!(task.ok);
-        let task_id = task.result.expect("task payload")["task_id"].as_str().expect("task id").to_owned();
+        let task_id =
+            task.result.expect("task payload")["task_id"].as_str().expect("task id").to_owned();
 
         let run = service
             .dispatch_request_authorized(
@@ -5987,7 +6098,8 @@ mod tests {
             )
             .await;
         assert!(run.ok);
-        let run_id = run.result.expect("run payload")["run_id"].as_str().expect("run id").to_owned();
+        let run_id =
+            run.result.expect("run payload")["run_id"].as_str().expect("run id").to_owned();
 
         thread::sleep(Duration::from_millis(150));
 
@@ -6014,13 +6126,15 @@ mod tests {
             )
             .await;
         assert!(worker_list.ok);
-        assert!(worker_list
-            .result
-            .expect("worker list")
-            .as_array()
-            .expect("worker list array")
-            .iter()
-            .any(|worker| worker["worker_id"] == json!(worker_id.clone())));
+        assert!(
+            worker_list
+                .result
+                .expect("worker list")
+                .as_array()
+                .expect("worker list array")
+                .iter()
+                .any(|worker| worker["worker_id"] == json!(worker_id.clone()))
+        );
 
         let worker_inspect = service
             .dispatch_request_authorized(
@@ -6045,13 +6159,15 @@ mod tests {
             )
             .await;
         assert!(session_list.ok);
-        assert!(session_list
-            .result
-            .expect("session list")
-            .as_array()
-            .expect("session list array")
-            .iter()
-            .any(|session| session["session_id"] == json!(session_id.clone())));
+        assert!(
+            session_list
+                .result
+                .expect("session list")
+                .as_array()
+                .expect("session list array")
+                .iter()
+                .any(|session| session["session_id"] == json!(session_id.clone()))
+        );
 
         let session_show = service
             .dispatch_request_authorized(
@@ -7171,7 +7287,8 @@ mod tests {
         assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
         assert!(!run_summary.contains("Checkpoint: `stale`"));
 
-        let persisted_run = reopened.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        let persisted_run =
+            reopened.inspect_run(&run_id).expect("inspect run").expect("run exists");
         assert_eq!(persisted_run.status, RunStatus::Completed);
     }
 
@@ -7365,11 +7482,11 @@ mod tests {
             .as_str()
             .expect("session id")
             .to_owned();
-        let thread_id = session.result.as_ref().expect("session result")["session"]
-            ["app_server_thread_id"]
-            .as_str()
-            .expect("thread id")
-            .to_owned();
+        let thread_id =
+            session.result.as_ref().expect("session result")["session"]["app_server_thread_id"]
+                .as_str()
+                .expect("thread id")
+                .to_owned();
         assert!(worker_id.starts_with("si-worker-"));
         assert!(session_id.starts_with("si-session-"));
         assert_ne!(session_id, thread_id);
@@ -7403,8 +7520,7 @@ mod tests {
             })
             .await;
         assert!(run.ok);
-        let run_id =
-            run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
+        let run_id = run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
         wait_for_task_status(&service, task_id, TaskStatus::Done);
 
         let persisted_run = service
@@ -7412,13 +7528,13 @@ mod tests {
             .inspect_run(&RunId::new(run_id).expect("run id"))
             .expect("inspect run")
             .expect("run exists");
-        let turn_id =
-            persisted_run.app_server_turn_id.as_deref().expect("app server turn id");
+        let turn_id = persisted_run.app_server_turn_id.as_deref().expect("app server turn id");
         assert!(run_id.starts_with("si-run-"));
         assert_ne!(run_id, turn_id);
         assert!(!turn_id.starts_with("si-run-"));
 
-        let events = load_canonical_events(&service.store.paths().events_path).expect("load events");
+        let events =
+            load_canonical_events(&service.store.paths().events_path).expect("load events");
         assert!(!events.is_empty());
         assert!(
             events.iter().all(|event| event.event_id.as_str().starts_with("si-event-")),
@@ -7714,8 +7830,7 @@ mod tests {
         let base_home = temp.path().join("home");
 
         for worker_suffix in ["b", "a"] {
-            let worker_id =
-                WorkerId::new(format!("si-worker-{worker_suffix}")).expect("worker id");
+            let worker_id = WorkerId::new(format!("si-worker-{worker_suffix}")).expect("worker id");
             let spec = WorkerLaunchSpec {
                 worker_id,
                 profile: profile.clone(),
@@ -7990,7 +8105,11 @@ mod tests {
             .await;
         assert!(task.ok);
         let task_id = TaskId::new(
-            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id").to_owned(),
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
         )
         .expect("task id");
 
@@ -8014,11 +8133,8 @@ mod tests {
         );
         assert_eq!(service.store.list_runs().expect("runs").len(), 0);
 
-        let task = service
-            .store
-            .inspect_task(&task_id)
-            .expect("inspect task")
-            .expect("task exists");
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
 
@@ -8211,11 +8327,8 @@ mod tests {
 
         service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
-        let task = service
-            .store
-            .inspect_task(&task_id)
-            .expect("inspect task")
-            .expect("task exists");
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
         assert!(task.latest_run_id.is_none());
@@ -8591,6 +8704,342 @@ mod tests {
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Ready);
     }
 
+    #[tokio::test]
+    async fn run_cancel_cancels_queued_run_before_turn_start() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-cancel-before-turn"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-cancel-before-turn"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel queued run",
+                    "instructions": "Create a queued run before turn start",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .store
+            .claim_run_for_task(RunRecord::new(
+                RunId::generate(),
+                task_id.clone(),
+                session_id.clone(),
+            ))
+            .expect("claim queued run");
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancel-before-turn"),
+                method: "run.cancel".to_owned(),
+                params: json!({ "run_id": run.run_id }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["status"].as_str()),
+            Some("cancelled")
+        );
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        let run = service.store.inspect_run(&run.run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        assert!(run.app_server_turn_id.is_none());
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Ready);
+    }
+
+    #[tokio::test]
+    async fn run_cancel_marks_session_broken_when_thread_id_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(400))),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-cancel-missing-thread"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-cancel-missing-thread"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel run after thread loss",
+                    "instructions": "Generate enough output to be cancellable",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-cancel-missing-thread"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id.as_str(),
+                    "prompt": "Generate a long response",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = RunId::new(
+            run.result
+                .as_ref()
+                .and_then(|item| item["run_id"].as_str())
+                .expect("run id")
+                .to_owned(),
+        )
+        .expect("run id");
+
+        let started = wait_for_run_started(&service, run_id.as_str());
+        assert!(started.app_server_turn_id.is_some());
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancel-missing-thread"),
+                method: "run.cancel".to_owned(),
+                params: json!({ "run_id": run_id.as_str() }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["status"].as_str()),
+            Some("cancelled")
+        );
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[tokio::test]
+    async fn task_cancel_marks_session_broken_when_thread_id_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(400))),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-task-cancel-missing-thread"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-task-cancel-missing-thread"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel task after thread loss",
+                    "instructions": "Generate enough output to be cancellable",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-task-cancel-missing-thread"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id.as_str(),
+                    "prompt": "Generate a long response",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = RunId::new(
+            run.result
+                .as_ref()
+                .and_then(|item| item["run_id"].as_str())
+                .expect("run id")
+                .to_owned(),
+        )
+        .expect("run id");
+
+        let started = wait_for_run_started(&service, run_id.as_str());
+        assert!(started.app_server_turn_id.is_some());
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-cancel-missing-thread"),
+                method: "task.cancel".to_owned(),
+                params: json!({ "task_id": task_id.as_str() }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["task"]["status"].as_str()),
+            Some("cancelled")
+        );
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["cancellation_requested"].as_bool()),
+            Some(false)
+        );
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
     #[test]
     fn cron_producer_emits_due_task_once_across_replay() {
         let temp = tempdir().expect("tempdir");
@@ -8707,7 +9156,8 @@ mod tests {
         })
         .expect("service");
         let now = Utc::now();
-        let rule_path = state_root.join("state").join("producers").join("cron").join("nightly.json");
+        let rule_path =
+            state_root.join("state").join("producers").join("cron").join("nightly.json");
         fs::create_dir_all(rule_path.parent().expect("cron dir")).expect("create cron dir");
         fs::write(
             &rule_path,
@@ -8921,7 +9371,8 @@ mod tests {
             auth_token: None,
         })
         .expect("service");
-        let rule_path = state_root.join("state").join("producers").join("hook").join("task-created.json");
+        let rule_path =
+            state_root.join("state").join("producers").join("hook").join("task-created.json");
         fs::create_dir_all(rule_path.parent().expect("hook dir")).expect("create hook dir");
         fs::write(
             &rule_path,
