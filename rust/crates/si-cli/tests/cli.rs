@@ -3740,6 +3740,70 @@ fn nucleus_worker_probe_persists_worker_state_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_list_and_inspect_reflect_live_workers_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let europe_codex_home = home_dir.join(".si/codex/profiles/europe");
+
+    let america = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &america_codex_home,
+        temp.path(),
+    );
+    let europe = create_session_via_cli_with_options(
+        &ws_url,
+        "europe",
+        None,
+        None,
+        &home_dir,
+        &europe_codex_home,
+        temp.path(),
+    );
+
+    let america_worker_id = america["worker"]["worker_id"].as_str().expect("america worker id");
+    let europe_worker_id = europe["worker"]["worker_id"].as_str().expect("europe worker id");
+
+    let listed_output = cargo_bin()
+        .args(["nucleus", "worker", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let workers: Value = serde_json::from_slice(&listed_output).expect("parse worker list");
+    let workers = workers.as_array().expect("worker list array");
+    assert_eq!(workers.len(), 2);
+    assert!(workers.iter().any(|worker| {
+        worker["worker_id"] == america_worker_id
+            && worker["profile"] == "america"
+            && worker["status"] == "ready"
+    }));
+    assert!(workers.iter().any(|worker| {
+        worker["worker_id"] == europe_worker_id
+            && worker["profile"] == "europe"
+            && worker["status"] == "ready"
+    }));
+
+    let inspected = inspect_worker_via_cli(&ws_url, america_worker_id);
+    assert_eq!(inspected["worker"]["worker_id"], america_worker_id);
+    assert_eq!(inspected["worker"]["profile"], "america");
+    assert_eq!(inspected["worker"]["status"], "ready");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_list_and_show_reflect_live_sessions_on_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
