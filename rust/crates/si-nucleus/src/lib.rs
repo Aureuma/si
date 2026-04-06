@@ -1541,6 +1541,40 @@ impl NucleusStore {
         Ok(Some((task, event)))
     }
 
+    fn requeue_blocked_task(
+        &self,
+        task_id: &TaskId,
+        profile: Option<ProfileName>,
+        message: &str,
+    ) -> Result<Option<CanonicalEvent>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let Some(mut task) = self.read_task_locked(task_id)? else {
+            return Ok(None);
+        };
+        if task.status != TaskStatus::Blocked {
+            return Ok(None);
+        }
+        task.transition_to(TaskStatus::Queued, None).map_err(anyhow::Error::new)?;
+        write_json_atomic(&self.paths.task_path(task_id), &task)?;
+        let event = self.append_event_locked(
+            CanonicalEventType::TaskUpdated,
+            CanonicalEventSource::Nucleus,
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: None,
+                session_id: task.session_id.clone(),
+                run_id: task.latest_run_id.clone(),
+                profile,
+                payload: json!({
+                    "status": task.status,
+                    "blocked_reason": task.blocked_reason,
+                    "message": message,
+                }),
+            },
+        )?;
+        Ok(Some(event))
+    }
+
     fn record_session_ready(
         &self,
         session_id: &SessionId,
@@ -3143,6 +3177,77 @@ impl NucleusService {
         Ok(None)
     }
 
+    fn requeue_recoverable_blocked_tasks_for_profile(
+        &self,
+        profile: &ProfileName,
+        allowed_reasons: &[BlockedReason],
+        message: &str,
+    ) -> Result<Vec<TaskId>> {
+        let tasks = self.store.list_tasks()?;
+        let sessions = self
+            .store
+            .list_sessions()?
+            .into_iter()
+            .map(|session| (session.session_id.clone(), session))
+            .collect::<HashMap<_, _>>();
+        let workers = self
+            .store
+            .list_workers()?
+            .into_iter()
+            .map(|worker| (worker.worker_id.clone(), worker))
+            .collect::<HashMap<_, _>>();
+        let profiles = self.store.list_profile_records()?;
+
+        let mut requeued = Vec::new();
+        for task in tasks {
+            if task.status != TaskStatus::Blocked {
+                continue;
+            }
+            let Some(reason) = task.blocked_reason else {
+                continue;
+            };
+            if !allowed_reasons.contains(&reason) {
+                continue;
+            }
+            if let Some(latest_run_id) = task.latest_run_id.as_ref() {
+                if let Some(run) = self.store.inspect_run(latest_run_id)? {
+                    if is_active_run_status(run.status) {
+                        continue;
+                    }
+                }
+            }
+            if let Some(session_id) = task.session_id.as_ref() {
+                let Some(session) = sessions.get(session_id) else {
+                    continue;
+                };
+                if matches!(
+                    session.lifecycle_state,
+                    SessionLifecycleState::Broken | SessionLifecycleState::Closed
+                ) || session.app_server_thread_id.is_none()
+                {
+                    continue;
+                }
+            }
+            let Some(task_profile) = derive_task_profile(&task, &sessions, &workers, &profiles)
+            else {
+                continue;
+            };
+            if &task_profile != profile {
+                continue;
+            }
+            if let Some(event) = self.store.requeue_blocked_task(
+                &task.task_id,
+                Some(task_profile.clone()),
+                message,
+            )? {
+                let _ = self.events.send(event);
+                requeued.push(task.task_id);
+            }
+        }
+
+        Ok(requeued)
+    }
+
     fn worker_launch_spec_from_record(&self, worker: &WorkerRecord) -> WorkerLaunchSpec {
         WorkerLaunchSpec {
             worker_id: worker.worker_id.clone(),
@@ -3187,6 +3292,11 @@ impl NucleusService {
         for event in events {
             let _ = self.events.send(event);
         }
+        let _ = self.requeue_recoverable_blocked_tasks_for_profile(
+            &worker.profile,
+            &[BlockedReason::WorkerUnavailable],
+            "task re-queued after worker restart",
+        )?;
         Ok(WorkerInspectView { worker, runtime: Some(runtime_view) })
     }
 
@@ -3212,6 +3322,11 @@ impl NucleusService {
         for event in events {
             let _ = self.events.send(event);
         }
+        let _ = self.requeue_recoverable_blocked_tasks_for_profile(
+            &worker.profile,
+            &[BlockedReason::AuthRequired, BlockedReason::FortUnavailable],
+            "task re-queued after worker auth repair",
+        )?;
         let worker = self
             .store
             .inspect_worker(worker_id)?
@@ -6835,6 +6950,189 @@ mod tests {
         assert_eq!(payload["worker"]["worker_id"], json!(worker_id));
         assert_eq!(payload["worker"]["status"], json!("ready"));
         assert_eq!(payload["runtime"]["worker_id"], json!(worker_id));
+    }
+
+    #[tokio::test]
+    async fn worker_restart_requeues_worker_unavailable_tasks_for_profile() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let probed = service
+            .dispatch_request(GatewayRequest {
+                id: json!("probe-restart-requeue"),
+                method: "worker.probe".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(probed.ok);
+        let worker_id = WorkerId::new(
+            probed
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-restart-requeue"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Restart should requeue blocked task",
+                    "instructions": "Run after the worker restart succeeds",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        runtime.fail_next_starts(2);
+        service.reconcile_and_dispatch_once().expect("dispatch blocked task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-requeue"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(restarted.ok);
+
+        let requeued =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(requeued.status, TaskStatus::Queued);
+        assert_eq!(requeued.blocked_reason, None);
+
+        service.reconcile_and_dispatch_once().expect("dispatch requeued task");
+        wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
+    }
+
+    #[tokio::test]
+    async fn worker_repair_auth_requeues_auth_required_tasks_for_profile() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-auth-requeue"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home.clone(),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-auth-requeue"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Fort auth retry task",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch auth-blocked task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::AuthRequired));
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-auth-requeue"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let requeued =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(requeued.status, TaskStatus::Queued);
+        assert_eq!(requeued.blocked_reason, None);
+
+        service.reconcile_and_dispatch_once().expect("dispatch requeued auth task");
+        wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
     }
 
     #[tokio::test]
