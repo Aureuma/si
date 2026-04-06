@@ -714,6 +714,26 @@ fn inspect_run_via_cli(ws_url: &str, run_id: &str) -> Value {
     serde_json::from_slice(&output).expect("parse run inspect")
 }
 
+fn inspect_session_via_cli(ws_url: &str, session_id: &str) -> Value {
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "show",
+            session_id,
+            "--endpoint",
+            ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).expect("parse session inspect")
+}
+
 fn inspect_worker_via_cli(ws_url: &str, worker_id: &str) -> Value {
     let output = cargo_bin()
         .args(["nucleus", "worker", "inspect", worker_id, "--endpoint", ws_url, "--format", "json"])
@@ -3154,6 +3174,76 @@ fn nucleus_websocket_reconnect_observes_active_run_completion_on_live_service() 
 
     let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
     assert_eq!(task["checkpoint_summary"], "alphabetagamma");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_run_streams_output_and_finishes_on_expected_profile() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(150),
+        Duration::from_millis(120),
+        &["alpha", "beta", "gamma"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let mut socket = subscribe_to_events(&ws_url);
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-stream-live",
+        "Stream live run task",
+        "Reply with alphabet chunks",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let mut saw_started = false;
+    let mut saw_output = false;
+    let mut saw_completed = false;
+    for _ in 0..16 {
+        let event = read_websocket_json(&mut socket);
+        if event["data"]["task_id"] != task_id {
+            continue;
+        }
+        match event["type"].as_str() {
+            Some("run.started") => saw_started = true,
+            Some("run.output_delta") => saw_output = true,
+            Some("run.completed") => {
+                saw_completed = true;
+                break;
+            }
+            _ => {}
+        }
+    }
+    assert!(saw_started, "did not observe run.started");
+    assert!(saw_output, "did not observe run.output_delta");
+    assert!(saw_completed, "did not observe run.completed");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("latest run id");
+    let run = inspect_run_via_cli(&ws_url, run_id);
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    let worker = inspect_worker_via_cli(&ws_url, &worker_id);
+    assert_eq!(task["profile"], "america");
+    assert_eq!(task["status"], "done");
+    assert_eq!(task["checkpoint_summary"], "alphabetagamma");
+    assert_eq!(run["status"], "completed");
+    assert_eq!(run["session_id"], session_id);
+    assert_eq!(session["summary_state"], "alphabetagamma");
+    assert_eq!(worker["worker"]["profile"], "america");
+    assert_eq!(worker["worker"]["status"], "ready");
 }
 
 #[test]
