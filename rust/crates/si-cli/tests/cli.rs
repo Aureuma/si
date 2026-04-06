@@ -7120,6 +7120,15 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["items"]["$ref"],
         json!("#/components/schemas/WorkerRecord")
     );
+    assert_eq!(body["paths"]["/workers"]["get"]["summary"], json!("List workers"));
+    assert_eq!(
+        body["paths"]["/workers"]["get"]["description"],
+        json!("List durable worker records tracked by Nucleus.")
+    );
+    assert_eq!(
+        body["paths"]["/workers"]["get"]["x-si-purpose"],
+        json!("Use this for bounded worker inspection without relying on tmux or direct runtime internals.")
+    );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
