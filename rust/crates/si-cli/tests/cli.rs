@@ -6530,6 +6530,89 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
     assert_eq!(run["status"], "completed");
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
+    let temp = tempdir().expect("tempdir");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let base_url = spawn_live_nucleus_service_with_options(
+        &temp.path().join("nucleus"),
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(runtime)),
+    );
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+    let client = BlockingClient::new();
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    cargo_bin()
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let created = client
+        .post(format!("{base_url}/tasks"))
+        .bearer_auth("test-token")
+        .json(&json!({
+            "title": "REST auth cancel task",
+            "instructions": "Reply with nucleus-smoke",
+            "profile": "america"
+        }))
+        .send()
+        .expect("authorized rest create");
+    assert!(created.status().is_success());
+    let created: Value = created.json().expect("parse created task");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let unauthorized_cancel = client
+        .post(format!("{base_url}/tasks/{task_id}/cancel"))
+        .send()
+        .expect("unauthorized rest cancel");
+    assert_eq!(unauthorized_cancel.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let unauthorized_body: Value = unauthorized_cancel.json().expect("parse unauthorized cancel");
+    assert_eq!(unauthorized_body["error"]["code"], "unauthorized");
+
+    let authorized_cancel = client
+        .post(format!("{base_url}/tasks/{task_id}/cancel"))
+        .bearer_auth("test-token")
+        .send()
+        .expect("authorized rest cancel");
+    assert!(authorized_cancel.status().is_success());
+    let authorized_cancel: Value = authorized_cancel.json().expect("parse authorized cancel");
+    assert_eq!(authorized_cancel["task"]["task_id"], task_id);
+    assert_eq!(authorized_cancel["run"]["run_id"], run_id);
+
+    let cancelled_task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    assert_eq!(cancelled_task["status"], "cancelled");
+
+    let cancelled_run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_eq!(cancelled_run["status"], "cancelled");
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
