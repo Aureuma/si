@@ -7235,6 +7235,18 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("object")
     );
     assert_eq!(
+        body["paths"]["/openapi.json"]["get"]["summary"],
+        json!("Fetch the OpenAPI document")
+    );
+    assert_eq!(
+        body["paths"]["/openapi.json"]["get"]["description"],
+        json!("Read the OpenAPI-compatible REST description for bounded external integrations.")
+    );
+    assert_eq!(
+        body["paths"]["/openapi.json"]["get"]["x-si-purpose"],
+        json!("Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.")
+    );
+    assert_eq!(
         body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
             ["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
