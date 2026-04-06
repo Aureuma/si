@@ -58,6 +58,7 @@ const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
+const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
 const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
 
@@ -1908,18 +1909,9 @@ where
 }
 
 fn load_canonical_events(path: &Path) -> Result<Vec<CanonicalEvent>> {
-    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
-    let reader = BufReader::new(file);
     let mut events = Vec::new();
-    for (index, line) in reader.lines().enumerate() {
-        let line = line.with_context(|| format!("read {} line {}", path.display(), index + 1))?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        events.push(
-            serde_json::from_str::<CanonicalEvent>(&line)
-                .with_context(|| format!("parse {} line {}", path.display(), index + 1))?,
-        );
+    for log_path in canonical_event_log_paths(path)? {
+        events.extend(load_canonical_events_from_path(&log_path)?);
     }
     Ok(events)
 }
@@ -1935,19 +1927,51 @@ fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
 }
 
 fn load_last_event_seq(path: &Path) -> Result<u64> {
+    let mut last_seq = 0_u64;
+    for log_path in canonical_event_log_paths(path)? {
+        for event in load_canonical_events_from_path(&log_path)? {
+            last_seq = last_seq.max(event.seq);
+        }
+    }
+    Ok(last_seq)
+}
+
+fn canonical_event_log_paths(path: &Path) -> Result<Vec<PathBuf>> {
+    let parent = path.parent().ok_or_else(|| anyhow!("missing parent for {}", path.display()))?;
+    let mut rotated = Vec::new();
+    for entry in fs::read_dir(parent).with_context(|| format!("read {}", parent.display()))? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        if !entry_path.is_file() {
+            continue;
+        }
+        let Some(name) = entry_path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if name.starts_with("events-") && name.ends_with(".jsonl") {
+            rotated.push(entry_path);
+        }
+    }
+    rotated.sort();
+    rotated.push(path.to_path_buf());
+    Ok(rotated)
+}
+
+fn load_canonical_events_from_path(path: &Path) -> Result<Vec<CanonicalEvent>> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let reader = BufReader::new(file);
-    let mut last_seq = 0_u64;
+    let mut events = Vec::new();
     for (index, line) in reader.lines().enumerate() {
         let line = line.with_context(|| format!("read {} line {}", path.display(), index + 1))?;
         if line.trim().is_empty() {
             continue;
         }
-        let event = serde_json::from_str::<CanonicalEvent>(&line)
-            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
-        last_seq = last_seq.max(event.seq);
+        events.push(
+            serde_json::from_str::<CanonicalEvent>(&line)
+                .with_context(|| format!("parse {} line {}", path.display(), index + 1))?,
+        );
     }
-    Ok(last_seq)
+    Ok(events)
 }
 
 fn read_json_path<T: DeserializeOwned>(path: &Path) -> Result<T> {
@@ -2108,6 +2132,11 @@ fn worker_restart_backoff(attempt: u32) -> ChronoDuration {
 }
 
 fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    append_jsonl_with_rotation(path, value, MAX_EVENTS_JSONL_BYTES)
+}
+
+fn append_jsonl_with_rotation<T: Serialize>(path: &Path, value: &T, max_bytes: u64) -> Result<()> {
+    rotate_jsonl_if_needed(path, max_bytes)?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -2116,6 +2145,25 @@ fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     serde_json::to_writer(&mut file, value)?;
     file.write_all(b"\n").with_context(|| format!("append {}", path.display()))?;
     file.flush().with_context(|| format!("flush {}", path.display()))?;
+    Ok(())
+}
+
+fn rotate_jsonl_if_needed(path: &Path, max_bytes: u64) -> Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    if fs::metadata(path).with_context(|| format!("stat {}", path.display()))?.len() < max_bytes {
+        return Ok(());
+    }
+    let parent = path.parent().ok_or_else(|| anyhow!("missing parent for {}", path.display()))?;
+    let rotated_path = parent.join(format!(
+        "events-{:020}-{}.jsonl",
+        Utc::now().timestamp_millis(),
+        process::id()
+    ));
+    fs::rename(path, &rotated_path)
+        .with_context(|| format!("rename {} -> {}", path.display(), rotated_path.display()))?;
+    File::create(path).with_context(|| format!("create {}", path.display()))?;
     Ok(())
 }
 
@@ -4480,7 +4528,8 @@ mod tests {
     use super::{
         CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        cron_due_key, load_canonical_events, write_json_atomic,
+        append_jsonl_with_rotation, cron_due_key, load_canonical_events, load_last_event_seq,
+        write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -4489,8 +4538,8 @@ mod tests {
     use serde_json::json;
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
-        ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState, TaskId,
-        TaskStatus, WorkerId, WorkerStatus,
+        EventId, ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState,
+        TaskId, TaskStatus, WorkerId, WorkerStatus,
     };
     use si_nucleus_runtime::{
         CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
@@ -4886,6 +4935,62 @@ mod tests {
         let status = reopened.status().expect("status");
         assert_eq!(status.task_count, 1);
         assert_eq!(status.next_event_seq, 2);
+    }
+
+    #[test]
+    fn rotated_event_logs_preserve_replay_and_last_sequence() {
+        let temp = tempdir().expect("tempdir");
+        let events_path = temp.path().join("events.jsonl");
+        let event_one = CanonicalEvent {
+            event_id: EventId::generate(),
+            seq: 1,
+            ts: Utc::now(),
+            event_type: CanonicalEventType::TaskCreated,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: None,
+                worker_id: None,
+                session_id: None,
+                run_id: None,
+                profile: None,
+                payload: json!({ "title": "first" }),
+            },
+        };
+        let event_two = CanonicalEvent {
+            event_id: EventId::generate(),
+            seq: 2,
+            ts: Utc::now(),
+            event_type: CanonicalEventType::TaskUpdated,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: None,
+                worker_id: None,
+                session_id: None,
+                run_id: None,
+                profile: None,
+                payload: json!({ "title": "second" }),
+            },
+        };
+
+        append_jsonl_with_rotation(&events_path, &event_one, 1).expect("append first event");
+        append_jsonl_with_rotation(&events_path, &event_two, 1).expect("append rotated event");
+
+        let rotated = fs::read_dir(temp.path())
+            .expect("read temp dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|value| value.to_str())
+                    .map(|name| name.starts_with("events-") && name.ends_with(".jsonl"))
+                    .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rotated.len(), 1);
+
+        let events = load_canonical_events(&events_path).expect("load canonical events");
+        assert_eq!(events.iter().map(|event| event.seq).collect::<Vec<_>>(), vec![1, 2]);
+        assert_eq!(load_last_event_seq(&events_path).expect("load last seq"), 2);
     }
 
     #[test]
