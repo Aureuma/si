@@ -3450,6 +3450,59 @@ fn nucleus_session_create_does_not_reuse_session_with_conflicting_active_run_on_
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_run_submit_turn_rejects_session_profile_mismatch_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &america_codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-live-run-profile-mismatch",
+        "Direct run mismatch",
+        "Attempt cross-profile run submission",
+        "europe",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let submit = cargo_bin()
+        .args([
+            "nucleus",
+            "run",
+            "submit-turn",
+            &session_id,
+            "Submit a mismatched direct run",
+            "--task-id",
+            &task_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(submit.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("task profile does not match session profile"));
+
+    let task = wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+        task["latest_run_id"].is_null()
+            && (task["status"] == "queued"
+                || (task["status"] == "blocked" && task["blocked_reason"] == "session_broken"))
+    });
+    assert!(task["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_app_server_init_failure_blocks_task_and_breaks_session_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
