@@ -7017,6 +7017,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/NucleusStatusView")
     );
+    assert_eq!(
+        body["paths"]["/status"]["get"]["responses"]["200"]["description"],
+        json!("Current nucleus status.")
+    );
     assert_eq!(body["paths"]["/status"]["get"]["summary"], json!("Inspect Nucleus status"));
     assert_eq!(
         body["paths"]["/status"]["get"]["description"],
@@ -7049,6 +7053,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/TaskRecord")
     );
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["201"]["description"],
+        json!("Created task.")
+    );
     assert_eq!(body["paths"]["/tasks"]["post"]["summary"], json!("Create a task"));
     assert_eq!(
         body["paths"]["/tasks"]["post"]["description"],
@@ -7077,9 +7085,17 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["400"]["description"],
+        json!("Invalid request.")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["description"],
+        json!("Canonical SI task id.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["summary"],
@@ -7098,6 +7114,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["responses"]["404"]["description"],
+        json!("Task not found.")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
@@ -7106,6 +7126,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/TaskCancelResultView")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["parameters"][0]["description"],
+        json!("Canonical SI task id.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["summary"],
@@ -7138,6 +7162,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["404"]["description"],
+        json!("Task not found.")
+    );
+    assert_eq!(
         body["paths"]["/workers"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["items"]["$ref"],
         json!("#/components/schemas/WorkerRecord")
@@ -7157,6 +7185,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/WorkerInspectView")
     );
     assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["description"],
+        json!("Worker inspect view.")
+    );
+    assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["summary"],
         json!("Inspect one worker")
     );
@@ -7173,6 +7205,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["parameters"][0]["description"],
+        json!("Canonical SI worker id.")
+    );
+    assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
@@ -7181,6 +7217,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/SessionRecord")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["description"],
+        json!("Session record.")
     );
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["summary"],
@@ -7199,6 +7239,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["description"],
+        json!("Canonical SI session id.")
+    );
+    assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
@@ -7207,6 +7251,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["$ref"],
         json!("#/components/schemas/RunRecord")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["description"],
+        json!("Run record.")
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["summary"],
@@ -7225,6 +7273,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["parameters"][0]["description"],
+        json!("Canonical SI run id.")
+    );
+    assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
@@ -7233,6 +7285,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["type"],
         json!("object")
+    );
+    assert_eq!(
+        body["paths"]["/openapi.json"]["get"]["responses"]["200"]["description"],
+        json!("OpenAPI document.")
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["summary"],
