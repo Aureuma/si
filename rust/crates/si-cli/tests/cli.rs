@@ -7017,6 +7017,19 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/NucleusStatusView")
     );
+    assert_eq!(body["paths"]["/status"]["get"]["summary"], json!("Inspect Nucleus status"));
+    assert_eq!(
+        body["paths"]["/status"]["get"]["description"],
+        json!(
+            "Read the current Nucleus status projection, including bind address, state directory, and durable object counts."
+        )
+    );
+    assert_eq!(
+        body["paths"]["/status"]["get"]["x-si-purpose"],
+        json!(
+            "Use this for bounded external health and topology inspection without opening the websocket control plane."
+        )
+    );
     assert_eq!(
         body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["items"]["$ref"],
