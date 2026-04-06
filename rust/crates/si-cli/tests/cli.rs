@@ -185,6 +185,8 @@ struct TestRuntimeConfig {
     step_delay: Duration,
     output_deltas: Vec<String>,
     fail_execute: bool,
+    block_when_worker_missing: bool,
+    fail_start_worker: bool,
 }
 
 impl Default for TestRuntimeConfig {
@@ -194,6 +196,8 @@ impl Default for TestRuntimeConfig {
             step_delay: Duration::from_millis(0),
             output_deltas: vec!["nucleus-smoke".to_owned()],
             fail_execute: false,
+            block_when_worker_missing: false,
+            fail_start_worker: false,
         }
     }
 }
@@ -233,6 +237,8 @@ impl TestRuntime {
             step_delay,
             output_deltas: output_deltas.iter().map(|value| (*value).to_owned()).collect(),
             fail_execute: false,
+            block_when_worker_missing: false,
+            fail_start_worker: false,
         })
     }
 
@@ -259,6 +265,49 @@ impl TestRuntime {
             thread::sleep(Duration::from_millis(20));
         }
         false
+    }
+
+    fn worker_is_missing(&self, worker_id: &WorkerId) -> bool {
+        !self.state.lock().expect("runtime state").workers.contains_key(worker_id.as_str())
+    }
+
+    fn set_fail_start_worker(&self, value: bool) {
+        self.state.lock().expect("runtime state").config.fail_start_worker = value;
+    }
+
+    fn block_run_for_missing_worker(
+        &self,
+        spec: &RunTurnSpec,
+        turn_id: &str,
+        block_when_worker_missing: bool,
+        on_event: &mut dyn FnMut(CanonicalEventDraft) -> anyhow::Result<()>,
+    ) -> anyhow::Result<Option<RuntimeRunOutcome>> {
+        if !block_when_worker_missing || !self.worker_is_missing(&spec.worker_id) {
+            return Ok(None);
+        }
+        on_event(CanonicalEventDraft {
+            event_type: CanonicalEventType::RunBlocked,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: spec.task_id.clone(),
+                worker_id: Some(spec.worker_id.clone()),
+                session_id: Some(spec.session_id.clone()),
+                run_id: Some(spec.run_id.clone()),
+                profile: Some(spec.profile.clone()),
+                payload: serde_json::json!({
+                    "thread_id": spec.thread_id,
+                    "turn_id": turn_id,
+                    "blocked_reason": "worker_unavailable",
+                    "error": "worker process is not attached to the runtime",
+                }),
+            },
+        })?;
+        Ok(Some(RuntimeRunOutcome {
+            turn_id: turn_id.to_owned(),
+            status: RunStatus::Blocked,
+            completed_at: Utc::now(),
+            final_output: None,
+        }))
     }
 }
 
@@ -297,6 +346,9 @@ impl NucleusRuntime for TestRuntime {
     }
 
     fn start_worker(&self, spec: &WorkerLaunchSpec) -> anyhow::Result<WorkerStartResult> {
+        if self.state.lock().expect("runtime state").config.fail_start_worker {
+            anyhow::bail!("cli-test-runtime start_worker failed");
+        }
         let probe = self.probe_worker(spec)?;
         let runtime = WorkerRuntimeView {
             worker_id: spec.worker_id.clone(),
@@ -338,13 +390,14 @@ impl NucleusRuntime for TestRuntime {
         spec: &RunTurnSpec,
         on_event: &mut dyn FnMut(CanonicalEventDraft) -> anyhow::Result<()>,
     ) -> anyhow::Result<RuntimeRunOutcome> {
-        let (run_delay, step_delay, output_deltas, fail_execute) = {
+        let (run_delay, step_delay, output_deltas, fail_execute, block_when_worker_missing) = {
             let state = self.state.lock().expect("runtime state");
             (
                 state.config.run_delay,
                 state.config.step_delay,
                 state.config.output_deltas.clone(),
                 state.config.fail_execute,
+                state.config.block_when_worker_missing,
             )
         };
         if fail_execute {
@@ -366,6 +419,11 @@ impl NucleusRuntime for TestRuntime {
                 }),
             },
         })?;
+        if let Some(outcome) =
+            self.block_run_for_missing_worker(spec, &turn_id, block_when_worker_missing, on_event)?
+        {
+            return Ok(outcome);
+        }
         if self.wait_for_interrupt_or_timeout(&turn_id, run_delay) {
             on_event(CanonicalEventDraft {
                 event_type: CanonicalEventType::RunCancelled,
@@ -389,6 +447,11 @@ impl NucleusRuntime for TestRuntime {
                 completed_at: Utc::now(),
                 final_output: None,
             });
+        }
+        if let Some(outcome) =
+            self.block_run_for_missing_worker(spec, &turn_id, block_when_worker_missing, on_event)?
+        {
+            return Ok(outcome);
         }
         let final_output = output_deltas.join("");
         for delta in &output_deltas {
@@ -415,6 +478,14 @@ impl NucleusRuntime for TestRuntime {
                     completed_at: Utc::now(),
                     final_output: None,
                 });
+            }
+            if let Some(outcome) = self.block_run_for_missing_worker(
+                spec,
+                &turn_id,
+                block_when_worker_missing,
+                on_event,
+            )? {
+                return Ok(outcome);
             }
             on_event(CanonicalEventDraft {
                 event_type: CanonicalEventType::RunOutputDelta,
@@ -643,6 +714,29 @@ fn inspect_run_via_cli(ws_url: &str, run_id: &str) -> Value {
     serde_json::from_slice(&output).expect("parse run inspect")
 }
 
+fn inspect_worker_via_cli(ws_url: &str, worker_id: &str) -> Value {
+    let output = cargo_bin()
+        .args(["nucleus", "worker", "inspect", worker_id, "--endpoint", ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).expect("parse worker inspect")
+}
+
+fn wait_for_worker_status(ws_url: &str, worker_id: &str, expected: &str) -> Value {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(5) {
+        let worker = inspect_worker_via_cli(ws_url, worker_id);
+        if worker["worker"]["status"] == expected {
+            return worker;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("worker {worker_id} did not reach status {expected}");
+}
+
 fn create_task_via_cli(ws_url: &str, title: &str, instructions: &str, profile: &str) -> Value {
     let output = cargo_bin()
         .args([
@@ -692,6 +786,39 @@ fn read_websocket_json(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> Val
     match socket.read().expect("read websocket message") {
         WsMessage::Text(text) => serde_json::from_str(&text).expect("parse websocket json"),
         other => panic!("unexpected websocket message: {other:?}"),
+    }
+}
+
+fn create_task_over_websocket(
+    ws_url: &str,
+    request_id: &str,
+    title: &str,
+    instructions: &str,
+    profile: &str,
+    session_id: Option<&str>,
+) -> Value {
+    let (mut socket, _) = connect(ws_url).expect("connect websocket");
+    let mut params = serde_json::json!({
+        "title": title,
+        "instructions": instructions,
+        "profile": profile,
+    });
+    if let Some(session_id) = session_id {
+        params["session_id"] = Value::String(session_id.to_owned());
+    }
+    let request = serde_json::json!({
+        "id": request_id,
+        "method": "task.create",
+        "params": params,
+    });
+    socket.send(WsMessage::Text(request.to_string().into())).expect("send websocket task create");
+    match socket.read().expect("read websocket task create") {
+        WsMessage::Text(text) => {
+            let payload = serde_json::from_str::<Value>(&text).expect("parse websocket task create");
+            assert_eq!(payload["ok"], true);
+            payload["result"].clone()
+        }
+        other => panic!("unexpected websocket task create response: {other:?}"),
     }
 }
 
@@ -2917,43 +3044,24 @@ fn nucleus_session_backlog_stays_serial_and_reuses_the_same_session_on_live_serv
     let codex_home = home_dir.join(".si/codex/profiles/america");
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
     let expected_session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
-    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
-    let first_create = serde_json::json!({
-        "id": "task-first",
-        "method": "task.create",
-        "params": {
-            "title": "First queued task",
-            "instructions": "Reply with nucleus-smoke",
-            "profile": "america",
-            "session_id": expected_session_id,
-        }
-    });
-    socket.send(WsMessage::Text(first_create.to_string().into())).expect("send first task create");
-    let first_created = match socket.read().expect("read first task create") {
-        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse first task create"),
-        other => panic!("unexpected first task create response: {other:?}"),
-    };
-    assert_eq!(first_created["ok"], true);
-    let first_task_id = first_created["result"]["task_id"].as_str().expect("first task id").to_owned();
-
-    let second_create = serde_json::json!({
-        "id": "task-second",
-        "method": "task.create",
-        "params": {
-            "title": "Second queued task",
-            "instructions": "Reply with nucleus-smoke",
-            "profile": "america",
-            "session_id": expected_session_id,
-        }
-    });
-    socket.send(WsMessage::Text(second_create.to_string().into())).expect("send second task create");
-    let second_created = match socket.read().expect("read second task create") {
-        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse second task create"),
-        other => panic!("unexpected second task create response: {other:?}"),
-    };
-    assert_eq!(second_created["ok"], true);
-    let second_task_id =
-        second_created["result"]["task_id"].as_str().expect("second task id").to_owned();
+    let first_created = create_task_over_websocket(
+        &ws_url,
+        "task-first",
+        "First queued task",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&expected_session_id),
+    );
+    let second_created = create_task_over_websocket(
+        &ws_url,
+        "task-second",
+        "Second queued task",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&expected_session_id),
+    );
+    let first_task_id = first_created["task_id"].as_str().expect("first task id").to_owned();
+    let second_task_id = second_created["task_id"].as_str().expect("second task id").to_owned();
 
     let _running = wait_for_cli_task_status(&ws_url, &first_task_id, "running");
     let second_queued = wait_for_cli_task_predicate(&ws_url, &second_task_id, Duration::from_secs(5), |task| {
@@ -3046,6 +3154,99 @@ fn nucleus_websocket_reconnect_observes_active_run_completion_on_live_service() 
 
     let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
     assert_eq!(task["checkpoint_summary"], "alphabetagamma");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-cancel-live",
+        "Cancel live run",
+        "Generate enough output to be cancellable",
+        "america",
+        Some(session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    cargo_bin()
+        .args(["nucleus", "run", "cancel", &run_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_eq!(task["status"], "cancelled");
+    assert_eq!(run["status"], "cancelled");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_config(TestRuntimeConfig {
+        run_delay: Duration::from_millis(900),
+        step_delay: Duration::from_millis(0),
+        output_deltas: vec!["nucleus-smoke".to_owned()],
+        fail_execute: false,
+        block_when_worker_missing: true,
+        fail_start_worker: false,
+    });
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-worker-loss",
+        "Worker loss task",
+        "Keep running until the worker disappears",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    runtime.set_fail_start_worker(true);
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop test worker");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    let worker_inspect = wait_for_worker_status(&ws_url, &worker_id, "failed");
+    assert_eq!(task["blocked_reason"], "worker_unavailable");
+    assert_eq!(run["status"], "blocked");
+    assert_eq!(worker_inspect["worker"]["status"], "failed");
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
