@@ -49,7 +49,7 @@ This page is the canonical map of SI integration families.
 | Apple App Store | Yes | Yes | Yes | Yes | auth + API checks |
 | Publish | N/A (depends on target) | target-specific | Curated publishing flows | N/A | pre-publish checks |
 | Provider inventory | N/A | N/A | Aggregated capability metadata | N/A | `si orbit list` |
-| Surf runtime | runtime status | runtime profile dir | browser actions through MCP | N/A | `si surf status` |
+| Surf runtime | runtime status | runtime profile dir | browser automation runtime, optional MCP-compatible endpoint | N/A | `si surf status` |
 
 ## Integration visuals
 
