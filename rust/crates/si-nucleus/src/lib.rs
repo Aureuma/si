@@ -5920,6 +5920,131 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn restart_reloads_persisted_task_worker_session_run_and_event_state() {
+        let temp = tempdir().expect("tempdir");
+        let config = NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        };
+
+        let (worker_id, session_id, task_id, run_id) = {
+            let service =
+                NucleusService::open_with_runtime(config.clone(), Arc::new(FakeRuntime::default()))
+                    .expect("service");
+
+            let session = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("session-restart-reload"),
+                    method: "session.create".to_owned(),
+                    params: json!({
+                        "profile": "america",
+                        "home_dir": temp.path().join("home"),
+                        "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                        "workdir": temp.path(),
+                    }),
+                })
+                .await;
+            assert!(session.ok);
+            let worker_id = WorkerId::new(
+                session
+                    .result
+                    .as_ref()
+                    .and_then(|item| item["worker"]["worker_id"].as_str())
+                    .expect("worker id")
+                    .to_owned(),
+            )
+            .expect("worker id");
+            let session_id = SessionId::new(
+                session
+                    .result
+                    .as_ref()
+                    .and_then(|item| item["session"]["session_id"].as_str())
+                    .expect("session id")
+                    .to_owned(),
+            )
+            .expect("session id");
+
+            let task = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("task-restart-reload"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Restart reload task",
+                        "instructions": "Reply with nucleus-smoke",
+                        "profile": "america",
+                        "session_id": session_id.as_str(),
+                    }),
+                })
+                .await;
+            assert!(task.ok);
+            let task_id = TaskId::new(
+                task.result
+                    .as_ref()
+                    .and_then(|item| item["task_id"].as_str())
+                    .expect("task id")
+                    .to_owned(),
+            )
+            .expect("task id");
+
+            let run = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("run-restart-reload"),
+                    method: "run.submit_turn".to_owned(),
+                    params: json!({
+                        "session_id": session_id.as_str(),
+                        "task_id": task_id.as_str(),
+                        "prompt": "Reply with nucleus-smoke",
+                    }),
+                })
+                .await;
+            assert!(run.ok);
+            let run_id = RunId::new(
+                run.result
+                    .as_ref()
+                    .and_then(|item| item["run_id"].as_str())
+                    .expect("run id")
+                    .to_owned(),
+            )
+            .expect("run id");
+
+            wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
+            (worker_id, session_id, task_id, run_id)
+        };
+
+        let reopened = NucleusService::open(config).expect("reopen service");
+        let status = reopened.status().expect("status");
+        assert_eq!(status.worker_count, 1);
+        assert_eq!(status.session_count, 1);
+        assert_eq!(status.task_count, 1);
+        assert_eq!(status.run_count, 1);
+        assert!(status.next_event_seq > 1);
+
+        let worker =
+            reopened.store.inspect_worker(&worker_id).expect("inspect worker").expect("worker exists");
+        let session = reopened
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        let task =
+            reopened.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        let run = reopened.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(worker.status, WorkerStatus::Ready);
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Ready);
+        assert_eq!(session.summary_state.as_deref(), Some("nucleus-smoke"));
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(task.checkpoint_summary.as_deref(), Some("nucleus-smoke"));
+        assert_eq!(run.status, RunStatus::Completed);
+
+        let events = load_canonical_events(&reopened.store.paths().events_path).expect("load events");
+        assert!(events.iter().any(|event| {
+            event.event_type == CanonicalEventType::RunCompleted
+                && event.data.run_id.as_ref() == Some(&run_id)
+        }));
+    }
+
+    #[tokio::test]
     async fn startup_rebuilds_markdown_projections_from_canonical_state() {
         let temp = tempdir().expect("tempdir");
         let state_dir = temp.path().join("nucleus");
