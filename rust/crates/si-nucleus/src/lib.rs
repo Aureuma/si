@@ -2665,7 +2665,7 @@ impl GatewayResponse {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::fs;
     use std::path::Path;
     use std::sync::{Arc, Mutex};
@@ -2695,6 +2695,7 @@ mod tests {
         workers: HashMap<String, WorkerRuntimeView>,
         run_delay: Duration,
         fail_execute: bool,
+        interrupted_turns: HashSet<String>,
     }
 
     #[derive(Clone, Default)]
@@ -2815,7 +2816,37 @@ mod tests {
                 },
             })?;
             if !run_delay.is_zero() {
-                thread::sleep(run_delay);
+                let start = std::time::Instant::now();
+                while start.elapsed() < run_delay {
+                    {
+                        let mut state = self.state.lock().expect("state");
+                        if state.interrupted_turns.remove(&turn_id) {
+                            on_event(CanonicalEventDraft {
+                                event_type: CanonicalEventType::RunCancelled,
+                                source: CanonicalEventSource::System,
+                                data: EventDataEnvelope {
+                                    task_id: spec.task_id.clone(),
+                                    worker_id: Some(spec.worker_id.clone()),
+                                    session_id: Some(spec.session_id.clone()),
+                                    run_id: Some(spec.run_id.clone()),
+                                    profile: Some(spec.profile.clone()),
+                                    payload: json!({
+                                        "thread_id": spec.thread_id,
+                                        "turn_id": turn_id,
+                                        "error": "interrupted",
+                                    }),
+                                },
+                            })?;
+                            return Ok(RuntimeRunOutcome {
+                                turn_id,
+                                status: RunStatus::Cancelled,
+                                completed_at: Utc::now(),
+                                final_output: None,
+                            });
+                        }
+                    }
+                    thread::sleep(Duration::from_millis(20));
+                }
             }
             on_event(CanonicalEventDraft {
                 event_type: CanonicalEventType::RunOutputDelta,
@@ -2861,8 +2892,9 @@ mod tests {
             &self,
             _worker_id: &WorkerId,
             _thread_id: &str,
-            _turn_id: &str,
+            turn_id: &str,
         ) -> Result<()> {
+            self.state.lock().expect("state").interrupted_turns.insert(turn_id.to_owned());
             Ok(())
         }
 
@@ -2910,6 +2942,18 @@ mod tests {
         let task =
             service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         panic!("expected task {} status {:?}, got {:?}", task_id, expected, task.status);
+    }
+
+    fn wait_for_run_started(service: &NucleusService, run_id: &str) -> RunRecord {
+        let run_id = RunId::new(run_id).expect("run id");
+        for _ in 0..80 {
+            let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+            if run.status == RunStatus::Running && run.app_server_turn_id.is_some() {
+                return run;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        service.store.inspect_run(&run_id).expect("inspect run").expect("run exists")
     }
 
     fn write_cron_rule(state_root: &Path, rule: &CronRuleRecord) {
@@ -3375,6 +3419,102 @@ mod tests {
             .expect("inspect session")
             .expect("session exists");
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[tokio::test]
+    async fn run_cancel_interrupts_active_run_and_projects_cancelled_state() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(400))),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-cancel"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-cancel"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel direct run",
+                    "instructions": "Generate enough output to be cancellable",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = task
+            .result
+            .as_ref()
+            .and_then(|item| item["task_id"].as_str())
+            .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-cancel"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "Generate a long response",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = run
+            .result
+            .as_ref()
+            .and_then(|item| item["run_id"].as_str())
+            .expect("run id");
+
+        let started = wait_for_run_started(&service, run_id);
+        assert!(started.app_server_turn_id.is_some());
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancel"),
+                method: "run.cancel".to_owned(),
+                params: json!({ "run_id": run_id }),
+            })
+            .await;
+        assert!(cancelled.ok);
+
+        wait_for_task_status(&service, task_id, TaskStatus::Cancelled);
+        let run = service
+            .store
+            .inspect_run(&RunId::new(run_id).expect("run id"))
+            .expect("inspect run")
+            .expect("run exists");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        let session = service
+            .store
+            .inspect_session(&SessionId::new(session_id).expect("session id"))
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Ready);
     }
 
     #[test]
