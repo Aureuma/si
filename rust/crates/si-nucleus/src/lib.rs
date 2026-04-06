@@ -5690,6 +5690,14 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
+        assert_eq!(body["info"]["title"], json!("SI Nucleus REST API"));
+        assert_eq!(body["info"]["version"], json!(env!("CARGO_PKG_VERSION")));
+        assert_eq!(
+            body["info"]["description"],
+            json!(
+                "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
+            )
+        );
         assert_eq!(body["servers"][0]["url"], json!("/"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(
