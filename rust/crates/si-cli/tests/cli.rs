@@ -7091,6 +7091,11 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/SessionRecord")
@@ -7098,6 +7103,11 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["schema"]["type"],
         json!("string")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -7109,9 +7119,54 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("string")
     );
     assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["type"],
         json!("object")
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["500"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/workers"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
         body["paths"]["/status"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
