@@ -4178,6 +4178,73 @@ fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_fort_public_cli_lifecycle_drives_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let fort_session_path = codex_home.join("fort").join("session.json");
+    write_fort_session_state_via_cli(&codex_home, "america");
+
+    let shown_output = cargo_bin()
+        .args(["fort", "session", "show", "--path"])
+        .arg(&fort_session_path)
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&shown_output).expect("parse fort session show");
+    assert_eq!(shown["profile_id"], "america");
+    assert_eq!(shown["agent_id"], "si-codex-america");
+
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id");
+
+    let first_created = create_task_over_websocket(
+        &ws_url,
+        "task-fort-cli-lifecycle-ready",
+        "Fort CLI lifecycle ready task",
+        "Use si fort bootstrap and then reply with nucleus-smoke",
+        "america",
+        Some(session_id),
+    );
+    let first_task_id = first_created["task_id"].as_str().expect("task id").to_owned();
+    let first_done = wait_for_cli_task_status(&ws_url, &first_task_id, "done");
+    assert_eq!(first_done["checkpoint_summary"], "nucleus-smoke");
+
+    clear_fort_session_state_via_cli(&codex_home);
+    let second_created = create_task_over_websocket(
+        &ws_url,
+        "task-fort-cli-lifecycle-cleared",
+        "Fort CLI lifecycle cleared task",
+        "Use si fort status before continuing",
+        "america",
+        Some(session_id),
+    );
+    let second_task_id = second_created["task_id"].as_str().expect("task id").to_owned();
+    let second_blocked = wait_for_cli_task_status(&ws_url, &second_task_id, "blocked");
+    assert_eq!(second_blocked["blocked_reason"], "auth_required");
+    assert!(second_blocked["latest_run_id"].is_null());
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "fort.ready" && event["data"]["task_id"] == first_task_id
+    }));
+    assert!(events.iter().any(|event| {
+        event["type"] == "fort.auth_required" && event["data"]["task_id"] == second_task_id
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_fort_auth_required_blocks_task_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
