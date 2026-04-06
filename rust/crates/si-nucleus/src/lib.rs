@@ -4644,7 +4644,7 @@ impl GatewayResponse {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, HashMap, HashSet};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
@@ -7019,6 +7019,60 @@ mod tests {
         );
         assert_eq!(service.store.list_workers().expect("workers").len(), 1);
         assert_eq!(service.store.list_sessions().expect("sessions").len(), 2);
+    }
+
+    #[tokio::test]
+    async fn session_create_prefers_stable_lexical_worker_id_when_candidates_tie() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+        let profile = ProfileName::new("america".to_owned()).expect("profile");
+        let base_home = temp.path().join("home");
+
+        for worker_suffix in ["b", "a"] {
+            let worker_id =
+                WorkerId::new(format!("si-worker-{worker_suffix}")).expect("worker id");
+            let spec = WorkerLaunchSpec {
+                worker_id,
+                profile: profile.clone(),
+                home_dir: base_home.clone(),
+                codex_home: base_home.join(format!(".si/codex/profiles/america-{worker_suffix}")),
+                workdir: temp.path().to_path_buf(),
+                extra_env: BTreeMap::new(),
+            };
+            let started = runtime.start_worker(&spec).expect("start worker");
+            let _ = service
+                .store
+                .record_worker_start(&spec, &started, &runtime)
+                .expect("record worker");
+        }
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-lexical-worker"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": base_home,
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        assert_eq!(runtime.start_call_count(), 2);
+        assert_eq!(
+            session.result.as_ref().expect("session result")["worker"]["worker_id"],
+            json!("si-worker-a")
+        );
     }
 
     #[tokio::test]
