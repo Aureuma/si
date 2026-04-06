@@ -1888,6 +1888,65 @@ fn nucleus_rest_task_matches_websocket_and_cli_state() {
     }
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_websocket_task_matches_cli_state_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let create_request = serde_json::json!({
+        "id": "task-create",
+        "method": "task.create",
+        "params": {
+            "title": "Gateway parity task",
+            "instructions": "Verify websocket-created tasks are visible through the CLI.",
+            "profile": "america"
+        }
+    });
+    socket.send(WsMessage::Text(create_request.to_string().into())).expect("send websocket create");
+    let create_response = socket.read().expect("read websocket create");
+    let create_payload = match create_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse websocket create")
+        }
+        other => panic!("unexpected websocket response: {other:?}"),
+    };
+    assert_eq!(create_payload["ok"], true);
+    let created = create_payload["result"].clone();
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let cli_output = cargo_bin()
+        .args(["nucleus", "task", "inspect", &task_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_inspect: Value = serde_json::from_slice(&cli_output).expect("parse cli output");
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_list: Value = serde_json::from_slice(&list_output).expect("parse cli list output");
+    assert!(
+        cli_list.as_array().expect("task list array").iter().any(|task| task["task_id"] == task_id),
+        "cli task list did not include websocket-created task"
+    );
+
+    for field in ["task_id", "title", "instructions", "profile", "status"] {
+        assert_eq!(
+            created[field], cli_inspect[field],
+            "field mismatch via cli for websocket-created task: {field}"
+        );
+    }
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
