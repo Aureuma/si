@@ -1141,6 +1141,256 @@ fn nucleus_task_prune_requests_gateway_task_prune_method() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_list_requests_gateway_worker_list_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "worker.list");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": [
+                {
+                    "worker_id": "si-worker-123",
+                    "profile": "america",
+                    "status": "ready"
+                }
+            ]
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "list",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload[0]["worker_id"], "si-worker-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_worker_inspect_requests_gateway_worker_inspect_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "worker.inspect");
+        assert_eq!(payload["params"]["worker_id"], "si-worker-123");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "worker_id": "si-worker-123",
+                "profile": "america",
+                "status": "ready"
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "inspect",
+            "si-worker-123",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["worker_id"], "si-worker-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_session_list_requests_gateway_session_list_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "session.list");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": [
+                {
+                    "session_id": "si-session-123",
+                    "worker_id": "si-worker-123",
+                    "status": "ready"
+                }
+            ]
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "list",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload[0]["session_id"], "si-session-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_session_show_requests_gateway_session_show_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "session.show");
+        assert_eq!(payload["params"]["session_id"], "si-session-123");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "session_id": "si-session-123",
+                "worker_id": "si-worker-123",
+                "status": "ready"
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "show",
+            "si-session-123",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["session_id"], "si-session-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_run_inspect_requests_gateway_run_inspect_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "run.inspect");
+        assert_eq!(payload["params"]["run_id"], "si-run-123");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "run_id": "si-run-123",
+                "session_id": "si-session-123",
+                "status": "running"
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "run",
+            "inspect",
+            "si-run-123",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["run_id"], "si-run-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_events_subscribe_prints_streamed_events() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
