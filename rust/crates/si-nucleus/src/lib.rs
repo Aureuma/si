@@ -58,6 +58,8 @@ const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
+const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
+const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
     let header = headers.get(AUTHORIZATION)?.to_str().ok()?.trim();
@@ -2099,6 +2101,12 @@ fn format_timestamp(timestamp: &DateTime<Utc>) -> String {
     timestamp.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
+fn worker_restart_backoff(attempt: u32) -> ChronoDuration {
+    let multiplier = 2_i64.saturating_pow(attempt.saturating_sub(1));
+    let millis = WORKER_RESTART_BACKOFF_BASE.as_millis() as i64;
+    ChronoDuration::milliseconds(millis.saturating_mul(multiplier))
+}
+
 fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -2128,6 +2136,7 @@ pub struct NucleusService {
     events: broadcast::Sender<CanonicalEvent>,
     runtime: Option<Arc<dyn NucleusRuntime>>,
     background_started: Arc<AtomicBool>,
+    worker_restart_state: Arc<Mutex<HashMap<WorkerId, WorkerRestartState>>>,
 }
 
 impl NucleusService {
@@ -2145,6 +2154,7 @@ impl NucleusService {
             events,
             runtime: None,
             background_started: Arc::new(AtomicBool::new(false)),
+            worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -2161,6 +2171,7 @@ impl NucleusService {
             events,
             runtime: Some(runtime),
             background_started: Arc::new(AtomicBool::new(false)),
+            worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -2260,6 +2271,19 @@ impl NucleusService {
                     let _ = self.events.send(event);
                 }
             }
+        }
+        for worker in self.store.list_workers()? {
+            if !matches!(
+                worker.status,
+                si_nucleus_core::WorkerStatus::Failed | si_nucleus_core::WorkerStatus::Stopped
+            ) {
+                continue;
+            }
+            if runtime.inspect_worker(&worker.worker_id)?.is_some() {
+                self.clear_worker_restart_state(&worker.worker_id);
+                continue;
+            }
+            self.maybe_restart_failed_worker(runtime.as_ref(), &worker)?;
         }
         Ok(())
     }
@@ -3016,6 +3040,7 @@ impl NucleusService {
         let started = runtime.start_worker(&spec)?;
         let (worker, runtime_view, events) =
             self.store.record_worker_start(&spec, &started, runtime.as_ref())?;
+        self.clear_worker_restart_state(worker_id);
         for event in events {
             let _ = self.events.send(event);
         }
@@ -3040,6 +3065,7 @@ impl NucleusService {
         )?;
         let probe = runtime.probe_worker(&spec)?;
         let events = self.store.record_worker_probe(&spec, &probe, runtime.as_ref())?;
+        self.clear_worker_restart_state(worker_id);
         for event in events {
             let _ = self.events.send(event);
         }
@@ -3452,10 +3478,99 @@ impl NucleusService {
         let started = runtime.start_worker(&spec)?;
         let (worker, runtime_view, events) =
             self.store.record_worker_start(&spec, &started, runtime)?;
+        self.clear_worker_restart_state(&worker.worker_id);
         for event in events {
             let _ = self.events.send(event);
         }
         Ok(EnsuredWorker { worker, runtime: Some(runtime_view) })
+    }
+
+    fn maybe_restart_failed_worker(
+        &self,
+        runtime: &dyn NucleusRuntime,
+        worker: &WorkerRecord,
+    ) -> Result<()> {
+        if self.worker_has_active_runs(&worker.worker_id)? {
+            return Ok(());
+        }
+        let now = Utc::now();
+        {
+            let state = self
+                .worker_restart_state
+                .lock()
+                .map_err(|_| anyhow!("worker restart state lock poisoned"))?;
+            if let Some(restart) = state.get(&worker.worker_id) {
+                if restart.exhausted {
+                    return Ok(());
+                }
+                if let Some(next_retry_at) = restart.next_retry_at {
+                    if now < next_retry_at {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        let spec = self.worker_launch_spec_from_record(worker);
+        match runtime.start_worker(&spec) {
+            Ok(started) => {
+                let (worker, _, events) =
+                    self.store.record_worker_start(&spec, &started, runtime)?;
+                self.clear_worker_restart_state(&worker.worker_id);
+                for event in events {
+                    let _ = self.events.send(event);
+                }
+                Ok(())
+            }
+            Err(error) => {
+                let restart = self.record_worker_restart_failure(&worker.worker_id, now)?;
+                let next_retry_at = restart
+                    .next_retry_at
+                    .map(|timestamp| timestamp.to_rfc3339_opts(SecondsFormat::Secs, true));
+                let event = self.store.append_system_warning(
+                    if restart.exhausted {
+                        "worker restart attempts exhausted"
+                    } else {
+                        "worker auto-restart attempt failed"
+                    },
+                    json!({
+                        "worker_id": worker.worker_id,
+                        "attempt": restart.attempts,
+                        "max_attempts": MAX_WORKER_RESTART_ATTEMPTS,
+                        "next_retry_at": next_retry_at,
+                        "error": error.to_string(),
+                    }),
+                )?;
+                let _ = self.events.send(event);
+                Ok(())
+            }
+        }
+    }
+
+    fn clear_worker_restart_state(&self, worker_id: &WorkerId) {
+        if let Ok(mut state) = self.worker_restart_state.lock() {
+            state.remove(worker_id);
+        }
+    }
+
+    fn record_worker_restart_failure(
+        &self,
+        worker_id: &WorkerId,
+        now: DateTime<Utc>,
+    ) -> Result<WorkerRestartState> {
+        let mut state = self
+            .worker_restart_state
+            .lock()
+            .map_err(|_| anyhow!("worker restart state lock poisoned"))?;
+        let restart = state.entry(worker_id.clone()).or_default();
+        restart.attempts += 1;
+        if restart.attempts >= MAX_WORKER_RESTART_ATTEMPTS {
+            restart.next_retry_at = None;
+            restart.exhausted = true;
+        } else {
+            restart.next_retry_at = Some(now + worker_restart_backoff(restart.attempts));
+        }
+        Ok(restart.clone())
     }
 }
 
@@ -3480,6 +3595,13 @@ struct EnsureWorkerRequest<'a> {
     codex_home: Option<PathBuf>,
     workdir: Option<PathBuf>,
     env: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct WorkerRestartState {
+    attempts: u32,
+    next_retry_at: Option<DateTime<Utc>>,
+    exhausted: bool,
 }
 
 async fn ws_handler(
@@ -4356,9 +4478,9 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord, NucleusConfig,
-        NucleusPaths, NucleusService, NucleusStore, cron_due_key, load_canonical_events,
-        write_json_atomic,
+        CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
+        MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
+        cron_due_key, load_canonical_events, write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -4384,6 +4506,8 @@ mod tests {
         workers: HashMap<String, WorkerRuntimeView>,
         run_delay: Duration,
         fail_execute: bool,
+        remaining_start_failures: usize,
+        start_calls: usize,
         interrupted_turns: HashSet<String>,
     }
 
@@ -4403,6 +4527,14 @@ mod tests {
             let runtime = Self::default();
             runtime.state.lock().expect("state").fail_execute = true;
             runtime
+        }
+
+        fn fail_next_starts(&self, count: usize) {
+            self.state.lock().expect("state").remaining_start_failures = count;
+        }
+
+        fn start_call_count(&self) -> usize {
+            self.state.lock().expect("state").start_calls
         }
     }
 
@@ -4441,6 +4573,14 @@ mod tests {
         }
 
         fn start_worker(&self, spec: &WorkerLaunchSpec) -> Result<WorkerStartResult> {
+            {
+                let mut state = self.state.lock().expect("state");
+                state.start_calls += 1;
+                if state.remaining_start_failures > 0 {
+                    state.remaining_start_failures -= 1;
+                    anyhow::bail!("fake-runtime start_worker failed");
+                }
+            }
             let probe = self.probe_worker(spec)?;
             let runtime = WorkerRuntimeView {
                 worker_id: spec.worker_id.clone(),
@@ -5317,6 +5457,119 @@ mod tests {
         assert_eq!(payload["worker"]["worker_id"], json!(worker_id));
         assert_eq!(payload["worker"]["status"], json!("ready"));
         assert_eq!(payload["runtime"]["worker_id"], json!(worker_id));
+    }
+
+    #[tokio::test]
+    async fn supervision_restarts_failed_idle_worker_within_retry_budget() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-auto-restart"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        runtime.stop_worker(&worker_id).expect("stop worker");
+        service.reconcile_and_dispatch_once().expect("reconcile failed worker");
+
+        let worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(worker.status, WorkerStatus::Ready);
+        assert!(runtime.inspect_worker(&worker_id).expect("inspect live runtime").is_some());
+    }
+
+    #[tokio::test]
+    async fn supervision_stops_retrying_worker_after_bounded_failures() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-auto-restart-fail"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        runtime.stop_worker(&worker_id).expect("stop worker");
+        runtime.fail_next_starts(MAX_WORKER_RESTART_ATTEMPTS as usize);
+
+        for _ in 0..(MAX_WORKER_RESTART_ATTEMPTS + 2) {
+            service.reconcile_and_dispatch_once().expect("reconcile failed worker");
+            thread::sleep(Duration::from_millis(125));
+        }
+
+        let worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(worker.status, WorkerStatus::Failed);
+        assert_eq!(runtime.start_call_count(), (MAX_WORKER_RESTART_ATTEMPTS + 1) as usize);
+
+        let warnings = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .filter(|event| event.event_type == CanonicalEventType::SystemWarning)
+            .collect::<Vec<_>>();
+        assert!(warnings.iter().any(|event| {
+            event.data.payload["message"] == json!("worker restart attempts exhausted")
+                && event.data.payload["details"]["worker_id"] == json!(worker_id.as_str())
+        }));
     }
 
     #[tokio::test]
