@@ -5201,9 +5201,23 @@ mod tests {
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
+        assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"], json!("opaque token"));
+        assert_eq!(
+            body["components"]["schemas"]["RestErrorEnvelope"]["required"],
+            json!(["error"])
+        );
+        assert_eq!(
+            body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["required"],
+            json!(["code", "message"])
+        );
+        assert!(body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["properties"]["details"].is_object());
         assert_eq!(
             body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
             json!("#/components/schemas/NucleusStatusView")
+        );
+        assert_eq!(
+            body["paths"]["/status"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
         );
         assert_eq!(
             body["paths"]["/tasks"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
@@ -5346,6 +5360,10 @@ mod tests {
             body["paths"]["/openapi.json"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
+        assert_eq!(
+            body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["type"],
+            json!("object")
+        );
         assert!(body["paths"]["/status"]["get"]["security"].is_null());
         assert!(body["paths"]["/tasks"]["get"]["security"].is_null());
         assert!(body["paths"]["/tasks/{task_id}"]["get"]["security"].is_null());
@@ -5353,6 +5371,7 @@ mod tests {
         assert!(body["paths"]["/workers/{worker_id}"]["get"]["security"].is_null());
         assert!(body["paths"]["/sessions/{session_id}"]["get"]["security"].is_null());
         assert!(body["paths"]["/runs/{run_id}"]["get"]["security"].is_null());
+        assert!(body["paths"]["/openapi.json"]["get"]["security"].is_null());
         assert_eq!(
             body["components"]["schemas"]["TaskCancelResultView"]["required"],
             json!(["task", "cancellation_requested"])
@@ -5497,6 +5516,26 @@ mod tests {
         assert_eq!(inspect_response.status(), StatusCode::OK);
         let inspected = response_json(inspect_response).await;
         assert_eq!(inspected["task_id"], json!(task_id));
+    }
+
+    #[tokio::test]
+    async fn rest_openapi_remains_available_without_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let response = app
+            .oneshot(Request::builder().uri("/openapi.json").body(Body::empty()).expect("request"))
+            .await
+            .expect("openapi response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["openapi"], json!("3.1.0"));
     }
 
     #[tokio::test]
