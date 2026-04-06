@@ -3212,6 +3212,150 @@ fn nucleus_rest_task_matches_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_worker_session_and_run_match_websocket_and_cli_state() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service_with_runtime(
+        &temp.path().join("nucleus"),
+        Arc::new(TestRuntime::default()),
+    );
+    let client = BlockingClient::new();
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created = create_task_via_cli(
+        &ws_url,
+        "REST inspect parity task",
+        "Reply with nucleus-smoke",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let rest_workers: Value = client
+        .get(format!("{base_url}/workers"))
+        .send()
+        .expect("list rest workers")
+        .json()
+        .expect("parse rest workers");
+    let rest_worker: Value = client
+        .get(format!("{base_url}/workers/{worker_id}"))
+        .send()
+        .expect("inspect rest worker")
+        .json()
+        .expect("parse rest worker");
+    let rest_session: Value = client
+        .get(format!("{base_url}/sessions/{session_id}"))
+        .send()
+        .expect("inspect rest session")
+        .json()
+        .expect("parse rest session");
+    let rest_run: Value = client
+        .get(format!("{base_url}/runs/{run_id}"))
+        .send()
+        .expect("inspect rest run")
+        .json()
+        .expect("parse rest run");
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let worker_request = serde_json::json!({
+        "id": "worker-inspect",
+        "method": "worker.inspect",
+        "params": { "worker_id": worker_id }
+    });
+    socket
+        .send(WsMessage::Text(worker_request.to_string().into()))
+        .expect("send websocket worker inspect");
+    let worker_response = socket.read().expect("read websocket worker inspect");
+    let worker_payload = match worker_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse worker payload")
+        }
+        other => panic!("unexpected websocket worker response: {other:?}"),
+    };
+    assert_eq!(worker_payload["ok"], true);
+    let ws_worker = worker_payload["result"].clone();
+
+    let session_request = serde_json::json!({
+        "id": "session-show",
+        "method": "session.show",
+        "params": { "session_id": session_id }
+    });
+    socket
+        .send(WsMessage::Text(session_request.to_string().into()))
+        .expect("send websocket session show");
+    let session_response = socket.read().expect("read websocket session show");
+    let session_payload = match session_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse session payload")
+        }
+        other => panic!("unexpected websocket session response: {other:?}"),
+    };
+    assert_eq!(session_payload["ok"], true);
+    let ws_session = session_payload["result"].clone();
+
+    let run_request = serde_json::json!({
+        "id": "run-inspect",
+        "method": "run.inspect",
+        "params": { "run_id": run_id }
+    });
+    socket
+        .send(WsMessage::Text(run_request.to_string().into()))
+        .expect("send websocket run inspect");
+    let run_response = socket.read().expect("read websocket run inspect");
+    let run_payload = match run_response {
+        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse run payload"),
+        other => panic!("unexpected websocket run response: {other:?}"),
+    };
+    assert_eq!(run_payload["ok"], true);
+    let ws_run = run_payload["result"].clone();
+
+    let cli_worker = inspect_worker_via_cli(&ws_url, &worker_id);
+    let cli_session = inspect_session_via_cli(&ws_url, &session_id);
+    let cli_run = inspect_run_via_cli(&ws_url, &run_id);
+
+    assert!(
+        rest_workers
+            .as_array()
+            .expect("rest worker list array")
+            .iter()
+            .any(|worker| worker["worker_id"] == worker_id && worker["profile"] == "america")
+    );
+    for field in ["worker_id", "profile", "status"] {
+        assert_eq!(
+            rest_worker["worker"][field], ws_worker["worker"][field],
+            "worker field mismatch via websocket: {field}"
+        );
+        assert_eq!(
+            rest_worker["worker"][field], cli_worker["worker"][field],
+            "worker field mismatch via cli: {field}"
+        );
+    }
+
+    for field in ["session_id", "worker_id", "profile", "app_server_thread_id"] {
+        assert_eq!(
+            rest_session[field], ws_session[field],
+            "session field mismatch via websocket: {field}"
+        );
+        assert_eq!(
+            rest_session[field], cli_session[field],
+            "session field mismatch via cli: {field}"
+        );
+    }
+
+    for field in ["run_id", "task_id", "session_id", "status"] {
+        assert_eq!(rest_run[field], ws_run[field], "run field mismatch via websocket: {field}");
+        assert_eq!(rest_run[field], cli_run[field], "run field mismatch via cli: {field}");
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_websocket_task_matches_cli_state_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
