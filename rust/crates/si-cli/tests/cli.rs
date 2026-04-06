@@ -6532,6 +6532,84 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_live_openapi_document_advertises_bounded_contract() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service_with_options(
+        &temp.path().join("nucleus"),
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(TestRuntime::default())),
+    );
+    let client = BlockingClient::new();
+
+    let response = client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
+    assert!(response.status().is_success());
+    let body: Value = response.json().expect("parse openapi");
+
+    assert_eq!(body["openapi"], json!("3.1.0"));
+    assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
+    assert_eq!(
+        body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
+        json!("opaque token")
+    );
+    assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"],
+        json!([])
+    );
+    assert!(body["paths"]["/status"]["get"]["security"].is_null());
+    assert!(body["paths"]["/openapi.json"]["get"]["security"].is_null());
+    assert_eq!(
+        body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/NucleusStatusView")
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/TaskRecord")
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    for (path, method) in [
+        ("/status", "get"),
+        ("/tasks", "get"),
+        ("/tasks", "post"),
+        ("/tasks/{task_id}", "get"),
+        ("/tasks/{task_id}/cancel", "post"),
+        ("/workers", "get"),
+        ("/workers/{worker_id}", "get"),
+        ("/sessions/{session_id}", "get"),
+        ("/runs/{run_id}", "get"),
+        ("/openapi.json", "get"),
+    ] {
+        let operation = &body["paths"][path][method];
+        assert!(
+            operation["summary"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+            "missing summary for {method} {path}"
+        );
+        assert!(
+            operation["description"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+            "missing description for {method} {path}"
+        );
+        assert!(
+            operation["x-si-purpose"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+            "missing x-si-purpose for {method} {path}"
+        );
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
     let temp = tempdir().expect("tempdir");
     let runtime = TestRuntime::with_streaming_output(
