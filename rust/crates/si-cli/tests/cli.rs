@@ -7108,6 +7108,16 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/TaskCancelResultView")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["summary"],
+        json!("Cancel one task")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["description"],
+        json!(
+            "Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed."
+        )
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["x-si-purpose"],
         json!(
             "Use this for bounded external cancellation requests and then re-read the task or run to observe final state."
