@@ -21,6 +21,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
+| `si nucleus` | Local control plane for tasks, workers, sessions, runs, gateway inspection, and service management | `status`, `service`, `task`, `worker`, `session`, `run`, `profile` | [Nucleus](./NUCLEUS) |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
@@ -64,6 +65,9 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 ### 1. New machine bootstrap
 
 ```bash
+si nucleus status
+si nucleus service install
+si nucleus service start
 si build self
 si build self check --timings
 si vault status
@@ -91,6 +95,8 @@ si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z" --target
 
 ## Guardrails
 
+- Use `si nucleus ...` rather than hidden runtime shortcuts when you need task, worker, session, run, or gateway state.
+- Prefer `si nucleus service ...` over handwritten service units or launch agents.
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` bootstrap/admin auth is file-backed and prefers explicit `--token-file` injection from `~/.si/fort/bootstrap/admin.token` when present.

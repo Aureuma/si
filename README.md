@@ -14,14 +14,15 @@
 
 `si` is an AI-first CLI for orchestrating coding agents, provider bridges, and secure runtime workflows.
 
-Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
+Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCLEUS.md) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
 
 ## What si covers
 
+- Nucleus control plane: durable local orchestration under `si nucleus ...` for tasks, workers, sessions, runs, the local WebSocket gateway, and OS-native service management.
 - Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `shell`, `tail`, `list`, `remove`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
-- Browser runtime: local Playwright MCP runtime (`si browser ...`).
+- Browser runtime: local Playwright browser runtime under `si surf ...`.
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
 ## Repo layout
@@ -73,6 +74,16 @@ si build self --timings
 
 ## Common workflows
 
+Nucleus control plane:
+
+```bash
+./si nucleus status
+./si nucleus task create "Investigate release drift" "Summarize the last failed release attempt."
+./si nucleus task list
+./si nucleus service install
+./si nucleus service start
+```
+
 Codex lifecycle:
 
 ```bash
@@ -86,15 +97,15 @@ Codex lifecycle:
 Browser runtime:
 
 ```bash
-./si browser build
-./si browser start
-./si browser status
-./si browser logs --follow
-./si browser stop
+./si surf build
+./si surf start --profile default
+./si surf status
+./si surf logs
+./si surf stop
 ```
 
-When running, SI-managed codex workers can auto-register MCP server `si_browser`
-to the configured browser runtime endpoint.
+By default, `si nucleus ...` discovers the local gateway via `SI_NUCLEUS_WS_ADDR`,
+then `~/.si/nucleus/gateway/metadata.json`, then `ws://127.0.0.1:4747/ws`.
 
 Mintlify docs tooling:
 
@@ -106,10 +117,11 @@ Mintlify docs tooling:
 
 ## Command map
 
+- `si nucleus ...`: local control-plane operations, gateway-facing orchestration, and service management.
 - `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
 - `si orbit ...`: provider bridges and provider capability inventory.
-- `si browser ...`: Playwright MCP browser runtime.
+- `si surf ...`: Playwright browser runtime.
 - `si mintlify ...`: docs site bootstrap/validation/dev wrappers.
 - `si build ...`: self-build and release workflows.
 

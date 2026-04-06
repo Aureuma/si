@@ -33,6 +33,7 @@
             "group": "Overview",
             "pages": [
               "docs/index",
+              "docs/NUCLEUS",
               "docs/CLI_REFERENCE",
               "docs/COMMAND_REFERENCE",
               "docs/INTEGRATIONS_OVERVIEW",
