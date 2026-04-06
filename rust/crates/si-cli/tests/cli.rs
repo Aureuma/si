@@ -7035,6 +7035,15 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["items"]["$ref"],
         json!("#/components/schemas/TaskRecord")
     );
+    assert_eq!(body["paths"]["/tasks"]["get"]["summary"], json!("List tasks"));
+    assert_eq!(
+        body["paths"]["/tasks"]["get"]["description"],
+        json!("List durable tasks from the same source of truth used by the websocket gateway and CLI.")
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["get"]["x-si-purpose"],
+        json!("Use this for bounded task inspection and polling from external tools such as GPT Actions.")
+    );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]
             ["$ref"],
