@@ -9040,6 +9040,69 @@ mod tests {
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
     }
 
+    #[tokio::test]
+    async fn cancelled_tasks_do_not_requeue_after_restart_or_reconcile() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = Arc::new(FakeRuntime::default());
+        let state_dir = temp.path().join("nucleus");
+        let config = NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: state_dir.clone(),
+            auth_token: None,
+        };
+        let service =
+            NucleusService::open_with_runtime(config.clone(), runtime.clone()).expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancelled-no-requeue-task"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not requeue cancelled task",
+                    "instructions": "This task should stay terminal after cancellation",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancelled-no-requeue-cancel"),
+                method: "task.cancel".to_owned(),
+                params: json!({ "task_id": task_id.as_str() }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["task"]["status"].as_str()),
+            Some("cancelled")
+        );
+
+        drop(service);
+
+        let reopened =
+            NucleusService::open_with_runtime(config, runtime.clone()).expect("reopen service");
+        reopened.reconcile_and_dispatch_once().expect("reconcile restarted service");
+
+        let task =
+            reopened.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        assert!(task.latest_run_id.is_none());
+        assert_eq!(runtime.start_call_count(), 0);
+        assert!(reopened.store.list_workers().expect("workers").is_empty());
+        assert!(reopened.store.list_runs().expect("runs").is_empty());
+    }
+
     #[test]
     fn cron_producer_emits_due_task_once_across_replay() {
         let temp = tempdir().expect("tempdir");
