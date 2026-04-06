@@ -7022,6 +7022,11 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/tasks"]["post"]["responses"]["400"]["content"]["application/json"]["schema"]
+            ["$ref"],
+        json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")

@@ -5794,6 +5794,11 @@ mod tests {
             json!("#/components/schemas/TaskRecord")
         );
         assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["400"]["content"]["application/json"]["schema"]
+                ["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
             body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["schema"]["type"],
             json!("string")
         );
