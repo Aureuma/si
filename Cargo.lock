@@ -2025,6 +2025,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "si-nucleus",
+ "si-nucleus-core",
+ "si-nucleus-runtime",
  "si-rs-codex",
  "si-rs-command-manifest",
  "si-rs-config",

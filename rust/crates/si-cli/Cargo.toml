@@ -51,6 +51,8 @@ serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 si-nucleus = { path = "../si-nucleus" }
+si-nucleus-core = { path = "../si-nucleus-core" }
+si-nucleus-runtime = { path = "../si-nucleus-runtime" }
 
 [[bin]]
 name = "si-rs"

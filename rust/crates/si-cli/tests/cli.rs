@@ -3,16 +3,29 @@ use base64::{
     Engine as _,
     engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD},
 };
+use chrono::Utc;
 use reqwest::blocking::Client as BlockingClient;
 use serde_json::Value;
 use si_nucleus::{NucleusConfig, NucleusService};
+use si_nucleus_core::{
+    CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId,
+    WorkerStatus,
+};
+use si_nucleus_runtime::{
+    CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
+    RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
+    WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
+};
+use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tar::Archive;
 use tempfile::tempdir;
 use tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
@@ -121,6 +134,395 @@ fn spawn_live_nucleus_service(state_dir: &Path) -> String {
         thread::sleep(Duration::from_millis(50));
     }
     panic!("nucleus service did not become ready at {base_url}");
+}
+
+fn spawn_live_nucleus_service_with_runtime(
+    state_dir: &Path,
+    runtime: Arc<dyn NucleusRuntime>,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind nucleus addr");
+    let addr = listener.local_addr().expect("nucleus addr");
+    drop(listener);
+
+    let state_dir = state_dir.to_path_buf();
+    thread::spawn(move || {
+        let tokio_runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        tokio_runtime.block_on(async move {
+            NucleusService::open_with_runtime(
+                NucleusConfig { bind_addr: addr, state_dir, auth_token: None },
+                runtime,
+            )
+            .expect("open nucleus service")
+            .serve()
+            .await
+            .expect("serve nucleus service");
+        });
+    });
+
+    let base_url = format!("http://{addr}");
+    let client = BlockingClient::builder()
+        .timeout(Duration::from_millis(250))
+        .build()
+        .expect("build reqwest client");
+    for _ in 0..50 {
+        if let Ok(response) = client.get(format!("{base_url}/status")).send()
+            && response.status().is_success()
+        {
+            return base_url;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("nucleus service did not become ready at {base_url}");
+}
+
+#[derive(Default)]
+struct TestRuntimeState {
+    workers: HashMap<String, WorkerRuntimeView>,
+}
+
+#[derive(Clone, Default)]
+struct TestRuntime {
+    state: Arc<Mutex<TestRuntimeState>>,
+}
+
+impl NucleusRuntime for TestRuntime {
+    fn runtime_name(&self) -> &'static str {
+        "cli-test-runtime"
+    }
+
+    fn build_worker_command(&self, spec: &WorkerLaunchSpec) -> RuntimeCommand {
+        RuntimeCommand {
+            program: "cli-test-runtime".to_owned(),
+            args: vec![spec.profile.to_string()],
+            current_dir: spec.workdir.clone(),
+            env: BTreeMap::new(),
+        }
+    }
+
+    fn probe_worker(&self, spec: &WorkerLaunchSpec) -> anyhow::Result<WorkerProbeResult> {
+        Ok(WorkerProbeResult {
+            status: WorkerStatus::Ready,
+            snapshot: RuntimeStatusSnapshot {
+                source: "cli-test-runtime".to_owned(),
+                model: Some("gpt-5.4".to_owned()),
+                reasoning_effort: Some("medium".to_owned()),
+                account_email: Some(format!("{}@example.com", spec.profile)),
+                account_plan: Some("pro".to_owned()),
+                five_hour_left_pct: Some(80.0),
+                five_hour_reset: Some("Apr 6, 2026 4:00 PM".to_owned()),
+                five_hour_remaining_minutes: Some(240),
+                weekly_left_pct: Some(90.0),
+                weekly_reset: Some("Apr 13, 2026 4:00 PM".to_owned()),
+                weekly_remaining_minutes: Some(9000),
+            },
+            checked_at: Utc::now(),
+        })
+    }
+
+    fn start_worker(&self, spec: &WorkerLaunchSpec) -> anyhow::Result<WorkerStartResult> {
+        let probe = self.probe_worker(spec)?;
+        let runtime = WorkerRuntimeView {
+            worker_id: spec.worker_id.clone(),
+            runtime_name: "cli-test-runtime".to_owned(),
+            pid: 4242,
+            started_at: Utc::now(),
+            checked_at: probe.checked_at,
+        };
+        self.state
+            .lock()
+            .expect("runtime state")
+            .workers
+            .insert(spec.worker_id.to_string(), runtime.clone());
+        Ok(WorkerStartResult { runtime, probe })
+    }
+
+    fn stop_worker(&self, worker_id: &WorkerId) -> anyhow::Result<()> {
+        self.state.lock().expect("runtime state").workers.remove(worker_id.as_str());
+        Ok(())
+    }
+
+    fn inspect_worker(&self, worker_id: &WorkerId) -> anyhow::Result<Option<WorkerRuntimeView>> {
+        Ok(self.state.lock().expect("runtime state").workers.get(worker_id.as_str()).cloned())
+    }
+
+    fn ensure_session(&self, spec: &SessionOpenSpec) -> anyhow::Result<SessionOpenResult> {
+        Ok(SessionOpenResult {
+            thread_id: spec
+                .resume_thread_id
+                .clone()
+                .unwrap_or_else(|| format!("thread-{}", spec.session_id)),
+            created: spec.resume_thread_id.is_none(),
+            opened_at: Utc::now(),
+        })
+    }
+
+    fn execute_turn(
+        &self,
+        spec: &RunTurnSpec,
+        on_event: &mut dyn FnMut(CanonicalEventDraft) -> anyhow::Result<()>,
+    ) -> anyhow::Result<RuntimeRunOutcome> {
+        let turn_id = format!("turn-{}", spec.run_id);
+        on_event(CanonicalEventDraft {
+            event_type: CanonicalEventType::RunStarted,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: spec.task_id.clone(),
+                worker_id: Some(spec.worker_id.clone()),
+                session_id: Some(spec.session_id.clone()),
+                run_id: Some(spec.run_id.clone()),
+                profile: Some(spec.profile.clone()),
+                payload: serde_json::json!({
+                    "thread_id": spec.thread_id,
+                    "turn_id": turn_id,
+                }),
+            },
+        })?;
+        on_event(CanonicalEventDraft {
+            event_type: CanonicalEventType::RunOutputDelta,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: spec.task_id.clone(),
+                worker_id: Some(spec.worker_id.clone()),
+                session_id: Some(spec.session_id.clone()),
+                run_id: Some(spec.run_id.clone()),
+                profile: Some(spec.profile.clone()),
+                payload: serde_json::json!({
+                    "thread_id": spec.thread_id,
+                    "turn_id": turn_id,
+                    "delta": "nucleus-smoke",
+                }),
+            },
+        })?;
+        on_event(CanonicalEventDraft {
+            event_type: CanonicalEventType::RunCompleted,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: spec.task_id.clone(),
+                worker_id: Some(spec.worker_id.clone()),
+                session_id: Some(spec.session_id.clone()),
+                run_id: Some(spec.run_id.clone()),
+                profile: Some(spec.profile.clone()),
+                payload: serde_json::json!({
+                    "thread_id": spec.thread_id,
+                    "turn_id": turn_id,
+                    "final_output": "nucleus-smoke",
+                }),
+            },
+        })?;
+        Ok(RuntimeRunOutcome {
+            turn_id,
+            status: RunStatus::Completed,
+            completed_at: Utc::now(),
+            final_output: Some("nucleus-smoke".to_owned()),
+        })
+    }
+
+    fn interrupt_turn(
+        &self,
+        _worker_id: &WorkerId,
+        _thread_id: &str,
+        _turn_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn probe_events(
+        &self,
+        spec: &WorkerLaunchSpec,
+        probe: &WorkerProbeResult,
+    ) -> anyhow::Result<Vec<CanonicalEventDraft>> {
+        Ok(vec![CanonicalEventDraft {
+            event_type: CanonicalEventType::WorkerReady,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: None,
+                worker_id: Some(spec.worker_id.clone()),
+                session_id: None,
+                run_id: None,
+                profile: Some(spec.profile.clone()),
+                payload: serde_json::json!({
+                    "source": probe.snapshot.source,
+                    "model": probe.snapshot.model,
+                }),
+            },
+        }])
+    }
+
+    fn status_payload(&self, probe: &WorkerProbeResult) -> serde_json::Value {
+        serde_json::json!({
+            "source": probe.snapshot.source,
+            "model": probe.snapshot.model,
+            "account_email": probe.snapshot.account_email,
+        })
+    }
+}
+
+fn write_cron_rule(
+    state_root: &Path,
+    name: &str,
+    schedule_kind: &str,
+    schedule: &str,
+    instructions: &str,
+    next_due_at: &str,
+) {
+    let path = state_root.join("state").join("producers").join("cron").join(format!("{name}.json"));
+    fs::create_dir_all(path.parent().expect("cron parent")).expect("mkdir cron dir");
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "name": name,
+            "enabled": true,
+            "schedule_kind": schedule_kind,
+            "schedule": schedule,
+            "instructions": instructions,
+            "last_emitted_at": null,
+            "next_due_at": next_due_at,
+            "version": 1
+        }))
+        .expect("serialize cron rule"),
+    )
+    .expect("write cron rule");
+}
+
+fn write_hook_rule(state_root: &Path, name: &str, match_event_type: &str, instructions: &str) {
+    let path = state_root.join("state").join("producers").join("hook").join(format!("{name}.json"));
+    fs::create_dir_all(path.parent().expect("hook parent")).expect("mkdir hook dir");
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "name": name,
+            "enabled": true,
+            "match_event_type": match_event_type,
+            "instructions": instructions,
+            "last_processed_event_seq": 0,
+            "version": 1
+        }))
+        .expect("serialize hook rule"),
+    )
+    .expect("write hook rule");
+}
+
+fn inspect_task_over_websocket(ws_url: &str, task_id: &str) -> Value {
+    let (mut socket, _) = connect(ws_url).expect("connect websocket");
+    let inspect_request = serde_json::json!({
+        "id": "task-inspect",
+        "method": "task.inspect",
+        "params": { "task_id": task_id }
+    });
+    socket
+        .send(WsMessage::Text(inspect_request.to_string().into()))
+        .expect("send websocket inspect");
+    let response = socket.read().expect("read websocket inspect");
+    match response {
+        WsMessage::Text(text) => {
+            let payload = serde_json::from_str::<Value>(&text).expect("parse websocket inspect");
+            assert_eq!(payload["ok"], true);
+            payload["result"].clone()
+        }
+        other => panic!("unexpected websocket response: {other:?}"),
+    }
+}
+
+fn wait_for_cli_task(ws_url: &str, timeout: Duration, predicate: impl Fn(&Value) -> bool) -> Value {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        let list_output = cargo_bin()
+            .args(["nucleus", "task", "list", "--endpoint", ws_url, "--format", "json"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let tasks: Value = serde_json::from_slice(&list_output).expect("parse task list");
+        if let Some(task) =
+            tasks.as_array().expect("task list array").iter().find(|task| predicate(task))
+        {
+            return task.clone();
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("task did not appear before timeout");
+}
+
+fn wait_for_cli_task_status(ws_url: &str, task_id: &str, expected: &str) -> Value {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(5) {
+        let output = cargo_bin()
+            .args(["nucleus", "task", "inspect", task_id, "--endpoint", ws_url, "--format", "json"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let task: Value = serde_json::from_slice(&output).expect("parse task inspect");
+        if task["status"] == expected {
+            return task;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("task {task_id} did not reach status {expected}");
+}
+
+fn create_session_via_cli(
+    ws_url: &str,
+    home_dir: &Path,
+    codex_home: &Path,
+    workdir: &Path,
+) -> Value {
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            workdir.to_str().expect("workdir"),
+            "--endpoint",
+            ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).expect("parse session create")
+}
+
+fn write_fort_session_state(codex_home: &Path, profile: &str) {
+    let session_path = codex_home.join("fort").join("session.json");
+    save_persisted_session_state(
+        &session_path,
+        &PersistedSessionState {
+            profile_id: profile.to_owned(),
+            agent_id: "si-codex-america".to_owned(),
+            session_id: "fort-session".to_owned(),
+            host: "https://fort.example.invalid".to_owned(),
+            runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+            access_expires_at: (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+            refresh_expires_at: (Utc::now() + chrono::Duration::hours(12)).to_rfc3339(),
+            ..PersistedSessionState::default()
+        },
+    )
+    .expect("write fort session state");
+}
+
+fn load_event_log_values(state_root: &Path) -> Vec<Value> {
+    let path = state_root.join("state").join("events").join("events.jsonl");
+    fs::read_to_string(path)
+        .expect("read events jsonl")
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str::<Value>(line).expect("parse event line"))
+        .collect()
 }
 
 #[test]
@@ -2127,6 +2529,144 @@ fn nucleus_cli_task_matches_websocket_state_on_live_service() {
             "field mismatch via websocket for cli-created task: {field}"
         );
     }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_cron_producer_task_matches_cli_and_websocket_state() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let due_at = (Utc::now() - chrono::Duration::seconds(5)).to_rfc3339();
+    write_cron_rule(
+        &state_root,
+        "nightly",
+        "once_at",
+        &due_at,
+        "Reply with nucleus-smoke",
+        &due_at,
+    );
+
+    let listed = wait_for_cli_task(&ws_url, Duration::from_secs(5), |task| {
+        task["source"] == "cron" && task["producer_rule_name"] == "nightly"
+    });
+    let task_id = listed["task_id"].as_str().expect("task id").to_owned();
+    let inspected = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let websocket = inspect_task_over_websocket(&ws_url, &task_id);
+
+    for field in ["task_id", "source", "producer_rule_name", "status", "checkpoint_summary"] {
+        assert_eq!(inspected[field], websocket[field], "cron field mismatch: {field}");
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_hook_producer_task_matches_cli_and_websocket_state() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    write_hook_rule(&state_root, "task-created", "task.created", "Reply with nucleus-smoke");
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let create_request = serde_json::json!({
+        "id": "task-create",
+        "method": "task.create",
+        "params": {
+            "title": "Primary task",
+            "instructions": "Create hook input",
+            "profile": "america"
+        }
+    });
+    socket.send(WsMessage::Text(create_request.to_string().into())).expect("send websocket create");
+    let create_response = socket.read().expect("read websocket create");
+    match create_response {
+        WsMessage::Text(text) => {
+            let payload = serde_json::from_str::<Value>(&text).expect("parse create payload");
+            assert_eq!(payload["ok"], true);
+        }
+        other => panic!("unexpected websocket response: {other:?}"),
+    }
+
+    let listed = wait_for_cli_task(&ws_url, Duration::from_secs(5), |task| {
+        task["source"] == "hook" && task["producer_rule_name"] == "task-created"
+    });
+    let task_id = listed["task_id"].as_str().expect("task id").to_owned();
+    let inspected = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let websocket = inspect_task_over_websocket(&ws_url, &task_id);
+
+    for field in ["task_id", "source", "producer_rule_name", "status", "checkpoint_summary"] {
+        assert_eq!(inspected[field], websocket[field], "hook field mismatch: {field}");
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_fort_session_state(&codex_home, "america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let cli_output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Fort-backed task",
+            "Use si fort bootstrap and then reply with nucleus-smoke",
+            "--profile",
+            "america",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let created: Value = serde_json::from_slice(&cli_output).expect("parse cli create output");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let inspected = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let websocket = inspect_task_over_websocket(&ws_url, &task_id);
+    assert_eq!(inspected["status"], "done");
+    assert_eq!(inspected["checkpoint_summary"], "nucleus-smoke");
+    assert_eq!(inspected["status"], websocket["status"]);
+
+    let events = load_event_log_values(&state_root);
+    assert!(
+        events
+            .iter()
+            .any(|event| { event["type"] == "fort.ready" && event["data"]["task_id"] == task_id })
+    );
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
