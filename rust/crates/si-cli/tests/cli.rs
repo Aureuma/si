@@ -3212,6 +3212,87 @@ fn nucleus_rest_task_matches_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_status_matches_websocket_and_cli_state() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let base_url =
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()));
+    let client = BlockingClient::new();
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let created = create_task_via_cli(
+        &ws_url,
+        "REST status parity task",
+        "Reply with nucleus-smoke",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let _done = wait_for_cli_task_status(&ws_url, &task_id, "done");
+
+    let rest_status: Value = client
+        .get(format!("{base_url}/status"))
+        .send()
+        .expect("rest status")
+        .json()
+        .expect("parse rest status");
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let status_request = serde_json::json!({
+        "id": "nucleus-status",
+        "method": "nucleus.status",
+        "params": {}
+    });
+    socket.send(WsMessage::Text(status_request.to_string().into())).expect("send websocket status");
+    let status_response = socket.read().expect("read websocket status");
+    let status_payload = match status_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse status payload")
+        }
+        other => panic!("unexpected websocket status response: {other:?}"),
+    };
+    assert_eq!(status_payload["ok"], true);
+    let ws_status = status_payload["result"].clone();
+
+    let cli_output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_status: Value = serde_json::from_slice(&cli_output).expect("parse cli status");
+
+    let metadata: Value = serde_json::from_slice(
+        &fs::read(state_root.join("gateway").join("metadata.json")).expect("read metadata"),
+    )
+    .expect("parse metadata");
+    assert_eq!(rest_status["ws_url"], metadata["ws_url"]);
+    assert_eq!(rest_status["bind_addr"], metadata["bind_addr"]);
+
+    for field in [
+        "version",
+        "bind_addr",
+        "ws_url",
+        "state_dir",
+        "task_count",
+        "worker_count",
+        "session_count",
+        "run_count",
+        "next_event_seq",
+    ] {
+        assert_eq!(
+            rest_status[field], ws_status[field],
+            "status field mismatch via websocket: {field}"
+        );
+        assert_eq!(rest_status[field], cli_status[field], "status field mismatch via cli: {field}");
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_rest_worker_session_and_run_match_websocket_and_cli_state() {
     let temp = tempdir().expect("tempdir");
     let base_url = spawn_live_nucleus_service_with_runtime(
