@@ -2843,6 +2843,12 @@ impl NucleusService {
                 },
             )?;
             let Some(thread_id) = session.app_server_thread_id.clone() else {
+                if let Some(event) = self.store.mark_session_broken(
+                    &session.session_id,
+                    "session is missing an app-server thread id",
+                )? {
+                    let _ = self.events.send(event);
+                }
                 if let Some(event) = self.store.mark_task_blocked(
                     &task.task_id,
                     Some(worker.worker.worker_id.clone()),
@@ -7820,6 +7826,96 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
         assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_marks_session_broken_when_referenced_session_lacks_thread_id() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-missing-thread"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(created_session.ok);
+        let session_id = SessionId::new(
+            created_session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let mut session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&session)
+            .expect("persist session without thread id");
+
+        let created_task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-missing-thread"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Missing thread id task",
+                    "instructions": "Route through a session with no app server thread",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created_task.ok);
+        let task_id = TaskId::new(
+            created_task
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(task.latest_run_id.is_none());
+
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+        assert!(session.app_server_thread_id.is_none());
     }
 
     #[tokio::test]
