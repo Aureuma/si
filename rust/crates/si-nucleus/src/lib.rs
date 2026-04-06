@@ -5258,6 +5258,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn gateway_rejects_raw_app_server_methods_from_public_surface() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+
+        for method in ["thread.start", "thread.resume", "turn.start", "turn.interrupt"] {
+            let response = service
+                .dispatch_request(GatewayRequest {
+                    id: json!(method),
+                    method: method.to_owned(),
+                    params: json!({}),
+                })
+                .await;
+            assert!(!response.ok, "{method} should not be exposed publicly");
+            let error = response.error.expect("gateway error");
+            assert_eq!(error.code, "method_not_found");
+            assert!(error.message.contains("method not found"));
+        }
+    }
+
+    #[tokio::test]
     async fn task_create_rejects_non_slug_profile_names() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
