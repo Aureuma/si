@@ -734,6 +734,132 @@ fn nucleus_service_start_and_status_use_systemctl_user_unit() {
 }
 
 #[test]
+fn nucleus_service_stop_restart_and_uninstall_use_systemctl_user_unit() {
+    let temp = tempdir().expect("tempdir");
+    let service_dir = temp.path().join("systemd-user");
+    fs::create_dir_all(&service_dir).expect("mkdir service dir");
+    let definition_path = service_dir.join("si-nucleus.service");
+    fs::write(&definition_path, "[Unit]\nDescription=SI Nucleus\n").expect("write unit");
+
+    let calls_file = temp.path().join("systemctl-calls.txt");
+    let systemctl_path = temp.path().join("systemctl");
+    write_executable_shell_script(
+        &systemctl_path,
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\n", shell_escape_for_test(&calls_file)),
+    );
+
+    cargo_bin()
+        .args(["nucleus", "service", "stop", "--format", "json"])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success();
+
+    cargo_bin()
+        .args(["nucleus", "service", "restart", "--format", "json"])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success();
+
+    let uninstall_output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "uninstall",
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&uninstall_output).expect("parse uninstall json");
+    assert_eq!(payload["action"], "uninstall");
+    assert_eq!(payload["definition_path"], definition_path.display().to_string());
+    assert!(!definition_path.exists());
+
+    let calls = fs::read_to_string(&calls_file).expect("read calls");
+    assert!(calls.contains("--user\nstop\nsi-nucleus.service\n"));
+    assert!(calls.contains("--user\nrestart\nsi-nucleus.service\n"));
+    assert!(calls.contains("--user\ndaemon-reload\n"));
+}
+
+#[test]
+fn nucleus_service_launchd_actions_and_status_use_launchctl() {
+    let temp = tempdir().expect("tempdir");
+    let home = temp.path().join("home");
+    fs::create_dir_all(&home).expect("mkdir home");
+    let calls_file = temp.path().join("launchctl-calls.txt");
+    let launchctl_path = temp.path().join("launchctl");
+    write_executable_shell_script(
+        &launchctl_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nif [ \"$1\" = \"print\" ]; then\n  printf 'state = running\\n'\nfi\n",
+            shell_escape_for_test(&calls_file),
+        ),
+    );
+
+    cargo_bin()
+        .args(["nucleus", "service", "install", "--format", "json"])
+        .env("HOME", &home)
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_LAUNCHCTL_EXEC", launchctl_path.to_str().expect("launchctl path"))
+        .assert()
+        .success();
+
+    cargo_bin()
+        .args(["nucleus", "service", "start", "--format", "json"])
+        .env("HOME", &home)
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_LAUNCHCTL_EXEC", launchctl_path.to_str().expect("launchctl path"))
+        .assert()
+        .success();
+
+    let status_output = cargo_bin()
+        .args(["nucleus", "service", "status", "--format", "json"])
+        .env("HOME", &home)
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_LAUNCHCTL_EXEC", launchctl_path.to_str().expect("launchctl path"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status_payload: Value = serde_json::from_slice(&status_output).expect("parse status json");
+    assert_eq!(status_payload["manager_stdout"], "state = running");
+
+    cargo_bin()
+        .args(["nucleus", "service", "stop", "--format", "json"])
+        .env("HOME", &home)
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_LAUNCHCTL_EXEC", launchctl_path.to_str().expect("launchctl path"))
+        .assert()
+        .success();
+
+    cargo_bin()
+        .args(["nucleus", "service", "restart", "--format", "json"])
+        .env("HOME", &home)
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_LAUNCHCTL_EXEC", launchctl_path.to_str().expect("launchctl path"))
+        .assert()
+        .success();
+
+    let domain = format!("gui/{}", unsafe { libc::geteuid() });
+    let definition_path = home.join("Library/LaunchAgents/com.aureuma.si.nucleus.plist");
+    let calls = fs::read_to_string(&calls_file).expect("read launchctl calls");
+    assert!(calls.contains(&format!("bootstrap\n{domain}\n{}\n", definition_path.display())));
+    assert!(calls.contains(&format!("print\n{domain}/com.aureuma.si.nucleus\n")));
+    assert!(calls.contains(&format!("bootout\n{domain}/com.aureuma.si.nucleus\n")));
+    assert!(calls.contains(&format!("kickstart\n-k\n{domain}/com.aureuma.si.nucleus\n")));
+}
+
+#[test]
 fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
     let temp = tempdir().expect("tempdir");
     let args_file = temp.path().join("nucleus-args.txt");
