@@ -7539,6 +7539,41 @@ fn help_json_for_specific_command_includes_aliases() {
 }
 
 #[test]
+fn nucleus_help_surface_stays_bounded_to_plan_scope() {
+    let output = cargo_bin()
+        .args(["nucleus", "--help"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let help = String::from_utf8(output).expect("help output should be utf-8");
+    for expected in [
+        "Usage: si-rs nucleus <COMMAND>",
+        "status",
+        "profile",
+        "service",
+        "task",
+        "worker",
+        "session",
+        "run",
+        "events",
+    ] {
+        assert!(
+            help.contains(expected),
+            "nucleus help output must expose {expected}"
+        );
+    }
+    for forbidden in ["thread", "turn", "tmux", "transcript", "auth-json", "authjson"] {
+        assert!(
+            !help.contains(forbidden),
+            "nucleus public surface must not expose {forbidden}"
+        );
+    }
+}
+
+#[test]
 fn commands_root_defaults_to_list_output() {
     let output = cargo_bin()
         .args(["commands", "--format", "json"])
