@@ -7136,6 +7136,233 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_repair_auth_requeues_fort_unavailable_tasks_for_profile() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-unavailable-requeue"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home.clone(),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-unavailable-requeue"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Fort unavailable retry task",
+                    "instructions": "Use si fort refresh before continuing",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch fort-unavailable task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::FortUnavailable));
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-fort-unavailable-requeue"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let requeued =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(requeued.status, TaskStatus::Queued);
+        assert_eq!(requeued.blocked_reason, None);
+
+        service.reconcile_and_dispatch_once().expect("dispatch requeued fort task");
+        wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
+    }
+
+    #[tokio::test]
+    async fn worker_repair_auth_does_not_requeue_tasks_for_broken_sessions() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-broken-auth-requeue"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home.clone(),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-broken-auth-requeue"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not requeue broken-session task",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch broken-session task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::SessionBroken));
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-broken-auth-requeue"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let still_blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(still_blocked.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
     async fn session_and_run_commands_persist_state() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
