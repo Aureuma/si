@@ -26,6 +26,7 @@ use axum::routing::{get, post};
 use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
 use cron::Schedule;
 use futures_util::{SinkExt, StreamExt};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use si_nucleus_core::{
@@ -328,7 +329,15 @@ impl NucleusStore {
         let paths = NucleusPaths::new(state_dir);
         paths.ensure_layout()?;
         let last_seq = load_last_event_seq(&paths.events_path)?;
-        Ok(Self { paths, next_event_seq: AtomicU64::new(last_seq), write_lock: Mutex::new(()) })
+        let store =
+            Self { paths, next_event_seq: AtomicU64::new(last_seq), write_lock: Mutex::new(()) };
+        for warning in store.rebuild_markdown_projections()? {
+            store.append_system_warning(
+                "skipped malformed persisted object during markdown projection rebuild",
+                warning,
+            )?;
+        }
+        Ok(store)
     }
 
     pub fn paths(&self) -> &NucleusPaths {
@@ -390,6 +399,120 @@ impl NucleusStore {
         };
         let summary = render_run_summary(run, owned_task.as_ref());
         write_markdown_atomic(&self.paths.run_summary_path(&run.run_id), &summary)
+    }
+
+    fn rebuild_markdown_projections(&self) -> Result<Vec<Value>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let mut warnings = Vec::new();
+        self.rebuild_worker_markdown_locked(&mut warnings)?;
+        self.rebuild_session_markdown_locked(&mut warnings)?;
+        self.rebuild_run_markdown_locked(&mut warnings)?;
+        Ok(warnings)
+    }
+
+    fn rebuild_worker_markdown_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.workers_state_dir)
+            .with_context(|| format!("read {}", self.paths.workers_state_dir.display()))?
+        {
+            let entry = entry?;
+            let worker_path = entry.path().join("state.json");
+            if !worker_path.exists() {
+                continue;
+            }
+            let worker = match read_json_path::<WorkerRecord>(&worker_path) {
+                Ok(worker) => worker,
+                Err(error) => {
+                    warnings.push(json!({
+                        "path": worker_path.display().to_string(),
+                        "error": error.to_string(),
+                    }));
+                    continue;
+                }
+            };
+            let runtime_path = entry.path().join("runtime.json");
+            let runtime = if runtime_path.exists() {
+                match read_json_path::<WorkerRuntimeView>(&runtime_path) {
+                    Ok(runtime) => Some(runtime),
+                    Err(error) => {
+                        warnings.push(json!({
+                            "path": runtime_path.display().to_string(),
+                            "error": error.to_string(),
+                        }));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let summary = render_worker_summary(&worker, runtime.as_ref());
+            write_markdown_atomic(&self.paths.worker_summary_path(&worker.worker_id), &summary)?;
+        }
+        Ok(())
+    }
+
+    fn rebuild_session_markdown_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.sessions_state_dir)
+            .with_context(|| format!("read {}", self.paths.sessions_state_dir.display()))?
+        {
+            let entry = entry?;
+            let session_path = entry.path().join("session.json");
+            if !session_path.exists() {
+                continue;
+            }
+            let session = match read_json_path::<SessionRecord>(&session_path) {
+                Ok(session) => session,
+                Err(error) => {
+                    warnings.push(json!({
+                        "path": session_path.display().to_string(),
+                        "error": error.to_string(),
+                    }));
+                    continue;
+                }
+            };
+            let summary = render_session_summary(&session);
+            write_markdown_atomic(&self.paths.session_summary_path(&session.session_id), &summary)?;
+        }
+        Ok(())
+    }
+
+    fn rebuild_run_markdown_locked(&self, warnings: &mut Vec<Value>) -> Result<()> {
+        for entry in fs::read_dir(&self.paths.runs_state_dir)
+            .with_context(|| format!("read {}", self.paths.runs_state_dir.display()))?
+        {
+            let entry = entry?;
+            let run_path = entry.path().join("run.json");
+            if !run_path.exists() {
+                continue;
+            }
+            let run = match read_json_path::<RunRecord>(&run_path) {
+                Ok(run) => run,
+                Err(error) => {
+                    warnings.push(json!({
+                        "path": run_path.display().to_string(),
+                        "error": error.to_string(),
+                    }));
+                    continue;
+                }
+            };
+            let task_path = self.paths.task_path(&run.task_id);
+            let task = if task_path.exists() {
+                match read_json_path::<TaskRecord>(&task_path) {
+                    Ok(task) => Some(task),
+                    Err(error) => {
+                        warnings.push(json!({
+                            "path": task_path.display().to_string(),
+                            "error": error.to_string(),
+                        }));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let summary = render_run_summary(&run, task.as_ref());
+            write_markdown_atomic(&self.paths.run_summary_path(&run.run_id), &summary)?;
+        }
+        Ok(())
     }
 
     fn create_task(&self, input: CreateTaskInput) -> Result<Vec<CanonicalEvent>> {
@@ -1747,6 +1870,11 @@ fn load_last_event_seq(path: &Path) -> Result<u64> {
         last_seq = last_seq.max(event.seq);
     }
     Ok(last_seq)
+}
+
+fn read_json_path<T: DeserializeOwned>(path: &Path) -> Result<T> {
+    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    serde_json::from_slice::<T>(&bytes).with_context(|| format!("parse {}", path.display()))
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -4145,7 +4273,8 @@ mod tests {
 
     use super::{
         CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord, NucleusConfig,
-        NucleusService, cron_due_key, load_canonical_events, write_json_atomic,
+        NucleusPaths, NucleusService, NucleusStore, cron_due_key, load_canonical_events,
+        write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -4485,6 +4614,17 @@ mod tests {
 
     fn fort_events_for_task(service: &NucleusService, task_id: &str) -> Vec<CanonicalEvent> {
         let task_id = TaskId::new(task_id).expect("task id");
+        for _ in 0..10 {
+            match load_canonical_events(&service.store.paths().events_path) {
+                Ok(events) => {
+                    return events
+                        .into_iter()
+                        .filter(|event| event.data.task_id.as_ref() == Some(&task_id))
+                        .collect();
+                }
+                Err(_) => thread::sleep(Duration::from_millis(20)),
+            }
+        }
         load_canonical_events(&service.store.paths().events_path)
             .expect("load events")
             .into_iter()
@@ -5215,6 +5355,110 @@ mod tests {
             .expect("read run summary");
         assert!(run_summary.contains("# Run"));
         assert!(run_summary.contains("Task status: `done`"));
+        assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
+    }
+
+    #[tokio::test]
+    async fn startup_rebuilds_markdown_projections_from_canonical_state() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+
+        let (worker_id, session_id, run_id) = {
+            let service = NucleusService::open_with_runtime(
+                NucleusConfig {
+                    bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                    state_dir: state_dir.clone(),
+                    auth_token: None,
+                },
+                Arc::new(FakeRuntime::default()),
+            )
+            .expect("service");
+
+            let session = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("session-rebuild"),
+                    method: "session.create".to_owned(),
+                    params: json!({
+                        "profile": "america",
+                        "home_dir": temp.path().join("home"),
+                        "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                        "workdir": temp.path(),
+                    }),
+                })
+                .await;
+            assert!(session.ok);
+            let worker_id = session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned();
+            let session_id = session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned();
+
+            let task = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("task-rebuild"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Rebuild summaries",
+                        "instructions": "Reply with nucleus-smoke",
+                        "profile": "america",
+                        "session_id": session_id,
+                    }),
+                })
+                .await;
+            assert!(task.ok);
+            let task_id =
+                task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+            let run = service
+                .dispatch_request(GatewayRequest {
+                    id: json!("run-rebuild"),
+                    method: "run.submit_turn".to_owned(),
+                    params: json!({
+                        "session_id": session_id,
+                        "task_id": task_id,
+                        "prompt": "Reply with nucleus-smoke",
+                    }),
+                })
+                .await;
+            assert!(run.ok);
+            let run_id = run
+                .result
+                .as_ref()
+                .and_then(|item| item["run_id"].as_str())
+                .expect("run id")
+                .to_owned();
+
+            thread::sleep(Duration::from_millis(150));
+            (worker_id, session_id, run_id)
+        };
+
+        let paths = NucleusPaths::new(state_dir.clone());
+        let worker_id = WorkerId::new(worker_id).expect("worker id");
+        let session_id = SessionId::new(session_id).expect("session id");
+        let run_id = RunId::new(run_id).expect("run id");
+
+        fs::remove_file(paths.worker_summary_path(&worker_id)).expect("remove worker summary");
+        fs::remove_file(paths.session_summary_path(&session_id)).expect("remove session summary");
+        fs::remove_file(paths.run_summary_path(&run_id)).expect("remove run summary");
+
+        let reopened = NucleusStore::open(state_dir).expect("reopen store");
+        let worker_summary = fs::read_to_string(reopened.paths().worker_summary_path(&worker_id))
+            .expect("read rebuilt worker summary");
+        let session_summary =
+            fs::read_to_string(reopened.paths().session_summary_path(&session_id))
+                .expect("read rebuilt session summary");
+        let run_summary = fs::read_to_string(reopened.paths().run_summary_path(&run_id))
+            .expect("read rebuilt run summary");
+
+        assert!(worker_summary.contains("Status: `ready`"));
+        assert!(session_summary.contains("Summary: `nucleus-smoke`"));
         assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
     }
 
