@@ -68,6 +68,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 si nucleus status
 si nucleus service install
 si nucleus service start
+si nucleus task prune --older-than-days 30
 si build self
 si build self check --timings
 si vault status

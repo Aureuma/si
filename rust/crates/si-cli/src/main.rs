@@ -497,6 +497,14 @@ enum NucleusTaskCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    Prune {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value_t = 30)]
+        older_than_days: u64,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -16547,6 +16555,19 @@ fn run_nucleus_task_cancel(
         endpoint.as_deref(),
         "task.cancel",
         json!({ "task_id": task_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_task_prune(
+    endpoint: Option<String>,
+    older_than_days: u64,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "task.prune",
+        json!({ "older_than_days": older_than_days }),
     )?;
     print_nucleus_output(format, &payload)
 }
@@ -33578,6 +33599,9 @@ fn main() -> Result<()> {
                 }
                 NucleusTaskCommand::Cancel { task_id, endpoint, format } => {
                     run_nucleus_task_cancel(endpoint, task_id, format)?
+                }
+                NucleusTaskCommand::Prune { endpoint, older_than_days, format } => {
+                    run_nucleus_task_prune(endpoint, older_than_days, format)?
                 }
             },
             NucleusCommand::Worker { command } => match command {

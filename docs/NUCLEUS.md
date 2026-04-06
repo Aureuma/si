@@ -26,6 +26,7 @@ si nucleus task create "Review nightly failures" "Summarize the last failed run.
 si nucleus task list
 si nucleus task cancel <task-id>
 si nucleus task inspect <task-id>
+si nucleus task prune --older-than-days 30
 si nucleus worker list
 si nucleus worker restart <worker-id>
 si nucleus worker repair-auth <worker-id>
@@ -84,7 +85,7 @@ The metadata file is written by `si-nucleus` and includes the bound websocket UR
 The main control-plane transport is WebSocket:
 
 - default local endpoint: `ws://127.0.0.1:4747/ws`
-- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.list`, `session.show`, `run.inspect`, and `run.cancel`
+- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.list`, `session.show`, `run.inspect`, and `run.cancel`
 - server-pushed canonical events through `events.subscribe`
 
 The bounded REST surface is exposed by the same Nucleus service and source of truth:
@@ -129,6 +130,11 @@ Important paths:
 - canonical event ledger: `~/.si/nucleus/state/events/events.jsonl`
 - gateway metadata: `~/.si/nucleus/gateway/metadata.json`
 - worker directories: `~/.si/nucleus/workers/<worker-id>/`
+
+Retention and cleanup:
+
+- use `si nucleus task prune --older-than-days 30` to explicitly remove old completed or failed task records from the durable task ledger
+- pruning is conservative: it removes only old completed or failed task records and does not silently delete active worker, session, or run state
 
 ## Related docs
 
