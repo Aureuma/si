@@ -6994,6 +6994,14 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     let body: Value = response.json().expect("parse openapi");
 
     assert_eq!(body["openapi"], json!("3.1.0"));
+    assert_eq!(body["info"]["title"], json!("SI Nucleus REST API"));
+    assert_eq!(body["info"]["version"], json!(env!("CARGO_PKG_VERSION")));
+    assert_eq!(
+        body["info"]["description"],
+        json!(
+            "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
+        )
+    );
     assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
     assert_eq!(
         body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
