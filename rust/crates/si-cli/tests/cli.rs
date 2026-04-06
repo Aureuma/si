@@ -22,6 +22,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
+use std::process::{Command as ProcessCommand, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -2950,6 +2951,65 @@ fn nucleus_events_subscribe_prints_streamed_events() {
     let rendered = String::from_utf8(output).expect("utf8 output");
     assert!(rendered.contains("\"type\": \"worker.ready\""));
     assert!(rendered.contains("\"event_id\": \"si-event-123\""));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_events_subscribe_streams_live_run_events_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(0),
+        Duration::from_millis(200),
+        &["alpha", "beta"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let create_task_ws_url = ws_url.clone();
+    let producer = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(200));
+        create_task_via_cli(
+            &create_task_ws_url,
+            "Live events task",
+            "Reply with alphabet chunks",
+            "america",
+        )
+    });
+
+    let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin("si-rs"))
+        .args([
+            "nucleus",
+            "events",
+            "subscribe",
+            "--count",
+            "7",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("run events subscribe");
+    let created = producer.join().expect("producer thread");
+    let task_id = created["task_id"].as_str().expect("task id");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+
+    let rendered = String::from_utf8(output.stdout).expect("utf8 output");
+    assert!(rendered.contains("\"type\": \"task.created\""));
+    assert!(rendered.contains("\"type\": \"run.started\""));
+    assert!(rendered.contains("\"type\": \"run.output_delta\""));
+    assert!(rendered.contains("\"type\": \"run.completed\""));
+    assert!(rendered.contains(&format!("\"task_id\": \"{task_id}\"")));
 }
 
 #[test]
