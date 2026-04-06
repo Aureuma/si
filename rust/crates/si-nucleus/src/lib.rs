@@ -7274,6 +7274,115 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dispatcher_blocks_task_when_referenced_session_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-missing-session"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Missing session task",
+                    "instructions": "Attempt to route through a missing session",
+                    "profile": "america",
+                    "session_id": "si-session-missing",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_task_behind_non_reusable_session() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-broken"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+        service
+            .store
+            .mark_session_broken(&session_id, "marked broken for test")
+            .expect("mark broken");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-broken-session"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Broken session task",
+                    "instructions": "Attempt to route through a broken session",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
     async fn dispatcher_respects_session_affine_backlog_order() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
