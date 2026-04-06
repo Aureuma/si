@@ -3474,6 +3474,59 @@ fn nucleus_live_run_streams_output_and_finishes_on_expected_profile() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_probe_persists_worker_state_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "probe",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let probed: Value = serde_json::from_slice(&output).expect("parse worker probe");
+    let worker_id = probed["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    assert_eq!(probed["worker"]["profile"], "america");
+    assert_eq!(probed["worker"]["status"], "ready");
+    assert_eq!(probed["probe"]["status"], "ready");
+
+    let inspected = wait_for_worker_status(&ws_url, &worker_id, "ready");
+    assert_eq!(inspected["worker"]["profile"], "america");
+
+    let worker_summary = fs::read_to_string(
+        state_root.join("state").join("workers").join(&worker_id).join("summary.md"),
+    )
+    .expect("read worker summary");
+    assert!(worker_summary.contains("# Worker"));
+    assert!(worker_summary.contains("Profile: `america`"));
+    assert!(worker_summary.contains("Status: `ready`"));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
