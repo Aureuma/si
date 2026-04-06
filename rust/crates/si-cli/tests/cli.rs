@@ -15,7 +15,6 @@ use si_nucleus_runtime::{
     RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec, WorkerProbeResult,
     WorkerRuntimeView, WorkerStartResult,
 };
-use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::fs::File;
@@ -903,22 +902,35 @@ fn create_session_via_cli(
     )
 }
 
-fn write_fort_session_state(codex_home: &Path, profile: &str) {
+fn write_fort_session_state_via_cli(codex_home: &Path, profile: &str) {
     let session_path = codex_home.join("fort").join("session.json");
-    save_persisted_session_state(
-        &session_path,
-        &PersistedSessionState {
-            profile_id: profile.to_owned(),
-            agent_id: "si-codex-america".to_owned(),
-            session_id: "fort-session".to_owned(),
-            host: "https://fort.example.invalid".to_owned(),
-            runtime_host: "https://fort-runtime.example.invalid".to_owned(),
-            access_expires_at: (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
-            refresh_expires_at: (Utc::now() + chrono::Duration::hours(12)).to_rfc3339(),
-            ..PersistedSessionState::default()
-        },
-    )
-    .expect("write fort session state");
+    cargo_bin()
+        .args(["fort", "session", "write", "--path"])
+        .arg(&session_path)
+        .args([
+            "--state-json",
+            &json!({
+                "profile_id": profile,
+                "agent_id": format!("si-codex-{profile}"),
+                "session_id": "fort-session",
+                "host": "https://fort.example.invalid",
+                "runtime_host": "https://fort-runtime.example.invalid",
+                "access_expires_at": (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+                "refresh_expires_at": (Utc::now() + chrono::Duration::hours(12)).to_rfc3339(),
+            })
+            .to_string(),
+        ])
+        .assert()
+        .success();
+}
+
+fn clear_fort_session_state_via_cli(codex_home: &Path) {
+    let session_path = codex_home.join("fort").join("session.json");
+    cargo_bin()
+        .args(["fort", "session", "clear", "--path"])
+        .arg(&session_path)
+        .assert()
+        .success();
 }
 
 fn write_invalid_fort_session_state(codex_home: &Path) {
@@ -4125,7 +4137,7 @@ fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
-    write_fort_session_state(&codex_home, "america");
+    write_fort_session_state_via_cli(&codex_home, "america");
     create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
 
     let cli_output = cargo_bin()
@@ -4177,6 +4189,8 @@ fn nucleus_fort_auth_required_blocks_task_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_fort_session_state_via_cli(&codex_home, "america");
+    clear_fort_session_state_via_cli(&codex_home);
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
     let session_id = session["session"]["session_id"].as_str().expect("session id");
 
@@ -6243,7 +6257,7 @@ fn nucleus_worker_repair_auth_requeues_blocked_task_on_live_service() {
     let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
     assert_eq!(blocked["blocked_reason"], "auth_required");
 
-    write_fort_session_state(&codex_home, "america");
+    write_fort_session_state_via_cli(&codex_home, "america");
     let repair_output = cargo_bin()
         .args([
             "nucleus",
@@ -6305,7 +6319,7 @@ fn nucleus_worker_repair_auth_requeues_fort_unavailable_task_on_live_service() {
     let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
     assert_eq!(blocked["blocked_reason"], "fort_unavailable");
 
-    write_fort_session_state(&codex_home, "america");
+    write_fort_session_state_via_cli(&codex_home, "america");
     let repair_output = cargo_bin()
         .args([
             "nucleus",
@@ -6489,7 +6503,7 @@ fn nucleus_worker_repair_auth_does_not_requeue_session_broken_task_on_live_servi
     assert_eq!(blocked["blocked_reason"], "session_broken");
 
     runtime.set_fail_ensure_session(false);
-    write_fort_session_state(&codex_home, "america");
+    write_fort_session_state_via_cli(&codex_home, "america");
     cargo_bin()
         .args([
             "nucleus",
@@ -6553,7 +6567,7 @@ fn nucleus_worker_repair_auth_does_not_requeue_other_profile_task_on_live_servic
     let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
     assert_eq!(blocked["blocked_reason"], "auth_required");
 
-    write_fort_session_state(&america_codex_home, "america");
+    write_fort_session_state_via_cli(&america_codex_home, "america");
     cargo_bin()
         .args([
             "nucleus",
