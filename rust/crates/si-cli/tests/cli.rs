@@ -7002,6 +7002,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
         )
     );
+    assert_eq!(body["servers"][0]["url"], json!("/"));
     assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
     assert_eq!(
         body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],

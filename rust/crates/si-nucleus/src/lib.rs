@@ -4164,7 +4164,7 @@ fn schema_ref(name: &str) -> Value {
     json!({ "$ref": format!("#/components/schemas/{name}") })
 }
 
-fn openapi_document(config: &NucleusConfig) -> Value {
+fn openapi_document(_config: &NucleusConfig) -> Value {
     json!({
         "openapi": "3.1.0",
         "info": {
@@ -4173,7 +4173,7 @@ fn openapi_document(config: &NucleusConfig) -> Value {
             "description": "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
         },
         "servers": [
-            { "url": format!("http://{}", config.bind_addr) }
+            { "url": "/" }
         ],
         "paths": {
             "/status": {
@@ -5690,6 +5690,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
+        assert_eq!(body["servers"][0]["url"], json!("/"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(
             body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
