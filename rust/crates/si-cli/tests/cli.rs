@@ -5881,6 +5881,177 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
         .success();
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let base_url = spawn_live_nucleus_service_with_options(
+        &state_root,
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(runtime)),
+    );
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let created_session = cargo_bin()
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let created_session: Value =
+        serde_json::from_slice(&created_session).expect("parse created session");
+    let session_id =
+        created_session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = created_session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created_task = cargo_bin()
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Auth readable task",
+            "Reply with nucleus-smoke",
+            "--profile",
+            "america",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let created_task: Value = serde_json::from_slice(&created_task).expect("parse created task");
+    let task_id = created_task["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    let profiles = cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "profile", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let profiles: Value = serde_json::from_slice(&profiles).expect("parse profile list");
+    assert!(profiles.as_array().expect("profile list array").iter().any(|profile| {
+        profile["profile"] == "america" && profile["account_identity"] == "america@example.com"
+    }));
+
+    let workers = cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "worker", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let workers: Value = serde_json::from_slice(&workers).expect("parse worker list");
+    assert!(
+        workers
+            .as_array()
+            .expect("worker list array")
+            .iter()
+            .any(|worker| worker["worker_id"] == worker_id)
+    );
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args([
+            "nucleus",
+            "worker",
+            "inspect",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let sessions = cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "session", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let sessions: Value = serde_json::from_slice(&sessions).expect("parse session list");
+    assert!(
+        sessions
+            .as_array()
+            .expect("session list array")
+            .iter()
+            .any(|session| session["session_id"] == session_id)
+    );
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args([
+            "nucleus",
+            "session",
+            "show",
+            &session_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "run", "inspect", &run_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success();
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args([
+            "nucleus",
+            "events",
+            "subscribe",
+            "--count",
+            "0",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
