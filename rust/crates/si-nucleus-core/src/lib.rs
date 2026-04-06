@@ -140,6 +140,8 @@ impl TaskStatus {
         matches!(
             (self, next),
             (Self::Queued, Self::Running)
+                | (Self::Queued, Self::Blocked)
+                | (Self::Queued, Self::Failed)
                 | (Self::Queued, Self::Cancelled)
                 | (Self::Running, Self::Done)
                 | (Self::Running, Self::Failed)
@@ -237,6 +239,8 @@ impl RunStatus {
         matches!(
             (self, next),
             (Self::Queued, Self::Running)
+                | (Self::Queued, Self::Blocked)
+                | (Self::Queued, Self::Failed)
                 | (Self::Queued, Self::Cancelled)
                 | (Self::Running, Self::Completed)
                 | (Self::Running, Self::Failed)
@@ -328,7 +332,13 @@ impl TaskRecord {
 pub struct WorkerRecord {
     pub worker_id: WorkerId,
     pub profile: ProfileName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home_dir: Option<String>,
     pub codex_home: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workdir: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra_env: BTreeMap<String, String>,
     pub status: WorkerStatus,
     pub capability_version: Option<String>,
     pub last_heartbeat_at: Option<DateTime<Utc>>,
@@ -353,7 +363,11 @@ impl WorkerRecord {
 pub struct SessionRecord {
     pub session_id: SessionId,
     pub worker_id: WorkerId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<ProfileName>,
     pub app_server_thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workdir: Option<String>,
     pub lifecycle_state: SessionLifecycleState,
     pub summary_state: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -366,7 +380,9 @@ impl SessionRecord {
         Self {
             session_id,
             worker_id,
+            profile: None,
             app_server_thread_id: None,
+            workdir: None,
             lifecycle_state: SessionLifecycleState::Opening,
             summary_state: None,
             created_at: now,
@@ -468,6 +484,8 @@ pub enum CanonicalEventType {
     RunOutputDelta,
     #[serde(rename = "run.requires_auth")]
     RunRequiresAuth,
+    #[serde(rename = "run.blocked")]
+    RunBlocked,
     #[serde(rename = "run.completed")]
     RunCompleted,
     #[serde(rename = "run.failed")]
@@ -495,6 +513,7 @@ impl CanonicalEventType {
             Self::RunStarted => "run.started",
             Self::RunOutputDelta => "run.output_delta",
             Self::RunRequiresAuth => "run.requires_auth",
+            Self::RunBlocked => "run.blocked",
             Self::RunCompleted => "run.completed",
             Self::RunFailed => "run.failed",
             Self::RunCancelled => "run.cancelled",
@@ -611,6 +630,8 @@ pub struct AppServerConfigProjection {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::{
         AppServerAuthState, AppServerConfigProjection, CanonicalEventType, ProfileName,
         ProfileNameError, RunRecord, RunStatus, SessionLifecycleState, SessionRecord, TaskId,
@@ -652,12 +673,27 @@ mod tests {
     }
 
     #[test]
+    fn task_transitions_allow_reconciliation_from_queue() {
+        let mut task =
+            TaskRecord::new(TaskId::generate(), TaskSource::Cli, "Title", "Instructions");
+        task.transition_to(TaskStatus::Blocked, Some(super::BlockedReason::WorkerUnavailable))
+            .expect("queued -> blocked");
+
+        let mut task =
+            TaskRecord::new(TaskId::generate(), TaskSource::Cli, "Title", "Instructions");
+        task.transition_to(TaskStatus::Failed, None).expect("queued -> failed");
+    }
+
+    #[test]
     fn worker_transitions_are_validated() {
         let profile = ProfileName::new("america").expect("profile");
         let mut worker = WorkerRecord {
             worker_id: WorkerId::generate(),
             profile,
+            home_dir: None,
             codex_home: "/tmp/worker".to_owned(),
+            workdir: None,
+            extra_env: BTreeMap::new(),
             status: WorkerStatus::Starting,
             capability_version: None,
             last_heartbeat_at: None,
@@ -694,9 +730,27 @@ mod tests {
     }
 
     #[test]
+    fn run_transitions_allow_reconciliation_from_queue() {
+        let mut run = RunRecord::new(
+            super::RunId::generate(),
+            TaskId::generate(),
+            super::SessionId::generate(),
+        );
+        run.transition_to(RunStatus::Blocked).expect("queued -> blocked");
+
+        let mut run = RunRecord::new(
+            super::RunId::generate(),
+            TaskId::generate(),
+            super::SessionId::generate(),
+        );
+        run.transition_to(RunStatus::Failed).expect("queued -> failed");
+    }
+
+    #[test]
     fn canonical_event_types_use_dot_names() {
         assert_eq!(CanonicalEventType::TaskCreated.as_str(), "task.created");
         assert_eq!(CanonicalEventType::RunRequiresAuth.as_str(), "run.requires_auth");
+        assert_eq!(CanonicalEventType::RunBlocked.as_str(), "run.blocked");
         assert_eq!(CanonicalEventType::WorkerReady.as_str(), "worker.ready");
     }
 
