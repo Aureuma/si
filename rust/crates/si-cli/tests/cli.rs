@@ -1810,6 +1810,61 @@ fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_status_reports_live_ws_endpoint_and_counts_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let base_url =
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()));
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse initial status");
+    assert_eq!(payload["ws_url"], ws_url);
+    assert_eq!(payload["task_count"], 0);
+    assert_eq!(payload["worker_count"], 0);
+    assert_eq!(payload["session_count"], 0);
+    assert_eq!(payload["run_count"], 0);
+
+    let metadata: Value = serde_json::from_slice(
+        &fs::read(state_root.join("gateway").join("metadata.json")).expect("read metadata"),
+    )
+    .expect("parse metadata");
+    assert_eq!(metadata["ws_url"], ws_url);
+    assert_eq!(metadata["bind_addr"], base_url.trim_start_matches("http://"));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let created =
+        create_task_via_cli(&ws_url, "Status live task", "Reply with nucleus-smoke", "america");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let _done = wait_for_cli_task_status(&ws_url, &task_id, "done");
+
+    let output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse final status");
+    assert_eq!(payload["ws_url"], ws_url);
+    assert_eq!(payload["state_dir"], state_root.display().to_string());
+    assert_eq!(payload["task_count"], 1);
+    assert_eq!(payload["worker_count"], 1);
+    assert_eq!(payload["session_count"], 1);
+    assert_eq!(payload["run_count"], 1);
+    assert!(payload["next_event_seq"].as_u64().expect("event seq") > 1);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
