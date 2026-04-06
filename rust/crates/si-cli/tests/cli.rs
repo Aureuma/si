@@ -2115,6 +2115,88 @@ fn nucleus_task_create_rejects_non_slug_profile_name_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_task_list_and_inspect_reflect_live_tasks_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let europe_codex_home = home_dir.join(".si/codex/profiles/europe");
+    create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &america_codex_home,
+        temp.path(),
+    );
+    create_session_via_cli_with_options(
+        &ws_url,
+        "europe",
+        None,
+        None,
+        &home_dir,
+        &europe_codex_home,
+        temp.path(),
+    );
+
+    let america_task =
+        create_task_via_cli(&ws_url, "America task inspect", "Reply with nucleus-smoke", "america");
+    let europe_task =
+        create_task_via_cli(&ws_url, "Europe task inspect", "Reply with nucleus-smoke", "europe");
+
+    let america_task_id = america_task["task_id"].as_str().expect("america task id");
+    let europe_task_id = europe_task["task_id"].as_str().expect("europe task id");
+    let america_done = wait_for_cli_task_status(&ws_url, america_task_id, "done");
+    let _europe_done = wait_for_cli_task_status(&ws_url, europe_task_id, "done");
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("parse task list");
+    let tasks = listed.as_array().expect("task list array");
+    assert!(
+        tasks.iter().any(|task| task["task_id"] == america_task_id && task["profile"] == "america")
+    );
+    assert!(
+        tasks.iter().any(|task| task["task_id"] == europe_task_id && task["profile"] == "europe")
+    );
+
+    let inspect_output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "inspect",
+            america_task_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let inspected: Value = serde_json::from_slice(&inspect_output).expect("parse task inspect");
+    assert_eq!(inspected["task_id"], america_task_id);
+    assert_eq!(inspected["profile"], "america");
+    assert_eq!(inspected["status"], "done");
+    assert_eq!(inspected["checkpoint_summary"], america_done["checkpoint_summary"]);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_list_requests_gateway_task_list_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
