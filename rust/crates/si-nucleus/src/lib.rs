@@ -5170,6 +5170,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn startup_fails_clearly_when_canonical_event_ledger_is_unreadable() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let paths = NucleusPaths::new(state_dir.clone());
+        paths.ensure_layout().expect("ensure layout");
+        fs::write(&paths.events_path, b"{\"seq\":").expect("write malformed events ledger");
+
+        let error = match NucleusStore::open(state_dir) {
+            Ok(_) => panic!("startup should fail"),
+            Err(error) => error,
+        };
+        let message = format!("{error:#}");
+        assert!(message.contains("parse"));
+        assert!(message.contains("events.jsonl"));
+        assert!(message.contains("line 1"));
+    }
+
     #[tokio::test]
     async fn gateway_dispatch_creates_and_lists_tasks() {
         let temp = tempdir().expect("tempdir");
