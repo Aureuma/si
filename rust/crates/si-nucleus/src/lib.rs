@@ -3863,6 +3863,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                                     "schema": { "type": "array", "items": schema_ref("TaskRecord") }
                                 }
                             }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 },
@@ -3891,6 +3895,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "400": {
                             "description": "Invalid request.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -3916,6 +3924,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         },
                         "404": {
                             "description": "Task not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
@@ -3952,6 +3964,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "503": {
                             "description": "Runtime unavailable for active-run cancellation.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -3969,6 +3985,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                                     "schema": { "type": "array", "items": schema_ref("WorkerRecord") }
                                 }
                             }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -3994,6 +4014,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         },
                         "404": {
                             "description": "Worker not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
@@ -4021,6 +4045,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "404": {
                             "description": "Session not found.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -4047,6 +4075,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "404": {
                             "description": "Run not found.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -4060,6 +4092,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "200": {
                             "description": "OpenAPI document.",
                             "content": { "application/json": { "schema": { "type": "object" } } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         }
                     }
                 }
@@ -5184,6 +5220,42 @@ mod tests {
         );
         assert_eq!(
             body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/workers"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/workers/{worker_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/sessions/{session_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/openapi.json"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]["$ref"],
             json!("#/components/schemas/RestErrorEnvelope")
         );
         assert!(body["paths"]["/status"]["get"]["security"].is_null());
