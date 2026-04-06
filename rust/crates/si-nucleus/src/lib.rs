@@ -3884,6 +3884,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                             "description": "Created task.",
                             "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
                         },
+                        "401": {
+                            "description": "Bearer token missing or invalid for a non-loopback write request.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
                         "400": {
                             "description": "Invalid request.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
@@ -3936,6 +3940,10 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                         "200": {
                             "description": "Cancellation result.",
                             "content": { "application/json": { "schema": schema_ref("TaskCancelResultView") } }
+                        },
+                        "401": {
+                            "description": "Bearer token missing or invalid for a non-loopback write request.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         },
                         "404": {
                             "description": "Task not found.",
@@ -5170,6 +5178,14 @@ mod tests {
         );
         assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
         assert_eq!(body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"], json!([]));
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["content"]["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/RestErrorEnvelope")
+        );
         assert!(body["paths"]["/status"]["get"]["security"].is_null());
         assert!(body["paths"]["/tasks"]["get"]["security"].is_null());
         assert!(body["paths"]["/tasks/{task_id}"]["get"]["security"].is_null());
