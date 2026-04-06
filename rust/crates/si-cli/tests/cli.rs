@@ -12,6 +12,8 @@ use std::path::Path;
 use std::thread;
 use tar::Archive;
 use tempfile::tempdir;
+use tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
+use tungstenite::{Message as WsMessage, accept_hdr};
 
 fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
@@ -679,6 +681,55 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
     let env = fs::read_to_string(&env_file).expect("read env");
     assert!(env.contains(&format!("SI_NUCLEUS_STATE_DIR={}\n", state_dir.display())));
     assert!(env.contains("SI_NUCLEUS_BIND_ADDR=127.0.0.1:4888\n"));
+}
+
+#[test]
+fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |request: &WsRequest, response: WsResponse| {
+            assert_eq!(
+                request.headers().get("authorization").and_then(|value| value.to_str().ok()),
+                Some("Bearer secret-token")
+            );
+            Ok(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "version": "test",
+                "bind_addr": "0.0.0.0:4747",
+                "ws_url": format!("ws://{addr}/ws"),
+                "state_dir": "/tmp/nucleus",
+                "task_count": 0,
+                "worker_count": 0,
+                "session_count": 0,
+                "run_count": 0,
+                "next_event_seq": 1
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &format!("ws://{addr}/ws"), "--format", "json"])
+        .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["version"], "test");
 }
 
 fn shell_escape_for_test(path: &Path) -> String {

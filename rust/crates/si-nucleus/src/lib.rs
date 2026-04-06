@@ -18,7 +18,8 @@ use axum::Json;
 use axum::Router;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, State};
-use axum::http::StatusCode;
+use axum::http::header::AUTHORIZATION;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::{get, post};
@@ -56,6 +57,12 @@ const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
+
+fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    let header = headers.get(AUTHORIZATION)?.to_str().ok()?.trim();
+    let token = header.strip_prefix("Bearer ")?.trim();
+    (!token.is_empty()).then(|| token.to_owned())
+}
 
 fn temp_suffix() -> String {
     let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
@@ -2568,12 +2575,49 @@ impl NucleusService {
     }
 
     pub async fn dispatch_request(&self, request: GatewayRequest) -> GatewayResponse {
+        self.dispatch_request_authorized(request, None).await
+    }
+
+    async fn dispatch_request_authorized(
+        &self,
+        request: GatewayRequest,
+        bearer_token: Option<&str>,
+    ) -> GatewayResponse {
+        if let Err(error) = self.authorize_request_method(request.method.as_str(), bearer_token) {
+            return GatewayResponse::err(
+                request.id,
+                infer_error_code(&error),
+                error.to_string(),
+                None,
+            );
+        }
         match self.handle_request(request.method.as_str(), request.params.clone()).await {
             Ok(result) => GatewayResponse::ok(request.id, result),
             Err(error) => {
                 GatewayResponse::err(request.id, infer_error_code(&error), error.to_string(), None)
             }
         }
+    }
+
+    fn authorize_request_method(&self, method: &str, bearer_token: Option<&str>) -> Result<()> {
+        if !self.requires_gateway_auth() || is_read_gateway_method(method) {
+            return Ok(());
+        }
+        let expected = self.config.auth_token.as_deref().ok_or_else(|| {
+            anyhow!("unauthorized: SI_NUCLEUS_AUTH_TOKEN must be set when bound beyond loopback")
+        })?;
+        let provided = bearer_token
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("unauthorized: missing bearer token"))?;
+        if provided != expected {
+            anyhow::bail!("unauthorized: invalid bearer token");
+        }
+        Ok(())
+    }
+
+    fn requires_gateway_auth(&self) -> bool {
+        !self.config.bind_addr.ip().is_loopback()
     }
 
     async fn handle_request(&self, method: &str, params: Value) -> Result<Value> {
@@ -2896,13 +2940,19 @@ struct EnsuredWorker {
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
+    let bearer_token = extract_bearer_token(&headers);
     ws.on_upgrade(move |socket| async move {
-        let _ = handle_socket(service, socket).await;
+        let _ = handle_socket(service, socket, bearer_token).await;
     })
 }
 
-async fn handle_socket(service: Arc<NucleusService>, socket: WebSocket) -> Result<()> {
+async fn handle_socket(
+    service: Arc<NucleusService>,
+    socket: WebSocket,
+    bearer_token: Option<String>,
+) -> Result<()> {
     let (mut sender, mut receiver) = socket.split();
     let mut subscription: Option<broadcast::Receiver<CanonicalEvent>> = None;
 
@@ -2917,7 +2967,8 @@ async fn handle_socket(service: Arc<NucleusService>, socket: WebSocket) -> Resul
                         let request: GatewayRequest =
                             serde_json::from_str(&text).context("parse websocket gateway request")?;
                         let subscribe_requested = request.method == "events.subscribe";
-                        let response = service.dispatch_request(request).await;
+                        let response =
+                            service.dispatch_request_authorized(request, bearer_token.as_deref()).await;
                         sender
                             .send(Message::Text(serde_json::to_string(&response)?.into()))
                             .await
@@ -2962,12 +3013,29 @@ async fn recv_event(
     }
 }
 
+fn is_read_gateway_method(method: &str) -> bool {
+    matches!(
+        method,
+        "nucleus.status"
+            | "task.list"
+            | "task.inspect"
+            | "profile.list"
+            | "worker.list"
+            | "worker.inspect"
+            | "session.list"
+            | "session.show"
+            | "run.inspect"
+            | "events.subscribe"
+    )
+}
+
 fn rest_request(method: &str, params: Value) -> GatewayRequest {
     GatewayRequest { id: json!(method), method: method.to_owned(), params }
 }
 
 fn rest_status_from_gateway_code(code: &str) -> StatusCode {
     match code {
+        "unauthorized" => StatusCode::UNAUTHORIZED,
         "invalid_params" => StatusCode::BAD_REQUEST,
         "not_found" | "method_not_found" => StatusCode::NOT_FOUND,
         "unavailable" => StatusCode::SERVICE_UNAVAILABLE,
@@ -3053,6 +3121,7 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                     "summary": "Create a task",
                     "description": "Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.",
                     "x-si-purpose": "Use this to create bounded external work without bypassing Nucleus task intake rules.",
+                    "security": [{ "bearerAuth": [] }],
                     "requestBody": {
                         "required": true,
                         "content": {
@@ -3104,6 +3173,7 @@ fn openapi_document(config: &NucleusConfig) -> Value {
                     "summary": "Cancel one task",
                     "description": "Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.",
                     "x-si-purpose": "Use this for bounded external cancellation requests and then re-read the task or run to observe final state.",
+                    "security": [{ "bearerAuth": [] }],
                     "parameters": [
                         {
                             "name": "task_id",
@@ -3239,6 +3309,13 @@ fn openapi_document(config: &NucleusConfig) -> Value {
             }
         },
         "components": {
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "opaque token"
+                }
+            },
             "schemas": {
                 "RestErrorEnvelope": {
                     "type": "object",
@@ -3397,69 +3474,113 @@ async fn rest_openapi_handler(State(service): State<Arc<NucleusService>>) -> imp
     (StatusCode::OK, Json(openapi_document(&service.config)))
 }
 
-async fn rest_status_handler(State(service): State<Arc<NucleusService>>) -> Response {
+async fn rest_status_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("nucleus.status", json!({}))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("nucleus.status", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
 async fn rest_create_task_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     Json(request): Json<TaskCreateParams>,
 ) -> Response {
     rest_gateway_response(
         service
-            .dispatch_request(rest_request(
-                "task.create",
-                serde_json::to_value(request).unwrap_or_else(|_| json!({})),
-            ))
+            .dispatch_request_authorized(
+                rest_request(
+                    "task.create",
+                    serde_json::to_value(request).unwrap_or_else(|_| json!({})),
+                ),
+                extract_bearer_token(&headers).as_deref(),
+            )
             .await,
         StatusCode::CREATED,
     )
 }
 
-async fn rest_list_tasks_handler(State(service): State<Arc<NucleusService>>) -> Response {
+async fn rest_list_tasks_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("task.list", json!({}))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("task.list", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
 async fn rest_inspect_task_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     AxumPath(task_id): AxumPath<String>,
 ) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("task.inspect", json!({ "task_id": task_id }))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("task.inspect", json!({ "task_id": task_id })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
 async fn rest_cancel_task_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     AxumPath(task_id): AxumPath<String>,
 ) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("task.cancel", json!({ "task_id": task_id }))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("task.cancel", json!({ "task_id": task_id })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
-async fn rest_list_workers_handler(State(service): State<Arc<NucleusService>>) -> Response {
+async fn rest_list_workers_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("worker.list", json!({}))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("worker.list", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
 async fn rest_inspect_worker_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     AxumPath(worker_id): AxumPath<String>,
 ) -> Response {
     rest_gateway_response(
         service
-            .dispatch_request(rest_request("worker.inspect", json!({ "worker_id": worker_id })))
+            .dispatch_request_authorized(
+                rest_request("worker.inspect", json!({ "worker_id": worker_id })),
+                extract_bearer_token(&headers).as_deref(),
+            )
             .await,
         StatusCode::OK,
     )
@@ -3467,11 +3588,15 @@ async fn rest_inspect_worker_handler(
 
 async fn rest_show_session_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     AxumPath(session_id): AxumPath<String>,
 ) -> Response {
     rest_gateway_response(
         service
-            .dispatch_request(rest_request("session.show", json!({ "session_id": session_id })))
+            .dispatch_request_authorized(
+                rest_request("session.show", json!({ "session_id": session_id })),
+                extract_bearer_token(&headers).as_deref(),
+            )
             .await,
         StatusCode::OK,
     )
@@ -3479,17 +3604,25 @@ async fn rest_show_session_handler(
 
 async fn rest_inspect_run_handler(
     State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
     AxumPath(run_id): AxumPath<String>,
 ) -> Response {
     rest_gateway_response(
-        service.dispatch_request(rest_request("run.inspect", json!({ "run_id": run_id }))).await,
+        service
+            .dispatch_request_authorized(
+                rest_request("run.inspect", json!({ "run_id": run_id })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
         StatusCode::OK,
     )
 }
 
 fn infer_error_code(error: &anyhow::Error) -> &'static str {
     let message = error.to_string();
-    if message.contains("parse ") {
+    if message.contains("unauthorized") {
+        "unauthorized"
+    } else if message.contains("parse ") {
         "invalid_params"
     } else if message.contains("unavailable") {
         "unavailable"
@@ -4123,6 +4256,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
+        assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(
             body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
                 ["$ref"],
@@ -4133,6 +4267,150 @@ mod tests {
             json!(
                 "Use this for bounded external cancellation requests and then re-read the task or run to observe final state."
             )
+        );
+        assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn rest_write_requests_require_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "Auth gated task",
+                            "instructions": "Should require auth",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(create_response.status(), StatusCode::UNAUTHORIZED);
+        let create_body = response_json(create_response).await;
+        assert_eq!(create_body["error"]["code"], json!("unauthorized"));
+
+        let status_response = app
+            .oneshot(Request::builder().uri("/status").body(Body::empty()).expect("request"))
+            .await
+            .expect("status response");
+        assert_eq!(status_response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn rest_write_requests_accept_matching_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let create_response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "Auth gated task",
+                            "instructions": "Should pass with auth",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(create_response.status(), StatusCode::CREATED);
+        let body = response_json(create_response).await;
+        assert_eq!(body["title"], json!("Auth gated task"));
+    }
+
+    #[tokio::test]
+    async fn gateway_mutations_require_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service");
+
+        let write = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("create"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Blocked write",
+                        "instructions": "No auth header",
+                    }),
+                },
+                None,
+            )
+            .await;
+        assert!(!write.ok);
+        assert_eq!(write.error.as_ref().map(|error| error.code.as_str()), Some("unauthorized"));
+
+        let read = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("status"),
+                    method: "nucleus.status".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(read.ok);
+    }
+
+    #[tokio::test]
+    async fn gateway_mutations_accept_matching_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service");
+
+        let write = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("create"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Authorized write",
+                        "instructions": "Bearer token provided",
+                    }),
+                },
+                Some("secret-token"),
+            )
+            .await;
+        assert!(write.ok);
+        assert_eq!(
+            write.result.as_ref().and_then(|value| value["title"].as_str()),
+            Some("Authorized write")
         );
     }
 

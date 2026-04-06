@@ -214,6 +214,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 use tar::Builder as TarBuilder;
+use tungstenite::client::IntoClientRequest;
+use tungstenite::http::header::{AUTHORIZATION, HeaderValue};
 use tungstenite::{Message as WsMessage, connect as ws_connect};
 
 #[derive(Debug, Parser)]
@@ -15941,6 +15943,13 @@ fn resolve_nucleus_ws_endpoint(endpoint: Option<&str>) -> Result<String> {
     Ok("ws://127.0.0.1:4747/ws".to_owned())
 }
 
+fn resolve_nucleus_gateway_auth_token() -> Option<String> {
+    env::var("SI_NUCLEUS_AUTH_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
 fn run_nucleus_gateway_request(
     endpoint: Option<&str>,
     method: &str,
@@ -15952,7 +15961,14 @@ fn run_nucleus_gateway_request(
         method: method.to_owned(),
         params,
     };
-    let (mut socket, _) = ws_connect(endpoint.as_str())
+    let mut websocket_request =
+        endpoint.as_str().into_client_request().context("build nucleus websocket request")?;
+    if let Some(token) = resolve_nucleus_gateway_auth_token() {
+        let header = HeaderValue::from_str(format!("Bearer {token}").as_str())
+            .context("build auth header")?;
+        websocket_request.headers_mut().insert(AUTHORIZATION, header);
+    }
+    let (mut socket, _) = ws_connect(websocket_request)
         .with_context(|| format!("connect nucleus websocket {}", endpoint))?;
     socket
         .send(WsMessage::Text(serde_json::to_string(&request)?.into()))
