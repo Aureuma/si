@@ -890,6 +890,12 @@ fn write_fort_session_state(codex_home: &Path, profile: &str) {
     .expect("write fort session state");
 }
 
+fn write_invalid_fort_session_state(codex_home: &Path) {
+    let session_path = codex_home.join("fort").join("session.json");
+    fs::create_dir_all(session_path.parent().expect("fort parent")).expect("mkdir fort dir");
+    fs::write(session_path, b"{ invalid fort state").expect("write invalid fort session state");
+}
+
 fn load_event_log_values(state_root: &Path) -> Vec<Value> {
     let path = state_root.join("state").join("events").join("events.jsonl");
     fs::read_to_string(path)
@@ -3041,6 +3047,83 @@ fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
         events
             .iter()
             .any(|event| { event["type"] == "fort.ready" && event["data"]["task_id"] == task_id })
+    );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_fort_auth_required_blocks_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-fort-auth-required",
+        "Fort auth required task",
+        "Use si fort status before continuing",
+        "america",
+        Some(session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(task["blocked_reason"], "auth_required");
+    assert!(task["latest_run_id"].is_null());
+
+    let events = load_event_log_values(&state_root);
+    assert!(
+        events.iter().any(|event| {
+            event["type"] == "fort.auth_required" && event["data"]["task_id"] == task_id
+        })
+    );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_fort_unavailable_blocks_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_invalid_fort_session_state(&codex_home);
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-fort-unavailable",
+        "Fort unavailable task",
+        "Use si fort refresh before continuing",
+        "america",
+        Some(session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(task["blocked_reason"], "fort_unavailable");
+    assert!(task["latest_run_id"].is_null());
+
+    let events = load_event_log_values(&state_root);
+    assert!(
+        events.iter().any(|event| {
+            event["type"] == "fort.unavailable" && event["data"]["task_id"] == task_id
+        })
     );
 }
 
