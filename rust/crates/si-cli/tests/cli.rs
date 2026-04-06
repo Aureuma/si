@@ -7003,6 +7003,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         )
     );
     assert_eq!(body["servers"][0]["url"], json!("/"));
+    assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["type"], json!("http"));
     assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
     assert_eq!(
         body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
