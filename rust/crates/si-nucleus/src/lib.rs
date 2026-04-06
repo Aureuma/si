@@ -5409,6 +5409,222 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_only_gateway_and_rest_inspect_surfaces_remain_available_without_bearer_token_when_bound_beyond_loopback(
+    ) {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: Some("secret-token".to_owned()),
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("session-1"),
+                    method: "session.create".to_owned(),
+                    params: json!({
+                        "profile": "america",
+                        "home_dir": temp.path().join("home"),
+                        "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                        "workdir": temp.path(),
+                    }),
+                },
+                Some("secret-token"),
+            )
+            .await;
+        assert!(session.ok);
+        let session_payload = session.result.expect("session payload");
+        let worker_id = session_payload["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+        let session_id = session_payload["session"]["session_id"].as_str().expect("session id").to_owned();
+
+        let task = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("task-1"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Run a turn",
+                        "instructions": "Drive one fake runtime turn",
+                        "profile": "america",
+                        "session_id": session_id,
+                    }),
+                },
+                Some("secret-token"),
+            )
+            .await;
+        assert!(task.ok);
+        let task_id = task.result.expect("task payload")["task_id"].as_str().expect("task id").to_owned();
+
+        let run = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("run-1"),
+                    method: "run.submit_turn".to_owned(),
+                    params: json!({
+                        "session_id": session_id,
+                        "task_id": task_id,
+                        "prompt": "Reply with nucleus-smoke",
+                    }),
+                },
+                Some("secret-token"),
+            )
+            .await;
+        assert!(run.ok);
+        let run_id = run.result.expect("run payload")["run_id"].as_str().expect("run id").to_owned();
+
+        thread::sleep(Duration::from_millis(150));
+
+        let profile_list = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("profile-list"),
+                    method: "profile.list".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(profile_list.ok);
+
+        let worker_list = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("worker-list"),
+                    method: "worker.list".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(worker_list.ok);
+        assert!(worker_list
+            .result
+            .expect("worker list")
+            .as_array()
+            .expect("worker list array")
+            .iter()
+            .any(|worker| worker["worker_id"] == json!(worker_id.clone())));
+
+        let worker_inspect = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("worker-inspect"),
+                    method: "worker.inspect".to_owned(),
+                    params: json!({ "worker_id": worker_id }),
+                },
+                None,
+            )
+            .await;
+        assert!(worker_inspect.ok);
+
+        let session_list = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("session-list"),
+                    method: "session.list".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(session_list.ok);
+        assert!(session_list
+            .result
+            .expect("session list")
+            .as_array()
+            .expect("session list array")
+            .iter()
+            .any(|session| session["session_id"] == json!(session_id.clone())));
+
+        let session_show = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("session-show"),
+                    method: "session.show".to_owned(),
+                    params: json!({ "session_id": session_id.clone() }),
+                },
+                None,
+            )
+            .await;
+        assert!(session_show.ok);
+
+        let run_inspect = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("run-inspect"),
+                    method: "run.inspect".to_owned(),
+                    params: json!({ "run_id": run_id.clone() }),
+                },
+                None,
+            )
+            .await;
+        assert!(run_inspect.ok);
+        assert_eq!(run_inspect.result.expect("run inspect")["status"], json!("completed"));
+
+        let subscribed = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("events-subscribe"),
+                    method: "events.subscribe".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(subscribed.ok);
+        assert_eq!(subscribed.result.expect("subscribe")["subscribed"], json!(true));
+
+        let app = service.clone().router();
+
+        let workers_response = app
+            .clone()
+            .oneshot(Request::builder().uri("/workers").body(Body::empty()).expect("request"))
+            .await
+            .expect("workers response");
+        assert_eq!(workers_response.status(), StatusCode::OK);
+
+        let worker_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/workers/{worker_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("worker response");
+        assert_eq!(worker_response.status(), StatusCode::OK);
+
+        let session_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/sessions/{session_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("session response");
+        assert_eq!(session_response.status(), StatusCode::OK);
+
+        let run_response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/runs/{run_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("run response");
+        assert_eq!(run_response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn gateway_mutations_accept_matching_bearer_token_when_bound_beyond_loopback() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
