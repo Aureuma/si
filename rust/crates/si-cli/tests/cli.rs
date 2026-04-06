@@ -3652,6 +3652,59 @@ fn nucleus_session_list_and_show_reflect_live_sessions_on_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_session_create_reuses_worker_and_codex_home_per_profile_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let first_codex_home = home_dir.join(".si/codex/profiles/america");
+    let second_codex_home = temp.path().join("other/.si/codex/profiles/america-shadow");
+
+    let first = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &first_codex_home,
+        temp.path().join("work-a").as_path(),
+    );
+    let second = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &temp.path().join("other"),
+        &second_codex_home,
+        temp.path().join("work-b").as_path(),
+    );
+
+    assert_eq!(runtime.start_call_count(), 1);
+    assert_eq!(first["worker"]["worker_id"], second["worker"]["worker_id"]);
+    assert_eq!(
+        second["worker"]["codex_home"],
+        Value::String(first_codex_home.display().to_string())
+    );
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "session", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("parse session list");
+    assert_eq!(listed.as_array().expect("session list").len(), 2);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
