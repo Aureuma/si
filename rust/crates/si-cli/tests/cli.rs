@@ -3589,6 +3589,62 @@ fn nucleus_run_submit_turn_rejects_session_profile_mismatch_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_run_submit_turn_marks_session_broken_when_thread_id_is_missing_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    clear_live_session_thread_id(&state_root, &session_id);
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-live-run-missing-thread",
+        "Direct run missing thread",
+        "Attempt direct run with no app server thread id",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let submit = cargo_bin()
+        .args([
+            "nucleus",
+            "run",
+            "submit-turn",
+            &session_id,
+            "attempt direct run without thread id",
+            "--task-id",
+            &task_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(submit.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("session missing app-server thread id"));
+
+    let task = wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+        task["latest_run_id"].is_null()
+            && (task["status"] == "blocked" && task["blocked_reason"] == "session_broken")
+    });
+    assert!(task["latest_run_id"].is_null());
+
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    assert_eq!(session["lifecycle_state"], "broken");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_cancel_transitions_blocked_task_to_cancelled_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
