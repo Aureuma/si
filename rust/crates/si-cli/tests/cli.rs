@@ -3537,6 +3537,66 @@ fn nucleus_worker_probe_persists_worker_state_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_session_list_and_show_reflect_live_sessions_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let europe_codex_home = home_dir.join(".si/codex/profiles/europe");
+
+    let america = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &america_codex_home,
+        temp.path(),
+    );
+    let europe = create_session_via_cli_with_options(
+        &ws_url,
+        "europe",
+        None,
+        None,
+        &home_dir,
+        &europe_codex_home,
+        temp.path(),
+    );
+
+    let america_session_id = america["session"]["session_id"].as_str().expect("america session id");
+    let europe_session_id = europe["session"]["session_id"].as_str().expect("europe session id");
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "session", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("parse session list");
+    let sessions = listed.as_array().expect("session list array");
+    assert!(sessions.iter().any(|session| {
+        session["session_id"] == america_session_id && session["profile"] == "america"
+    }));
+    assert!(sessions.iter().any(|session| {
+        session["session_id"] == europe_session_id && session["profile"] == "europe"
+    }));
+
+    let shown = inspect_session_via_cli(&ws_url, america_session_id);
+    assert_eq!(shown["session_id"], america_session_id);
+    assert_eq!(shown["profile"], "america");
+    assert_eq!(shown["worker_id"], america["worker"]["worker_id"]);
+    assert_eq!(shown["app_server_thread_id"], america["session"]["app_server_thread_id"]);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
