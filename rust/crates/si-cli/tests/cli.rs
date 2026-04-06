@@ -3613,7 +3613,38 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
         .stdout
         .clone();
     let payload: Value = serde_json::from_slice(&created).expect("parse task create");
+    let task_id = payload["task_id"].as_str().expect("task id");
     assert_eq!(payload["title"], "Auth gated task");
+
+    let listed = cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&listed).expect("parse task list");
+    assert!(listed
+        .as_array()
+        .expect("task list array")
+        .iter()
+        .any(|task| task["task_id"] == payload["task_id"]));
+
+    cargo_bin()
+        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .args([
+            "nucleus",
+            "task",
+            "inspect",
+            task_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
 }
 
 fn shell_escape_for_test(path: &Path) -> String {

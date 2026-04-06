@@ -5246,6 +5246,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rest_read_requests_remain_available_without_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "Readable task",
+                            "instructions": "Read should stay available",
+                            "profile": "america",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(create_response.status(), StatusCode::CREATED);
+        let created = response_json(create_response).await;
+        let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+        let list_response = app
+            .clone()
+            .oneshot(Request::builder().uri("/tasks").body(Body::empty()).expect("request"))
+            .await
+            .expect("list response");
+        assert_eq!(list_response.status(), StatusCode::OK);
+        let listed = response_json(list_response).await;
+        assert!(listed
+            .as_array()
+            .expect("task list array")
+            .iter()
+            .any(|task| task["task_id"] == json!(task_id.clone())));
+
+        let inspect_response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/tasks/{task_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("inspect response");
+        assert_eq!(inspect_response.status(), StatusCode::OK);
+        let inspected = response_json(inspect_response).await;
+        assert_eq!(inspected["task_id"], json!(task_id));
+    }
+
+    #[tokio::test]
     async fn gateway_mutations_require_bearer_token_when_bound_beyond_loopback() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
@@ -5279,9 +5341,71 @@ mod tests {
                     params: json!({}),
                 },
                 None,
-            )
+        )
             .await;
         assert!(read.ok);
+    }
+
+    #[tokio::test]
+    async fn gateway_reads_remain_available_without_bearer_token_when_bound_beyond_loopback() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service");
+
+        let created = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("create"),
+                    method: "task.create".to_owned(),
+                    params: json!({
+                        "title": "Readable task",
+                        "instructions": "Read should stay available",
+                        "profile": "america",
+                    }),
+                },
+                Some("secret-token"),
+            )
+            .await;
+        assert!(created.ok);
+        let task_id = created.result.expect("created")["task_id"]
+            .as_str()
+            .expect("task id")
+            .to_owned();
+
+        let listed = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("list"),
+                    method: "task.list".to_owned(),
+                    params: json!({}),
+                },
+                None,
+            )
+            .await;
+        assert!(listed.ok);
+        assert!(listed
+            .result
+            .expect("task list")
+            .as_array()
+            .expect("task list array")
+            .iter()
+            .any(|task| task["task_id"] == json!(task_id.clone())));
+
+        let inspected = service
+            .dispatch_request_authorized(
+                GatewayRequest {
+                    id: json!("inspect"),
+                    method: "task.inspect".to_owned(),
+                    params: json!({ "task_id": task_id }),
+                },
+                None,
+            )
+            .await;
+        assert!(inspected.ok);
     }
 
     #[tokio::test]
