@@ -3227,6 +3227,60 @@ fn nucleus_rest_task_matches_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_mutations_return_documented_status_codes_and_shapes() {
+    let temp = tempdir().expect("tempdir");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(900),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let base_url =
+        spawn_live_nucleus_service_with_runtime(&temp.path().join("nucleus"), Arc::new(runtime));
+    let client = BlockingClient::new();
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let created_response = client
+        .post(format!("{base_url}/tasks"))
+        .json(&json!({
+            "title": "REST status-code task",
+            "instructions": "Reply with nucleus-smoke",
+            "profile": "america"
+        }))
+        .send()
+        .expect("rest create task");
+    assert_eq!(created_response.status(), reqwest::StatusCode::CREATED);
+    let created: Value = created_response.json().expect("parse created task");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    assert_eq!(created["title"], "REST status-code task");
+    assert_eq!(created["instructions"], "Reply with nucleus-smoke");
+    assert_eq!(created["profile"], "america");
+    assert_eq!(created["status"], "queued");
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let running = wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(5), |task| {
+        task["status"] == "running"
+    });
+    let run_id = running["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let cancel_response =
+        client.post(format!("{base_url}/tasks/{task_id}/cancel")).send().expect("rest cancel task");
+    assert_eq!(cancel_response.status(), reqwest::StatusCode::OK);
+    let cancelled: Value = cancel_response.json().expect("parse cancel result");
+    assert_eq!(cancelled["task"]["task_id"], task_id);
+    assert_eq!(cancelled["run"]["run_id"], run_id);
+    assert!(cancelled["cancellation_requested"].is_boolean());
+
+    let cancelled_task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let cancelled_run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_eq!(cancelled_task["status"], "cancelled");
+    assert_eq!(cancelled_run["status"], "cancelled");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_rest_status_matches_websocket_and_cli_state() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
