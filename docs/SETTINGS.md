@@ -60,6 +60,25 @@ Warmup runtime files are also stored under `~/.si`:
 Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
 Warmup only inspects persistent Codex worker status and schedules the next run from the reported reset windows with a small jitter.
 
+## Nucleus gateway discovery and auth
+
+`si nucleus ...` does not currently use a dedicated `[nucleus]` table in `~/.si/settings.toml`.
+Its local gateway discovery and auth contract is environment- and metadata-based instead:
+
+1. `--endpoint`
+2. `SI_NUCLEUS_WS_ADDR`
+3. `~/.si/nucleus/gateway/metadata.json`
+4. default `ws://127.0.0.1:4747/ws`
+
+Additional env vars:
+
+- `SI_NUCLEUS_AUTH_TOKEN`: bearer token forwarded by CLI gateway clients when set
+- `SI_NUCLEUS_STATE_DIR`: override the Nucleus state root for service/runtime commands
+- `SI_NUCLEUS_BIND_ADDR`: override the Nucleus bind address for service/runtime commands
+- `SI_NUCLEUS_SERVICE_PLATFORM`: force service generation to `systemd-user` or `launchd-agent`
+
+The metadata file is written by the Nucleus service and advertises the current websocket URL and SI version for local CLI bootstrap.
+
 ### `[codex]`
 Defaults for `si codex` profile-bound worker commands.
 - Every `si codex` worker must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.

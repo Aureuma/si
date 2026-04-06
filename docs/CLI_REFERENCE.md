@@ -49,12 +49,22 @@ Color control:
 
 | Domain | Commands |
 | --- | --- |
-| Runtime and orchestration | `si codex`, `si surf`, `si viva` |
+| Runtime and orchestration | `si nucleus`, `si codex`, `si surf`, `si viva` |
 | Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
 | Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple`, `si orbit stripe`, `si image` |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
 
 ## High-signal workflows
+
+### Nucleus control plane
+
+```bash
+si nucleus status
+si nucleus task create "Inspect blocked task" "Summarize the current blocked reason and latest checkpoint."
+si nucleus task list
+si nucleus service install
+si nucleus service status --format json
+```
 
 ### Runtime setup
 
@@ -113,6 +123,8 @@ si build self --timings
 
 ## Safety guidance
 
+- For Nucleus gateway writes beyond loopback, set `SI_NUCLEUS_AUTH_TOKEN` and use the same bearer token from CLI clients.
+- CLI endpoint discovery for `si nucleus ...` resolves from `--endpoint`, then `SI_NUCLEUS_WS_ADDR`, then `~/.si/nucleus/gateway/metadata.json`, then the default local websocket URL.
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` wrapper passes explicit Fort file-path auth flags when defaults are available: `--host` from settings and `--token-file` from `~/.si/fort/bootstrap/admin.token`.
