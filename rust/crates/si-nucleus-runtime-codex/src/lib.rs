@@ -1094,6 +1094,8 @@ mod tests {
         let command = runtime.build_worker_command(&spec);
         assert_eq!(command.program, "codex");
         assert_eq!(command.args, vec!["app-server".to_owned()]);
+        assert!(!command.args.iter().any(|arg| arg == "exec"));
+        assert_eq!(command.args.len(), 1);
         assert_eq!(
             command.env.get("CODEX_HOME").map(String::as_str),
             Some("/tmp/home/.si/codex/profiles/america")
