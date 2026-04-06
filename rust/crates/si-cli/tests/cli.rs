@@ -124,42 +124,53 @@ fn spawn_live_nucleus_service_with_options(
     auth_token: Option<&str>,
     runtime: Option<Arc<dyn NucleusRuntime>>,
 ) -> String {
-    let listener = TcpListener::bind(format!("{bind_host}:0")).expect("bind nucleus addr");
-    let addr = listener.local_addr().expect("nucleus addr");
-    drop(listener);
-
     let state_dir = state_dir.to_path_buf();
     let auth_token = auth_token.map(str::to_owned);
-    thread::spawn(move || {
-        let tokio_runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("tokio runtime");
-        tokio_runtime.block_on(async move {
-            let config = NucleusConfig { bind_addr: addr, state_dir, auth_token };
-            let service = match runtime {
-                Some(runtime) => NucleusService::open_with_runtime(config, runtime),
-                None => NucleusService::open(config),
-            }
-            .expect("open nucleus service");
-            service.serve().await.expect("serve nucleus service");
-        });
-    });
-
-    let base_url = format!("http://{client_host}:{}", addr.port());
     let client = BlockingClient::builder()
         .timeout(Duration::from_millis(250))
         .build()
         .expect("build reqwest client");
-    for _ in 0..50 {
-        if let Ok(response) = client.get(format!("{base_url}/status")).send()
-            && response.status().is_success()
-        {
-            return base_url;
+
+    for attempt in 0..10 {
+        let listener = TcpListener::bind(format!("{bind_host}:0")).expect("bind nucleus addr");
+        let addr = listener.local_addr().expect("nucleus addr");
+        drop(listener);
+
+        let state_dir = state_dir.clone();
+        let auth_token = auth_token.clone();
+        let runtime = runtime.clone();
+        thread::spawn(move || {
+            let tokio_runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
+            tokio_runtime.block_on(async move {
+                let config = NucleusConfig { bind_addr: addr, state_dir, auth_token };
+                let service = match runtime {
+                    Some(runtime) => NucleusService::open_with_runtime(config, runtime),
+                    None => NucleusService::open(config),
+                }
+                .expect("open nucleus service");
+                service.serve().await.expect("serve nucleus service");
+            });
+        });
+
+        let base_url = format!("http://{client_host}:{}", addr.port());
+        for _ in 0..50 {
+            if let Ok(response) = client.get(format!("{base_url}/status")).send()
+                && response.status().is_success()
+            {
+                return base_url;
+            }
+            thread::sleep(Duration::from_millis(50));
         }
-        thread::sleep(Duration::from_millis(50));
+
+        eprintln!(
+            "retrying nucleus test service startup after timeout on {base_url} (attempt {} of 10)",
+            attempt + 1
+        );
     }
-    panic!("nucleus service did not become ready at {base_url}");
+    panic!("nucleus service did not become ready after 10 attempts");
 }
 
 #[derive(Clone)]
