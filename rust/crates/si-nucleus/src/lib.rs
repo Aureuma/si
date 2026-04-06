@@ -7028,6 +7028,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn si_primary_ids_remain_namespaced_and_distinct_from_runtime_ids() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-id-boundary"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = session.result.as_ref().expect("session result")["worker"]["worker_id"]
+            .as_str()
+            .expect("worker id")
+            .to_owned();
+        let session_id = session.result.as_ref().expect("session result")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+        let thread_id = session.result.as_ref().expect("session result")["session"]
+            ["app_server_thread_id"]
+            .as_str()
+            .expect("thread id")
+            .to_owned();
+        assert!(worker_id.starts_with("si-worker-"));
+        assert!(session_id.starts_with("si-session-"));
+        assert_ne!(session_id, thread_id);
+        assert!(!thread_id.starts_with("si-session-"));
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-id-boundary"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "ID boundary task",
+                    "instructions": "Verify SI ids stay distinct",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-id-boundary"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "verify id boundary",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id =
+            run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let persisted_run = service
+            .store
+            .inspect_run(&RunId::new(run_id).expect("run id"))
+            .expect("inspect run")
+            .expect("run exists");
+        let turn_id =
+            persisted_run.app_server_turn_id.as_deref().expect("app server turn id");
+        assert!(run_id.starts_with("si-run-"));
+        assert_ne!(run_id, turn_id);
+        assert!(!turn_id.starts_with("si-run-"));
+    }
+
+    #[tokio::test]
     async fn task_prune_removes_only_old_terminal_tasks() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
