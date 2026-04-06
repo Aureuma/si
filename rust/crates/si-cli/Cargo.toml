@@ -49,6 +49,8 @@ assert_cmd.workspace = true
 base64 = "0.22.1"
 serde_json.workspace = true
 tempfile.workspace = true
+tokio.workspace = true
+si-nucleus = { path = "../si-nucleus" }
 
 [[bin]]
 name = "si-rs"

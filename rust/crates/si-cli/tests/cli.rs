@@ -3,18 +3,21 @@ use base64::{
     Engine as _,
     engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD},
 };
+use reqwest::blocking::Client as BlockingClient;
 use serde_json::Value;
+use si_nucleus::{NucleusConfig, NucleusService};
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 use std::thread;
+use std::time::Duration;
 use tar::Archive;
 use tempfile::tempdir;
 use tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
 use tungstenite::http::Response as HttpResponse;
-use tungstenite::{Message as WsMessage, accept_hdr};
+use tungstenite::{Message as WsMessage, accept_hdr, connect};
 
 fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
@@ -82,6 +85,42 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
         stream.write_all(response.as_bytes()).expect("write test response");
     });
     format!("http://{}", addr)
+}
+
+fn spawn_live_nucleus_service(state_dir: &Path) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind nucleus addr");
+    let addr = listener.local_addr().expect("nucleus addr");
+    drop(listener);
+
+    let state_dir = state_dir.to_path_buf();
+    thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("tokio runtime");
+        runtime.block_on(async move {
+            NucleusService::open(NucleusConfig { bind_addr: addr, state_dir, auth_token: None })
+                .expect("open nucleus service")
+                .serve()
+                .await
+                .expect("serve nucleus service");
+        });
+    });
+
+    let base_url = format!("http://{addr}");
+    let client = BlockingClient::builder()
+        .timeout(Duration::from_millis(250))
+        .build()
+        .expect("build reqwest client");
+    for _ in 0..50 {
+        if let Ok(response) = client.get(format!("{base_url}/status")).send()
+            && response.status().is_success()
+        {
+            return base_url;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("nucleus service did not become ready at {base_url}");
 }
 
 #[test]
@@ -1785,6 +1824,68 @@ fn nucleus_events_subscribe_prints_streamed_events() {
     let rendered = String::from_utf8(output).expect("utf8 output");
     assert!(rendered.contains("\"type\": \"worker.ready\""));
     assert!(rendered.contains("\"event_id\": \"si-event-123\""));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_rest_task_matches_websocket_and_cli_state() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service(&temp.path().join("nucleus"));
+    let client = BlockingClient::new();
+
+    let create_response = client
+        .post(format!("{base_url}/tasks"))
+        .json(&serde_json::json!({
+            "title": "REST parity task",
+            "instructions": "Verify REST, websocket, and CLI agree.",
+            "profile": "america"
+        }))
+        .send()
+        .expect("create rest task");
+    assert!(create_response.status().is_success());
+    let created: Value = create_response.json().expect("parse create payload");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let rest_inspect: Value = client
+        .get(format!("{base_url}/tasks/{task_id}"))
+        .send()
+        .expect("inspect rest task")
+        .json()
+        .expect("parse rest inspect payload");
+
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let inspect_request = serde_json::json!({
+        "id": "task-inspect",
+        "method": "task.inspect",
+        "params": { "task_id": task_id }
+    });
+    socket
+        .send(WsMessage::Text(inspect_request.to_string().into()))
+        .expect("send websocket inspect");
+    let ws_response = socket.read().expect("read websocket inspect");
+    let ws_payload = match ws_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse websocket payload")
+        }
+        other => panic!("unexpected websocket response: {other:?}"),
+    };
+    assert_eq!(ws_payload["ok"], true);
+    let ws_inspect = ws_payload["result"].clone();
+
+    let cli_output = cargo_bin()
+        .args(["nucleus", "task", "inspect", &task_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_inspect: Value = serde_json::from_slice(&cli_output).expect("parse cli output");
+
+    for field in ["task_id", "title", "instructions", "profile", "status"] {
+        assert_eq!(rest_inspect[field], ws_inspect[field], "field mismatch via websocket: {field}");
+        assert_eq!(rest_inspect[field], cli_inspect[field], "field mismatch via cli: {field}");
+    }
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
