@@ -35117,13 +35117,39 @@ fn discover_checkout_repo_from_base(base: &Path, name: &str) -> Option<PathBuf> 
 
 fn existing_checkout_binary(repo: &Path, name: &str) -> Option<PathBuf> {
     let binary_name = if cfg!(windows) { format!("{name}.exe") } else { name.to_owned() };
-    for profile in ["debug", "release"] {
-        let candidate = repo.join("target").join(profile).join(&binary_name);
-        if candidate.is_file() {
-            return Some(candidate);
+    for target_dir in checkout_target_dirs(repo) {
+        for profile in ["debug", "release"] {
+            let candidate = target_dir.join(profile).join(&binary_name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
         }
     }
     None
+}
+
+fn checkout_target_dirs(repo: &Path) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    dirs.push(repo.join("target"));
+    if let Some(configured) = configured_checkout_target_dir(repo) {
+        if !dirs.iter().any(|existing| existing == &configured) {
+            dirs.push(configured);
+        }
+    }
+    dirs
+}
+
+fn configured_checkout_target_dir(repo: &Path) -> Option<PathBuf> {
+    let config_path = repo.join(".cargo").join("config.toml");
+    let raw = fs::read_to_string(config_path).ok()?;
+    let document = raw.parse::<toml::Table>().ok()?;
+    let build = document.get("build")?.as_table()?;
+    let value = build.get("target-dir")?.as_str()?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let path = PathBuf::from(value);
+    Some(if path.is_absolute() { path } else { repo.join(path) })
 }
 
 fn build_viva_binary(repo: PathBuf) -> Result<PathBuf> {
@@ -35138,7 +35164,8 @@ fn build_viva_binary(repo: PathBuf) -> Result<PathBuf> {
     if !status.success() {
         anyhow::bail!("cargo build --bin viva failed in {}", repo.display());
     }
-    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "viva.exe" } else { "viva" }))
+    existing_checkout_binary(&repo, "viva")
+        .ok_or_else(|| anyhow!("built viva binary not found in {}", repo.display()))
 }
 
 fn run_fort_wrapper(
@@ -35800,7 +35827,8 @@ fn build_fort_binary(repo: PathBuf) -> Result<PathBuf> {
     if !status.success() {
         anyhow::bail!("cargo build --bin fort failed in {}", repo.display());
     }
-    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "fort.exe" } else { "fort" }))
+    existing_checkout_binary(&repo, "fort")
+        .ok_or_else(|| anyhow!("built fort binary not found in {}", repo.display()))
 }
 
 fn default_fort_bootstrap_token_path(home: &Path) -> PathBuf {
@@ -65670,4 +65698,46 @@ fn format_provider_caps(caps: &ProviderCapabilitiesView) -> String {
         value.push('r');
     }
     value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn configured_checkout_target_dir_resolves_relative_path() {
+        let repo = tempdir().expect("repo tempdir");
+        fs::create_dir_all(repo.path().join(".cargo")).expect("mkdir cargo dir");
+        fs::write(
+            repo.path().join(".cargo/config.toml"),
+            "[build]\ntarget-dir = \".artifacts/cargo-target\"\n",
+        )
+        .expect("write cargo config");
+
+        assert_eq!(
+            configured_checkout_target_dir(repo.path()),
+            Some(repo.path().join(".artifacts").join("cargo-target"))
+        );
+    }
+
+    #[test]
+    fn existing_checkout_binary_prefers_configured_target_dir() {
+        let repo = tempdir().expect("repo tempdir");
+        fs::create_dir_all(repo.path().join(".cargo")).expect("mkdir cargo dir");
+        fs::write(
+            repo.path().join(".cargo/config.toml"),
+            "[build]\ntarget-dir = \".artifacts/cargo-target\"\n",
+        )
+        .expect("write cargo config");
+        let binary = repo.path().join(".artifacts").join("cargo-target").join("debug").join(if cfg!(windows) {
+            "viva.exe"
+        } else {
+            "viva"
+        });
+        fs::create_dir_all(binary.parent().expect("binary parent")).expect("mkdir binary parent");
+        fs::write(&binary, "#!/bin/sh\n").expect("write binary");
+
+        assert_eq!(existing_checkout_binary(repo.path(), "viva"), Some(binary));
+    }
 }
