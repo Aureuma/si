@@ -3308,6 +3308,163 @@ fn nucleus_rest_status_matches_websocket_and_cli_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_task_and_worker_lists_match_websocket_and_cli_state() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let base_url =
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()));
+    let client = BlockingClient::new();
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let europe_codex_home = home_dir.join(".si/codex/profiles/europe");
+    let america = create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &america_codex_home,
+        temp.path(),
+    );
+    let europe = create_session_via_cli_with_options(
+        &ws_url,
+        "europe",
+        None,
+        None,
+        &home_dir,
+        &europe_codex_home,
+        temp.path(),
+    );
+    let america_worker_id = america["worker"]["worker_id"].as_str().expect("america worker id");
+    let europe_worker_id = europe["worker"]["worker_id"].as_str().expect("europe worker id");
+
+    let america_task = create_task_via_cli(
+        &ws_url,
+        "REST list parity america",
+        "Reply with nucleus-smoke",
+        "america",
+    );
+    let europe_task = create_task_via_cli(
+        &ws_url,
+        "REST list parity europe",
+        "Reply with nucleus-smoke",
+        "europe",
+    );
+    let america_task_id = america_task["task_id"].as_str().expect("america task id").to_owned();
+    let europe_task_id = europe_task["task_id"].as_str().expect("europe task id").to_owned();
+    let america_done = wait_for_cli_task_status(&ws_url, &america_task_id, "done");
+    let europe_done = wait_for_cli_task_status(&ws_url, &europe_task_id, "done");
+
+    let rest_tasks: Value = client
+        .get(format!("{base_url}/tasks"))
+        .send()
+        .expect("list rest tasks")
+        .json()
+        .expect("parse rest tasks");
+    let rest_workers: Value = client
+        .get(format!("{base_url}/workers"))
+        .send()
+        .expect("list rest workers")
+        .json()
+        .expect("parse rest workers");
+
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let task_list_request = serde_json::json!({
+        "id": "task-list",
+        "method": "task.list",
+        "params": {}
+    });
+    socket
+        .send(WsMessage::Text(task_list_request.to_string().into()))
+        .expect("send websocket task list");
+    let task_list_response = socket.read().expect("read websocket task list");
+    let task_list_payload = match task_list_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse task list payload")
+        }
+        other => panic!("unexpected websocket task list response: {other:?}"),
+    };
+    assert_eq!(task_list_payload["ok"], true);
+    let ws_tasks = task_list_payload["result"].clone();
+
+    let worker_list_request = serde_json::json!({
+        "id": "worker-list",
+        "method": "worker.list",
+        "params": {}
+    });
+    socket
+        .send(WsMessage::Text(worker_list_request.to_string().into()))
+        .expect("send websocket worker list");
+    let worker_list_response = socket.read().expect("read websocket worker list");
+    let worker_list_payload = match worker_list_response {
+        WsMessage::Text(text) => {
+            serde_json::from_str::<Value>(&text).expect("parse worker list payload")
+        }
+        other => panic!("unexpected websocket worker list response: {other:?}"),
+    };
+    assert_eq!(worker_list_payload["ok"], true);
+    let ws_workers = worker_list_payload["result"].clone();
+
+    let cli_tasks_output = cargo_bin()
+        .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_tasks: Value = serde_json::from_slice(&cli_tasks_output).expect("parse cli task list");
+    let cli_workers_output = cargo_bin()
+        .args(["nucleus", "worker", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cli_workers: Value =
+        serde_json::from_slice(&cli_workers_output).expect("parse cli worker list");
+
+    for task in [&america_done, &europe_done] {
+        let task_id = task["task_id"].clone();
+        let profile = task["profile"].clone();
+        let status = task["status"].clone();
+        for (surface, tasks) in
+            [("rest", &rest_tasks), ("websocket", &ws_tasks), ("cli", &cli_tasks)]
+        {
+            assert!(
+                tasks
+                    .as_array()
+                    .expect("task list array")
+                    .iter()
+                    .any(|item| item["task_id"] == task_id
+                        && item["profile"] == profile
+                        && item["status"] == status),
+                "{surface} task list missing expected task {task_id}"
+            );
+        }
+    }
+
+    for (worker_id, profile) in [(america_worker_id, "america"), (europe_worker_id, "europe")] {
+        for (surface, workers) in
+            [("rest", &rest_workers), ("websocket", &ws_workers), ("cli", &cli_workers)]
+        {
+            assert!(
+                workers
+                    .as_array()
+                    .expect("worker list array")
+                    .iter()
+                    .any(|item| item["worker_id"] == worker_id
+                        && item["profile"] == profile
+                        && item["status"] == "ready"),
+                "{surface} worker list missing expected worker {worker_id}"
+            );
+        }
+    }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_rest_worker_session_and_run_match_websocket_and_cli_state() {
     let temp = tempdir().expect("tempdir");
     let base_url = spawn_live_nucleus_service_with_runtime(
