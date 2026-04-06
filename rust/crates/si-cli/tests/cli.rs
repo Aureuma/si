@@ -3636,6 +3636,81 @@ fn nucleus_worker_restart_requeues_blocked_task_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_does_not_requeue_broken_session_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_config(TestRuntimeConfig {
+        run_delay: Duration::from_millis(900),
+        step_delay: Duration::from_millis(0),
+        output_deltas: vec!["nucleus-smoke".to_owned()],
+        fail_execute: false,
+        block_when_worker_missing: true,
+        fail_start_worker: false,
+        fail_ensure_session: false,
+    });
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-worker-restart-broken-session-live",
+        "Do not requeue broken-session live worker task",
+        "Keep running until the worker disappears",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    runtime.set_fail_start_worker(false);
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop test worker");
+
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    assert_eq!(blocked["blocked_reason"], "worker_unavailable");
+    assert_eq!(run["status"], "blocked");
+    assert_eq!(session["lifecycle_state"], "broken");
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let still_blocked =
+        wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+            task["status"] == "blocked"
+        });
+    assert_eq!(still_blocked["blocked_reason"], "worker_unavailable");
+    assert_eq!(
+        still_blocked["latest_run_id"].as_str().expect("latest run id"),
+        run_id
+    );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_worker_repair_auth_requeues_blocked_task_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
