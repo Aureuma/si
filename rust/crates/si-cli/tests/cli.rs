@@ -17,11 +17,11 @@ use si_nucleus_runtime::{
     WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
 use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,7 +30,8 @@ use tar::Archive;
 use tempfile::tempdir;
 use tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
 use tungstenite::http::Response as HttpResponse;
-use tungstenite::{Message as WsMessage, accept_hdr, connect};
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{Message as WsMessage, WebSocket, accept_hdr, connect};
 
 fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
@@ -178,14 +179,87 @@ fn spawn_live_nucleus_service_with_runtime(
     panic!("nucleus service did not become ready at {base_url}");
 }
 
+#[derive(Clone)]
+struct TestRuntimeConfig {
+    run_delay: Duration,
+    step_delay: Duration,
+    output_deltas: Vec<String>,
+    fail_execute: bool,
+}
+
+impl Default for TestRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            run_delay: Duration::from_millis(0),
+            step_delay: Duration::from_millis(0),
+            output_deltas: vec!["nucleus-smoke".to_owned()],
+            fail_execute: false,
+        }
+    }
+}
+
 #[derive(Default)]
 struct TestRuntimeState {
     workers: HashMap<String, WorkerRuntimeView>,
+    interrupted_turns: HashSet<String>,
+    config: TestRuntimeConfig,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct TestRuntime {
     state: Arc<Mutex<TestRuntimeState>>,
+}
+
+impl Default for TestRuntime {
+    fn default() -> Self {
+        Self { state: Arc::new(Mutex::new(TestRuntimeState::default())) }
+    }
+}
+
+impl TestRuntime {
+    fn with_config(config: TestRuntimeConfig) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(TestRuntimeState {
+                workers: HashMap::new(),
+                interrupted_turns: HashSet::new(),
+                config,
+            })),
+        }
+    }
+
+    fn with_streaming_output(run_delay: Duration, step_delay: Duration, output_deltas: &[&str]) -> Self {
+        Self::with_config(TestRuntimeConfig {
+            run_delay,
+            step_delay,
+            output_deltas: output_deltas.iter().map(|value| (*value).to_owned()).collect(),
+            fail_execute: false,
+        })
+    }
+
+    fn wait_for_interrupt_or_timeout(&self, turn_id: &str, delay: Duration) -> bool {
+        if delay.is_zero() {
+            return self
+                .state
+                .lock()
+                .expect("runtime state")
+                .interrupted_turns
+                .remove(turn_id);
+        }
+        let start = Instant::now();
+        while start.elapsed() < delay {
+            if self
+                .state
+                .lock()
+                .expect("runtime state")
+                .interrupted_turns
+                .remove(turn_id)
+            {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        false
+    }
 }
 
 impl NucleusRuntime for TestRuntime {
@@ -264,6 +338,18 @@ impl NucleusRuntime for TestRuntime {
         spec: &RunTurnSpec,
         on_event: &mut dyn FnMut(CanonicalEventDraft) -> anyhow::Result<()>,
     ) -> anyhow::Result<RuntimeRunOutcome> {
+        let (run_delay, step_delay, output_deltas, fail_execute) = {
+            let state = self.state.lock().expect("runtime state");
+            (
+                state.config.run_delay,
+                state.config.step_delay,
+                state.config.output_deltas.clone(),
+                state.config.fail_execute,
+            )
+        };
+        if fail_execute {
+            anyhow::bail!("cli-test-runtime execute_turn failed before run.started");
+        }
         let turn_id = format!("turn-{}", spec.run_id);
         on_event(CanonicalEventDraft {
             event_type: CanonicalEventType::RunStarted,
@@ -280,22 +366,73 @@ impl NucleusRuntime for TestRuntime {
                 }),
             },
         })?;
-        on_event(CanonicalEventDraft {
-            event_type: CanonicalEventType::RunOutputDelta,
-            source: CanonicalEventSource::System,
-            data: EventDataEnvelope {
-                task_id: spec.task_id.clone(),
-                worker_id: Some(spec.worker_id.clone()),
-                session_id: Some(spec.session_id.clone()),
-                run_id: Some(spec.run_id.clone()),
-                profile: Some(spec.profile.clone()),
-                payload: serde_json::json!({
-                    "thread_id": spec.thread_id,
-                    "turn_id": turn_id,
-                    "delta": "nucleus-smoke",
-                }),
-            },
-        })?;
+        if self.wait_for_interrupt_or_timeout(&turn_id, run_delay) {
+            on_event(CanonicalEventDraft {
+                event_type: CanonicalEventType::RunCancelled,
+                source: CanonicalEventSource::System,
+                data: EventDataEnvelope {
+                    task_id: spec.task_id.clone(),
+                    worker_id: Some(spec.worker_id.clone()),
+                    session_id: Some(spec.session_id.clone()),
+                    run_id: Some(spec.run_id.clone()),
+                    profile: Some(spec.profile.clone()),
+                    payload: serde_json::json!({
+                        "thread_id": spec.thread_id,
+                        "turn_id": turn_id,
+                        "error": "interrupted",
+                    }),
+                },
+            })?;
+            return Ok(RuntimeRunOutcome {
+                turn_id,
+                status: RunStatus::Cancelled,
+                completed_at: Utc::now(),
+                final_output: None,
+            });
+        }
+        let final_output = output_deltas.join("");
+        for delta in &output_deltas {
+            if self.wait_for_interrupt_or_timeout(&turn_id, step_delay) {
+                on_event(CanonicalEventDraft {
+                    event_type: CanonicalEventType::RunCancelled,
+                    source: CanonicalEventSource::System,
+                    data: EventDataEnvelope {
+                        task_id: spec.task_id.clone(),
+                        worker_id: Some(spec.worker_id.clone()),
+                        session_id: Some(spec.session_id.clone()),
+                        run_id: Some(spec.run_id.clone()),
+                        profile: Some(spec.profile.clone()),
+                        payload: serde_json::json!({
+                            "thread_id": spec.thread_id,
+                            "turn_id": turn_id,
+                            "error": "interrupted",
+                        }),
+                    },
+                })?;
+                return Ok(RuntimeRunOutcome {
+                    turn_id,
+                    status: RunStatus::Cancelled,
+                    completed_at: Utc::now(),
+                    final_output: None,
+                });
+            }
+            on_event(CanonicalEventDraft {
+                event_type: CanonicalEventType::RunOutputDelta,
+                source: CanonicalEventSource::System,
+                data: EventDataEnvelope {
+                    task_id: spec.task_id.clone(),
+                    worker_id: Some(spec.worker_id.clone()),
+                    session_id: Some(spec.session_id.clone()),
+                    run_id: Some(spec.run_id.clone()),
+                    profile: Some(spec.profile.clone()),
+                    payload: serde_json::json!({
+                        "thread_id": spec.thread_id,
+                        "turn_id": turn_id,
+                        "delta": delta,
+                    }),
+                },
+            })?;
+        }
         on_event(CanonicalEventDraft {
             event_type: CanonicalEventType::RunCompleted,
             source: CanonicalEventSource::System,
@@ -308,7 +445,7 @@ impl NucleusRuntime for TestRuntime {
                 payload: serde_json::json!({
                     "thread_id": spec.thread_id,
                     "turn_id": turn_id,
-                    "final_output": "nucleus-smoke",
+                    "final_output": final_output,
                 }),
             },
         })?;
@@ -316,7 +453,7 @@ impl NucleusRuntime for TestRuntime {
             turn_id,
             status: RunStatus::Completed,
             completed_at: Utc::now(),
-            final_output: Some("nucleus-smoke".to_owned()),
+            final_output: Some(final_output),
         })
     }
 
@@ -324,8 +461,13 @@ impl NucleusRuntime for TestRuntime {
         &self,
         _worker_id: &WorkerId,
         _thread_id: &str,
-        _turn_id: &str,
+        turn_id: &str,
     ) -> anyhow::Result<()> {
+        self.state
+            .lock()
+            .expect("runtime state")
+            .interrupted_turns
+            .insert(turn_id.to_owned());
         Ok(())
     }
 
@@ -464,6 +606,93 @@ fn wait_for_cli_task_status(ws_url: &str, task_id: &str, expected: &str) -> Valu
         thread::sleep(Duration::from_millis(50));
     }
     panic!("task {task_id} did not reach status {expected}");
+}
+
+fn wait_for_cli_task_predicate(
+    ws_url: &str,
+    task_id: &str,
+    timeout: Duration,
+    predicate: impl Fn(&Value) -> bool,
+) -> Value {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        let output = cargo_bin()
+            .args(["nucleus", "task", "inspect", task_id, "--endpoint", ws_url, "--format", "json"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let task: Value = serde_json::from_slice(&output).expect("parse task inspect");
+        if predicate(&task) {
+            return task;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("task {task_id} did not satisfy predicate");
+}
+
+fn inspect_run_via_cli(ws_url: &str, run_id: &str) -> Value {
+    let output = cargo_bin()
+        .args(["nucleus", "run", "inspect", run_id, "--endpoint", ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).expect("parse run inspect")
+}
+
+fn create_task_via_cli(ws_url: &str, title: &str, instructions: &str, profile: &str) -> Value {
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            title,
+            instructions,
+            "--profile",
+            profile,
+            "--endpoint",
+            ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).expect("parse cli create output")
+}
+
+fn subscribe_to_events(ws_url: &str) -> WebSocket<MaybeTlsStream<TcpStream>> {
+    let (mut socket, _) = connect(ws_url).expect("connect websocket");
+    let subscribe_request = serde_json::json!({
+        "id": "events-subscribe",
+        "method": "events.subscribe",
+        "params": {}
+    });
+    socket
+        .send(WsMessage::Text(subscribe_request.to_string().into()))
+        .expect("send subscribe request");
+    let response = socket.read().expect("read subscribe response");
+    match response {
+        WsMessage::Text(text) => {
+            let payload = serde_json::from_str::<Value>(&text).expect("parse subscribe response");
+            assert_eq!(payload["ok"], true);
+            assert_eq!(payload["result"]["subscribed"], true);
+        }
+        other => panic!("unexpected subscribe response: {other:?}"),
+    }
+    socket
+}
+
+fn read_websocket_json(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>) -> Value {
+    match socket.read().expect("read websocket message") {
+        WsMessage::Text(text) => serde_json::from_str(&text).expect("parse websocket json"),
+        other => panic!("unexpected websocket message: {other:?}"),
+    }
 }
 
 fn create_session_via_cli(
@@ -2667,6 +2896,156 @@ fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
             .iter()
             .any(|event| { event["type"] == "fort.ready" && event["data"]["task_id"] == task_id })
     );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_session_backlog_stays_serial_and_reuses_the_same_session_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(700),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let expected_session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let (mut socket, _) = connect(ws_url.as_str()).expect("connect websocket");
+    let first_create = serde_json::json!({
+        "id": "task-first",
+        "method": "task.create",
+        "params": {
+            "title": "First queued task",
+            "instructions": "Reply with nucleus-smoke",
+            "profile": "america",
+            "session_id": expected_session_id,
+        }
+    });
+    socket.send(WsMessage::Text(first_create.to_string().into())).expect("send first task create");
+    let first_created = match socket.read().expect("read first task create") {
+        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse first task create"),
+        other => panic!("unexpected first task create response: {other:?}"),
+    };
+    assert_eq!(first_created["ok"], true);
+    let first_task_id = first_created["result"]["task_id"].as_str().expect("first task id").to_owned();
+
+    let second_create = serde_json::json!({
+        "id": "task-second",
+        "method": "task.create",
+        "params": {
+            "title": "Second queued task",
+            "instructions": "Reply with nucleus-smoke",
+            "profile": "america",
+            "session_id": expected_session_id,
+        }
+    });
+    socket.send(WsMessage::Text(second_create.to_string().into())).expect("send second task create");
+    let second_created = match socket.read().expect("read second task create") {
+        WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse second task create"),
+        other => panic!("unexpected second task create response: {other:?}"),
+    };
+    assert_eq!(second_created["ok"], true);
+    let second_task_id =
+        second_created["result"]["task_id"].as_str().expect("second task id").to_owned();
+
+    let _running = wait_for_cli_task_status(&ws_url, &first_task_id, "running");
+    let second_queued = wait_for_cli_task_predicate(&ws_url, &second_task_id, Duration::from_secs(5), |task| {
+        task["status"] == "queued"
+    });
+    assert_eq!(second_queued["status"], "queued");
+
+    let first_done = wait_for_cli_task_status(&ws_url, &first_task_id, "done");
+    let second_done = wait_for_cli_task_status(&ws_url, &second_task_id, "done");
+
+    let first_run_id = first_done["latest_run_id"].as_str().expect("first latest run id");
+    let second_run_id = second_done["latest_run_id"].as_str().expect("second latest run id");
+    let first_run = inspect_run_via_cli(&ws_url, first_run_id);
+    let second_run = inspect_run_via_cli(&ws_url, second_run_id);
+    assert_eq!(first_run["session_id"], expected_session_id);
+    assert_eq!(second_run["session_id"], expected_session_id);
+
+    let events = load_event_log_values(&state_root);
+    let first_started_seq = events
+        .iter()
+        .find(|event| event["type"] == "run.started" && event["data"]["task_id"] == first_task_id)
+        .and_then(|event| event["seq"].as_u64())
+        .expect("first run.started seq");
+    let first_completed_seq = events
+        .iter()
+        .find(|event| event["type"] == "run.completed" && event["data"]["task_id"] == first_task_id)
+        .and_then(|event| event["seq"].as_u64())
+        .expect("first run.completed seq");
+    let second_started_seq = events
+        .iter()
+        .find(|event| event["type"] == "run.started" && event["data"]["task_id"] == second_task_id)
+        .and_then(|event| event["seq"].as_u64())
+        .expect("second run.started seq");
+    assert!(first_started_seq < first_completed_seq);
+    assert!(first_completed_seq < second_started_seq);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_websocket_reconnect_observes_active_run_completion_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_millis(200),
+        Duration::from_millis(250),
+        &["alpha", "beta", "gamma"],
+    );
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    let mut first_socket = subscribe_to_events(&ws_url);
+    let created = create_task_via_cli(
+        &ws_url,
+        "Reconnect run task",
+        "Reply with alphabet chunks",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let mut saw_active_run_event = false;
+    for _ in 0..8 {
+        let event = read_websocket_json(&mut first_socket);
+        if event["type"] == "run.started" && event["data"]["task_id"] == task_id {
+            saw_active_run_event = true;
+            break;
+        }
+        if event["type"] == "run.output_delta" && event["data"]["task_id"] == task_id {
+            saw_active_run_event = true;
+            break;
+        }
+    }
+    assert!(saw_active_run_event, "did not observe the run becoming active before reconnect");
+    first_socket.close(None).expect("close first websocket");
+
+    let mut second_socket = subscribe_to_events(&ws_url);
+    let mut saw_completion = false;
+    for _ in 0..12 {
+        let event = read_websocket_json(&mut second_socket);
+        if event["type"] == "run.completed" && event["data"]["task_id"] == task_id {
+            saw_completion = true;
+            break;
+        }
+    }
+    assert!(saw_completion, "did not observe run.completed after websocket reconnect");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(task["checkpoint_summary"], "alphabetagamma");
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
