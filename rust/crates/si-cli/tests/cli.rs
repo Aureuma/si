@@ -7106,6 +7106,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["responses"]["200"]["description"],
+        json!("Task record.")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["description"],
         json!("Canonical SI task id.")
     );
@@ -7138,6 +7142,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/TaskCancelResultView")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["200"]["description"],
+        json!("Cancellation result.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["parameters"][0]["description"],
