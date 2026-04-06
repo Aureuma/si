@@ -6965,6 +6965,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_create_reuses_single_worker_and_codex_home_per_profile() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+        let first_codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let second_codex_home = temp.path().join("other/.si/codex/profiles/america-shadow");
+
+        let first = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-first-worker"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": first_codex_home,
+                    "workdir": temp.path().join("work-a"),
+                }),
+            })
+            .await;
+        assert!(first.ok);
+
+        let second = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-second-worker"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("other"),
+                    "codex_home": second_codex_home,
+                    "workdir": temp.path().join("work-b"),
+                }),
+            })
+            .await;
+        assert!(second.ok);
+
+        assert_eq!(runtime.start_call_count(), 1);
+        assert_eq!(
+            first.result.as_ref().expect("first result")["worker"]["worker_id"],
+            second.result.as_ref().expect("second result")["worker"]["worker_id"]
+        );
+        assert_eq!(
+            second.result.as_ref().expect("second result")["worker"]["codex_home"],
+            json!(first_codex_home.display().to_string())
+        );
+        assert_eq!(service.store.list_workers().expect("workers").len(), 1);
+        assert_eq!(service.store.list_sessions().expect("sessions").len(), 2);
+    }
+
+    #[tokio::test]
     async fn dispatcher_respects_session_affine_backlog_order() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
