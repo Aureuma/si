@@ -7113,6 +7113,13 @@ mod tests {
         assert!(run_id.starts_with("si-run-"));
         assert_ne!(run_id, turn_id);
         assert!(!turn_id.starts_with("si-run-"));
+
+        let events = load_canonical_events(&service.store.paths().events_path).expect("load events");
+        assert!(!events.is_empty());
+        assert!(
+            events.iter().all(|event| event.event_id.as_str().starts_with("si-event-")),
+            "canonical event ids must keep the si-event namespace"
+        );
     }
 
     #[tokio::test]
