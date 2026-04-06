@@ -44,7 +44,6 @@ fn write_named_codex_profile_settings(
     fs::write(settings_dir.join("settings.toml"), source).expect("write named codex settings");
 }
 
-
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -558,6 +557,128 @@ fn build_npm_publish_package_dry_run_uses_generated_tarball() {
     assert!(publish_args.contains("--access"));
     assert!(publish_args.contains("--dry-run"));
     assert!(publish_args.contains("aureuma-si-1.2.3.tgz"));
+}
+
+#[test]
+fn nucleus_service_install_writes_systemd_unit_and_reloads_user_manager() {
+    let temp = tempdir().expect("tempdir");
+    let state_dir = temp.path().join("state");
+    let service_dir = temp.path().join("systemd-user");
+    let args_file = temp.path().join("systemctl-args.txt");
+    let systemctl_path = temp.path().join("systemctl");
+    write_executable_shell_script(
+        &systemctl_path,
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n", shell_escape_for_test(&args_file),),
+    );
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse json");
+    let definition_path = service_dir.join("si-nucleus.service");
+    assert_eq!(payload["definition_path"], definition_path.display().to_string());
+    assert_eq!(payload["manager_command"][0], Value::String(systemctl_path.display().to_string()));
+    let unit = fs::read_to_string(&definition_path).expect("read unit");
+    assert!(unit.contains("\"nucleus\""));
+    assert!(unit.contains("\"service\""));
+    assert!(unit.contains("\"run\""));
+    assert!(unit.contains(state_dir.to_str().expect("state dir")));
+
+    let args = fs::read_to_string(&args_file).expect("read args");
+    assert_eq!(args, "--user\ndaemon-reload\n");
+}
+
+#[test]
+fn nucleus_service_start_and_status_use_systemctl_user_unit() {
+    let temp = tempdir().expect("tempdir");
+    let calls_file = temp.path().join("systemctl-calls.txt");
+    let systemctl_path = temp.path().join("systemctl");
+    write_executable_shell_script(
+        &systemctl_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nif [ \"$2\" = \"status\" ]; then\n  printf 'Active: active (running)\\n'\nfi\n",
+            shell_escape_for_test(&calls_file),
+        ),
+    );
+
+    cargo_bin()
+        .args(["nucleus", "service", "start", "--format", "json"])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success();
+
+    let output = cargo_bin()
+        .args(["nucleus", "service", "status", "--format", "json"])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse json");
+    assert_eq!(payload["service_name"], "si-nucleus.service");
+    assert_eq!(payload["logs_hint"], "journalctl --user-unit si-nucleus.service -f");
+    assert_eq!(payload["manager_stdout"], "Active: active (running)");
+
+    let calls = fs::read_to_string(&calls_file).expect("read calls");
+    assert!(calls.contains("--user\nstart\nsi-nucleus.service\n"));
+    assert!(calls.contains("--user\nstatus\n--no-pager\nsi-nucleus.service\n"));
+}
+
+#[test]
+fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
+    let temp = tempdir().expect("tempdir");
+    let args_file = temp.path().join("nucleus-args.txt");
+    let env_file = temp.path().join("nucleus-env.txt");
+    let nucleus_path = temp.path().join("si-nucleus");
+    write_executable_shell_script(
+        &nucleus_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_NUCLEUS_STATE_DIR=%s\\nSI_NUCLEUS_BIND_ADDR=%s\\n' \"${{SI_NUCLEUS_STATE_DIR:-}}\" \"${{SI_NUCLEUS_BIND_ADDR:-}}\" > {}\n",
+            shell_escape_for_test(&args_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+    let state_dir = temp.path().join("state");
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "run",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--bind-addr",
+            "127.0.0.1:4888",
+            "--nucleus-bin",
+            nucleus_path.to_str().expect("nucleus path"),
+        ])
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read args");
+    assert_eq!(args, "\n");
+    let env = fs::read_to_string(&env_file).expect("read env");
+    assert!(env.contains(&format!("SI_NUCLEUS_STATE_DIR={}\n", state_dir.display())));
+    assert!(env.contains("SI_NUCLEUS_BIND_ADDR=127.0.0.1:4888\n"));
 }
 
 fn shell_escape_for_test(path: &Path) -> String {
@@ -1707,8 +1828,6 @@ fn build_installer_smoke_npm_runs_rust_or_override_commands() {
         .assert()
         .success();
 }
-
-
 
 #[test]
 fn build_installer_smoke_homebrew_runs_rust_or_override_commands() {
