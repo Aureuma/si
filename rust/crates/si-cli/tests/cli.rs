@@ -3503,6 +3503,63 @@ fn nucleus_run_submit_turn_rejects_session_profile_mismatch_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_task_cancel_transitions_blocked_task_to_cancelled_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let session_path =
+        state_root.join("state").join("sessions").join(&session_id).join("session.json");
+    let mut persisted_session: Value =
+        serde_json::from_slice(&fs::read(&session_path).expect("read session json"))
+            .expect("parse session json");
+    persisted_session["app_server_thread_id"] = Value::Null;
+    fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&persisted_session).expect("serialize session json"),
+    )
+    .expect("write session json");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-live-blocked-cancel",
+        "Cancel blocked task",
+        "Create a blocked task before cancellation",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "session_broken");
+    assert!(blocked["latest_run_id"].is_null());
+
+    let cancelled_output = cargo_bin()
+        .args(["nucleus", "task", "cancel", &task_id, "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let cancelled: Value = serde_json::from_slice(&cancelled_output).expect("parse task cancel");
+    assert_eq!(cancelled["task"]["status"], "cancelled");
+    assert_eq!(cancelled["cancellation_requested"], false);
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    assert!(task["blocked_reason"].is_null());
+    assert!(task["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_app_server_init_failure_blocks_task_and_breaks_session_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
