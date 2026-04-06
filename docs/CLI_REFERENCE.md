@@ -64,6 +64,7 @@ si nucleus profile list
 si nucleus task create "Inspect blocked task" "Summarize the current blocked reason and latest checkpoint."
 si nucleus task cancel <task-id>
 si nucleus task list
+si nucleus task prune --older-than-days 30
 si nucleus worker repair-auth <worker-id>
 si nucleus service install
 si nucleus service status --format json

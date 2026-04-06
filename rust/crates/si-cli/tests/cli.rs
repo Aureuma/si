@@ -933,6 +933,56 @@ fn nucleus_task_cancel_requests_gateway_task_cancel_method() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_task_prune_requests_gateway_task_prune_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "task.prune");
+        assert_eq!(payload["params"]["older_than_days"], 30);
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "older_than_days": 30,
+                "cutoff_at": "2026-03-07T00:00:00Z",
+                "pruned_task_ids": ["si-task-123"],
+                "skipped": []
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "prune",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["pruned_task_ids"][0], "si-task-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_events_subscribe_prints_streamed_events() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");

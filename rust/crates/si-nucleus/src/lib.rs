@@ -59,6 +59,7 @@ const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
+const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
 const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
 
@@ -624,6 +625,38 @@ impl NucleusStore {
             },
         )?;
         Ok(vec![event])
+    }
+
+    fn prune_tasks_older_than(&self, cutoff: DateTime<Utc>) -> Result<TaskPruneOutcome> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let mut pruned_task_ids = Vec::new();
+        let mut skipped = Vec::new();
+        for entry in fs::read_dir(&self.paths.tasks_state_dir)
+            .with_context(|| format!("read {}", self.paths.tasks_state_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path().join("task.json");
+            if !path.exists() {
+                continue;
+            }
+            let task = match read_json_path::<TaskRecord>(&path) {
+                Ok(task) => task,
+                Err(error) => {
+                    skipped.push(TaskPruneSkipView {
+                        path: path.display().to_string(),
+                        error: error.to_string(),
+                    });
+                    continue;
+                }
+            };
+            if !is_prunable_task_status(task.status) || task.updated_at > cutoff {
+                continue;
+            }
+            fs::remove_dir_all(entry.path())
+                .with_context(|| format!("remove {}", entry.path().display()))?;
+            pruned_task_ids.push(task.task_id);
+        }
+        Ok(TaskPruneOutcome { pruned_task_ids, skipped })
     }
 
     fn create_producer_task(
@@ -2131,6 +2164,10 @@ fn worker_restart_backoff(attempt: u32) -> ChronoDuration {
     ChronoDuration::milliseconds(millis.saturating_mul(multiplier))
 }
 
+fn is_prunable_task_status(status: TaskStatus) -> bool {
+    matches!(status, TaskStatus::Done | TaskStatus::Failed)
+}
+
 fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     append_jsonl_with_rotation(path, value, MAX_EVENTS_JSONL_BYTES)
 }
@@ -3262,6 +3299,32 @@ impl NucleusService {
                 let task_id = TaskId::new(params.task_id)?;
                 Ok(serde_json::to_value(self.cancel_task(&task_id)?)?)
             }
+            "task.prune" => {
+                let params: TaskPruneParams =
+                    serde_json::from_value(params).context("parse task.prune params")?;
+                let older_than_days = params.older_than_days.unwrap_or(DEFAULT_TASK_RETENTION_DAYS);
+                let cutoff_at = Utc::now()
+                    - ChronoDuration::days(
+                        i64::try_from(older_than_days).context("task prune cutoff")?,
+                    );
+                let result = self.store.prune_tasks_older_than(cutoff_at)?;
+                for skipped in &result.skipped {
+                    let event = self.store.append_system_warning(
+                        "skipped malformed task during explicit prune",
+                        json!({
+                            "path": skipped.path,
+                            "error": skipped.error,
+                        }),
+                    )?;
+                    let _ = self.events.send(event);
+                }
+                Ok(serde_json::to_value(TaskPruneResultView {
+                    older_than_days,
+                    cutoff_at,
+                    pruned_task_ids: result.pruned_task_ids,
+                    skipped: result.skipped,
+                })?)
+            }
             "profile.list" => Ok(serde_json::to_value(self.store.list_profiles()?)?),
             "worker.probe" => {
                 let runtime =
@@ -3643,6 +3706,26 @@ struct EnsureWorkerRequest<'a> {
     codex_home: Option<PathBuf>,
     workdir: Option<PathBuf>,
     env: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct TaskPruneOutcome {
+    pruned_task_ids: Vec<TaskId>,
+    skipped: Vec<TaskPruneSkipView>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct TaskPruneResultView {
+    older_than_days: u64,
+    cutoff_at: DateTime<Utc>,
+    pruned_task_ids: Vec<TaskId>,
+    skipped: Vec<TaskPruneSkipView>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct TaskPruneSkipView {
+    path: String,
+    error: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -4408,6 +4491,11 @@ struct TaskCancelParams {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+struct TaskPruneParams {
+    older_than_days: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 struct WorkerProbeParams {
     worker_id: Option<String>,
     profile: String,
@@ -4539,7 +4627,7 @@ mod tests {
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
         EventId, ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState,
-        TaskId, TaskStatus, WorkerId, WorkerStatus,
+        TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId, WorkerStatus,
     };
     use si_nucleus_runtime::{
         CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
@@ -5933,6 +6021,74 @@ mod tests {
         assert!(worker_summary.contains("Status: `ready`"));
         assert!(session_summary.contains("Summary: `nucleus-smoke`"));
         assert!(run_summary.contains("Checkpoint: `nucleus-smoke`"));
+    }
+
+    #[tokio::test]
+    async fn task_prune_removes_only_old_terminal_tasks() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let old_done_id = TaskId::generate();
+        let old_cancelled_id = TaskId::generate();
+        let old_queued_id = TaskId::generate();
+        let recent_done_id = TaskId::generate();
+
+        let mut old_done =
+            TaskRecord::new(old_done_id.clone(), TaskSource::System, "old done", "done task");
+        old_done.transition_to(TaskStatus::Running, None).expect("run old done");
+        old_done.transition_to(TaskStatus::Done, None).expect("finish old done");
+        old_done.updated_at = Utc::now() - ChronoDuration::days(45);
+        write_json_atomic(&service.store.paths().task_path(&old_done_id), &old_done)
+            .expect("write old done");
+
+        let mut old_cancelled = TaskRecord::new(
+            old_cancelled_id.clone(),
+            TaskSource::System,
+            "old cancelled",
+            "cancelled task",
+        );
+        old_cancelled.transition_to(TaskStatus::Cancelled, None).expect("cancel old task");
+        old_cancelled.updated_at = Utc::now() - ChronoDuration::days(45);
+        write_json_atomic(&service.store.paths().task_path(&old_cancelled_id), &old_cancelled)
+            .expect("write old cancelled");
+
+        let mut old_queued =
+            TaskRecord::new(old_queued_id.clone(), TaskSource::System, "old queued", "queued task");
+        old_queued.updated_at = Utc::now() - ChronoDuration::days(45);
+        write_json_atomic(&service.store.paths().task_path(&old_queued_id), &old_queued)
+            .expect("write old queued");
+
+        let mut recent_done = TaskRecord::new(
+            recent_done_id.clone(),
+            TaskSource::System,
+            "recent done",
+            "recent task",
+        );
+        recent_done.transition_to(TaskStatus::Running, None).expect("run recent done");
+        recent_done.transition_to(TaskStatus::Done, None).expect("finish recent done");
+        write_json_atomic(&service.store.paths().task_path(&recent_done_id), &recent_done)
+            .expect("write recent done");
+
+        let response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-prune"),
+                method: "task.prune".to_owned(),
+                params: json!({ "older_than_days": 30 }),
+            })
+            .await;
+        assert!(response.ok);
+        let payload = response.result.expect("prune payload");
+        assert_eq!(payload["pruned_task_ids"], json!([old_done_id.as_str()]));
+
+        assert!(!service.store.paths().task_path(&old_done_id).exists());
+        assert!(service.store.paths().task_path(&old_cancelled_id).exists());
+        assert!(service.store.paths().task_path(&old_queued_id).exists());
+        assert!(service.store.paths().task_path(&recent_done_id).exists());
     }
 
     #[tokio::test]
