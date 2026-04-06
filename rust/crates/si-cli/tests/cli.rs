@@ -7187,6 +7187,18 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RunRecord")
     );
     assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["summary"],
+        json!("Inspect one run")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["description"],
+        json!("Read one durable run projection by run id.")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["x-si-purpose"],
+        json!("Use this to inspect bounded run state from external tools without subscribing to websocket events.")
+    );
+    assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["parameters"][0]["schema"]["type"],
         json!("string")
     );
