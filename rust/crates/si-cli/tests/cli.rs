@@ -1962,6 +1962,60 @@ fn nucleus_profile_list_requests_gateway_profile_list_method() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_profile_list_reflects_live_profiles_on_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let europe_codex_home = home_dir.join(".si/codex/profiles/europe");
+    create_session_via_cli_with_options(
+        &ws_url,
+        "america",
+        None,
+        None,
+        &home_dir,
+        &america_codex_home,
+        temp.path(),
+    );
+    create_session_via_cli_with_options(
+        &ws_url,
+        "europe",
+        None,
+        None,
+        &home_dir,
+        &europe_codex_home,
+        temp.path(),
+    );
+
+    let output = cargo_bin()
+        .args(["nucleus", "profile", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let profiles: Value = serde_json::from_slice(&output).expect("parse profile list");
+    let profiles = profiles.as_array().expect("profile list array");
+    assert!(profiles.iter().any(|profile| {
+        profile["profile"] == "america"
+            && profile["account_identity"] == "america@example.com"
+            && profile["codex_home"] == america_codex_home.display().to_string()
+    }));
+    assert!(profiles.iter().any(|profile| {
+        profile["profile"] == "europe"
+            && profile["account_identity"] == "europe@example.com"
+            && profile["codex_home"] == europe_codex_home.display().to_string()
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_create_requests_gateway_task_create_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
