@@ -29,7 +29,7 @@ use flate2::write::GzEncoder;
 use regex::Regex;
 use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use si_rs_codex::{RespawnRequest, build_respawn_plan, codex_tmux_session_name, codex_worker_name};
 use si_rs_command_manifest::{
@@ -214,6 +214,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 use tar::Builder as TarBuilder;
+use tungstenite::{Message as WsMessage, connect as ws_connect};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -317,6 +318,10 @@ enum Command {
         #[command(subcommand)]
         command: Box<CodexCommand>,
     },
+    Nucleus {
+        #[command(subcommand)]
+        command: NucleusCommand,
+    },
     Surf {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -362,6 +367,157 @@ enum Command {
     Vault {
         #[command(subcommand)]
         command: VaultCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusCommand {
+    Status {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Task {
+        #[command(subcommand)]
+        command: NucleusTaskCommand,
+    },
+    Worker {
+        #[command(subcommand)]
+        command: NucleusWorkerCommand,
+    },
+    Session {
+        #[command(subcommand)]
+        command: NucleusSessionCommand,
+    },
+    Run {
+        #[command(subcommand)]
+        command: NucleusRunCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusTaskCommand {
+    Create {
+        title: String,
+        instructions: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Inspect {
+        task_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusWorkerCommand {
+    Probe {
+        profile: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long)]
+        worker_id: Option<String>,
+        #[arg(long)]
+        home_dir: Option<PathBuf>,
+        #[arg(long)]
+        codex_home: Option<PathBuf>,
+        #[arg(long)]
+        workdir: Option<PathBuf>,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Inspect {
+        worker_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusSessionCommand {
+    Create {
+        profile: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long)]
+        worker_id: Option<String>,
+        #[arg(long)]
+        thread_id: Option<String>,
+        #[arg(long)]
+        home_dir: Option<PathBuf>,
+        #[arg(long)]
+        codex_home: Option<PathBuf>,
+        #[arg(long)]
+        workdir: Option<PathBuf>,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Show {
+        session_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusRunCommand {
+    SubmitTurn {
+        session_id: String,
+        prompt: String,
+        #[arg(long)]
+        task_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Inspect {
+        run_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Cancel {
+        run_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
     },
 }
 
@@ -15644,6 +15800,306 @@ impl fmt::Display for OutputFormat {
         };
         f.write_str(value)
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct NucleusGatewayMetadata {
+    ws_url: String,
+}
+
+#[derive(Debug, Serialize)]
+struct NucleusGatewayRequest {
+    id: Value,
+    method: String,
+    params: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct NucleusGatewayError {
+    code: String,
+    message: String,
+    #[allow(dead_code)]
+    details: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NucleusGatewayResponse {
+    id: Value,
+    ok: bool,
+    result: Option<Value>,
+    error: Option<NucleusGatewayError>,
+}
+
+fn default_nucleus_metadata_path() -> PathBuf {
+    default_home_dir().join(".si").join("nucleus").join("gateway").join("metadata.json")
+}
+
+fn resolve_nucleus_ws_endpoint(endpoint: Option<&str>) -> Result<String> {
+    if let Some(value) = endpoint.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok(value.to_owned());
+    }
+    if let Ok(value) = env::var("SI_NUCLEUS_WS_ADDR") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_owned());
+        }
+    }
+    let metadata_path = default_nucleus_metadata_path();
+    if metadata_path.is_file() {
+        let raw = fs::read(&metadata_path)
+            .with_context(|| format!("read {}", metadata_path.display()))?;
+        let metadata: NucleusGatewayMetadata = serde_json::from_slice(&raw)
+            .with_context(|| format!("parse {}", metadata_path.display()))?;
+        let trimmed = metadata.ws_url.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_owned());
+        }
+    }
+    Ok("ws://127.0.0.1:4747/ws".to_owned())
+}
+
+fn run_nucleus_gateway_request(
+    endpoint: Option<&str>,
+    method: &str,
+    params: Value,
+) -> Result<Value> {
+    let endpoint = resolve_nucleus_ws_endpoint(endpoint)?;
+    let request = NucleusGatewayRequest {
+        id: json!(Utc::now().timestamp_millis()),
+        method: method.to_owned(),
+        params,
+    };
+    let (mut socket, _) = ws_connect(endpoint.as_str())
+        .with_context(|| format!("connect nucleus websocket {}", endpoint))?;
+    socket
+        .send(WsMessage::Text(serde_json::to_string(&request)?.into()))
+        .context("send nucleus websocket request")?;
+
+    loop {
+        match socket.read().context("read nucleus websocket response")? {
+            WsMessage::Text(text) => {
+                let response: NucleusGatewayResponse =
+                    serde_json::from_str(&text).context("parse nucleus websocket response")?;
+                if !response.ok {
+                    let error = response
+                        .error
+                        .map(|item| format!("{}: {}", item.code, item.message))
+                        .unwrap_or_else(|| "unknown nucleus error".to_owned());
+                    anyhow::bail!(error);
+                }
+                let _ = response.id;
+                return Ok(response.result.unwrap_or(Value::Null));
+            }
+            WsMessage::Ping(payload) => {
+                socket.send(WsMessage::Pong(payload)).context("send nucleus websocket pong")?;
+            }
+            WsMessage::Pong(_) | WsMessage::Binary(_) | WsMessage::Frame(_) => {}
+            WsMessage::Close(_) => anyhow::bail!("nucleus websocket closed before response"),
+        }
+    }
+}
+
+fn print_nucleus_output(format: OutputFormat, payload: &Value) -> Result<()> {
+    match format {
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(payload)?);
+        }
+    }
+    Ok(())
+}
+
+fn parse_env_assignments(entries: &[String]) -> Result<BTreeMap<String, String>> {
+    let mut map = BTreeMap::new();
+    for entry in entries {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = trimmed.split_once('=') else {
+            anyhow::bail!("invalid env assignment: {trimmed}");
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("invalid env assignment: {trimmed}");
+        }
+        map.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(map)
+}
+
+fn run_nucleus_status(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload = run_nucleus_gateway_request(endpoint.as_deref(), "nucleus.status", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_task_create(
+    endpoint: Option<String>,
+    title: String,
+    instructions: String,
+    profile: Option<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "task.create",
+        json!({
+            "title": title,
+            "instructions": instructions,
+            "profile": profile,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_task_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload = run_nucleus_gateway_request(endpoint.as_deref(), "task.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_task_inspect(
+    endpoint: Option<String>,
+    task_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "task.inspect",
+        json!({ "task_id": task_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_worker_probe(
+    endpoint: Option<String>,
+    profile: String,
+    worker_id: Option<String>,
+    home_dir: Option<PathBuf>,
+    codex_home: Option<PathBuf>,
+    workdir: Option<PathBuf>,
+    env_entries: Vec<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "worker.probe",
+        json!({
+            "profile": profile,
+            "worker_id": worker_id,
+            "home_dir": home_dir,
+            "codex_home": codex_home,
+            "workdir": workdir,
+            "env": parse_env_assignments(&env_entries)?,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_worker_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload = run_nucleus_gateway_request(endpoint.as_deref(), "worker.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_worker_inspect(
+    endpoint: Option<String>,
+    worker_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "worker.inspect",
+        json!({ "worker_id": worker_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_session_create(
+    endpoint: Option<String>,
+    profile: String,
+    worker_id: Option<String>,
+    thread_id: Option<String>,
+    home_dir: Option<PathBuf>,
+    codex_home: Option<PathBuf>,
+    workdir: Option<PathBuf>,
+    env_entries: Vec<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "session.create",
+        json!({
+            "profile": profile,
+            "worker_id": worker_id,
+            "thread_id": thread_id,
+            "home_dir": home_dir,
+            "codex_home": codex_home,
+            "workdir": workdir,
+            "env": parse_env_assignments(&env_entries)?,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_session_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload = run_nucleus_gateway_request(endpoint.as_deref(), "session.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_session_show(
+    endpoint: Option<String>,
+    session_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "session.show",
+        json!({ "session_id": session_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_run_submit_turn(
+    endpoint: Option<String>,
+    session_id: String,
+    prompt: String,
+    task_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "run.submit_turn",
+        json!({
+            "session_id": session_id,
+            "prompt": prompt,
+            "task_id": task_id,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_run_inspect(
+    endpoint: Option<String>,
+    run_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "run.inspect",
+        json!({ "run_id": run_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_run_cancel(
+    endpoint: Option<String>,
+    run_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "run.cancel",
+        json!({ "run_id": run_id }),
+    )?;
+    print_nucleus_output(format, &payload)
 }
 
 #[derive(Debug, Serialize)]
@@ -32350,33 +32806,14 @@ fn main() -> Result<()> {
                 detach,
                 home,
                 env,
-            }) => show_codex_spawn_start(
-                profile,
-                workspace,
-                workdir,
-                detach,
-                home,
-                env,
-            )?,
+            }) => show_codex_spawn_start(profile, workspace, workdir, detach, home, env)?,
             CodexCommand::Remove { profile, all, format } => {
                 run_codex_remove(profile.as_deref(), all, format)?
             }
             CodexCommand::Tail { profile, tail } => run_codex_tail(profile.as_deref(), &tail)?,
-            CodexCommand::Shell {
-                profile,
-                workdir,
-                interactive,
-                tty,
-                env,
-                command,
-            } => run_codex_shell(
-                profile.as_deref(),
-                workdir,
-                interactive,
-                tty,
-                env,
-                command,
-            )?,
+            CodexCommand::Shell { profile, workdir, interactive, tty, env, command } => {
+                run_codex_shell(profile.as_deref(), workdir, interactive, tty, env, command)?
+            }
             CodexCommand::List { format } => run_codex_list(format)?,
             CodexCommand::Tmux(CodexTmuxArgs { profile, format }) => {
                 run_codex_tmux_command(profile.as_deref(), format)?
@@ -32403,15 +32840,7 @@ fn main() -> Result<()> {
                     settings_file,
                     workspace,
                     format,
-                }) => run_codex_warmup(
-                    profile,
-                    all,
-                    path,
-                    home,
-                    settings_file,
-                    workspace,
-                    format,
-                )?,
+                }) => run_codex_warmup(profile, all, path, home, settings_file, workspace, format)?,
                 WarmupCommand::Status { path, home, format } => {
                     run_warmup_status(path, home, format)?
                 }
@@ -32433,6 +32862,73 @@ fn main() -> Result<()> {
             CodexCommand::Respawn { profile, profile_sessions, format } => {
                 run_codex_respawn_plan(profile.as_deref(), profile_sessions, format)?
             }
+        },
+        Command::Nucleus { command } => match command {
+            NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
+            NucleusCommand::Task { command } => match command {
+                NucleusTaskCommand::Create { title, instructions, endpoint, profile, format } => {
+                    run_nucleus_task_create(endpoint, title, instructions, profile, format)?
+                }
+                NucleusTaskCommand::List { endpoint, format } => {
+                    run_nucleus_task_list(endpoint, format)?
+                }
+                NucleusTaskCommand::Inspect { task_id, endpoint, format } => {
+                    run_nucleus_task_inspect(endpoint, task_id, format)?
+                }
+            },
+            NucleusCommand::Worker { command } => match command {
+                NucleusWorkerCommand::Probe {
+                    profile,
+                    endpoint,
+                    worker_id,
+                    home_dir,
+                    codex_home,
+                    workdir,
+                    env,
+                    format,
+                } => run_nucleus_worker_probe(
+                    endpoint, profile, worker_id, home_dir, codex_home, workdir, env, format,
+                )?,
+                NucleusWorkerCommand::List { endpoint, format } => {
+                    run_nucleus_worker_list(endpoint, format)?
+                }
+                NucleusWorkerCommand::Inspect { worker_id, endpoint, format } => {
+                    run_nucleus_worker_inspect(endpoint, worker_id, format)?
+                }
+            },
+            NucleusCommand::Session { command } => match command {
+                NucleusSessionCommand::Create {
+                    profile,
+                    endpoint,
+                    worker_id,
+                    thread_id,
+                    home_dir,
+                    codex_home,
+                    workdir,
+                    env,
+                    format,
+                } => run_nucleus_session_create(
+                    endpoint, profile, worker_id, thread_id, home_dir, codex_home, workdir, env,
+                    format,
+                )?,
+                NucleusSessionCommand::List { endpoint, format } => {
+                    run_nucleus_session_list(endpoint, format)?
+                }
+                NucleusSessionCommand::Show { session_id, endpoint, format } => {
+                    run_nucleus_session_show(endpoint, session_id, format)?
+                }
+            },
+            NucleusCommand::Run { command } => match command {
+                NucleusRunCommand::SubmitTurn { session_id, prompt, task_id, endpoint, format } => {
+                    run_nucleus_run_submit_turn(endpoint, session_id, prompt, task_id, format)?
+                }
+                NucleusRunCommand::Inspect { run_id, endpoint, format } => {
+                    run_nucleus_run_inspect(endpoint, run_id, format)?
+                }
+                NucleusRunCommand::Cancel { run_id, endpoint, format } => {
+                    run_nucleus_run_cancel(endpoint, run_id, format)?
+                }
+            },
         },
         Command::Surf { home, settings_file, build, no_build, bin, args } => {
             run_surf_wrapper(home, settings_file, build, no_build, bin, args)?
@@ -34908,7 +35404,6 @@ fn prompt_for_codex_profile(purpose: &str, profiles: &[CodexProfileView]) -> Res
     anyhow::bail!("could not resolve codex profile from {:?}", trimmed)
 }
 
-
 fn codex_profile_resolution_error(query: &str, profiles: &[CodexProfileView]) -> anyhow::Error {
     let available = profiles.iter().map(|profile| profile.profile.as_str()).collect::<Vec<_>>();
     anyhow!(
@@ -35144,7 +35639,14 @@ fn resolve_codex_profile_live_view(
     paths: SiPaths,
     settings: Settings,
 ) -> CodexProfileView {
-    match read_codex_status_for_profile(profile.profile.as_str(), &home, &paths, &settings, None, false) {
+    match read_codex_status_for_profile(
+        profile.profile.as_str(),
+        &home,
+        &paths,
+        &settings,
+        None,
+        false,
+    ) {
         Ok(status) if codex_status_has_live_quota(&status) => {
             apply_codex_status_to_profile(&mut profile, &status);
         }
@@ -35217,11 +35719,7 @@ fn show_codex_profile_list(
     };
     let progress = spinner.as_ref().map(CliSpinnerHandle::progress_counter);
     let profiles = enrich_codex_profiles_with_live_status_parallel(
-        profiles,
-        &home,
-        &paths,
-        &settings,
-        progress,
+        profiles, &home, &paths, &settings, progress,
     );
     if let Some(spinner) = spinner {
         spinner.finish();
@@ -63099,11 +63597,7 @@ fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<Pa
         return Ok(workspace.to_path_buf());
     };
     let path = expand_home_path(PathBuf::from(workdir));
-    if path.is_absolute() {
-        Ok(path)
-    } else {
-        Ok(workspace.join(path))
-    }
+    if path.is_absolute() { Ok(path) } else { Ok(workspace.join(path)) }
 }
 
 fn resolve_codex_workspace(workspace: Option<PathBuf>, settings: &Settings) -> Result<PathBuf> {
@@ -63193,7 +63687,10 @@ fn read_codex_worker_states(paths: &SiPaths) -> Result<Vec<CodexWorkerState>> {
     Ok(items)
 }
 
-fn codex_profile_display_name_from_settings(settings: &Settings, profile_id: &str) -> Option<String> {
+fn codex_profile_display_name_from_settings(
+    settings: &Settings,
+    profile_id: &str,
+) -> Option<String> {
     settings
         .codex
         .profiles
@@ -63285,7 +63782,8 @@ fn ensure_codex_worker_session(
 
     let existing = find_codex_worker_state(paths, profile_id)?;
     let restart_needed = existing.as_ref().is_some_and(|state| {
-        state.workspace != workspace.display().to_string() || state.workdir != workdir.display().to_string()
+        state.workspace != workspace.display().to_string()
+            || state.workdir != workdir.display().to_string()
     });
     let tmux_bin = "tmux";
     let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
@@ -63364,7 +63862,9 @@ fn resolve_codex_worker_for_profile(
     let states = read_codex_worker_states(&paths)?;
 
     if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(state) = states.iter().find(|item| item.session_name.eq_ignore_ascii_case(query)) {
+        if let Some(state) =
+            states.iter().find(|item| item.session_name.eq_ignore_ascii_case(query))
+        {
             return Ok(state.clone());
         }
     }
@@ -63383,7 +63883,10 @@ fn resolve_codex_worker_for_profile(
         .with_context(|| format!("resolve codex worker for {}", purpose))
 }
 
-fn remove_codex_worker_state(paths: &SiPaths, state: &CodexWorkerState) -> Result<CodexRemoveResultView> {
+fn remove_codex_worker_state(
+    paths: &SiPaths,
+    state: &CodexWorkerState,
+) -> Result<CodexRemoveResultView> {
     let tmux_bin = "tmux";
     let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
     kill_tmux_session_if_present(tmux_bin, &tmux_term, &state.session_name);
@@ -63583,7 +64086,11 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
                         stdout_text(&item.profile_id, CliTone::Command),
                         stdout_text(
                             &item.state,
-                            if item.state == "running" { CliTone::Success } else { CliTone::Warning },
+                            if item.state == "running" {
+                                CliTone::Success
+                            } else {
+                                CliTone::Warning
+                            },
                         ),
                         stdout_text(&item.session_name, CliTone::Info),
                         item.workspace,
@@ -63595,7 +64102,11 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
     Ok(())
 }
 
-fn run_local_codex_app_server_status(home: &Path, codex_home: &Path, workdir: &Path) -> Result<CodexStatusView> {
+fn run_local_codex_app_server_status(
+    home: &Path,
+    codex_home: &Path,
+    workdir: &Path,
+) -> Result<CodexStatusView> {
     let mut child = StdCommand::new("codex")
         .arg("app-server")
         .current_dir(workdir)
@@ -63608,7 +64119,8 @@ fn run_local_codex_app_server_status(home: &Path, codex_home: &Path, workdir: &P
         .spawn()
         .context("run codex app-server")?;
     {
-        let stdin = child.stdin.as_mut().ok_or_else(|| anyhow!("missing codex app-server stdin"))?;
+        let stdin =
+            child.stdin.as_mut().ok_or_else(|| anyhow!("missing codex app-server stdin"))?;
         stdin
             .write_all(&build_app_server_status_input())
             .context("write codex app-server input")?;
@@ -63624,7 +64136,11 @@ fn run_local_codex_app_server_status(home: &Path, codex_home: &Path, workdir: &P
         combined.push_str(stderr.trim());
     }
     if !output.status.success() {
-        anyhow::bail!(if combined.is_empty() { "codex app-server failed".to_owned() } else { combined });
+        anyhow::bail!(if combined.is_empty() {
+            "codex app-server failed".to_owned()
+        } else {
+            combined
+        });
     }
     parse_app_server_status(&combined).map(|mut status| {
         status.raw = Some(combined);
@@ -63667,7 +64183,14 @@ fn read_codex_status_with_retry(
 ) -> Result<CodexStatusView> {
     let mut last_error: Option<anyhow::Error> = None;
     for attempt in 0..10 {
-        match read_codex_status_for_profile(profile_id, home, paths, settings, workspace.clone(), false) {
+        match read_codex_status_for_profile(
+            profile_id,
+            home,
+            paths,
+            settings,
+            workspace.clone(),
+            false,
+        ) {
             Ok(status) => return Ok(status),
             Err(err) => {
                 last_error = Some(err);
@@ -63763,7 +64286,8 @@ fn run_codex_warmup(
     workspace: Option<PathBuf>,
     format: OutputFormat,
 ) -> Result<()> {
-    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), settings_file.clone())?;
+    let (settings_home, settings) =
+        load_codex_runtime_settings(home.clone(), settings_file.clone())?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
     let state_path = match path {
         Some(path) => path,
@@ -63771,7 +64295,9 @@ fn run_codex_warmup(
     };
     let mut state = load_warmup_state(&state_path)?;
     let updated_at = chrono::Utc::now();
-    let profile_ids = if let Some(profile) = profile.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    let profile_ids = if let Some(profile) =
+        profile.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
         vec![resolve_codex_requested_profile(&settings, &paths, Some(profile))?]
     } else if all || profile.is_none() {
         let mut items = settings.codex.profiles.entries.keys().cloned().collect::<Vec<_>>();
@@ -63788,7 +64314,8 @@ fn run_codex_warmup(
 
     for profile_id in profile_ids {
         let previous = state.profiles.get(profile_id.as_str()).cloned();
-        let last_weekly_used_pct = previous.as_ref().map(|row| row.last_weekly_used_pct).unwrap_or(0.0);
+        let last_weekly_used_pct =
+            previous.as_ref().map(|row| row.last_weekly_used_pct).unwrap_or(0.0);
         let last_weekly_used_ok = previous.as_ref().is_some_and(|row| row.last_weekly_used_ok);
         let entry = state.profiles.entry(profile_id.clone()).or_default();
         entry.profile_id = profile_id.clone();
@@ -63808,14 +64335,19 @@ fn run_codex_warmup(
                 workspace.clone(),
             ) {
                 Ok(status) => {
-                    let weekly_used_pct = status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
+                    let weekly_used_pct =
+                        status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
                     entry.last_result = "warmed".to_owned();
                     entry.last_error.clear();
                     entry.last_weekly_used_pct = weekly_used_pct;
                     entry.last_weekly_used_ok = status.weekly_left_pct.is_some();
                     entry.last_weekly_reset = status.weekly_reset.clone().unwrap_or_default();
                     entry.last_warmed_reset = status.weekly_reset.clone().unwrap_or_default();
-                    entry.last_usage_delta = if last_weekly_used_ok { weekly_used_pct - last_weekly_used_pct } else { 0.0 };
+                    entry.last_usage_delta = if last_weekly_used_ok {
+                        weekly_used_pct - last_weekly_used_pct
+                    } else {
+                        0.0
+                    };
                     entry.next_due = codex_warmup_next_due(&status, &profile_id, updated_at);
                     entry.failure_count = 0;
                     entry.paused = false;
@@ -64007,7 +64539,8 @@ fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> R
         .env("TERM", tmux_term)
         .args(["has-session", "-t", session_name])
         .stderr(std::process::Stdio::null());
-    let status = command.status().with_context(|| format!("check tmux session {}", session_name))?;
+    let status =
+        command.status().with_context(|| format!("check tmux session {}", session_name))?;
     Ok(status.success())
 }
 
@@ -64070,8 +64603,10 @@ fn run_codex_respawn_plan(
     } else {
         profile_sessions
     };
-    let plan = build_respawn_plan(&RespawnRequest { profile_id, profile_session_names: discovered })?;
-    let view = CodexRespawnPlanView { profile_id: plan.profile_id, remove_targets: plan.reset_targets };
+    let plan =
+        build_respawn_plan(&RespawnRequest { profile_id, profile_session_names: discovered })?;
+    let view =
+        CodexRespawnPlanView { profile_id: plan.profile_id, remove_targets: plan.reset_targets };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => {
