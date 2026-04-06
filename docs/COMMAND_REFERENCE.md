@@ -25,7 +25,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
-| `si surf` | Local Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
+| `si surf` | Local Playwright browser runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si viva` | Manage Viva runtime and node helper commands | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |
 | `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
 | `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
