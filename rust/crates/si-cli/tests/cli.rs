@@ -8,13 +8,12 @@ use reqwest::blocking::Client as BlockingClient;
 use serde_json::Value;
 use si_nucleus::{NucleusConfig, NucleusService};
 use si_nucleus_core::{
-    CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId,
-    WorkerStatus,
+    CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId, WorkerStatus,
 };
 use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
-    RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
-    WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
+    RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec, WorkerProbeResult,
+    WorkerRuntimeView, WorkerStartResult,
 };
 use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -171,6 +170,7 @@ struct TestRuntimeConfig {
     fail_execute: bool,
     block_when_worker_missing: bool,
     fail_start_worker: bool,
+    fail_ensure_session: bool,
 }
 
 impl Default for TestRuntimeConfig {
@@ -182,6 +182,7 @@ impl Default for TestRuntimeConfig {
             fail_execute: false,
             block_when_worker_missing: false,
             fail_start_worker: false,
+            fail_ensure_session: false,
         }
     }
 }
@@ -215,7 +216,11 @@ impl TestRuntime {
         }
     }
 
-    fn with_streaming_output(run_delay: Duration, step_delay: Duration, output_deltas: &[&str]) -> Self {
+    fn with_streaming_output(
+        run_delay: Duration,
+        step_delay: Duration,
+        output_deltas: &[&str],
+    ) -> Self {
         Self::with_config(TestRuntimeConfig {
             run_delay,
             step_delay,
@@ -223,27 +228,17 @@ impl TestRuntime {
             fail_execute: false,
             block_when_worker_missing: false,
             fail_start_worker: false,
+            fail_ensure_session: false,
         })
     }
 
     fn wait_for_interrupt_or_timeout(&self, turn_id: &str, delay: Duration) -> bool {
         if delay.is_zero() {
-            return self
-                .state
-                .lock()
-                .expect("runtime state")
-                .interrupted_turns
-                .remove(turn_id);
+            return self.state.lock().expect("runtime state").interrupted_turns.remove(turn_id);
         }
         let start = Instant::now();
         while start.elapsed() < delay {
-            if self
-                .state
-                .lock()
-                .expect("runtime state")
-                .interrupted_turns
-                .remove(turn_id)
-            {
+            if self.state.lock().expect("runtime state").interrupted_turns.remove(turn_id) {
                 return true;
             }
             thread::sleep(Duration::from_millis(20));
@@ -257,6 +252,10 @@ impl TestRuntime {
 
     fn set_fail_start_worker(&self, value: bool) {
         self.state.lock().expect("runtime state").config.fail_start_worker = value;
+    }
+
+    fn set_fail_ensure_session(&self, value: bool) {
+        self.state.lock().expect("runtime state").config.fail_ensure_session = value;
     }
 
     fn block_run_for_missing_worker(
@@ -359,6 +358,9 @@ impl NucleusRuntime for TestRuntime {
     }
 
     fn ensure_session(&self, spec: &SessionOpenSpec) -> anyhow::Result<SessionOpenResult> {
+        if self.state.lock().expect("runtime state").config.fail_ensure_session {
+            anyhow::bail!("cli-test-runtime ensure_session failed");
+        }
         Ok(SessionOpenResult {
             thread_id: spec
                 .resume_thread_id
@@ -518,11 +520,7 @@ impl NucleusRuntime for TestRuntime {
         _thread_id: &str,
         turn_id: &str,
     ) -> anyhow::Result<()> {
-        self.state
-            .lock()
-            .expect("runtime state")
-            .interrupted_turns
-            .insert(turn_id.to_owned());
+        self.state.lock().expect("runtime state").interrupted_turns.insert(turn_id.to_owned());
         Ok(())
     }
 
@@ -708,23 +706,22 @@ fn create_session_via_cli_with_options(
     workdir: &Path,
 ) -> Value {
     let mut command = cargo_bin();
-    command
-        .args([
-            "nucleus",
-            "session",
-            "create",
-            profile,
-            "--home-dir",
-            home_dir.to_str().expect("home dir"),
-            "--codex-home",
-            codex_home.to_str().expect("codex home"),
-            "--workdir",
-            workdir.to_str().expect("workdir"),
-            "--endpoint",
-            ws_url,
-            "--format",
-            "json",
-        ]);
+    command.args([
+        "nucleus",
+        "session",
+        "create",
+        profile,
+        "--home-dir",
+        home_dir.to_str().expect("home dir"),
+        "--codex-home",
+        codex_home.to_str().expect("codex home"),
+        "--workdir",
+        workdir.to_str().expect("workdir"),
+        "--endpoint",
+        ws_url,
+        "--format",
+        "json",
+    ]);
     if let Some(worker_id) = worker_id {
         command.args(["--worker-id", worker_id]);
     }
@@ -737,16 +734,7 @@ fn create_session_via_cli_with_options(
 
 fn inspect_session_via_cli(ws_url: &str, session_id: &str) -> Value {
     let output = cargo_bin()
-        .args([
-            "nucleus",
-            "session",
-            "show",
-            session_id,
-            "--endpoint",
-            ws_url,
-            "--format",
-            "json",
-        ])
+        .args(["nucleus", "session", "show", session_id, "--endpoint", ws_url, "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -855,7 +843,8 @@ fn create_task_over_websocket(
     socket.send(WsMessage::Text(request.to_string().into())).expect("send websocket task create");
     match socket.read().expect("read websocket task create") {
         WsMessage::Text(text) => {
-            let payload = serde_json::from_str::<Value>(&text).expect("parse websocket task create");
+            let payload =
+                serde_json::from_str::<Value>(&text).expect("parse websocket task create");
             assert_eq!(payload["ok"], true);
             payload["result"].clone()
         }
@@ -869,7 +858,9 @@ fn create_session_via_cli(
     codex_home: &Path,
     workdir: &Path,
 ) -> Value {
-    create_session_via_cli_with_options(ws_url, "america", None, None, home_dir, codex_home, workdir)
+    create_session_via_cli_with_options(
+        ws_url, "america", None, None, home_dir, codex_home, workdir,
+    )
 }
 
 fn write_fort_session_state(codex_home: &Path, profile: &str) {
@@ -3081,11 +3072,9 @@ fn nucleus_fort_auth_required_blocks_task_on_live_service() {
     assert!(task["latest_run_id"].is_null());
 
     let events = load_event_log_values(&state_root);
-    assert!(
-        events.iter().any(|event| {
-            event["type"] == "fort.auth_required" && event["data"]["task_id"] == task_id
-        })
-    );
+    assert!(events.iter().any(|event| {
+        event["type"] == "fort.auth_required" && event["data"]["task_id"] == task_id
+    }));
 }
 
 #[test]
@@ -3120,11 +3109,9 @@ fn nucleus_fort_unavailable_blocks_task_on_live_service() {
     assert!(task["latest_run_id"].is_null());
 
     let events = load_event_log_values(&state_root);
-    assert!(
-        events.iter().any(|event| {
-            event["type"] == "fort.unavailable" && event["data"]["task_id"] == task_id
-        })
-    );
+    assert!(events.iter().any(|event| {
+        event["type"] == "fort.unavailable" && event["data"]["task_id"] == task_id
+    }));
 }
 
 #[test]
@@ -3139,13 +3126,15 @@ fn nucleus_session_backlog_stays_serial_and_reuses_the_same_session_on_live_serv
     );
     let ws_url = format!(
         "{}/ws",
-        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
     );
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
-    let expected_session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let expected_session_id =
+        session["session"]["session_id"].as_str().expect("session id").to_owned();
     let first_created = create_task_over_websocket(
         &ws_url,
         "task-first",
@@ -3166,9 +3155,10 @@ fn nucleus_session_backlog_stays_serial_and_reuses_the_same_session_on_live_serv
     let second_task_id = second_created["task_id"].as_str().expect("second task id").to_owned();
 
     let _running = wait_for_cli_task_status(&ws_url, &first_task_id, "running");
-    let second_queued = wait_for_cli_task_predicate(&ws_url, &second_task_id, Duration::from_secs(5), |task| {
-        task["status"] == "queued"
-    });
+    let second_queued =
+        wait_for_cli_task_predicate(&ws_url, &second_task_id, Duration::from_secs(5), |task| {
+            task["status"] == "queued"
+        });
     assert_eq!(second_queued["status"], "queued");
 
     let first_done = wait_for_cli_task_status(&ws_url, &first_task_id, "done");
@@ -3213,7 +3203,8 @@ fn nucleus_websocket_reconnect_observes_active_run_completion_on_live_service() 
     );
     let ws_url = format!(
         "{}/ws",
-        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
     );
 
     let home_dir = temp.path().join("home");
@@ -3221,12 +3212,8 @@ fn nucleus_websocket_reconnect_observes_active_run_completion_on_live_service() 
     create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
 
     let mut first_socket = subscribe_to_events(&ws_url);
-    let created = create_task_via_cli(
-        &ws_url,
-        "Reconnect run task",
-        "Reply with alphabet chunks",
-        "america",
-    );
+    let created =
+        create_task_via_cli(&ws_url, "Reconnect run task", "Reply with alphabet chunks", "america");
     let task_id = created["task_id"].as_str().expect("task id").to_owned();
     let mut saw_active_run_event = false;
     for _ in 0..8 {
@@ -3343,10 +3330,8 @@ fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
     let codex_home = home_dir.join(".si/codex/profiles/america");
     let first = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
     let worker_id = first["worker"]["worker_id"].as_str().expect("worker id").to_owned();
-    let thread_id = first["session"]["app_server_thread_id"]
-        .as_str()
-        .expect("thread id")
-        .to_owned();
+    let thread_id =
+        first["session"]["app_server_thread_id"].as_str().expect("thread id").to_owned();
 
     let resumed = create_session_via_cli_with_options(
         &ws_url,
@@ -3357,7 +3342,8 @@ fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
         &codex_home,
         temp.path(),
     );
-    let resumed_session_id = resumed["session"]["session_id"].as_str().expect("session id").to_owned();
+    let resumed_session_id =
+        resumed["session"]["session_id"].as_str().expect("session id").to_owned();
     assert_eq!(resumed["worker"]["worker_id"], worker_id);
     assert_eq!(resumed["session"]["worker_id"], worker_id);
     assert_eq!(resumed["session"]["app_server_thread_id"], thread_id);
@@ -3383,6 +3369,96 @@ fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_app_server_init_failure_blocks_task_and_breaks_session_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    runtime.set_fail_ensure_session(true);
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-session-init-fail",
+        "Session init failure task",
+        "Reply with nucleus-smoke",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    let session = inspect_session_via_cli(&ws_url, &session_id);
+    assert_eq!(task["blocked_reason"], "session_broken");
+    assert!(task["latest_run_id"].is_null());
+    assert_eq!(session["lifecycle_state"], "broken");
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "task.blocked"
+            && event["data"]["task_id"] == task_id
+            && event["data"]["payload"]["blocked_reason"] == "session_broken"
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_startup_isolates_malformed_task_state_and_keeps_live_gateway_usable() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let broken_task_dir = state_root.join("state").join("tasks").join("broken-task");
+    fs::create_dir_all(&broken_task_dir).expect("create broken task dir");
+    fs::write(broken_task_dir.join("task.json"), b"{\"task_id\":").expect("write broken task file");
+
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let status_output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).expect("parse status output");
+    assert_eq!(status["task_count"], 0);
+    assert!(status["next_event_seq"].as_u64().expect("next event seq") >= 2);
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "system.warning"
+            && event["data"]["payload"]["message"]
+                == "isolated malformed persisted object during startup recovery"
+            && event["data"]["payload"]["details"]["kind"] == "task"
+            && event["data"]["payload"]["details"]["path"]
+                .as_str()
+                .expect("warning path")
+                .ends_with("task.json")
+    }));
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let created =
+        create_task_via_cli(&ws_url, "Recovery task", "Reply with nucleus-smoke", "america");
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(task["checkpoint_summary"], "nucleus-smoke");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
@@ -3393,7 +3469,8 @@ fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
     );
     let ws_url = format!(
         "{}/ws",
-        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime)).replacen("http", "ws", 1)
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
     );
 
     let home_dir = temp.path().join("home");
@@ -3436,6 +3513,7 @@ fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() 
         fail_execute: false,
         block_when_worker_missing: true,
         fail_start_worker: false,
+        fail_ensure_session: false,
     });
     let ws_url = format!(
         "{}/ws",
