@@ -3281,6 +3281,45 @@ fn nucleus_rest_mutations_return_documented_status_codes_and_shapes() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_rest_create_rejects_non_slug_profile_name() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service_with_runtime(
+        &temp.path().join("nucleus"),
+        Arc::new(TestRuntime::default()),
+    );
+    let client = BlockingClient::new();
+
+    let response = client
+        .post(format!("{base_url}/tasks"))
+        .json(&json!({
+            "title": "Bad profile task",
+            "instructions": "Reject uppercase profile names",
+            "profile": "America"
+        }))
+        .send()
+        .expect("rest create invalid profile");
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let body: Value = response.json().expect("parse invalid profile body");
+    assert_eq!(body["error"]["code"], "invalid_params");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .map(|value| value.contains("profile name must match"))
+            .unwrap_or(false)
+    );
+    assert!(body["error"]["details"].is_null());
+
+    let tasks: Value = client
+        .get(format!("{base_url}/tasks"))
+        .send()
+        .expect("list tasks after invalid create")
+        .json()
+        .expect("parse task list");
+    assert_eq!(tasks.as_array().expect("task list array").len(), 0);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_rest_status_matches_websocket_and_cli_state() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
