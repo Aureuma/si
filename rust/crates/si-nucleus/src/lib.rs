@@ -7098,6 +7098,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_repair_auth_clears_exhausted_auto_restart_boundary() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-repair-auth-after-exhausted-restart"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        runtime.stop_worker(&worker_id).expect("stop worker");
+        runtime.fail_next_starts(MAX_WORKER_RESTART_ATTEMPTS as usize);
+        for _ in 0..(MAX_WORKER_RESTART_ATTEMPTS + 2) {
+            service.reconcile_and_dispatch_once().expect("reconcile failed worker");
+            thread::sleep(Duration::from_millis(125));
+        }
+
+        let failed_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-create-exhausted-before-repair-auth"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(!failed_session.ok);
+        assert!(
+            failed_session
+                .error
+                .as_ref()
+                .expect("session create error")
+                .message
+                .contains("worker restart attempts exhausted")
+        );
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-repair-auth-after-exhausted-restart"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(repaired.ok);
+
+        let resumed_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-create-after-repair-auth"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(resumed_session.ok);
+    }
+
+    #[tokio::test]
     async fn worker_repair_auth_refreshes_persisted_profile_state() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
