@@ -1969,6 +1969,24 @@ fn load_canonical_events(path: &Path) -> Result<Vec<CanonicalEvent>> {
     Ok(events)
 }
 
+fn load_canonical_events_for_live_iteration(path: &Path) -> Result<Vec<CanonicalEvent>> {
+    let mut last_error = None;
+    for _ in 0..3 {
+        match load_canonical_events(path) {
+            Ok(events) => return Ok(events),
+            Err(error)
+                if error.to_string().contains("parse ")
+                    && error.to_string().contains("EOF while parsing") =>
+            {
+                last_error = Some(error);
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error.expect("live iteration parse retry should record an error"))
+}
+
 fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
     match source {
         TaskSource::Cli => CanonicalEventSource::Cli,
@@ -2475,7 +2493,7 @@ impl NucleusService {
     }
 
     fn process_hook_producers(&self) -> Result<()> {
-        let events = load_canonical_events(&self.store.paths().events_path)?;
+        let events = load_canonical_events_for_live_iteration(&self.store.paths().events_path)?;
         for mut rule in
             load_json_records_from_dir::<HookRuleRecord>(&self.store.paths().hook_state_dir)?
         {
@@ -7035,6 +7053,122 @@ mod tests {
 
         service.reconcile_and_dispatch_once().expect("dispatch requeued task");
         wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
+    }
+
+    #[tokio::test]
+    async fn worker_restart_does_not_requeue_worker_unavailable_task_with_broken_session() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::with_run_delay(Duration::from_millis(400));
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-broken-session"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-worker-restart-broken-session"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not requeue broken-session worker task",
+                    "instructions": "Keep running until the worker disappears",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-worker-restart-broken-session"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id.as_str(),
+                    "prompt": "Generate a long response",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+
+        let runtime_worker_id = worker_id.clone();
+        runtime.stop_worker(&runtime_worker_id).expect("stop worker");
+        service.reconcile_and_dispatch_once().expect("reconcile worker loss");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        let broken_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(broken_session.lifecycle_state, SessionLifecycleState::Broken);
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-after-broken-session"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(restarted.ok);
+
+        let still_blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert_eq!(
+            still_blocked.latest_run_id.as_ref().map(|id| id.as_str()),
+            blocked.latest_run_id.as_ref().map(|id| id.as_str())
+        );
     }
 
     #[tokio::test]
