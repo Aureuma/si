@@ -3571,6 +3571,132 @@ fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() 
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_requeues_blocked_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    runtime.set_fail_start_worker(true);
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop test worker");
+
+    let created = create_task_via_cli(
+        &ws_url,
+        "Restart live recovery task",
+        "Reply with nucleus-smoke after worker restart",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "worker_unavailable");
+
+    runtime.set_fail_start_worker(false);
+    let restart_output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let restarted: Value = serde_json::from_slice(&restart_output).expect("parse worker restart");
+    assert_eq!(restarted["worker"]["worker_id"], worker_id);
+    assert_eq!(restarted["worker"]["status"], "ready");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(task["checkpoint_summary"], "nucleus-smoke");
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "task.updated"
+            && event["data"]["task_id"] == task_id
+            && event["data"]["payload"]["status"] == "queued"
+            && event["data"]["payload"]["message"] == "task re-queued after worker restart"
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_requeues_blocked_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-auth-requeue-live",
+        "Repair auth live recovery task",
+        "Use si fort status before continuing",
+        "america",
+        None,
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "auth_required");
+
+    write_fort_session_state(&codex_home, "america");
+    let repair_output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let repaired: Value = serde_json::from_slice(&repair_output).expect("parse worker repair");
+    assert_eq!(repaired["worker"]["worker_id"], worker_id);
+    assert_eq!(repaired["worker"]["status"], "ready");
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(task["checkpoint_summary"], "nucleus-smoke");
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "task.updated"
+            && event["data"]["task_id"] == task_id
+            && event["data"]["payload"]["status"] == "queued"
+            && event["data"]["payload"]["message"] == "task re-queued after worker auth repair"
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
