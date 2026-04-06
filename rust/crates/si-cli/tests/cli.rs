@@ -7214,6 +7214,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["description"],
+        json!("Worker not found.")
+    );
+    assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["responses"]["200"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/SessionRecord")
@@ -7248,6 +7252,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["description"],
+        json!("Session not found.")
+    );
+    assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["$ref"],
         json!("#/components/schemas/RunRecord")
@@ -7280,6 +7288,10 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["description"],
+        json!("Run not found.")
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
