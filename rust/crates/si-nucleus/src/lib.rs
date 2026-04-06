@@ -5121,6 +5121,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn service_open_writes_gateway_metadata_with_version_and_bind_address() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let _service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: state_dir.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let raw = fs::read(state_dir.join("gateway").join("metadata.json")).expect("read metadata");
+        let metadata: serde_json::Value = serde_json::from_slice(&raw).expect("parse metadata");
+        assert_eq!(metadata["version"], json!(env!("CARGO_PKG_VERSION")));
+        assert_eq!(metadata["bind_addr"], json!("127.0.0.1:9898"));
+        assert_eq!(metadata["ws_url"], json!("ws://127.0.0.1:9898/ws"));
+    }
+
+    #[tokio::test]
     async fn rest_openapi_document_describes_bounded_external_endpoints() {
         let temp = tempdir().expect("tempdir");
         let app = NucleusService::open(NucleusConfig {
