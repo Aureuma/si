@@ -3866,6 +3866,70 @@ fn nucleus_worker_repair_auth_does_not_requeue_session_broken_task_on_live_servi
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_does_not_requeue_other_profile_task_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let america_codex_home = home_dir.join(".si/codex/profiles/america");
+    let britain_codex_home = home_dir.join(".si/codex/profiles/britain");
+
+    let america_session =
+        create_session_via_cli(&ws_url, &home_dir, &america_codex_home, temp.path());
+    let america_worker_id =
+        america_session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    create_session_via_cli_with_options(
+        &ws_url,
+        "britain",
+        None,
+        None,
+        &home_dir,
+        &britain_codex_home,
+        temp.path(),
+    );
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-other-profile-auth-live",
+        "Do not requeue other profile auth task",
+        "Use si fort status before continuing",
+        "britain",
+        None,
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "auth_required");
+
+    write_fort_session_state(&america_codex_home, "america");
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &america_worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let still_blocked =
+        wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+            task["status"] == "blocked"
+        });
+    assert_eq!(still_blocked["blocked_reason"], "auth_required");
+    assert!(still_blocked["latest_run_id"].is_null());
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
