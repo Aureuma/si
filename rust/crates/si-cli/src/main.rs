@@ -380,6 +380,10 @@ enum NucleusCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    Profile {
+        #[command(subcommand)]
+        command: NucleusProfileCommand,
+    },
     Service {
         #[command(subcommand)]
         command: NucleusServiceCommand,
@@ -399,6 +403,20 @@ enum NucleusCommand {
     Run {
         #[command(subcommand)]
         command: NucleusRunCommand,
+    },
+    Events {
+        #[command(subcommand)]
+        command: NucleusEventsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusProfileCommand {
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
     },
 }
 
@@ -472,6 +490,13 @@ enum NucleusTaskCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    Cancel {
+        task_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -500,6 +525,20 @@ enum NucleusWorkerCommand {
         format: OutputFormat,
     },
     Inspect {
+        worker_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Restart {
+        worker_id: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    RepairAuth {
         worker_id: String,
         #[arg(long)]
         endpoint: Option<String>,
@@ -567,6 +606,18 @@ enum NucleusRunCommand {
         run_id: String,
         #[arg(long)]
         endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusEventsCommand {
+    Subscribe {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long)]
+        count: Option<usize>,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
@@ -16031,6 +16082,11 @@ fn run_nucleus_status(endpoint: Option<String>, format: OutputFormat) -> Result<
     print_nucleus_output(format, &payload)
 }
 
+fn run_nucleus_profile_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload = run_nucleus_gateway_request(endpoint.as_deref(), "profile.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
 fn default_nucleus_state_dir() -> PathBuf {
     default_home_dir().join(".si").join("nucleus")
 }
@@ -16482,6 +16538,19 @@ fn run_nucleus_task_inspect(
     print_nucleus_output(format, &payload)
 }
 
+fn run_nucleus_task_cancel(
+    endpoint: Option<String>,
+    task_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "task.cancel",
+        json!({ "task_id": task_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
 fn run_nucleus_worker_probe(
     endpoint: Option<String>,
     profile: String,
@@ -16520,6 +16589,32 @@ fn run_nucleus_worker_inspect(
     let payload = run_nucleus_gateway_request(
         endpoint.as_deref(),
         "worker.inspect",
+        json!({ "worker_id": worker_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_worker_restart(
+    endpoint: Option<String>,
+    worker_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "worker.restart",
+        json!({ "worker_id": worker_id }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_worker_repair_auth(
+    endpoint: Option<String>,
+    worker_id: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "worker.repair_auth",
         json!({ "worker_id": worker_id }),
     )?;
     print_nucleus_output(format, &payload)
@@ -16613,6 +16708,73 @@ fn run_nucleus_run_cancel(
         json!({ "run_id": run_id }),
     )?;
     print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_events_subscribe(
+    endpoint: Option<String>,
+    count: Option<usize>,
+    format: OutputFormat,
+) -> Result<()> {
+    let endpoint = resolve_nucleus_ws_endpoint(endpoint.as_deref())?;
+    let request = NucleusGatewayRequest {
+        id: json!(Utc::now().timestamp_millis()),
+        method: "events.subscribe".to_owned(),
+        params: json!({}),
+    };
+    let mut websocket_request =
+        endpoint.as_str().into_client_request().context("build nucleus websocket request")?;
+    if let Some(token) = resolve_nucleus_gateway_auth_token() {
+        let header = HeaderValue::from_str(format!("Bearer {token}").as_str())
+            .context("build auth header")?;
+        websocket_request.headers_mut().insert(AUTHORIZATION, header);
+    }
+    let (mut socket, _) = ws_connect(websocket_request)
+        .with_context(|| format!("connect nucleus websocket {}", endpoint))?;
+    socket
+        .send(WsMessage::Text(serde_json::to_string(&request)?.into()))
+        .context("send nucleus websocket request")?;
+
+    let mut subscribed = false;
+    let mut seen = 0usize;
+    loop {
+        match socket.read().context("read nucleus websocket response")? {
+            WsMessage::Text(text) => {
+                if !subscribed {
+                    let response: NucleusGatewayResponse =
+                        serde_json::from_str(&text).context("parse nucleus websocket response")?;
+                    if !response.ok {
+                        let error = response
+                            .error
+                            .map(|item| format!("{}: {}", item.code, item.message))
+                            .unwrap_or_else(|| "unknown nucleus error".to_owned());
+                        anyhow::bail!(error);
+                    }
+                    subscribed = true;
+                    if count == Some(0) {
+                        return Ok(());
+                    }
+                    continue;
+                }
+                let payload: Value =
+                    serde_json::from_str(&text).context("parse nucleus websocket event")?;
+                print_nucleus_output(format, &payload)?;
+                seen += 1;
+                if count.is_some_and(|limit| seen >= limit) {
+                    return Ok(());
+                }
+            }
+            WsMessage::Ping(payload) => {
+                socket.send(WsMessage::Pong(payload)).context("send nucleus websocket pong")?;
+            }
+            WsMessage::Pong(_) | WsMessage::Binary(_) | WsMessage::Frame(_) => {}
+            WsMessage::Close(_) => {
+                if subscribed {
+                    return Ok(());
+                }
+                anyhow::bail!("nucleus websocket closed before subscribe acknowledgement");
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -33378,6 +33540,11 @@ fn main() -> Result<()> {
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
+            NucleusCommand::Profile { command } => match command {
+                NucleusProfileCommand::List { endpoint, format } => {
+                    run_nucleus_profile_list(endpoint, format)?
+                }
+            },
             NucleusCommand::Service { command } => match command {
                 NucleusServiceCommand::Install { state_dir, bind_addr, service_dir, format } => {
                     run_nucleus_service_install(state_dir, bind_addr, service_dir, format)?
@@ -33409,6 +33576,9 @@ fn main() -> Result<()> {
                 NucleusTaskCommand::Inspect { task_id, endpoint, format } => {
                     run_nucleus_task_inspect(endpoint, task_id, format)?
                 }
+                NucleusTaskCommand::Cancel { task_id, endpoint, format } => {
+                    run_nucleus_task_cancel(endpoint, task_id, format)?
+                }
             },
             NucleusCommand::Worker { command } => match command {
                 NucleusWorkerCommand::Probe {
@@ -33428,6 +33598,12 @@ fn main() -> Result<()> {
                 }
                 NucleusWorkerCommand::Inspect { worker_id, endpoint, format } => {
                     run_nucleus_worker_inspect(endpoint, worker_id, format)?
+                }
+                NucleusWorkerCommand::Restart { worker_id, endpoint, format } => {
+                    run_nucleus_worker_restart(endpoint, worker_id, format)?
+                }
+                NucleusWorkerCommand::RepairAuth { worker_id, endpoint, format } => {
+                    run_nucleus_worker_repair_auth(endpoint, worker_id, format)?
                 }
             },
             NucleusCommand::Session { command } => match command {
@@ -33461,6 +33637,11 @@ fn main() -> Result<()> {
                 }
                 NucleusRunCommand::Cancel { run_id, endpoint, format } => {
                     run_nucleus_run_cancel(endpoint, run_id, format)?
+                }
+            },
+            NucleusCommand::Events { command } => match command {
+                NucleusEventsCommand::Subscribe { endpoint, count, format } => {
+                    run_nucleus_events_subscribe(endpoint, count, format)?
                 }
             },
         },

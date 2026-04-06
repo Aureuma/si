@@ -2536,6 +2536,77 @@ impl NucleusService {
         Ok(None)
     }
 
+    fn worker_launch_spec_from_record(&self, worker: &WorkerRecord) -> WorkerLaunchSpec {
+        WorkerLaunchSpec {
+            worker_id: worker.worker_id.clone(),
+            profile: worker.profile.clone(),
+            home_dir: worker.home_dir.as_ref().map(PathBuf::from).unwrap_or_else(default_home_dir),
+            codex_home: PathBuf::from(worker.codex_home.clone()),
+            workdir: worker.workdir.as_ref().map(PathBuf::from).unwrap_or_else(default_workdir),
+            extra_env: worker.extra_env.clone(),
+        }
+    }
+
+    fn worker_has_active_runs(&self, worker_id: &WorkerId) -> Result<bool> {
+        for run in self.store.list_runs()? {
+            if !is_active_run_status(run.status) {
+                continue;
+            }
+            let Some(session) = self.store.inspect_session(&run.session_id)? else {
+                continue;
+            };
+            if session.worker_id == *worker_id {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    fn restart_worker(&self, worker_id: &WorkerId) -> Result<WorkerInspectView> {
+        let runtime = self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
+        let worker =
+            self.store.inspect_worker(worker_id)?.ok_or_else(|| anyhow!("worker not found"))?;
+        if self.worker_has_active_runs(worker_id)? {
+            anyhow::bail!("worker has active runs; cancel or reconcile them before restart");
+        }
+        let spec = self.worker_launch_spec_from_record(&worker);
+        if runtime.inspect_worker(worker_id)?.is_some() {
+            runtime.stop_worker(worker_id)?;
+        }
+        let started = runtime.start_worker(&spec)?;
+        let (worker, runtime_view, events) = self.store.record_worker_start(&spec, &started, runtime.as_ref())?;
+        for event in events {
+            let _ = self.events.send(event);
+        }
+        Ok(WorkerInspectView { worker, runtime: Some(runtime_view) })
+    }
+
+    fn repair_worker_auth(&self, worker_id: &WorkerId) -> Result<WorkerInspectView> {
+        let runtime = self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
+        let worker =
+            self.store.inspect_worker(worker_id)?.ok_or_else(|| anyhow!("worker not found"))?;
+        let spec = self.worker_launch_spec_from_record(&worker);
+        let _ = self.ensure_worker_started(
+            runtime.as_ref(),
+            &worker.profile,
+            Some(worker.worker_id.as_str()),
+            Some(spec.home_dir.clone()),
+            Some(spec.codex_home.clone()),
+            Some(spec.workdir.clone()),
+            Some(spec.extra_env.clone()),
+        )?;
+        let probe = runtime.probe_worker(&spec)?;
+        let events = self.store.record_worker_probe(&spec, &probe, runtime.as_ref())?;
+        for event in events {
+            let _ = self.events.send(event);
+        }
+        let worker = self
+            .store
+            .inspect_worker(worker_id)?
+            .ok_or_else(|| anyhow!("worker missing after auth repair"))?;
+        Ok(WorkerInspectView { runtime: self.store.inspect_worker_runtime(worker_id)?, worker })
+    }
+
     fn spawn_run_execution(&self, _runtime: &dyn NucleusRuntime, run_spec: RunTurnSpec) {
         let store = Arc::clone(&self.store);
         let runtime = Arc::clone(self.runtime.as_ref().expect("runtime must exist for execution"));
@@ -2723,6 +2794,18 @@ impl NucleusService {
                     })?),
                     None => Err(anyhow!("worker not found")),
                 }
+            }
+            "worker.restart" => {
+                let params: WorkerRestartParams =
+                    serde_json::from_value(params).context("parse worker.restart params")?;
+                let worker_id = WorkerId::new(params.worker_id)?;
+                Ok(serde_json::to_value(self.restart_worker(&worker_id)?)?)
+            }
+            "worker.repair_auth" => {
+                let params: WorkerRepairAuthParams =
+                    serde_json::from_value(params).context("parse worker.repair_auth params")?;
+                let worker_id = WorkerId::new(params.worker_id)?;
+                Ok(serde_json::to_value(self.repair_worker_auth(&worker_id)?)?)
             }
             "session.create" => {
                 let runtime =
@@ -3714,6 +3797,16 @@ struct WorkerInspectParams {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+struct WorkerRestartParams {
+    worker_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct WorkerRepairAuthParams {
+    worker_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 struct SessionCreateParams {
     profile: String,
     worker_id: Option<String>,
@@ -4666,6 +4759,98 @@ mod tests {
         assert_eq!(service.status().expect("status").worker_count, 1);
         let profile = ProfileName::new("america").expect("profile");
         assert_eq!(payload["worker"]["profile"], json!(profile.as_str()));
+    }
+
+    #[tokio::test]
+    async fn worker_restart_restarts_idle_worker_through_gateway() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-restart"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["worker_id"].as_str())
+            .expect("worker id");
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": worker_id }),
+            })
+            .await;
+        assert!(restarted.ok);
+        let payload = restarted.result.expect("restart payload");
+        assert_eq!(payload["worker"]["worker_id"], json!(worker_id));
+        assert_eq!(payload["worker"]["status"], json!("ready"));
+        assert_eq!(payload["runtime"]["worker_id"], json!(worker_id));
+    }
+
+    #[tokio::test]
+    async fn worker_repair_auth_reprobes_worker_and_starts_runtime_if_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("probe-repair-auth"),
+                method: "worker.probe".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(response.ok);
+        let worker_id = response
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["worker_id"].as_str())
+            .expect("worker id");
+
+        let repaired = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-repair-auth"),
+                method: "worker.repair_auth".to_owned(),
+                params: json!({ "worker_id": worker_id }),
+            })
+            .await;
+        assert!(repaired.ok);
+        let payload = repaired.result.expect("repair payload");
+        assert_eq!(payload["worker"]["worker_id"], json!(worker_id));
+        assert_eq!(payload["worker"]["status"], json!("ready"));
+        assert_eq!(payload["runtime"]["worker_id"], json!(worker_id));
     }
 
     #[tokio::test]
