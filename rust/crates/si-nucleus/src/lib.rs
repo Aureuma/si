@@ -3497,6 +3497,28 @@ impl NucleusService {
                 )? {
                     anyhow::bail!(message);
                 }
+                let thread_id = match session.app_server_thread_id.clone() {
+                    Some(thread_id) => thread_id,
+                    None => {
+                        let message = "session missing app-server thread id";
+                        if let Some(event) =
+                            self.store.mark_session_broken(&session.session_id, message)?
+                        {
+                            let _ = self.events.send(event);
+                        }
+                        if let Some(event) = self.store.mark_task_blocked(
+                            &task.task_id,
+                            Some(worker.worker_id.clone()),
+                            Some(session.session_id.clone()),
+                            Some(profile.clone()),
+                            BlockedReason::SessionBroken,
+                            message,
+                        )? {
+                            let _ = self.events.send(event);
+                        }
+                        anyhow::bail!(message);
+                    }
+                };
                 let run = RunRecord::new(RunId::generate(), task_id.clone(), session_id.clone());
                 let run = self.store.claim_run_for_task(run)?;
                 let run_spec = RunTurnSpec {
@@ -3505,10 +3527,7 @@ impl NucleusService {
                     worker_id: worker.worker_id.clone(),
                     session_id: session_id.clone(),
                     profile,
-                    thread_id: session
-                        .app_server_thread_id
-                        .clone()
-                        .ok_or_else(|| anyhow!("session missing app-server thread id"))?,
+                    thread_id,
                     input: vec![RunInputItem::Text { text: params.prompt }],
                 };
                 self.spawn_run_execution(runtime.as_ref(), run_spec);
@@ -7717,6 +7736,107 @@ mod tests {
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_runs().expect("runs").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_marks_session_broken_when_thread_id_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-missing-run-thread"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-missing-run-thread"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Direct run missing thread",
+                    "instructions": "Attempt direct run with no app server thread id",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id").to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-missing-thread"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id.as_str(),
+                    "prompt": "attempt direct run without thread id",
+                }),
+            })
+            .await;
+        assert!(!run.ok);
+        assert!(
+            run.error
+                .as_ref()
+                .map(|error| error.message.contains("session missing app-server thread id"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_runs().expect("runs").len(), 0);
+
+        let task = service
+            .store
+            .inspect_task(&task_id)
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
+
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
     }
 
     #[tokio::test]
