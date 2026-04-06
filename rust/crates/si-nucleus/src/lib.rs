@@ -292,6 +292,33 @@ enum CronScheduleKind {
     Cron,
 }
 
+fn current_persisted_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+fn default_persisted_version() -> String {
+    current_persisted_version().to_owned()
+}
+
+fn deserialize_persisted_version<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum PersistedVersion {
+        String(String),
+        Unsigned(u64),
+        Signed(i64),
+    }
+
+    Ok(match PersistedVersion::deserialize(deserializer)? {
+        PersistedVersion::String(version) => version,
+        PersistedVersion::Unsigned(version) => version.to_string(),
+        PersistedVersion::Signed(version) => version.to_string(),
+    })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 struct CronRuleRecord {
     name: String,
@@ -301,7 +328,11 @@ struct CronRuleRecord {
     instructions: String,
     last_emitted_at: Option<DateTime<Utc>>,
     next_due_at: Option<DateTime<Utc>>,
-    version: u32,
+    #[serde(
+        default = "default_persisted_version",
+        deserialize_with = "deserialize_persisted_version"
+    )]
+    version: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -312,7 +343,11 @@ struct HookRuleRecord {
     instructions: String,
     #[serde(default)]
     last_processed_event_seq: u64,
-    version: u32,
+    #[serde(
+        default = "default_persisted_version",
+        deserialize_with = "deserialize_persisted_version"
+    )]
+    version: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2352,12 +2387,16 @@ impl NucleusService {
         if !rule.enabled {
             return Ok(());
         }
+        let mut changed = false;
+        if rule.version != current_persisted_version() {
+            rule.version = current_persisted_version().to_owned();
+            changed = true;
+        }
         if rule.next_due_at.is_none() {
             rule.next_due_at = next_cron_due_after(rule, now - ChronoDuration::seconds(1))?;
+            changed = true;
             self.write_cron_rule(rule)?;
         }
-
-        let mut changed = false;
         while let Some(due_at) = rule.next_due_at {
             if due_at > now {
                 break;
@@ -2431,6 +2470,10 @@ impl NucleusService {
             return Ok(());
         }
         let mut changed = false;
+        if rule.version != current_persisted_version() {
+            rule.version = current_persisted_version().to_owned();
+            changed = true;
+        }
         for event in events {
             if event.seq <= rule.last_processed_event_seq {
                 continue;
@@ -4611,8 +4654,8 @@ mod tests {
     use super::{
         CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        CreateTaskInput, append_jsonl_with_rotation, cron_due_key, hook_event_key,
-        load_canonical_events, load_last_event_seq, write_json_atomic,
+        CreateTaskInput, append_jsonl_with_rotation, cron_due_key, current_persisted_version,
+        hook_event_key, load_canonical_events, load_last_event_seq, write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -7134,7 +7177,7 @@ mod tests {
                 instructions: "Run nightly maintenance".to_owned(),
                 last_emitted_at: None,
                 next_due_at: Some(now - ChronoDuration::seconds(30)),
-                version: 1,
+                version: current_persisted_version().to_owned(),
             },
         );
 
@@ -7184,7 +7227,7 @@ mod tests {
                 instructions: "Run nightly maintenance".to_owned(),
                 last_emitted_at: None,
                 next_due_at: Some(due_at),
-                version: 1,
+                version: current_persisted_version().to_owned(),
             },
         );
         service
@@ -7218,6 +7261,41 @@ mod tests {
         assert!(stored.next_due_at.is_some_and(|value| value > now));
     }
 
+    #[test]
+    fn cron_producer_rewrites_legacy_numeric_version_to_current_si_version() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+        let rule_path = state_root.join("state").join("producers").join("cron").join("nightly.json");
+        fs::create_dir_all(rule_path.parent().expect("cron dir")).expect("create cron dir");
+        fs::write(
+            &rule_path,
+            serde_json::to_vec(&json!({
+                "name": "nightly",
+                "enabled": true,
+                "schedule_kind": "every",
+                "schedule": "60s",
+                "instructions": "Run nightly maintenance",
+                "last_emitted_at": null,
+                "next_due_at": now.to_rfc3339(),
+                "version": 1
+            }))
+            .expect("serialize legacy rule"),
+        )
+        .expect("write legacy rule");
+
+        service.process_cron_producers_at(now).expect("process cron");
+
+        let stored = read_cron_rule(&state_root, "nightly");
+        assert_eq!(stored.version, current_persisted_version());
+    }
+
     #[tokio::test]
     async fn hook_producer_emits_task_once_for_matching_event_and_advances_cursor() {
         let temp = tempdir().expect("tempdir");
@@ -7236,7 +7314,7 @@ mod tests {
                 match_event_type: "task.created".to_owned(),
                 instructions: "Investigate newly created task".to_owned(),
                 last_processed_event_seq: 0,
-                version: 1,
+                version: current_persisted_version().to_owned(),
             },
         );
 
@@ -7292,7 +7370,7 @@ mod tests {
                 match_event_type: "task.created".to_owned(),
                 instructions: "Investigate newly created task".to_owned(),
                 last_processed_event_seq: 0,
-                version: 1,
+                version: current_persisted_version().to_owned(),
             },
         );
 
@@ -7354,6 +7432,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hook_producer_rewrites_legacy_numeric_version_to_current_si_version() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let rule_path = state_root.join("state").join("producers").join("hook").join("task-created.json");
+        fs::create_dir_all(rule_path.parent().expect("hook dir")).expect("create hook dir");
+        fs::write(
+            &rule_path,
+            serde_json::to_vec(&json!({
+                "name": "task-created",
+                "enabled": true,
+                "match_event_type": "task.created",
+                "instructions": "Investigate newly created task",
+                "last_processed_event_seq": 0,
+                "version": 1
+            }))
+            .expect("serialize legacy rule"),
+        )
+        .expect("write legacy rule");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!(1),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Primary task",
+                    "instructions": "Create hook input",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+
+        service.process_hook_producers().expect("process hooks");
+
+        let stored = read_hook_rule(&state_root, "task-created");
+        assert_eq!(stored.version, current_persisted_version());
+    }
+
+    #[tokio::test]
     async fn producer_created_task_can_route_when_one_profile_is_available() {
         let temp = tempdir().expect("tempdir");
         let state_root = temp.path().join("nucleus");
@@ -7392,7 +7514,7 @@ mod tests {
                 instructions: "Reply with nucleus-smoke".to_owned(),
                 last_emitted_at: None,
                 next_due_at: Some(now - ChronoDuration::seconds(5)),
-                version: 1,
+                version: current_persisted_version().to_owned(),
             },
         );
 
