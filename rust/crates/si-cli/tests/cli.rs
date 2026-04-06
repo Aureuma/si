@@ -179,6 +179,7 @@ struct TestRuntimeConfig {
     step_delay: Duration,
     output_deltas: Vec<String>,
     fail_execute: bool,
+    fail_execute_prompts: Vec<String>,
     block_when_worker_missing: bool,
     fail_start_worker: bool,
     fail_ensure_session: bool,
@@ -191,6 +192,7 @@ impl Default for TestRuntimeConfig {
             step_delay: Duration::from_millis(0),
             output_deltas: vec!["nucleus-smoke".to_owned()],
             fail_execute: false,
+            fail_execute_prompts: Vec::new(),
             block_when_worker_missing: false,
             fail_start_worker: false,
             fail_ensure_session: false,
@@ -239,6 +241,7 @@ impl TestRuntime {
             step_delay,
             output_deltas: output_deltas.iter().map(|value| (*value).to_owned()).collect(),
             fail_execute: false,
+            fail_execute_prompts: Vec::new(),
             block_when_worker_missing: false,
             fail_start_worker: false,
             fail_ensure_session: false,
@@ -397,17 +400,32 @@ impl NucleusRuntime for TestRuntime {
         spec: &RunTurnSpec,
         on_event: &mut dyn FnMut(CanonicalEventDraft) -> anyhow::Result<()>,
     ) -> anyhow::Result<RuntimeRunOutcome> {
-        let (run_delay, step_delay, output_deltas, fail_execute, block_when_worker_missing) = {
+        let (
+            run_delay,
+            step_delay,
+            output_deltas,
+            fail_execute,
+            fail_execute_prompts,
+            block_when_worker_missing,
+        ) = {
             let state = self.state.lock().expect("runtime state");
             (
                 state.config.run_delay,
                 state.config.step_delay,
                 state.config.output_deltas.clone(),
                 state.config.fail_execute,
+                state.config.fail_execute_prompts.clone(),
                 state.config.block_when_worker_missing,
             )
         };
-        if fail_execute {
+        let input_text = spec
+            .input
+            .iter()
+            .find_map(|item| match item {
+                si_nucleus_runtime::RunInputItem::Text { text } => Some(text.as_str()),
+            })
+            .unwrap_or_default();
+        if fail_execute || fail_execute_prompts.iter().any(|candidate| candidate == input_text) {
             anyhow::bail!("cli-test-runtime execute_turn failed before run.started");
         }
         let turn_id = format!("turn-{}", spec.run_id);
@@ -3432,6 +3450,7 @@ fn nucleus_session_create_does_not_reuse_session_with_conflicting_active_run_on_
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
+        fail_execute_prompts: Vec::new(),
         block_when_worker_missing: false,
         fail_start_worker: false,
         fail_ensure_session: false,
@@ -3710,6 +3729,99 @@ fn nucleus_run_submit_turn_marks_session_broken_when_thread_id_is_missing_on_liv
 
     let session = inspect_session_via_cli(&ws_url, &session_id);
     assert_eq!(session["lifecycle_state"], "broken");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_run_submit_turn_failure_before_run_started_marks_run_and_task_failed_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_config(TestRuntimeConfig {
+        run_delay: Duration::from_millis(900),
+        step_delay: Duration::from_millis(0),
+        output_deltas: vec!["nucleus-smoke".to_owned()],
+        fail_execute: false,
+        fail_execute_prompts: vec!["fail before run.started".to_owned()],
+        block_when_worker_missing: false,
+        fail_start_worker: false,
+        fail_ensure_session: false,
+    });
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+
+    let active = create_task_over_websocket(
+        &ws_url,
+        "task-live-run-fail-busy-session",
+        "Keep the session busy",
+        "Keep the session busy before a direct run failure",
+        "america",
+        Some(&session_id),
+    );
+    let active_task_id = active["task_id"].as_str().expect("active task id").to_owned();
+    let _running = wait_for_cli_task_status(&ws_url, &active_task_id, "running");
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-live-run-fail-before-start",
+        "Direct run pre-start failure",
+        "Attempt a direct run that fails before run.started",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let queued = wait_for_cli_task_predicate(&ws_url, &task_id, Duration::from_secs(2), |task| {
+        task["status"] == "queued" && task["latest_run_id"].is_null()
+    });
+    assert!(queued["latest_run_id"].is_null());
+
+    let submit_output = cargo_bin()
+        .args([
+            "nucleus",
+            "run",
+            "submit-turn",
+            &session_id,
+            "fail before run.started",
+            "--task-id",
+            &task_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let submitted: Value = serde_json::from_slice(&submit_output).expect("parse run submit");
+    let run_id = submitted["run_id"].as_str().expect("run id").to_owned();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "failed");
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_eq!(task["latest_run_id"], run_id);
+    assert_eq!(run["status"], "failed");
+    let completed = wait_for_cli_task_status(&ws_url, &active_task_id, "done");
+    assert_eq!(completed["checkpoint_summary"], "nucleus-smoke");
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "run.failed"
+            && event["data"]["run_id"] == run_id
+            && event["data"]["task_id"] == task_id
+    }));
+    assert!(!events.iter().any(|event| {
+        event["type"] == "run.started"
+            && event["data"]["run_id"] == run_id
+            && event["data"]["task_id"] == task_id
+    }));
 }
 
 #[test]
@@ -4020,6 +4132,7 @@ fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() 
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
+        fail_execute_prompts: Vec::new(),
         block_when_worker_missing: true,
         fail_start_worker: false,
         fail_ensure_session: false,
@@ -4208,6 +4321,7 @@ fn nucleus_worker_restart_rejects_active_run_on_live_service() {
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
+        fail_execute_prompts: Vec::new(),
         block_when_worker_missing: false,
         fail_start_worker: false,
         fail_ensure_session: false,
@@ -4362,6 +4476,7 @@ fn nucleus_worker_restart_does_not_requeue_broken_session_task_on_live_service()
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
+        fail_execute_prompts: Vec::new(),
         block_when_worker_missing: true,
         fail_start_worker: false,
         fail_ensure_session: false,
