@@ -428,10 +428,11 @@ impl NucleusStore {
             let worker = match read_json_path::<WorkerRecord>(&worker_path) {
                 Ok(worker) => worker,
                 Err(error) => {
-                    warnings.push(json!({
-                        "path": worker_path.display().to_string(),
-                        "error": error.to_string(),
-                    }));
+                    warnings.push(malformed_state_warning(
+                        "worker",
+                        &worker_path,
+                        &error.to_string(),
+                    ));
                     continue;
                 }
             };
@@ -440,10 +441,11 @@ impl NucleusStore {
                 match read_json_path::<WorkerRuntimeView>(&runtime_path) {
                     Ok(runtime) => Some(runtime),
                     Err(error) => {
-                        warnings.push(json!({
-                            "path": runtime_path.display().to_string(),
-                            "error": error.to_string(),
-                        }));
+                        warnings.push(malformed_state_warning(
+                            "worker_runtime",
+                            &runtime_path,
+                            &error.to_string(),
+                        ));
                         None
                     }
                 }
@@ -468,10 +470,11 @@ impl NucleusStore {
             let session = match read_json_path::<SessionRecord>(&session_path) {
                 Ok(session) => session,
                 Err(error) => {
-                    warnings.push(json!({
-                        "path": session_path.display().to_string(),
-                        "error": error.to_string(),
-                    }));
+                    warnings.push(malformed_state_warning(
+                        "session",
+                        &session_path,
+                        &error.to_string(),
+                    ));
                     continue;
                 }
             };
@@ -493,10 +496,7 @@ impl NucleusStore {
             let run = match read_json_path::<RunRecord>(&run_path) {
                 Ok(run) => run,
                 Err(error) => {
-                    warnings.push(json!({
-                        "path": run_path.display().to_string(),
-                        "error": error.to_string(),
-                    }));
+                    warnings.push(malformed_state_warning("run", &run_path, &error.to_string()));
                     continue;
                 }
             };
@@ -505,10 +505,11 @@ impl NucleusStore {
                 match read_json_path::<TaskRecord>(&task_path) {
                     Ok(task) => Some(task),
                     Err(error) => {
-                        warnings.push(json!({
-                            "path": task_path.display().to_string(),
-                            "error": error.to_string(),
-                        }));
+                        warnings.push(malformed_state_warning(
+                            "task",
+                            &task_path,
+                            &error.to_string(),
+                        ));
                         None
                     }
                 }
@@ -712,20 +713,10 @@ impl NucleusStore {
     }
 
     pub fn list_tasks(&self) -> Result<Vec<TaskRecord>> {
-        let mut tasks = Vec::new();
-        for entry in fs::read_dir(&self.paths.tasks_state_dir)
-            .with_context(|| format!("read {}", self.paths.tasks_state_dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path().join("task.json");
-            if !path.exists() {
-                continue;
-            }
-            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-            let task = serde_json::from_slice::<TaskRecord>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?;
-            tasks.push(task);
-        }
+        let mut tasks = load_json_records_from_child_dirs::<TaskRecord>(
+            &self.paths.tasks_state_dir,
+            "task.json",
+        )?;
         tasks.sort_by(|left, right| left.created_at.cmp(&right.created_at));
         Ok(tasks)
     }
@@ -742,20 +733,10 @@ impl NucleusStore {
     }
 
     pub fn list_workers(&self) -> Result<Vec<WorkerRecord>> {
-        let mut workers = Vec::new();
-        for entry in fs::read_dir(&self.paths.workers_state_dir)
-            .with_context(|| format!("read {}", self.paths.workers_state_dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path().join("state.json");
-            if !path.exists() {
-                continue;
-            }
-            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-            let worker = serde_json::from_slice::<WorkerRecord>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?;
-            workers.push(worker);
-        }
+        let mut workers = load_json_records_from_child_dirs::<WorkerRecord>(
+            &self.paths.workers_state_dir,
+            "state.json",
+        )?;
         workers.sort_by(|left, right| left.worker_id.cmp(&right.worker_id));
         Ok(workers)
     }
@@ -786,20 +767,10 @@ impl NucleusStore {
     }
 
     pub fn list_sessions(&self) -> Result<Vec<SessionRecord>> {
-        let mut sessions = Vec::new();
-        for entry in fs::read_dir(&self.paths.sessions_state_dir)
-            .with_context(|| format!("read {}", self.paths.sessions_state_dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path().join("session.json");
-            if !path.exists() {
-                continue;
-            }
-            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-            let session = serde_json::from_slice::<SessionRecord>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?;
-            sessions.push(session);
-        }
+        let mut sessions = load_json_records_from_child_dirs::<SessionRecord>(
+            &self.paths.sessions_state_dir,
+            "session.json",
+        )?;
         sessions.sort_by(|left, right| left.created_at.cmp(&right.created_at));
         Ok(sessions)
     }
@@ -816,20 +787,8 @@ impl NucleusStore {
     }
 
     pub fn list_runs(&self) -> Result<Vec<RunRecord>> {
-        let mut runs = Vec::new();
-        for entry in fs::read_dir(&self.paths.runs_state_dir)
-            .with_context(|| format!("read {}", self.paths.runs_state_dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path().join("run.json");
-            if !path.exists() {
-                continue;
-            }
-            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-            let run = serde_json::from_slice::<RunRecord>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?;
-            runs.push(run);
-        }
+        let mut runs =
+            load_json_records_from_child_dirs::<RunRecord>(&self.paths.runs_state_dir, "run.json")?;
         runs.sort_by(|left, right| {
             left.started_at.cmp(&right.started_at).then(left.run_id.cmp(&right.run_id))
         });
@@ -848,32 +807,13 @@ impl NucleusStore {
     }
 
     pub fn list_profiles(&self) -> Result<Vec<Value>> {
-        let mut profiles = Vec::new();
-        for entry in fs::read_dir(&self.paths.profiles_state_dir)
-            .with_context(|| format!("read {}", self.paths.profiles_state_dir.display()))?
-        {
-            let entry = entry?;
-            if !entry.path().is_file() {
-                continue;
-            }
-            let bytes = fs::read(entry.path())?;
-            profiles.push(serde_json::from_slice::<Value>(&bytes)?);
-        }
+        let profiles = load_json_records_from_dir::<Value>(&self.paths.profiles_state_dir)?;
         Ok(profiles)
     }
 
     pub fn list_profile_records(&self) -> Result<Vec<ProfileRecord>> {
-        let mut profiles = Vec::new();
-        for entry in fs::read_dir(&self.paths.profiles_state_dir)
-            .with_context(|| format!("read {}", self.paths.profiles_state_dir.display()))?
-        {
-            let entry = entry?;
-            if !entry.path().is_file() {
-                continue;
-            }
-            let bytes = fs::read(entry.path())?;
-            profiles.push(serde_json::from_slice::<ProfileRecord>(&bytes)?);
-        }
+        let mut profiles =
+            load_json_records_from_dir::<ProfileRecord>(&self.paths.profiles_state_dir)?;
         profiles.sort_by(|left, right| left.profile.cmp(&right.profile));
         Ok(profiles)
     }
@@ -1346,17 +1286,10 @@ impl NucleusStore {
         producer_rule_name: &str,
         producer_dedup_key: &str,
     ) -> Result<Option<TaskRecord>> {
-        for entry in fs::read_dir(&self.paths.tasks_state_dir)
-            .with_context(|| format!("read {}", self.paths.tasks_state_dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path().join("task.json");
-            if !path.exists() {
-                continue;
-            }
-            let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-            let task = serde_json::from_slice::<TaskRecord>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?;
+        for task in load_json_records_from_child_dirs::<TaskRecord>(
+            &self.paths.tasks_state_dir,
+            "task.json",
+        )? {
             if task.source == source
                 && task.producer_rule_name.as_deref() == Some(producer_rule_name)
                 && task.producer_dedup_key.as_deref() == Some(producer_dedup_key)
@@ -1932,11 +1865,29 @@ where
 
     let mut records = Vec::with_capacity(paths.len());
     for path in paths {
-        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
-        records.push(
-            serde_json::from_slice::<T>(&bytes)
-                .with_context(|| format!("parse {}", path.display()))?,
-        );
+        if let Ok(record) = read_json_path::<T>(&path) {
+            records.push(record);
+        }
+    }
+    Ok(records)
+}
+
+fn load_json_records_from_child_dirs<T>(dir: &Path, file_name: &str) -> Result<Vec<T>>
+where
+    T: DeserializeOwned,
+{
+    let mut paths = fs::read_dir(dir)
+        .with_context(|| format!("read {}", dir.display()))?
+        .filter_map(|entry| entry.ok().map(|value| value.path().join(file_name)))
+        .filter(|path| path.exists())
+        .collect::<Vec<_>>();
+    paths.sort();
+
+    let mut records = Vec::with_capacity(paths.len());
+    for path in paths {
+        if let Ok(record) = read_json_path::<T>(&path) {
+            records.push(record);
+        }
     }
     Ok(records)
 }
@@ -6020,8 +5971,11 @@ mod tests {
         assert_eq!(status.run_count, 1);
         assert!(status.next_event_seq > 1);
 
-        let worker =
-            reopened.store.inspect_worker(&worker_id).expect("inspect worker").expect("worker exists");
+        let worker = reopened
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
         let session = reopened
             .store
             .inspect_session(&session_id)
@@ -6037,7 +5991,8 @@ mod tests {
         assert_eq!(task.checkpoint_summary.as_deref(), Some("nucleus-smoke"));
         assert_eq!(run.status, RunStatus::Completed);
 
-        let events = load_canonical_events(&reopened.store.paths().events_path).expect("load events");
+        let events =
+            load_canonical_events(&reopened.store.paths().events_path).expect("load events");
         assert!(events.iter().any(|event| {
             event.event_type == CanonicalEventType::RunCompleted
                 && event.data.run_id.as_ref() == Some(&run_id)
