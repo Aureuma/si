@@ -4611,8 +4611,8 @@ mod tests {
     use super::{
         CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        append_jsonl_with_rotation, cron_due_key, load_canonical_events, load_last_event_seq,
-        write_json_atomic,
+        CreateTaskInput, append_jsonl_with_rotation, cron_due_key, hook_event_key,
+        load_canonical_events, load_last_event_seq, write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -7161,6 +7161,63 @@ mod tests {
         assert_eq!(reopened.store.list_tasks().expect("list tasks").len(), 1);
     }
 
+    #[test]
+    fn cron_producer_replay_advances_rule_after_durable_task_exists() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+        let due_at = now - ChronoDuration::seconds(30);
+        let dedup_key = cron_due_key("nightly", due_at);
+        write_cron_rule(
+            &state_root,
+            &CronRuleRecord {
+                name: "nightly".to_owned(),
+                enabled: true,
+                schedule_kind: CronScheduleKind::Every,
+                schedule: "60s".to_owned(),
+                instructions: "Run nightly maintenance".to_owned(),
+                last_emitted_at: None,
+                next_due_at: Some(due_at),
+                version: 1,
+            },
+        );
+        service
+            .store
+            .create_producer_task(
+                CreateTaskInput {
+                    title: "Cron nightly @ precreated".to_owned(),
+                    instructions: "Simulate crash after durable task creation".to_owned(),
+                    source: TaskSource::Cron,
+                    profile: None,
+                    session_id: None,
+                    max_retries: None,
+                    timeout_seconds: None,
+                },
+                "nightly",
+                &dedup_key,
+            )
+            .expect("create durable producer task");
+
+        let before = read_cron_rule(&state_root, "nightly");
+        assert_eq!(before.last_emitted_at, None);
+        assert_eq!(before.next_due_at, Some(due_at));
+
+        service.process_cron_producers_at(now).expect("replay cron");
+
+        let tasks = service.store.list_tasks().expect("list tasks");
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].producer_dedup_key.as_deref(), Some(dedup_key.as_str()));
+        let stored = read_cron_rule(&state_root, "nightly");
+        assert_eq!(stored.last_emitted_at, Some(due_at));
+        assert!(stored.next_due_at.is_some_and(|value| value > now));
+    }
+
     #[tokio::test]
     async fn hook_producer_emits_task_once_for_matching_event_and_advances_cursor() {
         let temp = tempdir().expect("tempdir");
@@ -7215,6 +7272,85 @@ mod tests {
         .expect("reopen service");
         reopened.process_hook_producers().expect("process hooks after restart");
         assert_eq!(reopened.store.list_tasks().expect("list tasks").len(), 2);
+    }
+
+    #[tokio::test]
+    async fn hook_producer_replay_advances_cursor_after_durable_task_exists() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "task-created".to_owned(),
+                enabled: true,
+                match_event_type: "task.created".to_owned(),
+                instructions: "Investigate newly created task".to_owned(),
+                last_processed_event_seq: 0,
+                version: 1,
+            },
+        );
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!(1),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Primary task",
+                    "instructions": "Create hook input",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+
+        let task_created_event = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| event.event_type == CanonicalEventType::TaskCreated)
+            .expect("task.created event");
+        let dedup_key = hook_event_key("task-created", task_created_event.seq);
+        service
+            .store
+            .create_producer_task(
+                CreateTaskInput {
+                    title: "Hook task-created @ precreated".to_owned(),
+                    instructions: "Simulate crash after durable hook task creation".to_owned(),
+                    source: TaskSource::Hook,
+                    profile: None,
+                    session_id: None,
+                    max_retries: None,
+                    timeout_seconds: None,
+                },
+                "task-created",
+                &dedup_key,
+            )
+            .expect("create durable hook task");
+        let max_seq_before_replay = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events after precreate")
+            .into_iter()
+            .map(|event| event.seq)
+            .max()
+            .expect("max event seq");
+
+        let before = read_hook_rule(&state_root, "task-created");
+        assert_eq!(before.last_processed_event_seq, 0);
+
+        service.process_hook_producers().expect("replay hooks");
+
+        let tasks = service.store.list_tasks().expect("list tasks");
+        assert_eq!(tasks.len(), 2);
+        let hook_task = tasks
+            .iter()
+            .find(|task| task.source == si_nucleus_core::TaskSource::Hook)
+            .expect("hook task");
+        assert_eq!(hook_task.producer_dedup_key.as_deref(), Some(dedup_key.as_str()));
+        let stored = read_hook_rule(&state_root, "task-created");
+        assert_eq!(stored.last_processed_event_seq, max_seq_before_replay);
     }
 
     #[tokio::test]
