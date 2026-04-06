@@ -14,6 +14,7 @@ cron.workspace = true
 futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+si-rs-fort = { path = "../si-fort" }
 si-nucleus-core = { path = "../si-nucleus-core" }
 si-nucleus-runtime = { path = "../si-nucleus-runtime" }
 si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }
@@ -21,6 +22,7 @@ tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tower.workspace = true
 
 [lib]
 path = "src/lib.rs"
