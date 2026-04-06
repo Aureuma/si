@@ -202,6 +202,7 @@ impl Default for TestRuntimeConfig {
 struct TestRuntimeState {
     workers: HashMap<String, WorkerRuntimeView>,
     interrupted_turns: HashSet<String>,
+    start_calls: usize,
     config: TestRuntimeConfig,
 }
 
@@ -222,6 +223,7 @@ impl TestRuntime {
             state: Arc::new(Mutex::new(TestRuntimeState {
                 workers: HashMap::new(),
                 interrupted_turns: HashSet::new(),
+                start_calls: 0,
                 config,
             })),
         }
@@ -267,6 +269,10 @@ impl TestRuntime {
 
     fn set_fail_ensure_session(&self, value: bool) {
         self.state.lock().expect("runtime state").config.fail_ensure_session = value;
+    }
+
+    fn start_call_count(&self) -> usize {
+        self.state.lock().expect("runtime state").start_calls
     }
 
     fn block_run_for_missing_worker(
@@ -340,8 +346,12 @@ impl NucleusRuntime for TestRuntime {
     }
 
     fn start_worker(&self, spec: &WorkerLaunchSpec) -> anyhow::Result<WorkerStartResult> {
-        if self.state.lock().expect("runtime state").config.fail_start_worker {
-            anyhow::bail!("cli-test-runtime start_worker failed");
+        {
+            let mut state = self.state.lock().expect("runtime state");
+            state.start_calls += 1;
+            if state.config.fail_start_worker {
+                anyhow::bail!("cli-test-runtime start_worker failed");
+            }
         }
         let probe = self.probe_worker(spec)?;
         let runtime = WorkerRuntimeView {
@@ -3632,6 +3642,78 @@ fn nucleus_worker_restart_requeues_blocked_task_on_live_service() {
             && event["data"]["payload"]["status"] == "queued"
             && event["data"]["payload"]["message"] == "task re-queued after worker restart"
     }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_clears_exhausted_auto_restart_boundary_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    runtime.set_fail_start_worker(true);
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop test worker");
+
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(8) {
+        let events = load_event_log_values(&state_root);
+        if events.iter().any(|event| {
+            event["type"] == "system.warning"
+                && event["data"]["payload"]["message"] == "worker restart attempts exhausted"
+                && event["data"]["payload"]["details"]["worker_id"] == worker_id
+        }) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == "system.warning"
+            && event["data"]["payload"]["message"] == "worker restart attempts exhausted"
+            && event["data"]["payload"]["details"]["worker_id"] == worker_id
+    }));
+    let exhausted_start_calls = runtime.start_call_count();
+
+    let created = create_task_via_cli(
+        &ws_url,
+        "Blocked until explicit worker restart",
+        "Do not bypass exhausted auto-restart implicitly",
+        "america",
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let blocked = wait_for_cli_task_status(&ws_url, &task_id, "blocked");
+    assert_eq!(blocked["blocked_reason"], "worker_unavailable");
+    assert_eq!(runtime.start_call_count(), exhausted_start_calls);
+
+    runtime.set_fail_start_worker(false);
+    cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(task["checkpoint_summary"], "nucleus-smoke");
 }
 
 #[test]
