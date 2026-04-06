@@ -3396,6 +3396,60 @@ fn nucleus_session_resume_reuses_worker_thread_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_session_create_does_not_reuse_session_with_conflicting_active_run_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::with_config(TestRuntimeConfig {
+        run_delay: Duration::from_millis(900),
+        step_delay: Duration::from_millis(0),
+        output_deltas: vec!["nucleus-smoke".to_owned()],
+        fail_execute: false,
+        block_when_worker_missing: false,
+        fail_start_worker: false,
+        fail_ensure_session: false,
+    });
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let first = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let first_session_id =
+        first["session"]["session_id"].as_str().expect("first session id").to_owned();
+    let worker_id = first["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created = create_task_over_websocket(
+        &ws_url,
+        "task-conflicting-active-session-live",
+        "Conflicting active run",
+        "Keep the first session busy",
+        "america",
+        Some(&first_session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("latest run id").to_owned();
+
+    let second = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let second_session_id =
+        second["session"]["session_id"].as_str().expect("second session id").to_owned();
+    let second_worker_id = second["worker"]["worker_id"].as_str().expect("second worker id");
+
+    assert_ne!(second_session_id, first_session_id);
+    assert_eq!(second_worker_id, worker_id);
+
+    let run = inspect_run_via_cli(&ws_url, &run_id);
+    assert_eq!(run["session_id"], first_session_id);
+
+    let completed = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    assert_eq!(completed["checkpoint_summary"], "nucleus-smoke");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_app_server_init_failure_blocks_task_and_breaks_session_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
