@@ -7027,6 +7027,17 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/TaskRecord")
     );
+    assert_eq!(body["paths"]["/tasks"]["post"]["summary"], json!("Create a task"));
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["description"],
+        json!(
+            "Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane."
+        )
+    );
+    assert_eq!(
+        body["paths"]["/tasks"]["post"]["x-si-purpose"],
+        json!("Use this to create bounded external work without bypassing Nucleus task intake rules.")
+    );
     assert_eq!(body["paths"]["/tasks"]["post"]["requestBody"]["required"], json!(true));
     assert_eq!(
         body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
