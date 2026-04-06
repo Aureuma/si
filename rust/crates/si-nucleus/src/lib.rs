@@ -6949,6 +6949,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn persisted_run_events_use_canonical_si_event_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-canonical-events"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-canonical-events"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Canonical event names",
+                    "instructions": "Emit canonical run events",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-canonical-events"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "emit canonical event names",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let names = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .map(|event| event.event_type.as_str().to_owned())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"run.started".to_owned()));
+        assert!(names.contains(&"run.output_delta".to_owned()));
+        assert!(names.contains(&"run.completed".to_owned()));
+        for forbidden in ["item/agentMessage/delta", "turn/start", "turn/interrupt"] {
+            assert!(
+                !names.iter().any(|name| name == forbidden),
+                "canonical event ledger must not expose {forbidden}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn task_prune_removes_only_old_terminal_tasks() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
