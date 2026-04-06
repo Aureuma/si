@@ -7205,6 +7205,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run_submit_turn_rejects_session_profile_mismatch() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-america-run"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-europe-run"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Direct run mismatch",
+                    "instructions": "Attempt cross-profile run submission",
+                    "profile": "europe",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-mismatch"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "Submit a mismatched direct run",
+                }),
+            })
+            .await;
+        assert!(!run.ok);
+        assert!(
+            run.error
+                .as_ref()
+                .map(|error| error.message.contains("task profile does not match session profile"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_runs().expect("runs").len(), 0);
+    }
+
+    #[tokio::test]
     async fn dispatcher_respects_session_affine_backlog_order() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
