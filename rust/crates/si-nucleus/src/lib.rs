@@ -2891,6 +2891,7 @@ impl NucleusService {
                 runtime,
                 profile,
                 EnsureWorkerRequest {
+                    allow_exhausted_restart: false,
                     requested_worker_id: Some(session.worker_id.as_str()),
                     home_dir: None,
                     codex_home: None,
@@ -2964,6 +2965,7 @@ impl NucleusService {
             runtime,
             profile,
             EnsureWorkerRequest {
+                allow_exhausted_restart: false,
                 requested_worker_id: None,
                 home_dir: None,
                 codex_home: None,
@@ -3164,6 +3166,7 @@ impl NucleusService {
                 runtime,
                 profile,
                 EnsureWorkerRequest {
+                    allow_exhausted_restart: false,
                     requested_worker_id: Some(session.worker_id.as_str()),
                     home_dir: None,
                     codex_home: None,
@@ -3331,6 +3334,7 @@ impl NucleusService {
             runtime.as_ref(),
             &worker.profile,
             EnsureWorkerRequest {
+                allow_exhausted_restart: true,
                 requested_worker_id: Some(worker.worker_id.as_str()),
                 home_dir: Some(spec.home_dir.clone()),
                 codex_home: Some(spec.codex_home.clone()),
@@ -3593,6 +3597,7 @@ impl NucleusService {
                     runtime.as_ref(),
                     &profile,
                     EnsureWorkerRequest {
+                        allow_exhausted_restart: false,
                         requested_worker_id: params.worker_id.as_deref(),
                         home_dir: params.home_dir,
                         codex_home: params.codex_home,
@@ -3820,6 +3825,15 @@ impl NucleusService {
         if let (Some(worker), Some(runtime_view)) = (existing.clone(), live_runtime) {
             return Ok(EnsuredWorker { worker, runtime: Some(runtime_view) });
         }
+        if let Some(worker) = existing.as_ref() {
+            if !request.allow_exhausted_restart
+                && self.worker_restart_exhausted(&worker.worker_id)?
+            {
+                anyhow::bail!(
+                    "worker restart attempts exhausted; explicit worker.restart or worker.repair_auth required"
+                );
+            }
+        }
 
         let started = runtime.start_worker(&spec)?;
         let (worker, runtime_view, events) =
@@ -3899,6 +3913,14 @@ impl NucleusService {
         }
     }
 
+    fn worker_restart_exhausted(&self, worker_id: &WorkerId) -> Result<bool> {
+        let state = self
+            .worker_restart_state
+            .lock()
+            .map_err(|_| anyhow!("worker restart state lock poisoned"))?;
+        Ok(state.get(worker_id).is_some_and(|restart| restart.exhausted))
+    }
+
     fn record_worker_restart_failure(
         &self,
         worker_id: &WorkerId,
@@ -3936,6 +3958,7 @@ struct BlockedRunReconciliation {
 }
 
 struct EnsureWorkerRequest<'a> {
+    allow_exhausted_restart: bool,
     requested_worker_id: Option<&'a str>,
     home_dir: Option<PathBuf>,
     codex_home: Option<PathBuf>,
@@ -6926,6 +6949,106 @@ mod tests {
             event.data.payload["message"] == json!("worker restart attempts exhausted")
                 && event.data.payload["details"]["worker_id"] == json!(worker_id.as_str())
         }));
+    }
+
+    #[tokio::test]
+    async fn dispatch_blocks_tasks_until_operator_restart_after_exhausted_auto_restart() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-auto-restart-exhausted-block"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        runtime.stop_worker(&worker_id).expect("stop worker");
+        runtime.fail_next_starts(MAX_WORKER_RESTART_ATTEMPTS as usize);
+        for _ in 0..(MAX_WORKER_RESTART_ATTEMPTS + 2) {
+            service.reconcile_and_dispatch_once().expect("reconcile failed worker");
+            thread::sleep(Duration::from_millis(125));
+        }
+
+        let exhausted_worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(exhausted_worker.status, WorkerStatus::Failed);
+        assert_eq!(runtime.start_call_count(), (MAX_WORKER_RESTART_ATTEMPTS + 1) as usize);
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-auto-restart-exhausted-block"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Stay blocked until operator restart",
+                    "instructions": "Do not bypass exhausted auto-restart state implicitly",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch exhausted task");
+
+        let blocked =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert_eq!(runtime.start_call_count(), (MAX_WORKER_RESTART_ATTEMPTS + 1) as usize);
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-after-exhausted-auto-restart"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": worker_id.as_str() }),
+            })
+            .await;
+        assert!(restarted.ok);
+
+        let requeued =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(requeued.status, TaskStatus::Queued);
+        assert_eq!(requeued.blocked_reason, None);
+
+        service.reconcile_and_dispatch_once().expect("dispatch requeued task");
+        wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
     }
 
     #[tokio::test]
