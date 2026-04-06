@@ -2795,6 +2795,26 @@ impl NucleusService {
                 }
                 return Ok(None);
             };
+            let bound_profile = session.profile.clone().or_else(|| {
+                self.store
+                    .inspect_worker(&session.worker_id)
+                    .ok()
+                    .flatten()
+                    .map(|worker| worker.profile)
+            });
+            if bound_profile.as_ref().is_some_and(|bound_profile| bound_profile != profile) {
+                if let Some(event) = self.store.mark_task_blocked(
+                    &task.task_id,
+                    Some(session.worker_id.clone()),
+                    Some(session.session_id.clone()),
+                    Some(profile.clone()),
+                    BlockedReason::SessionBroken,
+                    "task profile does not match session profile",
+                )? {
+                    let _ = self.events.send(event);
+                }
+                return Ok(None);
+            }
             if matches!(
                 session.lifecycle_state,
                 SessionLifecycleState::Broken | SessionLifecycleState::Closed
@@ -7115,6 +7135,73 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
         assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_task_when_session_profile_mismatches_task_profile() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-america"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-session-mismatch"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Mismatched task profile",
+                    "instructions": "Attempt cross-profile session reuse",
+                    "profile": "europe",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
+        assert!(task.latest_run_id.is_none());
+
+        let session = service
+            .store
+            .inspect_session(&SessionId::new(session_id).expect("session id"))
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.profile.as_ref().map(ProfileName::as_str), Some("america"));
     }
 
     #[tokio::test]
