@@ -6278,6 +6278,147 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
         .success();
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_require_token() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let base_url = spawn_live_nucleus_service_with_options(
+        &state_root,
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(TestRuntime::default())),
+    );
+    let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
+    let client = BlockingClient::new();
+
+    let openapi_response =
+        client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
+    assert!(openapi_response.status().is_success());
+
+    let status_response = client.get(format!("{base_url}/status")).send().expect("status response");
+    assert!(status_response.status().is_success());
+
+    let unauthorized_create = client
+        .post(format!("{base_url}/tasks"))
+        .json(&json!({
+            "title": "REST auth gated task",
+            "instructions": "This should require a bearer token.",
+            "profile": "america"
+        }))
+        .send()
+        .expect("unauthorized rest create");
+    assert_eq!(unauthorized_create.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let unauthorized_body: Value = unauthorized_create.json().expect("parse unauthorized body");
+    assert_eq!(unauthorized_body["error"]["code"], "unauthorized");
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let created_session = cargo_bin()
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let created_session: Value =
+        serde_json::from_slice(&created_session).expect("parse created session");
+    let session_id =
+        created_session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let worker_id = created_session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+
+    let created_task = client
+        .post(format!("{base_url}/tasks"))
+        .bearer_auth("test-token")
+        .json(&json!({
+            "title": "REST readable task",
+            "instructions": "Reply with nucleus-smoke",
+            "profile": "america"
+        }))
+        .send()
+        .expect("authorized rest create");
+    assert!(created_task.status().is_success());
+    let created_task: Value = created_task.json().expect("parse created task");
+    let task_id = created_task["task_id"].as_str().expect("task id").to_owned();
+    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let run_id = task["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let tasks: Value = client
+        .get(format!("{base_url}/tasks"))
+        .send()
+        .expect("list tasks")
+        .json()
+        .expect("parse tasks");
+    assert!(
+        tasks.as_array().expect("task list array").iter().any(|item| item["task_id"] == task_id)
+    );
+
+    let task_inspect: Value = client
+        .get(format!("{base_url}/tasks/{task_id}"))
+        .send()
+        .expect("inspect task")
+        .json()
+        .expect("parse task inspect");
+    assert_eq!(task_inspect["task_id"], task_id);
+    assert_eq!(task_inspect["status"], "done");
+
+    let workers: Value = client
+        .get(format!("{base_url}/workers"))
+        .send()
+        .expect("list workers")
+        .json()
+        .expect("parse workers");
+    assert!(
+        workers
+            .as_array()
+            .expect("worker list array")
+            .iter()
+            .any(|item| item["worker_id"] == worker_id)
+    );
+
+    let worker: Value = client
+        .get(format!("{base_url}/workers/{worker_id}"))
+        .send()
+        .expect("inspect worker")
+        .json()
+        .expect("parse worker inspect");
+    assert_eq!(worker["worker"]["worker_id"], worker_id);
+
+    let session: Value = client
+        .get(format!("{base_url}/sessions/{session_id}"))
+        .send()
+        .expect("inspect session")
+        .json()
+        .expect("parse session inspect");
+    assert_eq!(session["session_id"], session_id);
+
+    let run: Value = client
+        .get(format!("{base_url}/runs/{run_id}"))
+        .send()
+        .expect("inspect run")
+        .json()
+        .expect("parse run inspect");
+    assert_eq!(run["run_id"], run_id);
+    assert_eq!(run["status"], "completed");
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
