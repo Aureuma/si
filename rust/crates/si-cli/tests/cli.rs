@@ -7044,6 +7044,49 @@ fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
     assert_eq!(cancelled_run["status"], "cancelled");
 }
 
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_live_rest_missing_targets_preserve_auth_split() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service_with_options(
+        &temp.path().join("nucleus"),
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(TestRuntime::default())),
+    );
+    let client = BlockingClient::new();
+
+    for path in [
+        "/tasks/si-task-missing",
+        "/workers/si-worker-missing",
+        "/sessions/si-session-missing",
+        "/runs/si-run-missing",
+    ] {
+        let response = client.get(format!("{base_url}{path}")).send().expect("missing read");
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND, "{path}");
+        let body: Value = response.json().expect("parse missing read body");
+        assert_eq!(body["error"]["code"], "not_found", "{path}");
+    }
+
+    let unauthorized_cancel = client
+        .post(format!("{base_url}/tasks/si-task-missing/cancel"))
+        .send()
+        .expect("unauthorized missing cancel");
+    assert_eq!(unauthorized_cancel.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let unauthorized_body: Value = unauthorized_cancel.json().expect("parse unauthorized body");
+    assert_eq!(unauthorized_body["error"]["code"], "unauthorized");
+
+    let authorized_cancel = client
+        .post(format!("{base_url}/tasks/si-task-missing/cancel"))
+        .bearer_auth("test-token")
+        .send()
+        .expect("authorized missing cancel");
+    assert_eq!(authorized_cancel.status(), reqwest::StatusCode::NOT_FOUND);
+    let authorized_body: Value = authorized_cancel.json().expect("parse authorized missing body");
+    assert_eq!(authorized_body["error"]["code"], "not_found");
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
