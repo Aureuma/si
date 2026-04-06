@@ -3728,6 +3728,24 @@ impl NucleusService {
                 let run_id = RunId::new(params.run_id)?;
                 let run =
                     self.store.inspect_run(&run_id)?.ok_or_else(|| anyhow!("run not found"))?;
+                if run.status == RunStatus::Blocked {
+                    let session = self
+                        .store
+                        .inspect_session(&run.session_id)?
+                        .ok_or_else(|| anyhow!("session not found"))?;
+                    let task = self
+                        .store
+                        .inspect_task(&run.task_id)?
+                        .ok_or_else(|| anyhow!("task not found"))?;
+                    let (_, run) = self.cancel_active_run_without_interrupt(
+                        &task,
+                        &run,
+                        &session,
+                        "run cancelled after becoming blocked",
+                        false,
+                    )?;
+                    return Ok(serde_json::to_value(run)?);
+                }
                 if !is_active_run_status(run.status) {
                     return Ok(serde_json::to_value(run)?);
                 }
@@ -10074,6 +10092,124 @@ mod tests {
             .expect("inspect session")
             .expect("session exists");
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[tokio::test]
+    async fn run_cancel_transitions_blocked_run_to_cancelled() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(400))),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-cancel-blocked-run"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-cancel-blocked-run"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Cancel blocked run",
+                    "instructions": "Generate enough output to become cancellable after blocking",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-cancel-blocked-run"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id.as_str(),
+                    "prompt": "Generate a long response",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = RunId::new(
+            run.result
+                .as_ref()
+                .and_then(|item| item["run_id"].as_str())
+                .expect("run id")
+                .to_owned(),
+        )
+        .expect("run id");
+
+        let started = wait_for_run_started(&service, run_id.as_str());
+        assert!(started.app_server_turn_id.is_some());
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        service.reconcile_and_dispatch_once().expect("reconcile blocked run");
+        let blocked_run =
+            service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(blocked_run.status, RunStatus::Blocked);
+
+        let cancelled = service
+            .dispatch_request(GatewayRequest {
+                id: json!("cancel-blocked-run"),
+                method: "run.cancel".to_owned(),
+                params: json!({ "run_id": run_id.as_str() }),
+            })
+            .await;
+        assert!(cancelled.ok);
+        assert_eq!(
+            cancelled.result.as_ref().and_then(|item| item["status"].as_str()),
+            Some("cancelled")
+        );
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+        let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Cancelled);
     }
 
     #[tokio::test]
