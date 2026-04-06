@@ -7123,6 +7123,14 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             ["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
     );
+    assert_eq!(
+        body["components"]["schemas"]["TaskCancelResultView"]["required"],
+        json!(["task", "cancellation_requested"])
+    );
+    assert_eq!(
+        body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["$ref"],
+        json!("#/components/schemas/WorkerRecord")
+    );
     for (path, method) in [
         ("/status", "get"),
         ("/tasks", "get"),
