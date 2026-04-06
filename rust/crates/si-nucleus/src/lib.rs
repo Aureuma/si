@@ -7076,6 +7076,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dispatcher_blocks_task_when_profile_worker_is_not_ready() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        runtime.fail_next_starts(1);
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-blocked-profile"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Blocked profile task",
+                    "instructions": "Run when the profile is ready",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
     async fn dispatcher_respects_session_affine_backlog_order() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
