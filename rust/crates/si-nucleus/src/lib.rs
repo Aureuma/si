@@ -5169,6 +5169,14 @@ mod tests {
             )
         );
         assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
+        assert_eq!(body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"], json!([]));
+        assert!(body["paths"]["/status"]["get"]["security"].is_null());
+        assert!(body["paths"]["/tasks"]["get"]["security"].is_null());
+        assert!(body["paths"]["/tasks/{task_id}"]["get"]["security"].is_null());
+        assert!(body["paths"]["/workers"]["get"]["security"].is_null());
+        assert!(body["paths"]["/workers/{worker_id}"]["get"]["security"].is_null());
+        assert!(body["paths"]["/sessions/{session_id}"]["get"]["security"].is_null());
+        assert!(body["paths"]["/runs/{run_id}"]["get"]["security"].is_null());
     }
 
     #[tokio::test]
