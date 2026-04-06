@@ -7128,6 +7128,19 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!(["task", "cancellation_requested"])
     );
     assert_eq!(
+        body["components"]["schemas"]["RestErrorEnvelope"]["required"],
+        json!(["error"])
+    );
+    assert_eq!(
+        body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["required"],
+        json!(["code", "message"])
+    );
+    assert!(
+        body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["properties"]
+            ["details"]
+            .is_object()
+    );
+    assert_eq!(
         body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["$ref"],
         json!("#/components/schemas/WorkerRecord")
     );
