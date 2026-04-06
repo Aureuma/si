@@ -8313,6 +8313,107 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reconciliation_blocks_active_run_when_worker_disappears() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session_response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-worker-loss"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session_response.ok);
+        let worker_id = WorkerId::new(
+            session_response
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+        let session_id = SessionId::new(
+            session_response
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task_response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-worker-loss"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Worker loss run",
+                    "instructions": "Block when the worker disappears",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task_response.ok);
+        let task_id = TaskId::new(
+            task_response
+                .result
+                .as_ref()
+                .and_then(|task| task["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .store
+            .claim_run_for_task(RunRecord::new(
+                RunId::generate(),
+                task_id.clone(),
+                session_id.clone(),
+            ))
+            .expect("claim run");
+
+        runtime.stop_worker(&worker_id).expect("stop worker");
+        service.reconcile_and_dispatch_once().expect("reconcile worker loss");
+
+        let run = service.store.inspect_run(&run.run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Blocked);
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+        let worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(worker.status, WorkerStatus::Failed);
+    }
+
+    #[tokio::test]
     async fn run_cancel_interrupts_active_run_and_projects_cancelled_state() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
