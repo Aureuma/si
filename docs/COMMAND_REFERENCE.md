@@ -21,7 +21,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
-| `si nucleus` | Local control plane for tasks, workers, sessions, runs, gateway inspection, and service management | `status`, `service`, `task`, `worker`, `session`, `run`, `profile` | [Nucleus](./NUCLEUS) |
+| `si nucleus` | Local control plane for tasks, workers, sessions, runs, gateway inspection, and service management | `status`, `profile`, `service`, `task`, `worker`, `session`, `run`, `events` | [Nucleus](./NUCLEUS) |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |

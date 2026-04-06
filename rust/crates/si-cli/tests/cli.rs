@@ -827,6 +827,144 @@ fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
     assert_eq!(payload["version"], "test");
 }
 
+#[test]
+fn nucleus_profile_list_requests_gateway_profile_list_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
+            .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "profile.list");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": [
+                { "profile": "america", "codex_home": "/tmp/codex-america" }
+            ]
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args(["nucleus", "profile", "list", "--endpoint", &format!("ws://{addr}/ws"), "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload[0]["profile"], "america");
+}
+
+#[test]
+fn nucleus_task_cancel_requests_gateway_task_cancel_method() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
+            .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "task.cancel");
+        assert_eq!(payload["params"]["task_id"], "si-task-123");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": {
+                "task": { "task_id": "si-task-123", "status": "cancelled" },
+                "cancellation_requested": false
+            }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write message");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "cancel",
+            "si-task-123",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse output");
+    assert_eq!(payload["task"]["status"], "cancelled");
+}
+
+#[test]
+fn nucleus_events_subscribe_prints_streamed_events() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("listener addr");
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
+            .expect("accept websocket");
+        let request = socket.read().expect("read message");
+        let payload = match request {
+            WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
+            other => panic!("unexpected websocket message: {other:?}"),
+        };
+        assert_eq!(payload["method"], "events.subscribe");
+        let response = serde_json::json!({
+            "id": payload["id"].clone(),
+            "ok": true,
+            "result": { "subscribed": true }
+        });
+        socket.send(WsMessage::Text(response.to_string().into())).expect("write ack");
+        let event = serde_json::json!({
+            "event_id": "si-event-123",
+            "seq": 1,
+            "ts": "2026-04-06T00:00:00Z",
+            "type": "worker.ready",
+            "source": "system",
+            "data": {
+                "worker_id": "si-worker-123",
+                "profile": "america",
+                "payload": { "message": "ready" }
+            }
+        });
+        socket.send(WsMessage::Text(event.to_string().into())).expect("write event");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "events",
+            "subscribe",
+            "--count",
+            "1",
+            "--endpoint",
+            &format!("ws://{addr}/ws"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output).expect("utf8 output");
+    assert!(rendered.contains("\"type\": \"worker.ready\""));
+    assert!(rendered.contains("\"event_id\": \"si-event-123\""));
+}
+
 fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }

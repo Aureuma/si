@@ -21,12 +21,17 @@ Use `si nucleus ...` for control-plane operations:
 
 ```bash
 si nucleus status
+si nucleus profile list
 si nucleus task create "Review nightly failures" "Summarize the last failed run."
 si nucleus task list
+si nucleus task cancel <task-id>
 si nucleus task inspect <task-id>
 si nucleus worker list
+si nucleus worker restart <worker-id>
+si nucleus worker repair-auth <worker-id>
 si nucleus session list
 si nucleus run inspect <run-id>
+si nucleus events subscribe --count 1
 ```
 
 `si codex ...` remains the worker/runtime-facing surface.
@@ -79,7 +84,7 @@ The metadata file is written by `si-nucleus` and includes the bound websocket UR
 The main control-plane transport is WebSocket:
 
 - default local endpoint: `ws://127.0.0.1:4747/ws`
-- request/response methods such as `nucleus.status`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `worker.list`, `session.list`, and `run.cancel`
+- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.list`, `session.show`, `run.inspect`, and `run.cancel`
 - server-pushed canonical events through `events.subscribe`
 
 The bounded REST surface is exposed by the same Nucleus service and source of truth:
