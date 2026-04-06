@@ -7187,6 +7187,53 @@ fn nucleus_live_rest_missing_targets_preserve_auth_split() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_live_rest_invalid_create_preserves_auth_and_validation_order() {
+    let temp = tempdir().expect("tempdir");
+    let base_url = spawn_live_nucleus_service_with_options(
+        &temp.path().join("nucleus"),
+        "0.0.0.0",
+        "127.0.0.1",
+        Some("test-token"),
+        Some(Arc::new(TestRuntime::default())),
+    );
+    let client = BlockingClient::new();
+
+    let unauthorized_create = client
+        .post(format!("{base_url}/tasks"))
+        .json(&json!({
+            "title": "Bad profile task",
+            "instructions": "Reject uppercase profile names",
+            "profile": "America"
+        }))
+        .send()
+        .expect("unauthorized invalid create");
+    assert_eq!(unauthorized_create.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let unauthorized_body: Value = unauthorized_create.json().expect("parse unauthorized body");
+    assert_eq!(unauthorized_body["error"]["code"], "unauthorized");
+
+    let authorized_create = client
+        .post(format!("{base_url}/tasks"))
+        .bearer_auth("test-token")
+        .json(&json!({
+            "title": "Bad profile task",
+            "instructions": "Reject uppercase profile names",
+            "profile": "America"
+        }))
+        .send()
+        .expect("authorized invalid create");
+    assert_eq!(authorized_create.status(), reqwest::StatusCode::BAD_REQUEST);
+    let authorized_body: Value = authorized_create.json().expect("parse authorized invalid body");
+    assert_eq!(authorized_body["error"]["code"], "invalid_params");
+    assert!(
+        authorized_body["error"]["message"]
+            .as_str()
+            .map(|value| value.contains("profile name must match"))
+            .unwrap_or(false)
+    );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_live_rest_error_envelopes_keep_canonical_shape() {
     let temp = tempdir().expect("tempdir");
 
