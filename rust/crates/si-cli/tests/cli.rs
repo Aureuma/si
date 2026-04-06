@@ -4207,6 +4207,50 @@ fn nucleus_run_cancel_marks_session_broken_when_thread_id_is_missing_on_live_ser
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_restart_restarts_idle_worker_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    let initial_start_calls = runtime.start_call_count();
+
+    let restarted_output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "restart",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let restarted: Value = serde_json::from_slice(&restarted_output).expect("parse restart");
+    assert_eq!(restarted["worker"]["worker_id"], worker_id);
+    assert_eq!(restarted["worker"]["status"], "ready");
+    assert_eq!(restarted["runtime"]["worker_id"], worker_id);
+    assert_eq!(runtime.start_call_count(), initial_start_calls + 1);
+
+    let inspected = wait_for_worker_status(&ws_url, &worker_id, "ready");
+    assert_eq!(inspected["worker"]["status"], "ready");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_cancel_marks_session_broken_when_thread_id_is_missing_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
