@@ -6474,6 +6474,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_restart_rejects_workers_with_active_runs() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(150))),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-restart-active"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["worker_id"].as_str())
+            .expect("worker id")
+            .to_owned();
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id")
+            .to_owned();
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-restart-active"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Worker restart guard",
+                    "instructions": "Keep the run active while restart is requested",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-restart-active"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "hold this run open briefly",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+
+        thread::sleep(Duration::from_millis(40));
+
+        let restarted = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-restart-active"),
+                method: "worker.restart".to_owned(),
+                params: json!({ "worker_id": worker_id }),
+            })
+            .await;
+        assert!(!restarted.ok);
+        assert!(
+            restarted
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("worker has active runs"))
+                .unwrap_or(false)
+        );
+
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+    }
+
+    #[tokio::test]
     async fn supervision_restarts_failed_idle_worker_within_retry_budget() {
         let temp = tempdir().expect("tempdir");
         let runtime = FakeRuntime::default();
