@@ -484,6 +484,12 @@ pub enum CanonicalEventType {
     SessionReused,
     #[serde(rename = "session.broken")]
     SessionBroken,
+    #[serde(rename = "fort.ready")]
+    FortReady,
+    #[serde(rename = "fort.auth_required")]
+    FortAuthRequired,
+    #[serde(rename = "fort.unavailable")]
+    FortUnavailable,
     #[serde(rename = "run.started")]
     RunStarted,
     #[serde(rename = "run.output_delta")]
@@ -516,6 +522,9 @@ impl CanonicalEventType {
             Self::SessionCreated => "session.created",
             Self::SessionReused => "session.reused",
             Self::SessionBroken => "session.broken",
+            Self::FortReady => "fort.ready",
+            Self::FortAuthRequired => "fort.auth_required",
+            Self::FortUnavailable => "fort.unavailable",
             Self::RunStarted => "run.started",
             Self::RunOutputDelta => "run.output_delta",
             Self::RunRequiresAuth => "run.requires_auth",
@@ -755,6 +764,7 @@ mod tests {
     #[test]
     fn canonical_event_types_use_dot_names() {
         assert_eq!(CanonicalEventType::TaskCreated.as_str(), "task.created");
+        assert_eq!(CanonicalEventType::FortReady.as_str(), "fort.ready");
         assert_eq!(CanonicalEventType::RunRequiresAuth.as_str(), "run.requires_auth");
         assert_eq!(CanonicalEventType::RunBlocked.as_str(), "run.blocked");
         assert_eq!(CanonicalEventType::WorkerReady.as_str(), "worker.ready");

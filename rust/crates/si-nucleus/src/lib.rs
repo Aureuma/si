@@ -14,11 +14,14 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
+use axum::Json;
 use axum::Router;
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Path as AxumPath, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::response::Response;
+use axum::routing::{get, post};
 use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
 use cron::Schedule;
 use futures_util::{SinkExt, StreamExt};
@@ -34,11 +37,24 @@ use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
     WorkerLaunchSpec, WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
+use si_rs_fort::{
+    SessionState, SessionStateFileError, build_bootstrap_view, classify_persisted_session_state,
+    load_persisted_session_state,
+};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:4747";
 const WS_PATH: &str = "/ws";
+const OPENAPI_PATH: &str = "/openapi.json";
+const REST_STATUS_PATH: &str = "/status";
+const REST_TASKS_PATH: &str = "/tasks";
+const REST_TASK_PATH: &str = "/tasks/{task_id}";
+const REST_TASK_CANCEL_PATH: &str = "/tasks/{task_id}/cancel";
+const REST_WORKERS_PATH: &str = "/workers";
+const REST_WORKER_PATH: &str = "/workers/{worker_id}";
+const REST_SESSION_PATH: &str = "/sessions/{session_id}";
+const REST_RUN_PATH: &str = "/runs/{run_id}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 
 fn temp_suffix() -> String {
@@ -273,6 +289,13 @@ struct HookRuleRecord {
     #[serde(default)]
     last_processed_event_seq: u64,
     version: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FortCapabilityState {
+    Ready,
+    AuthRequired,
+    Unavailable,
 }
 
 pub struct NucleusStore {
@@ -1074,6 +1097,16 @@ impl NucleusStore {
         )
     }
 
+    fn append_aux_event(
+        &self,
+        event_type: CanonicalEventType,
+        source: CanonicalEventSource,
+        data: EventDataEnvelope,
+    ) -> Result<CanonicalEvent> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        self.append_event_locked(event_type, source, data)
+    }
+
     fn mark_worker_failed(
         &self,
         worker_id: &WorkerId,
@@ -1173,6 +1206,42 @@ impl NucleusStore {
         Ok(Some(event))
     }
 
+    fn cancel_task_without_run(
+        &self,
+        task_id: &TaskId,
+        source: CanonicalEventSource,
+        message: &str,
+    ) -> Result<Option<(TaskRecord, CanonicalEvent)>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let Some(mut task) = self.read_task_locked(task_id)? else {
+            return Ok(None);
+        };
+        if task.status == TaskStatus::Cancelled {
+            return Ok(None);
+        }
+        if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+            return Ok(None);
+        }
+        task.transition_to(TaskStatus::Cancelled, None).map_err(anyhow::Error::new)?;
+        write_json_atomic(&self.paths.task_path(task_id), &task)?;
+        let event = self.append_event_locked(
+            CanonicalEventType::TaskUpdated,
+            source,
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: None,
+                session_id: task.session_id.clone(),
+                run_id: task.latest_run_id.clone(),
+                profile: task.profile.clone(),
+                payload: json!({
+                    "status": task.status,
+                    "message": message,
+                }),
+            },
+        )?;
+        Ok(Some((task, event)))
+    }
+
     fn record_session_ready(
         &self,
         session_id: &SessionId,
@@ -1251,6 +1320,227 @@ fn cron_due_key(rule_name: &str, due_at: DateTime<Utc>) -> String {
 
 fn hook_event_key(rule_name: &str, seq: u64) -> String {
     format!("{rule_name}:{seq}")
+}
+
+fn task_requires_fort(task: &TaskRecord, prompt_override: Option<&str>) -> bool {
+    let mut combined = String::with_capacity(
+        task.title.len() + task.instructions.len() + prompt_override.unwrap_or_default().len() + 2,
+    );
+    combined.push_str(&task.title);
+    combined.push('\n');
+    combined.push_str(&task.instructions);
+    if let Some(prompt) = prompt_override {
+        combined.push('\n');
+        combined.push_str(prompt);
+    }
+    combined.to_ascii_lowercase().contains("si fort")
+}
+
+fn default_fort_profile_dir(home_dir: &Path, profile: &ProfileName) -> PathBuf {
+    home_dir.join(".si").join("codex").join("profiles").join(profile.as_str()).join("fort")
+}
+
+fn fort_profile_dir(worker: &WorkerRecord, profile: &ProfileName) -> PathBuf {
+    let codex_home = worker.codex_home.trim();
+    if !codex_home.is_empty() {
+        return PathBuf::from(codex_home).join("fort");
+    }
+    if let Some(home_dir) =
+        worker.home_dir.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        return default_fort_profile_dir(Path::new(home_dir), profile);
+    }
+    default_codex_home_dir(profile.as_str()).join("fort")
+}
+
+fn fort_capability_event_type(state: FortCapabilityState) -> CanonicalEventType {
+    match state {
+        FortCapabilityState::Ready => CanonicalEventType::FortReady,
+        FortCapabilityState::AuthRequired => CanonicalEventType::FortAuthRequired,
+        FortCapabilityState::Unavailable => CanonicalEventType::FortUnavailable,
+    }
+}
+
+fn fort_blocked_reason(state: FortCapabilityState) -> Option<BlockedReason> {
+    match state {
+        FortCapabilityState::Ready => None,
+        FortCapabilityState::AuthRequired => Some(BlockedReason::AuthRequired),
+        FortCapabilityState::Unavailable => Some(BlockedReason::FortUnavailable),
+    }
+}
+
+fn fort_capability_label(state: FortCapabilityState) -> &'static str {
+    match state {
+        FortCapabilityState::Ready => "ready",
+        FortCapabilityState::AuthRequired => "auth_required",
+        FortCapabilityState::Unavailable => "unavailable",
+    }
+}
+
+fn fort_session_state_label(state: &SessionState) -> &'static str {
+    match state {
+        SessionState::BootstrapRequired => "bootstrap_required",
+        SessionState::Resumable(_) => "resumable",
+        SessionState::Refreshing(_) => "refreshing",
+        SessionState::Revoked { .. } => "revoked",
+        SessionState::TeardownPending(_) => "teardown_pending",
+        SessionState::Closed => "closed",
+    }
+}
+
+fn classify_fort_requirement(
+    task: &TaskRecord,
+    worker: &WorkerRecord,
+    profile: &ProfileName,
+    prompt_override: Option<&str>,
+) -> Result<Option<(FortCapabilityState, String, Value)>> {
+    if !task_requires_fort(task, prompt_override) {
+        return Ok(None);
+    }
+
+    let fort_dir = fort_profile_dir(worker, profile);
+    let session_path = fort_dir.join("session.json");
+    let access_token_path = fort_dir.join("access.token");
+    let refresh_token_path = fort_dir.join("refresh.token");
+    let payload_base = json!({
+        "fort_profile_dir": fort_dir.display().to_string(),
+        "session_path": session_path.display().to_string(),
+        "access_token_path": access_token_path.display().to_string(),
+        "refresh_token_path": refresh_token_path.display().to_string(),
+    });
+    if !session_path.exists() {
+        let message = format!(
+            "Fort authentication is required for profile {}: session state is missing",
+            profile
+        );
+        return Ok(Some((
+            FortCapabilityState::AuthRequired,
+            message,
+            json!({
+                "fort_profile_dir": fort_dir.display().to_string(),
+                "session_path": session_path.display().to_string(),
+                "access_token_path": access_token_path.display().to_string(),
+                "refresh_token_path": refresh_token_path.display().to_string(),
+                "fort_state": "missing",
+            }),
+        )));
+    }
+
+    let persisted = match load_persisted_session_state(&session_path) {
+        Ok(state) => state,
+        Err(SessionStateFileError::Stat(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            let message = format!(
+                "Fort authentication is required for profile {}: session state is missing",
+                profile
+            );
+            return Ok(Some((
+                FortCapabilityState::AuthRequired,
+                message,
+                json!({
+                    "fort_profile_dir": fort_dir.display().to_string(),
+                    "session_path": session_path.display().to_string(),
+                    "access_token_path": access_token_path.display().to_string(),
+                    "refresh_token_path": refresh_token_path.display().to_string(),
+                    "fort_state": "missing",
+                }),
+            )));
+        }
+        Err(error) => {
+            let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+            return Ok(Some((
+                FortCapabilityState::Unavailable,
+                message,
+                json!({
+                    "fort_profile_dir": fort_dir.display().to_string(),
+                    "session_path": session_path.display().to_string(),
+                    "access_token_path": access_token_path.display().to_string(),
+                    "refresh_token_path": refresh_token_path.display().to_string(),
+                    "fort_state": "load_failed",
+                    "error": error.to_string(),
+                }),
+            )));
+        }
+    };
+
+    if let Err(error) = build_bootstrap_view(
+        &persisted,
+        Some(profile.as_str()),
+        &access_token_path.display().to_string(),
+        &refresh_token_path.display().to_string(),
+        &access_token_path.display().to_string(),
+        &refresh_token_path.display().to_string(),
+    ) {
+        let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+        return Ok(Some((
+            FortCapabilityState::Unavailable,
+            message,
+            json!({
+                "fort_profile_dir": fort_dir.display().to_string(),
+                "session_path": session_path.display().to_string(),
+                "access_token_path": access_token_path.display().to_string(),
+                "refresh_token_path": refresh_token_path.display().to_string(),
+                "fort_state": "bootstrap_invalid",
+                "error": error.to_string(),
+            }),
+        )));
+    }
+
+    let now_unix = Utc::now().timestamp();
+    let session_state = match classify_persisted_session_state(&persisted, now_unix) {
+        Ok(state) => state,
+        Err(error) => {
+            let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+            return Ok(Some((
+                FortCapabilityState::Unavailable,
+                message,
+                json!({
+                    "fort_profile_dir": fort_dir.display().to_string(),
+                    "session_path": session_path.display().to_string(),
+                    "access_token_path": access_token_path.display().to_string(),
+                    "refresh_token_path": refresh_token_path.display().to_string(),
+                    "fort_state": "classification_failed",
+                    "error": error.to_string(),
+                }),
+            )));
+        }
+    };
+
+    let (state, message) = match &session_state {
+        SessionState::Resumable(_) | SessionState::Refreshing(_) => {
+            (FortCapabilityState::Ready, format!("Fort is ready for profile {}", profile))
+        }
+        SessionState::BootstrapRequired | SessionState::Revoked { .. } | SessionState::Closed => (
+            FortCapabilityState::AuthRequired,
+            format!("Fort authentication is required for profile {}", profile),
+        ),
+        SessionState::TeardownPending(_) => (
+            FortCapabilityState::Unavailable,
+            format!(
+                "Fort is unavailable for profile {}: session teardown is still pending",
+                profile
+            ),
+        ),
+    };
+    let payload = merge_json_objects(
+        payload_base,
+        json!({
+            "fort_state": fort_session_state_label(&session_state),
+            "fort_capability": fort_capability_label(state),
+        }),
+    );
+    Ok(Some((state, message, payload)))
+}
+
+fn merge_json_objects(base: Value, extra: Value) -> Value {
+    match (base, extra) {
+        (Value::Object(mut left), Value::Object(right)) => {
+            for (key, value) in right {
+                left.insert(key, value);
+            }
+            Value::Object(left)
+        }
+        (_, right) => right,
+    }
 }
 
 fn parse_every_duration(schedule: &str) -> Result<ChronoDuration> {
@@ -1454,7 +1744,18 @@ impl NucleusService {
     }
 
     pub fn router(self) -> Router {
-        Router::new().route(WS_PATH, get(ws_handler)).with_state(Arc::new(self))
+        Router::new()
+            .route(WS_PATH, get(ws_handler))
+            .route(OPENAPI_PATH, get(rest_openapi_handler))
+            .route(REST_STATUS_PATH, get(rest_status_handler))
+            .route(REST_TASKS_PATH, get(rest_list_tasks_handler).post(rest_create_task_handler))
+            .route(REST_TASK_PATH, get(rest_inspect_task_handler))
+            .route(REST_TASK_CANCEL_PATH, post(rest_cancel_task_handler))
+            .route(REST_WORKERS_PATH, get(rest_list_workers_handler))
+            .route(REST_WORKER_PATH, get(rest_inspect_worker_handler))
+            .route(REST_SESSION_PATH, get(rest_show_session_handler))
+            .route(REST_RUN_PATH, get(rest_inspect_run_handler))
+            .with_state(Arc::new(self))
     }
 
     pub async fn serve(self) -> Result<()> {
@@ -1864,6 +2165,13 @@ impl NucleusService {
         let Some(session) = self.ensure_dispatch_session(runtime, &task, &profile)? else {
             return Ok(());
         };
+        let worker = self
+            .store
+            .inspect_worker(&session.worker_id)?
+            .ok_or_else(|| anyhow!("worker not found"))?;
+        if self.enforce_fort_capability(&task, &session, &worker, &profile, None)?.is_some() {
+            return Ok(());
+        }
         let run = self.store.claim_run_for_task(RunRecord::new(
             RunId::generate(),
             task.task_id.clone(),
@@ -1883,6 +2191,51 @@ impl NucleusService {
         };
         self.spawn_run_execution(runtime, run_spec);
         Ok(())
+    }
+
+    fn enforce_fort_capability(
+        &self,
+        task: &TaskRecord,
+        session: &SessionRecord,
+        worker: &WorkerRecord,
+        profile: &ProfileName,
+        prompt_override: Option<&str>,
+    ) -> Result<Option<String>> {
+        let Some((state, message, payload)) =
+            classify_fort_requirement(task, worker, profile, prompt_override)?
+        else {
+            return Ok(None);
+        };
+
+        let fort_event = self.store.append_aux_event(
+            fort_capability_event_type(state),
+            CanonicalEventSource::Fort,
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: Some(worker.worker_id.clone()),
+                session_id: Some(session.session_id.clone()),
+                run_id: task.latest_run_id.clone(),
+                profile: Some(profile.clone()),
+                payload: merge_json_objects(payload, json!({ "message": message.clone() })),
+            },
+        )?;
+        let _ = self.events.send(fort_event);
+
+        if let Some(blocked_reason) = fort_blocked_reason(state) {
+            if let Some(event) = self.store.mark_task_blocked(
+                &task.task_id,
+                Some(worker.worker_id.clone()),
+                Some(session.session_id.clone()),
+                Some(profile.clone()),
+                blocked_reason,
+                &message,
+            )? {
+                let _ = self.events.send(event);
+            }
+            return Ok(Some(message));
+        }
+
+        Ok(None)
     }
 
     fn ensure_dispatch_session(
@@ -2023,6 +2376,95 @@ impl NucleusService {
         )?;
         let _ = self.events.send(event);
         Ok(Some(session))
+    }
+
+    fn cancel_task(&self, task_id: &TaskId) -> Result<TaskCancelResultView> {
+        let task = self.store.inspect_task(task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+        let current_run = task
+            .latest_run_id
+            .as_ref()
+            .map(|run_id| self.store.inspect_run(run_id))
+            .transpose()?
+            .flatten();
+
+        if matches!(task.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Cancelled) {
+            return Ok(TaskCancelResultView {
+                task,
+                run: current_run,
+                cancellation_requested: false,
+            });
+        }
+
+        if let Some(run) = current_run.clone() {
+            if is_active_run_status(run.status) {
+                let session = self
+                    .store
+                    .inspect_session(&run.session_id)?
+                    .ok_or_else(|| anyhow!("session not found"))?;
+                let profile = task.profile.clone().or_else(|| session.profile.clone());
+                if let Some(turn_id) = run.app_server_turn_id.as_deref() {
+                    let runtime =
+                        self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
+                    let thread_id = session
+                        .app_server_thread_id
+                        .clone()
+                        .ok_or_else(|| anyhow!("session missing app-server thread id"))?;
+                    runtime.interrupt_turn(&session.worker_id, &thread_id, turn_id)?;
+                    let task = self
+                        .store
+                        .inspect_task(task_id)?
+                        .ok_or_else(|| anyhow!("task not found"))?;
+                    let run = self.store.inspect_run(&run.run_id)?;
+                    return Ok(TaskCancelResultView { task, run, cancellation_requested: true });
+                }
+
+                let events = self.store.apply_runtime_event(CanonicalEventDraft {
+                    event_type: CanonicalEventType::RunCancelled,
+                    source: CanonicalEventSource::Nucleus,
+                    data: EventDataEnvelope {
+                        task_id: Some(task.task_id.clone()),
+                        worker_id: Some(session.worker_id.clone()),
+                        session_id: Some(session.session_id.clone()),
+                        run_id: Some(run.run_id.clone()),
+                        profile,
+                        payload: json!({
+                            "message": "run cancelled before the worker reported turn start",
+                        }),
+                    },
+                })?;
+                for event in events {
+                    let _ = self.events.send(event);
+                }
+                let task =
+                    self.store.inspect_task(task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+                let run = self.store.inspect_run(&run.run_id)?;
+                return Ok(TaskCancelResultView { task, run, cancellation_requested: false });
+            }
+        }
+
+        if let Some((task, event)) = self.store.cancel_task_without_run(
+            task_id,
+            CanonicalEventSource::Nucleus,
+            "task cancelled before run execution",
+        )? {
+            let _ = self.events.send(event);
+            let run = task
+                .latest_run_id
+                .as_ref()
+                .map(|run_id| self.store.inspect_run(run_id))
+                .transpose()?
+                .flatten();
+            return Ok(TaskCancelResultView { task, run, cancellation_requested: false });
+        }
+
+        let task = self.store.inspect_task(task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+        let run = task
+            .latest_run_id
+            .as_ref()
+            .map(|run_id| self.store.inspect_run(run_id))
+            .transpose()?
+            .flatten();
+        Ok(TaskCancelResultView { task, run, cancellation_requested: false })
     }
 
     fn find_reusable_session(
@@ -2182,6 +2624,12 @@ impl NucleusService {
                     None => Err(anyhow!("task not found")),
                 }
             }
+            "task.cancel" => {
+                let params: TaskCancelParams =
+                    serde_json::from_value(params).context("parse task.cancel params")?;
+                let task_id = TaskId::new(params.task_id)?;
+                Ok(serde_json::to_value(self.cancel_task(&task_id)?)?)
+            }
             "profile.list" => Ok(serde_json::to_value(self.store.list_profiles()?)?),
             "worker.probe" => {
                 let runtime =
@@ -2310,6 +2758,15 @@ impl NucleusService {
                             anyhow::bail!("task already has an active run");
                         }
                     }
+                }
+                if let Some(message) = self.enforce_fort_capability(
+                    &task,
+                    &session,
+                    &worker,
+                    &profile,
+                    Some(&params.prompt),
+                )? {
+                    anyhow::bail!(message);
                 }
                 let run = RunRecord::new(RunId::generate(), task_id.clone(), session_id.clone());
                 let run = self.store.claim_run_for_task(run)?;
@@ -2505,6 +2962,531 @@ async fn recv_event(
     }
 }
 
+fn rest_request(method: &str, params: Value) -> GatewayRequest {
+    GatewayRequest { id: json!(method), method: method.to_owned(), params }
+}
+
+fn rest_status_from_gateway_code(code: &str) -> StatusCode {
+    match code {
+        "invalid_params" => StatusCode::BAD_REQUEST,
+        "not_found" | "method_not_found" => StatusCode::NOT_FOUND,
+        "unavailable" => StatusCode::SERVICE_UNAVAILABLE,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+fn rest_gateway_response(response: GatewayResponse, success_status: StatusCode) -> Response {
+    if response.ok {
+        return (success_status, Json(response.result.unwrap_or_else(|| json!({}))))
+            .into_response();
+    }
+
+    let error = response.error.unwrap_or(GatewayErrorObject {
+        code: "internal_error".to_owned(),
+        message: "request failed".to_owned(),
+        details: None,
+    });
+    let status = rest_status_from_gateway_code(&error.code);
+    (
+        status,
+        Json(json!({
+            "error": {
+                "code": error.code,
+                "message": error.message,
+                "details": error.details,
+            }
+        })),
+    )
+        .into_response()
+}
+
+fn schema_ref(name: &str) -> Value {
+    json!({ "$ref": format!("#/components/schemas/{name}") })
+}
+
+fn openapi_document(config: &NucleusConfig) -> Value {
+    json!({
+        "openapi": "3.1.0",
+        "info": {
+            "title": "SI Nucleus REST API",
+            "version": env!("CARGO_PKG_VERSION"),
+            "description": "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
+        },
+        "servers": [
+            { "url": format!("http://{}", config.bind_addr) }
+        ],
+        "paths": {
+            "/status": {
+                "get": {
+                    "summary": "Inspect Nucleus status",
+                    "description": "Read the current Nucleus status projection, including bind address, state directory, and durable object counts.",
+                    "x-si-purpose": "Use this for bounded external health and topology inspection without opening the websocket control plane.",
+                    "responses": {
+                        "200": {
+                            "description": "Current nucleus status.",
+                            "content": { "application/json": { "schema": schema_ref("NucleusStatusView") } }
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/tasks": {
+                "get": {
+                    "summary": "List tasks",
+                    "description": "List durable tasks from the same source of truth used by the websocket gateway and CLI.",
+                    "x-si-purpose": "Use this for bounded task inspection and polling from external tools such as GPT Actions.",
+                    "responses": {
+                        "200": {
+                            "description": "All durable tasks.",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "array", "items": schema_ref("TaskRecord") }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Create a task",
+                    "description": "Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.",
+                    "x-si-purpose": "Use this to create bounded external work without bypassing Nucleus task intake rules.",
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": schema_ref("TaskCreateParams")
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Created task.",
+                            "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
+                        },
+                        "400": {
+                            "description": "Invalid request.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/tasks/{task_id}": {
+                "get": {
+                    "summary": "Inspect one task",
+                    "description": "Read one durable task projection by task id.",
+                    "x-si-purpose": "Use this to inspect bounded task state from external tooling.",
+                    "parameters": [
+                        {
+                            "name": "task_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" },
+                            "description": "Canonical SI task id."
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Task record.",
+                            "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
+                        },
+                        "404": {
+                            "description": "Task not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/tasks/{task_id}/cancel": {
+                "post": {
+                    "summary": "Cancel one task",
+                    "description": "Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.",
+                    "x-si-purpose": "Use this for bounded external cancellation requests and then re-read the task or run to observe final state.",
+                    "parameters": [
+                        {
+                            "name": "task_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" },
+                            "description": "Canonical SI task id."
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Cancellation result.",
+                            "content": { "application/json": { "schema": schema_ref("TaskCancelResultView") } }
+                        },
+                        "404": {
+                            "description": "Task not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        },
+                        "503": {
+                            "description": "Runtime unavailable for active-run cancellation.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/workers": {
+                "get": {
+                    "summary": "List workers",
+                    "description": "List durable worker records tracked by Nucleus.",
+                    "x-si-purpose": "Use this for bounded worker inspection without relying on tmux or direct runtime internals.",
+                    "responses": {
+                        "200": {
+                            "description": "All durable workers.",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "array", "items": schema_ref("WorkerRecord") }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/workers/{worker_id}": {
+                "get": {
+                    "summary": "Inspect one worker",
+                    "description": "Read one worker projection, including persisted runtime view when available.",
+                    "x-si-purpose": "Use this to inspect worker assignment and runtime attachment through the Nucleus model.",
+                    "parameters": [
+                        {
+                            "name": "worker_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" },
+                            "description": "Canonical SI worker id."
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Worker inspect view.",
+                            "content": { "application/json": { "schema": schema_ref("WorkerInspectView") } }
+                        },
+                        "404": {
+                            "description": "Worker not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/sessions/{session_id}": {
+                "get": {
+                    "summary": "Inspect one session",
+                    "description": "Read one durable session projection by session id.",
+                    "x-si-purpose": "Use this to inspect worker/session binding and reusable thread identity from external tooling.",
+                    "parameters": [
+                        {
+                            "name": "session_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" },
+                            "description": "Canonical SI session id."
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Session record.",
+                            "content": { "application/json": { "schema": schema_ref("SessionRecord") } }
+                        },
+                        "404": {
+                            "description": "Session not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/runs/{run_id}": {
+                "get": {
+                    "summary": "Inspect one run",
+                    "description": "Read one durable run projection by run id.",
+                    "x-si-purpose": "Use this to inspect bounded run state from external tools without subscribing to websocket events.",
+                    "parameters": [
+                        {
+                            "name": "run_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" },
+                            "description": "Canonical SI run id."
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Run record.",
+                            "content": { "application/json": { "schema": schema_ref("RunRecord") } }
+                        },
+                        "404": {
+                            "description": "Run not found.",
+                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                        }
+                    }
+                }
+            },
+            "/openapi.json": {
+                "get": {
+                    "summary": "Fetch the OpenAPI document",
+                    "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
+                    "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
+                    "responses": {
+                        "200": {
+                            "description": "OpenAPI document.",
+                            "content": { "application/json": { "schema": { "type": "object" } } }
+                        }
+                    }
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "RestErrorEnvelope": {
+                    "type": "object",
+                    "required": ["error"],
+                    "properties": {
+                        "error": {
+                            "type": "object",
+                            "required": ["code", "message"],
+                            "properties": {
+                                "code": { "type": "string" },
+                                "message": { "type": "string" },
+                                "details": {}
+                            }
+                        }
+                    }
+                },
+                "NucleusStatusView": {
+                    "type": "object",
+                    "required": ["version", "bind_addr", "ws_url", "state_dir", "task_count", "worker_count", "session_count", "run_count", "next_event_seq"],
+                    "properties": {
+                        "version": { "type": "string" },
+                        "bind_addr": { "type": "string" },
+                        "ws_url": { "type": "string" },
+                        "state_dir": { "type": "string" },
+                        "task_count": { "type": "integer", "minimum": 0 },
+                        "worker_count": { "type": "integer", "minimum": 0 },
+                        "session_count": { "type": "integer", "minimum": 0 },
+                        "run_count": { "type": "integer", "minimum": 0 },
+                        "next_event_seq": { "type": "integer", "minimum": 0 }
+                    }
+                },
+                "TaskCreateParams": {
+                    "type": "object",
+                    "required": ["title", "instructions"],
+                    "properties": {
+                        "title": { "type": "string" },
+                        "instructions": { "type": "string" },
+                        "source": { "type": "string", "enum": ["cli", "websocket", "cron", "hook", "system"] },
+                        "profile": { "type": ["string", "null"] },
+                        "session_id": { "type": ["string", "null"] },
+                        "max_retries": { "type": ["integer", "null"], "minimum": 0 },
+                        "timeout_seconds": { "type": ["integer", "null"], "minimum": 0 }
+                    }
+                },
+                "TaskRecord": {
+                    "type": "object",
+                    "required": ["task_id", "source", "title", "instructions", "status", "created_at", "updated_at"],
+                    "properties": {
+                        "task_id": { "type": "string" },
+                        "source": { "type": "string", "enum": ["cli", "websocket", "cron", "hook", "system"] },
+                        "title": { "type": "string" },
+                        "instructions": { "type": "string" },
+                        "status": { "type": "string", "enum": ["queued", "running", "blocked", "done", "failed", "cancelled"] },
+                        "profile": { "type": ["string", "null"] },
+                        "session_id": { "type": ["string", "null"] },
+                        "latest_run_id": { "type": ["string", "null"] },
+                        "checkpoint_summary": { "type": ["string", "null"] },
+                        "checkpoint_at": { "type": ["string", "null"], "format": "date-time" },
+                        "checkpoint_seq": { "type": ["integer", "null"], "minimum": 0 },
+                        "parent_task_id": { "type": ["string", "null"] },
+                        "producer_rule_name": { "type": ["string", "null"] },
+                        "producer_dedup_key": { "type": ["string", "null"] },
+                        "blocked_reason": {
+                            "type": ["string", "null"],
+                            "enum": [null, "auth_required", "worker_unavailable", "session_broken", "producer_error", "operator_hold", "fort_unavailable"]
+                        },
+                        "created_at": { "type": "string", "format": "date-time" },
+                        "updated_at": { "type": "string", "format": "date-time" },
+                        "max_retries": { "type": ["integer", "null"], "minimum": 0 },
+                        "timeout_seconds": { "type": ["integer", "null"], "minimum": 0 }
+                    }
+                },
+                "WorkerRecord": {
+                    "type": "object",
+                    "required": ["worker_id", "profile", "codex_home", "status"],
+                    "properties": {
+                        "worker_id": { "type": "string" },
+                        "profile": { "type": "string" },
+                        "home_dir": { "type": ["string", "null"] },
+                        "codex_home": { "type": "string" },
+                        "workdir": { "type": ["string", "null"] },
+                        "extra_env": { "type": "object", "additionalProperties": { "type": "string" } },
+                        "status": { "type": "string", "enum": ["starting", "ready", "degraded", "failed", "stopped"] },
+                        "capability_version": { "type": ["string", "null"] },
+                        "last_heartbeat_at": { "type": ["string", "null"], "format": "date-time" },
+                        "effective_account_state": { "type": ["string", "null"] }
+                    }
+                },
+                "WorkerRuntimeView": {
+                    "type": "object",
+                    "required": ["worker_id", "runtime_name", "pid", "started_at", "checked_at"],
+                    "properties": {
+                        "worker_id": { "type": "string" },
+                        "runtime_name": { "type": "string" },
+                        "pid": { "type": "integer", "minimum": 0 },
+                        "started_at": { "type": "string", "format": "date-time" },
+                        "checked_at": { "type": "string", "format": "date-time" }
+                    }
+                },
+                "WorkerInspectView": {
+                    "type": "object",
+                    "required": ["worker"],
+                    "properties": {
+                        "worker": schema_ref("WorkerRecord"),
+                        "runtime": {
+                            "anyOf": [schema_ref("WorkerRuntimeView"), { "type": "null" }]
+                        }
+                    }
+                },
+                "SessionRecord": {
+                    "type": "object",
+                    "required": ["session_id", "worker_id", "lifecycle_state", "created_at", "updated_at"],
+                    "properties": {
+                        "session_id": { "type": "string" },
+                        "worker_id": { "type": "string" },
+                        "profile": { "type": ["string", "null"] },
+                        "app_server_thread_id": { "type": ["string", "null"] },
+                        "workdir": { "type": ["string", "null"] },
+                        "lifecycle_state": { "type": "string", "enum": ["opening", "ready", "busy", "broken", "closed"] },
+                        "summary_state": { "type": ["string", "null"] },
+                        "created_at": { "type": "string", "format": "date-time" },
+                        "updated_at": { "type": "string", "format": "date-time" }
+                    }
+                },
+                "RunRecord": {
+                    "type": "object",
+                    "required": ["run_id", "task_id", "session_id", "status"],
+                    "properties": {
+                        "run_id": { "type": "string" },
+                        "task_id": { "type": "string" },
+                        "session_id": { "type": "string" },
+                        "status": { "type": "string", "enum": ["queued", "running", "blocked", "completed", "failed", "cancelled"] },
+                        "started_at": { "type": ["string", "null"], "format": "date-time" },
+                        "ended_at": { "type": ["string", "null"], "format": "date-time" },
+                        "parent_run_id": { "type": ["string", "null"] },
+                        "app_server_turn_id": { "type": ["string", "null"] }
+                    }
+                },
+                "TaskCancelResultView": {
+                    "type": "object",
+                    "required": ["task", "cancellation_requested"],
+                    "properties": {
+                        "task": schema_ref("TaskRecord"),
+                        "run": {
+                            "anyOf": [schema_ref("RunRecord"), { "type": "null" }]
+                        },
+                        "cancellation_requested": { "type": "boolean" }
+                    }
+                }
+            }
+        }
+    })
+}
+
+async fn rest_openapi_handler(State(service): State<Arc<NucleusService>>) -> impl IntoResponse {
+    (StatusCode::OK, Json(openapi_document(&service.config)))
+}
+
+async fn rest_status_handler(State(service): State<Arc<NucleusService>>) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("nucleus.status", json!({}))).await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_create_task_handler(
+    State(service): State<Arc<NucleusService>>,
+    Json(request): Json<TaskCreateParams>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request(rest_request(
+                "task.create",
+                serde_json::to_value(request).unwrap_or_else(|_| json!({})),
+            ))
+            .await,
+        StatusCode::CREATED,
+    )
+}
+
+async fn rest_list_tasks_handler(State(service): State<Arc<NucleusService>>) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("task.list", json!({}))).await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_inspect_task_handler(
+    State(service): State<Arc<NucleusService>>,
+    AxumPath(task_id): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("task.inspect", json!({ "task_id": task_id }))).await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_cancel_task_handler(
+    State(service): State<Arc<NucleusService>>,
+    AxumPath(task_id): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("task.cancel", json!({ "task_id": task_id }))).await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_list_workers_handler(State(service): State<Arc<NucleusService>>) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("worker.list", json!({}))).await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_inspect_worker_handler(
+    State(service): State<Arc<NucleusService>>,
+    AxumPath(worker_id): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request(rest_request("worker.inspect", json!({ "worker_id": worker_id })))
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_show_session_handler(
+    State(service): State<Arc<NucleusService>>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request(rest_request("session.show", json!({ "session_id": session_id })))
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_inspect_run_handler(
+    State(service): State<Arc<NucleusService>>,
+    AxumPath(run_id): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service.dispatch_request(rest_request("run.inspect", json!({ "run_id": run_id }))).await,
+        StatusCode::OK,
+    )
+}
+
 fn infer_error_code(error: &anyhow::Error) -> &'static str {
     let message = error.to_string();
     if message.contains("parse ") {
@@ -2543,7 +3525,7 @@ struct CreateTaskInput {
     timeout_seconds: Option<u64>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct TaskCreateParams {
     title: String,
     instructions: String,
@@ -2559,8 +3541,21 @@ fn default_request_task_source() -> TaskSource {
     TaskSource::Websocket
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TaskCancelResultView {
+    task: TaskRecord,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    run: Option<RunRecord>,
+    cancellation_requested: bool,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct TaskInspectParams {
+    task_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct TaskCancelParams {
     task_id: String,
 }
 
@@ -2667,28 +3662,33 @@ impl GatewayResponse {
 mod tests {
     use std::collections::{HashMap, HashSet};
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
     use super::{
         CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord, NucleusConfig,
-        NucleusService, cron_due_key, write_json_atomic,
+        NucleusService, cron_due_key, load_canonical_events, write_json_atomic,
     };
     use anyhow::Result;
+    use axum::body::{Body, to_bytes};
+    use axum::http::{Request, StatusCode};
     use chrono::{Duration as ChronoDuration, Utc};
     use serde_json::json;
     use si_nucleus_core::{
-        CanonicalEventSource, CanonicalEventType, EventDataEnvelope, ProfileName, RunId, RunRecord,
-        RunStatus, SessionId, SessionLifecycleState, TaskId, TaskStatus, WorkerId, WorkerStatus,
+        BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
+        ProfileName, RunId, RunRecord, RunStatus, SessionId, SessionLifecycleState, TaskId,
+        TaskStatus, WorkerId, WorkerStatus,
     };
     use si_nucleus_runtime::{
         CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
         RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
         WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
     };
+    use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
     use tempfile::tempdir;
+    use tower::util::ServiceExt;
 
     #[derive(Default)]
     struct FakeState {
@@ -2992,6 +3992,35 @@ mod tests {
         serde_json::from_slice(&fs::read(path).expect("read hook rule")).expect("parse hook rule")
     }
 
+    fn write_fort_session_state(
+        codex_home: &Path,
+        profile: &str,
+        state: PersistedSessionState,
+    ) -> PathBuf {
+        let fort_dir = codex_home.join("fort");
+        let session_path = fort_dir.join("session.json");
+        save_persisted_session_state(
+            &session_path,
+            &PersistedSessionState { profile_id: profile.to_owned(), ..state },
+        )
+        .expect("write fort session state");
+        session_path
+    }
+
+    fn fort_events_for_task(service: &NucleusService, task_id: &str) -> Vec<CanonicalEvent> {
+        let task_id = TaskId::new(task_id).expect("task id");
+        load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .filter(|event| event.data.task_id.as_ref() == Some(&task_id))
+            .collect()
+    }
+
+    async fn response_json(response: axum::response::Response) -> serde_json::Value {
+        let body = to_bytes(response.into_body(), usize::MAX).await.expect("read body");
+        serde_json::from_slice(&body).expect("parse json body")
+    }
+
     #[test]
     fn store_reloads_event_sequence() {
         let temp = tempdir().expect("tempdir");
@@ -3074,6 +4103,249 @@ mod tests {
             .await;
         assert!(response.ok);
         assert_eq!(response.result.expect("status")["ws_url"], json!("ws://127.0.0.1:9898/ws"));
+    }
+
+    #[tokio::test]
+    async fn rest_openapi_document_describes_bounded_external_endpoints() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service")
+        .router();
+
+        let response = app
+            .oneshot(Request::builder().uri("/openapi.json").body(Body::empty()).expect("request"))
+            .await
+            .expect("openapi response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["openapi"], json!("3.1.0"));
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+                ["$ref"],
+            json!("#/components/schemas/TaskCreateParams")
+        );
+        assert_eq!(
+            body["paths"]["/tasks/{task_id}/cancel"]["post"]["x-si-purpose"],
+            json!(
+                "Use this for bounded external cancellation requests and then re-read the task or run to observe final state."
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn rest_task_endpoints_share_nucleus_source_of_truth() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST task",
+                            "instructions": "Create a durable task through REST",
+                            "profile": "america",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(create_response.status(), StatusCode::CREATED);
+        let created = response_json(create_response).await;
+        let task_id = created["task_id"].as_str().expect("task id");
+
+        let status_response = app
+            .clone()
+            .oneshot(Request::builder().uri("/status").body(Body::empty()).expect("request"))
+            .await
+            .expect("status response");
+        assert_eq!(status_response.status(), StatusCode::OK);
+        let status = response_json(status_response).await;
+        assert_eq!(status["task_count"], json!(1));
+
+        let list_response = app
+            .clone()
+            .oneshot(Request::builder().uri("/tasks").body(Body::empty()).expect("request"))
+            .await
+            .expect("list response");
+        assert_eq!(list_response.status(), StatusCode::OK);
+        let listed = response_json(list_response).await;
+        assert_eq!(listed.as_array().map(|items| items.len()), Some(1));
+
+        let inspect_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/tasks/{task_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("inspect response");
+        assert_eq!(inspect_response.status(), StatusCode::OK);
+        let inspected = response_json(inspect_response).await;
+        assert_eq!(inspected["status"], json!("queued"));
+
+        let cancel_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/tasks/{task_id}/cancel"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("cancel response");
+        assert_eq!(cancel_response.status(), StatusCode::OK);
+        let cancelled = response_json(cancel_response).await;
+        assert_eq!(cancelled["task"]["status"], json!("cancelled"));
+        assert_eq!(cancelled["cancellation_requested"], json!(false));
+
+        let stored = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(stored.status, TaskStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn rest_worker_session_and_run_endpoints_reflect_gateway_state() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+        let app = service.clone().router();
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-rest"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["worker_id"].as_str())
+            .expect("worker id");
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-rest"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "REST inspect run",
+                    "instructions": "Reply with nucleus-smoke",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-rest"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "Reply with nucleus-smoke",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
+
+        thread::sleep(Duration::from_millis(150));
+
+        let workers_response = app
+            .clone()
+            .oneshot(Request::builder().uri("/workers").body(Body::empty()).expect("request"))
+            .await
+            .expect("workers response");
+        assert_eq!(workers_response.status(), StatusCode::OK);
+        let workers = response_json(workers_response).await;
+        assert_eq!(workers.as_array().map(|items| items.len()), Some(1));
+
+        let worker_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/workers/{worker_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("worker response");
+        assert_eq!(worker_response.status(), StatusCode::OK);
+        let worker = response_json(worker_response).await;
+        assert_eq!(worker["worker"]["worker_id"], json!(worker_id));
+
+        let session_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/sessions/{session_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("session response");
+        assert_eq!(session_response.status(), StatusCode::OK);
+        let session_body = response_json(session_response).await;
+        assert_eq!(session_body["session_id"], json!(session_id));
+
+        let run_response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/runs/{run_id}"))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("run response");
+        assert_eq!(run_response.status(), StatusCode::OK);
+        let run_body = response_json(run_response).await;
+        assert_eq!(run_body["run_id"], json!(run_id));
+        assert_eq!(run_body["status"], json!("completed"));
     }
 
     #[tokio::test]
@@ -3466,11 +4738,8 @@ mod tests {
             })
             .await;
         assert!(task.ok);
-        let task_id = task
-            .result
-            .as_ref()
-            .and_then(|item| item["task_id"].as_str())
-            .expect("task id");
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
 
         let run = service
             .dispatch_request(GatewayRequest {
@@ -3484,11 +4753,7 @@ mod tests {
             })
             .await;
         assert!(run.ok);
-        let run_id = run
-            .result
-            .as_ref()
-            .and_then(|item| item["run_id"].as_str())
-            .expect("run id");
+        let run_id = run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
 
         let started = wait_for_run_started(&service, run_id);
         assert!(started.app_server_turn_id.is_some());
@@ -3745,5 +5010,226 @@ mod tests {
         wait_for_task_status(&service, task_id, TaskStatus::Failed);
         let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
         assert_eq!(run.status, RunStatus::Failed);
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_fort_task_when_auth_is_required() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-auth"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Check Fort bootstrap",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-auth"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home,
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        service.reconcile_and_dispatch_once().expect("dispatch fort task");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::AuthRequired));
+        assert!(task.latest_run_id.is_none());
+        let events = fort_events_for_task(&service, task_id);
+        assert!(
+            events.iter().any(|event| event.event_type == CanonicalEventType::FortAuthRequired)
+        );
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_blocks_fort_task_when_fort_is_unavailable() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-unavailable"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home,
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-unavailable"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Use Fort in a run",
+                    "instructions": "Use si fort refresh",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-fort-unavailable"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "Use si fort refresh now",
+                }),
+            })
+            .await;
+        assert!(!run.ok);
+        assert!(
+            run.error
+                .as_ref()
+                .and_then(|error| Some(error.message.contains("Fort is unavailable")))
+                .unwrap_or(false)
+        );
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::FortUnavailable));
+        assert_eq!(service.store.list_runs().expect("list runs").len(), 0);
+        let events = fort_events_for_task(&service, task_id);
+        assert!(events.iter().any(|event| event.event_type == CanonicalEventType::FortUnavailable));
+    }
+
+    #[tokio::test]
+    async fn dispatcher_executes_fort_task_when_fort_is_ready() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-ready"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home,
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-ready"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Fort-backed task",
+                    "instructions": "Use si fort bootstrap and then reply with nucleus-smoke",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch fort-ready task");
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Done);
+        let events = fort_events_for_task(&service, task_id);
+        assert!(events.iter().any(|event| event.event_type == CanonicalEventType::FortReady));
     }
 }

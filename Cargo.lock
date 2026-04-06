@@ -1966,8 +1966,10 @@ dependencies = [
  "si-nucleus-core",
  "si-nucleus-runtime",
  "si-nucleus-runtime-codex",
+ "si-rs-fort",
  "tempfile",
  "tokio",
+ "tower",
 ]
 
 [[package]]
