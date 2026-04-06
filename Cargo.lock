@@ -1952,6 +1952,8 @@ dependencies = [
  "serde",
  "serde_json",
  "si-nucleus-core",
+ "si-nucleus-runtime",
+ "si-nucleus-runtime-codex",
  "tempfile",
  "tokio",
 ]
@@ -1964,6 +1966,31 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "si-nucleus-runtime"
+version = "0.55.12"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "si-nucleus-core",
+]
+
+[[package]]
+name = "si-nucleus-runtime-codex"
+version = "0.55.12"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "si-nucleus-core",
+ "si-nucleus-runtime",
+ "si-rs-core",
+ "si-rs-process",
 ]
 
 [[package]]
@@ -2005,6 +2032,7 @@ dependencies = [
  "tar",
  "tempfile",
  "toml",
+ "tungstenite",
  "url",
 ]
 

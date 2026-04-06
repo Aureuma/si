@@ -1,5 +1,5 @@
 [package]
-name = "si-nucleus"
+name = "si-nucleus-runtime-codex"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,18 +8,13 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
 chrono.workspace = true
-futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 si-nucleus-core = { path = "../si-nucleus-core" }
 si-nucleus-runtime = { path = "../si-nucleus-runtime" }
-si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }
-tokio.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
+si-rs-process = { path = "../si-process" }
+si-rs-core = { path = "../si-core" }
 
 [lib]
 path = "src/lib.rs"
