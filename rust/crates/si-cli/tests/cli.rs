@@ -7082,6 +7082,18 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["summary"],
+        json!("Inspect one task")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["description"],
+        json!("Read one durable task projection by task id.")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["x-si-purpose"],
+        json!("Use this to inspect bounded task state from external tooling.")
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["schema"]["type"],
         json!("string")
     );
