@@ -7028,6 +7028,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn persisted_run_events_use_single_canonical_event_ledger() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-single-ledger"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-single-ledger"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Single ledger task",
+                    "instructions": "Verify one canonical event stream",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-single-ledger"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "verify a single canonical event ledger",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let event_files = fs::read_dir(&service.store.paths().events_state_dir)
+            .expect("read events dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("jsonl"))
+            .collect::<Vec<_>>();
+        assert_eq!(event_files, vec![service.store.paths().events_path.clone()]);
+
+        let log_entries = fs::read_dir(&service.store.paths().logs_dir)
+            .expect("read logs dir")
+            .filter_map(|entry| entry.ok())
+            .collect::<Vec<_>>();
+        assert!(log_entries.is_empty(), "logs dir should not hold a parallel event ledger");
+    }
+
+    #[tokio::test]
     async fn si_primary_ids_remain_namespaced_and_distinct_from_runtime_ids() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
