@@ -12,6 +12,8 @@
     clippy::collapsible_if
 )]
 
+mod vault_compat;
+
 use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -217,6 +219,7 @@ use tar::Builder as TarBuilder;
 use tungstenite::client::IntoClientRequest;
 use tungstenite::http::header::{AUTHORIZATION, HeaderValue};
 use tungstenite::{Message as WsMessage, connect as ws_connect};
+use vault_compat::{VaultCommand, run_vault_command};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -15870,30 +15873,6 @@ enum FortRefreshOutcomeArg {
     Success,
     Unauthorized,
     Retryable,
-}
-
-#[derive(Debug, Subcommand)]
-enum VaultCommand {
-    Trust {
-        #[command(subcommand)]
-        command: VaultTrustCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum VaultTrustCommand {
-    Lookup {
-        #[arg(long)]
-        path: PathBuf,
-        #[arg(long)]
-        repo_root: String,
-        #[arg(long)]
-        file: String,
-        #[arg(long)]
-        fingerprint: String,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -33678,13 +33657,7 @@ fn main() -> Result<()> {
         Command::Fort { home, settings_file, build, no_build, bin, args } => {
             run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
         }
-        Command::Vault { command } => match command {
-            VaultCommand::Trust { command } => match command {
-                VaultTrustCommand::Lookup { path, repo_root, file, fingerprint, format } => {
-                    show_vault_trust_lookup(path, &repo_root, &file, &fingerprint, format)?
-                }
-            },
-        },
+        Command::Vault { command } => run_vault_command(command)?,
         Command::Image { command } => match command {
             ImageCommand::Unsplash { command } => {
                 run_image_command(ImageProvider::Unsplash, command)?

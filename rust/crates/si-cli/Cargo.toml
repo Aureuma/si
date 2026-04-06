@@ -12,7 +12,9 @@ base64 = "0.22.1"
 chrono.workspace = true
 clap.workspace = true
 comfy-table = "7.1.4"
+ecies = { version = "0.2.10", default-features = false, features = ["std", "pure"] }
 flate2 = "1.1.2"
+hex = "0.4.3"
 libc.workspace = true
 regex.workspace = true
 reqwest.workspace = true

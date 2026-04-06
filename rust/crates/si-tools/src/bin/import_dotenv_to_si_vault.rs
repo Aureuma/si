@@ -40,16 +40,6 @@ fn run(args: Vec<String>) -> Result<ExitCode, (String, ExitCode)> {
     if !has_si_on_path() {
         return Err(("si not found on PATH".to_string(), ExitCode::from(1)));
     }
-    if !config.identity_file.exists() {
-        return Err((
-            format!(
-                "vault identity file not found: {}\nhint: pass --identity-file",
-                config.identity_file.display()
-            ),
-            ExitCode::from(1),
-        ));
-    }
-
     let env_files = list_env_files(&config.src)
         .map_err(|err| (format!("find env files: {err}"), ExitCode::from(1)))?;
     if env_files.is_empty() {
@@ -143,9 +133,9 @@ fn usage_error(message: &str) -> Result<(Config, bool), (String, ExitCode)> {
 fn default_identity_file() -> PathBuf {
     match env::var("HOME") {
         Ok(home) if !home.trim().is_empty() => {
-            Path::new(home.trim()).join(".si").join("vault").join("keys").join("age.key")
+            Path::new(home.trim()).join(".si").join("vault").join("si-vault-keyring.json")
         }
-        _ => PathBuf::from(".si/vault/keys/age.key"),
+        _ => PathBuf::from(".si/vault/si-vault-keyring.json"),
     }
 }
 
