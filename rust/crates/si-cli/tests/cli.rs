@@ -7063,6 +7063,12 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("#/components/schemas/TaskCancelResultView")
     );
     assert_eq!(
+        body["paths"]["/tasks/{task_id}/cancel"]["post"]["x-si-purpose"],
+        json!(
+            "Use this for bounded external cancellation requests and then re-read the task or run to observe final state."
+        )
+    );
+    assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["503"]["content"]["application/json"]
             ["schema"]["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
