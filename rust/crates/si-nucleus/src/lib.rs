@@ -4758,6 +4758,8 @@ fn infer_error_code(error: &anyhow::Error) -> &'static str {
     let message = error.to_string();
     if message.contains("unauthorized") {
         "unauthorized"
+    } else if message.contains("must match") {
+        "invalid_params"
     } else if message.contains("parse ") {
         "invalid_params"
     } else if message.contains("unavailable") {
@@ -6566,6 +6568,47 @@ mod tests {
             .expect("inspect task")
             .expect("task exists");
         assert_eq!(stored.status, TaskStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_rejects_non_slug_profile_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST invalid profile task",
+                            "instructions": "Reject uppercase profile names",
+                            "profile": "America",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], json!("invalid_params"));
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("profile name must match"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
     }
 
     #[tokio::test]
@@ -10464,10 +10507,7 @@ mod tests {
             Some("cancelled")
         );
         assert_eq!(
-            cancelled
-                .result
-                .as_ref()
-                .and_then(|item| item["run"]["status"].as_str()),
+            cancelled.result.as_ref().and_then(|item| item["run"]["status"].as_str()),
             Some("cancelled")
         );
 
