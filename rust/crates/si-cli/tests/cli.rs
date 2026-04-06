@@ -2019,6 +2019,47 @@ fn nucleus_task_create_requests_gateway_task_create_method() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_task_create_rejects_non_slug_profile_name_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let failed = cargo_bin()
+        .args([
+            "nucleus",
+            "task",
+            "create",
+            "Bad profile task",
+            "Reject uppercase profile names",
+            "--profile",
+            "America",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(failed.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("profile name must match"));
+
+    let status_output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).expect("parse status");
+    assert_eq!(status["task_count"], 0);
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_list_requests_gateway_task_list_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
@@ -2595,6 +2636,53 @@ fn nucleus_session_create_requests_gateway_session_create_method() {
         .clone();
     let payload: Value = serde_json::from_slice(&output).expect("parse output");
     assert_eq!(payload["session_id"], "si-session-123");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_session_create_rejects_non_slug_profile_name_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/America");
+    let failed = cargo_bin()
+        .args([
+            "nucleus",
+            "session",
+            "create",
+            "America",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8(failed.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("profile name must match"));
+
+    let status_output = cargo_bin()
+        .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).expect("parse status");
+    assert_eq!(status["worker_count"], 0);
+    assert_eq!(status["session_count"], 0);
 }
 
 #[test]
