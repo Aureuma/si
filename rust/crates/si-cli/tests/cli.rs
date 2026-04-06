@@ -4415,6 +4415,76 @@ fn nucleus_worker_restart_restarts_idle_worker_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_worker_repair_auth_reprobes_and_starts_missing_runtime_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let runtime = TestRuntime::default();
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(runtime.clone()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let probe_output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "probe",
+            "america",
+            "--home-dir",
+            home_dir.to_str().expect("home dir"),
+            "--codex-home",
+            codex_home.to_str().expect("codex home"),
+            "--workdir",
+            temp.path().to_str().expect("workdir"),
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let probed: Value = serde_json::from_slice(&probe_output).expect("parse worker probe");
+    let worker_id = probed["worker"]["worker_id"].as_str().expect("worker id").to_owned();
+    assert_eq!(runtime.start_call_count(), 0);
+
+    runtime
+        .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
+        .expect("stop missing runtime worker");
+
+    let repaired_output = cargo_bin()
+        .args([
+            "nucleus",
+            "worker",
+            "repair-auth",
+            &worker_id,
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let repaired: Value = serde_json::from_slice(&repaired_output).expect("parse repair auth");
+    assert_eq!(repaired["worker"]["worker_id"], worker_id);
+    assert_eq!(repaired["worker"]["status"], "ready");
+    assert_eq!(repaired["runtime"]["worker_id"], worker_id);
+    assert_eq!(runtime.start_call_count(), 1);
+
+    let inspected = wait_for_worker_status(&ws_url, &worker_id, "ready");
+    assert_eq!(inspected["worker"]["status"], "ready");
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_cancel_marks_session_broken_when_thread_id_is_missing_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
