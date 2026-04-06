@@ -5202,6 +5202,54 @@ mod tests {
         assert_eq!(body["openapi"], json!("3.1.0"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"], json!("opaque token"));
+        for (path, method, expected_response) in [
+            ("/status", "get", "200"),
+            ("/tasks", "get", "200"),
+            ("/tasks", "post", "201"),
+            ("/tasks/{task_id}", "get", "200"),
+            ("/tasks/{task_id}/cancel", "post", "200"),
+            ("/workers", "get", "200"),
+            ("/workers/{worker_id}", "get", "200"),
+            ("/sessions/{session_id}", "get", "200"),
+            ("/runs/{run_id}", "get", "200"),
+            ("/openapi.json", "get", "200"),
+        ] {
+            let operation = &body["paths"][path][method];
+            assert!(
+                operation["summary"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+                "missing summary for {method} {path}"
+            );
+            assert!(
+                operation["description"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+                "missing description for {method} {path}"
+            );
+            assert!(
+                operation["x-si-purpose"]
+                    .as_str()
+                    .map(|value| !value.is_empty())
+                    .unwrap_or(false),
+                "missing x-si-purpose for {method} {path}"
+            );
+            assert!(
+                operation["responses"][expected_response]["content"]["application/json"]["schema"]
+                    .is_object(),
+                "missing success schema for {method} {path}"
+            );
+            assert!(
+                operation.get("requestBody").map(|value| value.is_object()).unwrap_or(false)
+                    || operation.get("parameters").map(|value| value.is_array()).unwrap_or(false)
+                    || matches!((path, method), ("/status", "get") | ("/tasks", "get") | ("/workers", "get") | ("/openapi.json", "get")),
+                "missing request surface for {method} {path}"
+            );
+        }
+        for (path, method) in [("/tasks", "post")] {
+            let operation = &body["paths"][path][method];
+            assert_eq!(operation["requestBody"]["required"], json!(true), "requestBody must be required for {method} {path}");
+            assert!(
+                operation["requestBody"]["content"]["application/json"]["schema"].is_object(),
+                "missing request schema for {method} {path}"
+            );
+        }
         assert_eq!(
             body["components"]["schemas"]["RestErrorEnvelope"]["required"],
             json!(["error"])
