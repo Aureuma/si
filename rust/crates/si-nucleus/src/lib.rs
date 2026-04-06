@@ -2051,12 +2051,14 @@ impl NucleusService {
             };
             self.reconcile_run_as_blocked(
                 &run,
-                worker_id,
-                Some(run.session_id.clone()),
-                profile,
-                blocked_reason,
-                &message,
-                mark_session_broken,
+                BlockedRunReconciliation {
+                    worker_id,
+                    session_id: Some(run.session_id.clone()),
+                    profile,
+                    blocked_reason,
+                    message,
+                    mark_session_broken,
+                },
             )?;
         }
         Ok(())
@@ -2065,34 +2067,31 @@ impl NucleusService {
     fn reconcile_run_as_blocked(
         &self,
         run: &RunRecord,
-        worker_id: Option<WorkerId>,
-        session_id: Option<SessionId>,
-        profile: Option<ProfileName>,
-        blocked_reason: BlockedReason,
-        message: &str,
-        mark_session_broken: bool,
+        blocked: BlockedRunReconciliation,
     ) -> Result<()> {
         let events = self.store.apply_runtime_event(CanonicalEventDraft {
             event_type: CanonicalEventType::RunBlocked,
             source: CanonicalEventSource::System,
             data: EventDataEnvelope {
                 task_id: Some(run.task_id.clone()),
-                worker_id,
-                session_id: session_id.clone(),
+                worker_id: blocked.worker_id,
+                session_id: blocked.session_id.clone(),
                 run_id: Some(run.run_id.clone()),
-                profile,
+                profile: blocked.profile,
                 payload: json!({
-                    "blocked_reason": blocked_reason,
-                    "error": message,
+                    "blocked_reason": blocked.blocked_reason,
+                    "error": blocked.message,
                 }),
             },
         })?;
         for event in events {
             let _ = self.events.send(event);
         }
-        if mark_session_broken {
-            if let Some(session_id) = session_id {
-                if let Some(event) = self.store.mark_session_broken(&session_id, message)? {
+        if blocked.mark_session_broken {
+            if let Some(session_id) = blocked.session_id {
+                if let Some(event) =
+                    self.store.mark_session_broken(&session_id, &blocked.message)?
+                {
                     let _ = self.events.send(event);
                 }
             }
@@ -2284,11 +2283,13 @@ impl NucleusService {
             let worker = self.ensure_worker_started(
                 runtime,
                 profile,
-                Some(session.worker_id.as_str()),
-                None,
-                None,
-                session.workdir.as_ref().map(PathBuf::from),
-                None,
+                EnsureWorkerRequest {
+                    requested_worker_id: Some(session.worker_id.as_str()),
+                    home_dir: None,
+                    codex_home: None,
+                    workdir: session.workdir.as_ref().map(PathBuf::from),
+                    env: None,
+                },
             )?;
             let Some(thread_id) = session.app_server_thread_id.clone() else {
                 if let Some(event) = self.store.mark_task_blocked(
@@ -2319,7 +2320,7 @@ impl NucleusService {
                         profile,
                         &thread_id,
                     )?;
-                    return Ok(self.store.inspect_session(&session.session_id)?);
+                    return self.store.inspect_session(&session.session_id);
                 }
                 Err(error) => {
                     if let Some(event) =
@@ -2346,23 +2347,32 @@ impl NucleusService {
             return Ok(Some(session));
         }
 
-        let worker =
-            match self.ensure_worker_started(runtime, profile, None, None, None, None, None) {
-                Ok(worker) => worker,
-                Err(error) => {
-                    if let Some(event) = self.store.mark_task_blocked(
-                        &task.task_id,
-                        None,
-                        None,
-                        Some(profile.clone()),
-                        BlockedReason::WorkerUnavailable,
-                        &error.to_string(),
-                    )? {
-                        let _ = self.events.send(event);
-                    }
-                    return Ok(None);
+        let worker = match self.ensure_worker_started(
+            runtime,
+            profile,
+            EnsureWorkerRequest {
+                requested_worker_id: None,
+                home_dir: None,
+                codex_home: None,
+                workdir: None,
+                env: None,
+            },
+        ) {
+            Ok(worker) => worker,
+            Err(error) => {
+                if let Some(event) = self.store.mark_task_blocked(
+                    &task.task_id,
+                    None,
+                    None,
+                    Some(profile.clone()),
+                    BlockedReason::WorkerUnavailable,
+                    &error.to_string(),
+                )? {
+                    let _ = self.events.send(event);
                 }
-            };
+                return Ok(None);
+            }
+        };
         let workdir =
             worker.worker.workdir.as_ref().map(PathBuf::from).unwrap_or_else(default_workdir);
         let session_id = SessionId::generate();
@@ -2502,11 +2512,13 @@ impl NucleusService {
             let worker = match self.ensure_worker_started(
                 runtime,
                 profile,
-                Some(session.worker_id.as_str()),
-                None,
-                None,
-                session.workdir.as_ref().map(PathBuf::from),
-                None,
+                EnsureWorkerRequest {
+                    requested_worker_id: Some(session.worker_id.as_str()),
+                    home_dir: None,
+                    codex_home: None,
+                    workdir: session.workdir.as_ref().map(PathBuf::from),
+                    env: None,
+                },
             ) {
                 Ok(worker) => worker,
                 Err(_) => continue,
@@ -2590,11 +2602,13 @@ impl NucleusService {
         let _ = self.ensure_worker_started(
             runtime.as_ref(),
             &worker.profile,
-            Some(worker.worker_id.as_str()),
-            Some(spec.home_dir.clone()),
-            Some(spec.codex_home.clone()),
-            Some(spec.workdir.clone()),
-            Some(spec.extra_env.clone()),
+            EnsureWorkerRequest {
+                requested_worker_id: Some(worker.worker_id.as_str()),
+                home_dir: Some(spec.home_dir.clone()),
+                codex_home: Some(spec.codex_home.clone()),
+                workdir: Some(spec.workdir.clone()),
+                env: Some(spec.extra_env.clone()),
+            },
         )?;
         let probe = runtime.probe_worker(&spec)?;
         let events = self.store.record_worker_probe(&spec, &probe, runtime.as_ref())?;
@@ -2818,11 +2832,13 @@ impl NucleusService {
                 let worker = self.ensure_worker_started(
                     runtime.as_ref(),
                     &profile,
-                    params.worker_id.as_deref(),
-                    params.home_dir,
-                    params.codex_home,
-                    Some(workdir.clone()),
-                    params.env,
+                    EnsureWorkerRequest {
+                        requested_worker_id: params.worker_id.as_deref(),
+                        home_dir: params.home_dir,
+                        codex_home: params.codex_home,
+                        workdir: Some(workdir.clone()),
+                        env: params.env,
+                    },
                 )?;
                 let session_id = SessionId::generate();
                 let opened = runtime.ensure_session(&SessionOpenSpec {
@@ -2954,13 +2970,9 @@ impl NucleusService {
         &self,
         runtime: &dyn NucleusRuntime,
         profile: &ProfileName,
-        requested_worker_id: Option<&str>,
-        home_dir: Option<PathBuf>,
-        codex_home: Option<PathBuf>,
-        workdir: Option<PathBuf>,
-        env: Option<BTreeMap<String, String>>,
+        request: EnsureWorkerRequest<'_>,
     ) -> Result<EnsuredWorker> {
-        let existing = if let Some(worker_id) = requested_worker_id {
+        let existing = if let Some(worker_id) = request.requested_worker_id {
             let worker_id = WorkerId::new(worker_id.to_owned())?;
             self.store.inspect_worker(&worker_id)?
         } else {
@@ -2974,20 +2986,24 @@ impl NucleusService {
             .as_ref()
             .map(|worker| worker.worker_id.clone())
             .unwrap_or_else(WorkerId::generate);
-        let home_dir = home_dir
+        let home_dir = request
+            .home_dir
             .or_else(|| {
                 existing.as_ref().and_then(|worker| worker.home_dir.as_ref().map(PathBuf::from))
             })
             .unwrap_or_else(default_home_dir);
-        let codex_home = codex_home
+        let codex_home = request
+            .codex_home
             .or_else(|| existing.as_ref().map(|worker| PathBuf::from(worker.codex_home.clone())))
             .unwrap_or_else(|| default_codex_home_dir(profile.as_str()));
-        let workdir = workdir
+        let workdir = request
+            .workdir
             .or_else(|| {
                 existing.as_ref().and_then(|worker| worker.workdir.as_ref().map(PathBuf::from))
             })
             .unwrap_or_else(default_workdir);
-        let extra_env = env
+        let extra_env = request
+            .env
             .filter(|value| !value.is_empty())
             .or_else(|| existing.as_ref().map(|worker| worker.extra_env.clone()))
             .unwrap_or_default();
@@ -3019,6 +3035,23 @@ impl NucleusService {
 struct EnsuredWorker {
     worker: WorkerRecord,
     runtime: Option<WorkerRuntimeView>,
+}
+
+struct BlockedRunReconciliation {
+    worker_id: Option<WorkerId>,
+    session_id: Option<SessionId>,
+    profile: Option<ProfileName>,
+    blocked_reason: BlockedReason,
+    message: String,
+    mark_session_broken: bool,
+}
+
+struct EnsureWorkerRequest<'a> {
+    requested_worker_id: Option<&'a str>,
+    home_dir: Option<PathBuf>,
+    codex_home: Option<PathBuf>,
+    workdir: Option<PathBuf>,
+    env: Option<BTreeMap<String, String>>,
 }
 
 async fn ws_handler(
@@ -5611,7 +5644,7 @@ mod tests {
         assert!(
             run.error
                 .as_ref()
-                .and_then(|error| Some(error.message.contains("Fort is unavailable")))
+                .map(|error| error.message.contains("Fort is unavailable"))
                 .unwrap_or(false)
         );
 

@@ -13,10 +13,18 @@ use std::thread;
 use tar::Archive;
 use tempfile::tempdir;
 use tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
+use tungstenite::http::Response as HttpResponse;
 use tungstenite::{Message as WsMessage, accept_hdr};
 
 fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
+}
+
+#[allow(clippy::result_large_err)]
+fn accept_test_ws_response(
+    response: WsResponse,
+) -> Result<WsResponse, HttpResponse<Option<String>>> {
+    Ok(response)
 }
 
 fn expected_version_line() -> String {
@@ -725,6 +733,7 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
     let home = tempdir().expect("home tempdir");
     let metadata_dir = home.path().join(".si/nucleus/gateway");
@@ -737,8 +746,10 @@ fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
 
     thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
-        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
-            .expect("accept websocket");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
         let request = socket.read().expect("read message");
         let payload = match request {
             WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
@@ -776,6 +787,7 @@ fn nucleus_status_reads_ws_endpoint_from_gateway_metadata() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
@@ -786,7 +798,7 @@ fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
                 request.headers().get("authorization").and_then(|value| value.to_str().ok()),
                 Some("Bearer secret-token")
             );
-            Ok(response)
+            accept_test_ws_response(response)
         })
         .expect("accept websocket");
         let request = socket.read().expect("read message");
@@ -825,13 +837,16 @@ fn nucleus_status_sends_bearer_token_on_websocket_handshake() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_profile_list_requests_gateway_profile_list_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
     thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
-        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
-            .expect("accept websocket");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
         let request = socket.read().expect("read message");
         let payload = match request {
             WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
@@ -868,13 +883,16 @@ fn nucleus_profile_list_requests_gateway_profile_list_method() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_task_cancel_requests_gateway_task_cancel_method() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
     thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
-        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
-            .expect("accept websocket");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
         let request = socket.read().expect("read message");
         let payload = match request {
             WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
@@ -914,13 +932,16 @@ fn nucleus_task_cancel_requests_gateway_task_cancel_method() {
 }
 
 #[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_events_subscribe_prints_streamed_events() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
     thread::spawn(move || {
         let (stream, _) = listener.accept().expect("accept");
-        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| Ok(response))
-            .expect("accept websocket");
+        let mut socket = accept_hdr(stream, |_: &WsRequest, response: WsResponse| {
+            accept_test_ws_response(response)
+        })
+        .expect("accept websocket");
         let request = socket.read().expect("read message");
         let payload = match request {
             WsMessage::Text(text) => serde_json::from_str::<Value>(&text).expect("parse request"),
