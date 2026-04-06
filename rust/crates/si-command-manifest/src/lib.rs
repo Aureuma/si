@@ -80,6 +80,13 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
+        name: "nucleus",
+        aliases: &[],
+        category: CommandCategory::Runtime,
+        summary: "Manage the SI Nucleus control plane.",
+        hidden: false,
+    },
+    CommandSpec {
         name: "surf",
         aliases: &[],
         category: CommandCategory::Runtime,
