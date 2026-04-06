@@ -927,6 +927,21 @@ fn write_invalid_fort_session_state(codex_home: &Path) {
     fs::write(session_path, b"{ invalid fort state").expect("write invalid fort session state");
 }
 
+fn copy_dir_recursive(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("mkdir destination");
+    for entry in fs::read_dir(source).expect("read source dir") {
+        let entry = entry.expect("dir entry");
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let file_type = entry.file_type().expect("file type");
+        if file_type.is_dir() {
+            copy_dir_recursive(&source_path, &destination_path);
+        } else {
+            fs::copy(&source_path, &destination_path).expect("copy file");
+        }
+    }
+}
+
 fn load_event_log_values(state_root: &Path) -> Vec<Value> {
     let path = state_root.join("state").join("events").join("events.jsonl");
     fs::read_to_string(path)
@@ -3577,6 +3592,73 @@ fn nucleus_rest_missing_targets_return_canonical_not_found_envelopes() {
         );
         assert!(body["error"]["details"].is_null(), "{method} {path} expected null details");
     }
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_rest_task_cancel_returns_unavailable_when_runtime_is_missing() {
+    let temp = tempdir().expect("tempdir");
+    let source_state_root = temp.path().join("source-nucleus");
+    let runtime = TestRuntime::with_streaming_output(
+        Duration::from_secs(5),
+        Duration::from_millis(0),
+        &["nucleus-smoke"],
+    );
+    let source_ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&source_state_root, Arc::new(runtime))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    let session = create_session_via_cli(&source_ws_url, &home_dir, &codex_home, temp.path());
+    let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
+    let created = create_task_over_websocket(
+        &source_ws_url,
+        "rest-cancel-runtime-unavailable-live",
+        "Cancel active run without runtime",
+        "Keep running until cancellation is attempted",
+        "america",
+        Some(&session_id),
+    );
+    let task_id = created["task_id"].as_str().expect("task id").to_owned();
+    let running = wait_for_cli_task_status(&source_ws_url, &task_id, "running");
+    let run_id = running["latest_run_id"].as_str().expect("run id").to_owned();
+
+    let snapshot_state_root = temp.path().join("snapshot-nucleus");
+    copy_dir_recursive(&source_state_root, &snapshot_state_root);
+
+    let base_url = spawn_live_nucleus_service(&snapshot_state_root);
+    let client = BlockingClient::new();
+    let response = client
+        .post(format!("{base_url}/tasks/{task_id}/cancel"))
+        .send()
+        .expect("rest cancel without runtime");
+    assert_eq!(response.status(), reqwest::StatusCode::SERVICE_UNAVAILABLE);
+    let body: Value = response.json().expect("parse unavailable body");
+    assert_eq!(body["error"]["code"], "unavailable");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .map(|value| value.contains("runtime unavailable"))
+            .unwrap_or(false)
+    );
+
+    let task: Value = client
+        .get(format!("{base_url}/tasks/{task_id}"))
+        .send()
+        .expect("inspect task after unavailable cancel")
+        .json()
+        .expect("parse task after unavailable cancel");
+    let run: Value = client
+        .get(format!("{base_url}/runs/{run_id}"))
+        .send()
+        .expect("inspect run after unavailable cancel")
+        .json()
+        .expect("parse run after unavailable cancel");
+    assert_eq!(task["status"], "running");
+    assert_eq!(run["status"], "running");
 }
 
 #[test]
