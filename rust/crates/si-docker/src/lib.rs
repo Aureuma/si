@@ -228,10 +228,10 @@ impl ContainerSpec {
         if self.image.trim().is_empty() {
             return Err(ContainerSpecError::MissingImage);
         }
-        if let Some(name) = &self.name {
-            if name.trim().is_empty() {
-                return Err(ContainerSpecError::InvalidName);
-            }
+        if let Some(name) = &self.name
+            && name.trim().is_empty()
+        {
+            return Err(ContainerSpecError::InvalidName);
         }
         for mount in &self.bind_mounts {
             mount.validate().map_err(ContainerSpecError::BindMount)?;
@@ -242,10 +242,10 @@ impl ContainerSpec {
         for port in &self.published_ports {
             port.validate().map_err(ContainerSpecError::PublishedPort)?;
         }
-        if let Some(path) = &self.working_dir {
-            if !path.is_absolute() {
-                return Err(ContainerSpecError::InvalidWorkingDir { path: path.clone() });
-            }
+        if let Some(path) = &self.working_dir
+            && !path.is_absolute()
+        {
+            return Err(ContainerSpecError::InvalidWorkingDir { path: path.clone() });
         }
         Ok(())
     }
@@ -642,10 +642,10 @@ pub fn docker_container_exec_command(
     if spec.command.is_empty() {
         return Err(ContainerExecError::MissingCommand);
     }
-    if let Some(workdir) = &spec.workdir {
-        if !workdir.is_absolute() {
-            return Err(ContainerExecError::InvalidWorkingDir { path: workdir.clone() });
-        }
+    if let Some(workdir) = &spec.workdir
+        && !workdir.is_absolute()
+    {
+        return Err(ContainerExecError::InvalidWorkingDir { path: workdir.clone() });
     }
     let mut command = CommandSpec::new(docker_program).arg("exec");
     match (spec.interactive, spec.tty) {
