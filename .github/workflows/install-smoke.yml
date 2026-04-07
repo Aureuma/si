@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Run codex image preflight lanes
         run: cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
@@ -85,7 +85,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Run host installer smoke tests
         run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
@@ -100,7 +100,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -120,7 +120,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Run docker installer smoke tests
         run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
