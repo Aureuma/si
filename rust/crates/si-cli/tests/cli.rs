@@ -114,7 +114,7 @@ fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::write(
         repo.join("Cargo.toml"),
         format!(
-            "[workspace]\nmembers = [\"rust/crates/si-cli\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"{}\"\nedition = \"2024\"\nlicense = \"AGPL-3.0-only\"\nrepository = \"https://example.invalid/si\"\nrust-version = \"1.86\"\n",
+            "[workspace]\nmembers = [\"rust/crates/si-cli\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"{}\"\nedition = \"2024\"\nlicense = \"AGPL-3.0-only\"\nrepository = \"https://example.invalid/si\"\nrust-version = \"1.88\"\n",
             version.trim_start_matches('v')
         ),
     )
@@ -1622,7 +1622,7 @@ fn build_installer_run_dry_run_reports_rust_usage() {
 
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
-    write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.86.0\n");
+    write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.88.0\n");
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
@@ -1656,7 +1656,7 @@ fn build_installer_run_installs_fake_binary() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.86.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.88.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());

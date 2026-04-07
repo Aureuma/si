@@ -20,7 +20,7 @@ RUN apt-get update \
     tar \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /opt/rust \
-  && curl https://sh.rustup.rs -sSf | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.86.0 \
+  && curl https://sh.rustup.rs -sSf | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.88.0 \
   && chmod -R a+rwx /opt/rust
 
 ENTRYPOINT ["cargo","run","--quiet","--locked","--manifest-path","/workspace/si/rust/crates/si-tools/Cargo.toml","--bin","si-install-smoke-root","--"]
