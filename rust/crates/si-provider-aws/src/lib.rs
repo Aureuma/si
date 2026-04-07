@@ -253,12 +253,10 @@ fn resolve_access_key(
     }
     if let Some(reference) =
         account.access_key_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "ACCESS_KEY_ID", env) {
         return (value, format!("env:{}ACCESS_KEY_ID", account_env_prefix(alias, account)));
@@ -285,12 +283,10 @@ fn resolve_secret_key(
     }
     if let Some(reference) =
         account.secret_access_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "SECRET_ACCESS_KEY", env) {
         return (value, format!("env:{}SECRET_ACCESS_KEY", account_env_prefix(alias, account)));
@@ -317,12 +313,10 @@ fn resolve_session_token(
     }
     if let Some(reference) =
         account.session_token_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "SESSION_TOKEN", env) {
         return (value, format!("env:{}SESSION_TOKEN", account_env_prefix(alias, account)));
@@ -595,12 +589,12 @@ fn normalize_http_error(
 
 fn first_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> String {
     for name in names {
-        if let Some(value) = headers.get(*name) {
-            if let Ok(value) = value.to_str() {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() {
-                    return trimmed.to_owned();
-                }
+        if let Some(value) = headers.get(*name)
+            && let Ok(value) = value.to_str()
+        {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_owned();
             }
         }
     }

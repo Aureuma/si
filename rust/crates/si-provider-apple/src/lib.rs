@@ -446,12 +446,10 @@ fn resolve_project_id(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "PROJECT_ID", env) {
         return (value, format!("env:{}PROJECT_ID", account_env_prefix(alias, account)));
@@ -524,13 +522,13 @@ fn resolve_locale(
     if let Some(value) = normalize_locale(account.default_language.as_deref()) {
         return (value.to_owned(), "settings.apple.default_language".to_owned());
     }
-    if let Some(value) = account_env(alias, account, "APPSTORE_LOCALE", env) {
-        if let Some(locale) = normalize_locale(Some(value.as_str())) {
-            return (
-                locale.to_owned(),
-                format!("env:{}APPSTORE_LOCALE", account_env_prefix(alias, account)),
-            );
-        }
+    if let Some(value) = account_env(alias, account, "APPSTORE_LOCALE", env)
+        && let Some(locale) = normalize_locale(Some(value.as_str()))
+    {
+        return (
+            locale.to_owned(),
+            format!("env:{}APPSTORE_LOCALE", account_env_prefix(alias, account)),
+        );
     }
     if let Some(locale) = normalize_locale(env.get("APPLE_APPSTORE_LOCALE").map(String::as_str)) {
         return (locale.to_owned(), "env:APPLE_APPSTORE_LOCALE".to_owned());
@@ -612,12 +610,10 @@ fn resolve_issuer_id(
     }
     if let Some(reference) =
         account.issuer_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return Ok((value.to_owned(), format!("env:{reference}")));
-        }
+    {
+        return Ok((value.to_owned(), format!("env:{reference}")));
     }
     if let Some(value) = account_env(alias, account, "APPSTORE_ISSUER_ID", env) {
         return Ok((
@@ -660,12 +656,10 @@ fn resolve_key_id(
     }
     if let Some(reference) =
         account.key_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return Ok((value.to_owned(), format!("env:{reference}")));
-        }
+    {
+        return Ok((value.to_owned(), format!("env:{reference}")));
     }
     if let Some(value) = account_env(alias, account, "APPSTORE_KEY_ID", env) {
         return Ok((value, format!("env:{}APPSTORE_KEY_ID", account_env_prefix(alias, account))));
@@ -732,12 +726,10 @@ fn resolve_private_key_source(
     }
     if let Some(reference) =
         account.private_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return validate_private_key_value(value).map(|_| format!("env:{reference}"));
-        }
+    {
+        return validate_private_key_value(value).map(|_| format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "APPSTORE_PRIVATE_KEY_PEM", env) {
         return validate_private_key_value(&value).map(|_| {
@@ -752,12 +744,10 @@ fn resolve_private_key_source(
     }
     if let Some(reference) =
         account.private_key_file_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(path) =
+        && let Some(path) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return validate_private_key_file(path).map(|_| format!("env:{reference}"));
-        }
+    {
+        return validate_private_key_file(path).map(|_| format!("env:{reference}"));
     }
     if let Some(path) = account_env(alias, account, "APPSTORE_PRIVATE_KEY_FILE", env) {
         return validate_private_key_file(&path).map(|_| {
@@ -797,12 +787,10 @@ fn resolve_private_key_value(
     }
     if let Some(reference) =
         account.private_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return resolve_override_private_key_value(value);
-        }
+    {
+        return resolve_override_private_key_value(value);
     }
     if let Some(value) = account_env(alias, account, "APPSTORE_PRIVATE_KEY_PEM", env) {
         return resolve_override_private_key_value(&value);
@@ -814,12 +802,10 @@ fn resolve_private_key_value(
     }
     if let Some(reference) =
         account.private_key_file_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(path) =
+        && let Some(path) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return read_private_key_file(path);
-        }
+    {
+        return read_private_key_file(path);
     }
     if let Some(path) = account_env(alias, account, "APPSTORE_PRIVATE_KEY_FILE", env) {
         return read_private_key_file(&path);

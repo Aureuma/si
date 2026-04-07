@@ -1981,32 +1981,31 @@ fn resolve_oauth_token(
     if !overrides.token.trim().is_empty() {
         return (overrides.token.trim().to_owned(), "flag:--token".to_owned());
     }
-    if let Some(value) = entry.and_then(|item| item.oauth_access_token.as_deref()) {
-        if !value.trim().is_empty() {
-            return (value.trim().to_owned(), "settings.oauth_access_token".to_owned());
-        }
+    if let Some(value) = entry.and_then(|item| item.oauth_access_token.as_deref())
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), "settings.oauth_access_token".to_owned());
     }
-    if let Some(reference) = entry.and_then(|item| item.oauth_token_env.as_deref()) {
-        if let Some(value) = env.get(reference.trim()) {
-            if !value.trim().is_empty() {
-                return (value.trim().to_owned(), format!("env:{}", reference.trim()));
-            }
-        }
+    if let Some(reference) = entry.and_then(|item| item.oauth_token_env.as_deref())
+        && let Some(value) = env.get(reference.trim())
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), format!("env:{}", reference.trim()));
     }
     let prefix = github_account_env_prefix(account_alias, entry);
     for key in ["OAUTH_ACCESS_TOKEN", "TOKEN"] {
         let env_key = format!("{prefix}{key}");
-        if let Some(value) = env.get(&env_key) {
-            if !value.trim().is_empty() {
-                return (value.trim().to_owned(), format!("env:{env_key}"));
-            }
+        if let Some(value) = env.get(&env_key)
+            && !value.trim().is_empty()
+        {
+            return (value.trim().to_owned(), format!("env:{env_key}"));
         }
     }
     for key in ["GITHUB_OAUTH_TOKEN", "GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PAT", "GH_PAT"] {
-        if let Some(value) = env.get(key) {
-            if !value.trim().is_empty() {
-                return (value.trim().to_owned(), format!("env:{key}"));
-            }
+        if let Some(value) = env.get(key)
+            && !value.trim().is_empty()
+        {
+            return (value.trim().to_owned(), format!("env:{key}"));
         }
     }
     (String::new(), String::new())
@@ -2024,14 +2023,13 @@ fn resolve_app_id(
     if let Some(value) = entry.and_then(|item| item.app_id).filter(|value| *value > 0) {
         return (value, "settings.app_id".to_owned());
     }
-    if let Some(reference) = entry.and_then(|item| item.app_id_env.as_deref()) {
-        if let Some(value) = env
+    if let Some(reference) = entry.and_then(|item| item.app_id_env.as_deref())
+        && let Some(value) = env
             .get(reference.trim())
             .and_then(|raw| raw.trim().parse::<i64>().ok())
             .filter(|value| *value > 0)
-        {
-            return (value, format!("env:{}", reference.trim()));
-        }
+    {
+        return (value, format!("env:{}", reference.trim()));
     }
     let env_key = format!("{}APP_ID", github_account_env_prefix(account_alias, entry));
     if let Some(value) =
@@ -2058,28 +2056,27 @@ fn resolve_app_key(
     if !overrides.app_key.trim().is_empty() {
         return (overrides.app_key.trim().to_owned(), "flag:--app-key".to_owned());
     }
-    if let Some(value) = entry.and_then(|item| item.app_private_key_pem.as_deref()) {
-        if !value.trim().is_empty() {
-            return (value.trim().to_owned(), "settings.app_private_key_pem".to_owned());
-        }
+    if let Some(value) = entry.and_then(|item| item.app_private_key_pem.as_deref())
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), "settings.app_private_key_pem".to_owned());
     }
-    if let Some(reference) = entry.and_then(|item| item.app_private_key_env.as_deref()) {
-        if let Some(value) = env.get(reference.trim()) {
-            if !value.trim().is_empty() {
-                return (value.trim().to_owned(), format!("env:{}", reference.trim()));
-            }
-        }
+    if let Some(reference) = entry.and_then(|item| item.app_private_key_env.as_deref())
+        && let Some(value) = env.get(reference.trim())
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), format!("env:{}", reference.trim()));
     }
     let env_key = format!("{}APP_PRIVATE_KEY_PEM", github_account_env_prefix(account_alias, entry));
-    if let Some(value) = env.get(&env_key) {
-        if !value.trim().is_empty() {
-            return (value.trim().to_owned(), format!("env:{env_key}"));
-        }
+    if let Some(value) = env.get(&env_key)
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), format!("env:{env_key}"));
     }
-    if let Some(value) = env.get("GITHUB_APP_PRIVATE_KEY_PEM") {
-        if !value.trim().is_empty() {
-            return (value.trim().to_owned(), "env:GITHUB_APP_PRIVATE_KEY_PEM".to_owned());
-        }
+    if let Some(value) = env.get("GITHUB_APP_PRIVATE_KEY_PEM")
+        && !value.trim().is_empty()
+    {
+        return (value.trim().to_owned(), "env:GITHUB_APP_PRIVATE_KEY_PEM".to_owned());
     }
     (String::new(), String::new())
 }
@@ -2096,14 +2093,13 @@ fn resolve_installation_id(
     if let Some(value) = entry.and_then(|item| item.installation_id).filter(|value| *value > 0) {
         return (value, "settings.installation_id".to_owned());
     }
-    if let Some(reference) = entry.and_then(|item| item.installation_env.as_deref()) {
-        if let Some(value) = env
+    if let Some(reference) = entry.and_then(|item| item.installation_env.as_deref())
+        && let Some(value) = env
             .get(reference.trim())
             .and_then(|raw| raw.trim().parse::<i64>().ok())
             .filter(|value| *value > 0)
-        {
-            return (value, format!("env:{}", reference.trim()));
-        }
+    {
+        return (value, format!("env:{}", reference.trim()));
     }
     let env_key = format!("{}INSTALLATION_ID", github_account_env_prefix(account_alias, entry));
     if let Some(value) =
