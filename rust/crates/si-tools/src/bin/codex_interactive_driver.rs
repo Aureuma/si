@@ -349,13 +349,13 @@ fn take_bool(args: &[String], idx: &mut usize, inline: Option<String>) -> Result
     if let Some(value) = inline {
         return parse_bool(&value);
     }
-    if let Some(next) = args.get(*idx + 1) {
-        if !next.starts_with('-') {
+    match args.get(*idx + 1) {
+        Some(next) if !next.starts_with('-') => {
             *idx += 1;
-            return parse_bool(next);
+            parse_bool(next)
         }
+        _ => Ok(true),
     }
-    Ok(true)
 }
 
 fn parse_bool(value: &str) -> Result<bool, String> {

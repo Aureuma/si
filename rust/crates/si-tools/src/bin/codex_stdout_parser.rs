@@ -378,10 +378,8 @@ fn pump_reader<R: Read>(
                 break;
             }
             Ok(_) => {
-                if let Some(file) = raw_log.as_ref() {
-                    if let Ok(mut file) = file.lock() {
-                        let _ = file.write_all(line.as_bytes());
-                    }
+                if let Some(mut file) = raw_log.as_ref().and_then(|file| file.lock().ok()) {
+                    let _ = file.write_all(line.as_bytes());
                 }
                 let _ = tx.send(Some(line.clone()));
             }
@@ -595,16 +593,16 @@ fn take_bool(
 ) -> Result<bool, String> {
     match inline_value {
         Some(value) => parse_bool(&value),
-        None => {
-            if let Some(next) = args.get(*idx + 1) {
-                if !next.starts_with('-') {
-                    *idx += 1;
-                    return parse_bool(next);
-                }
+        None => match args.get(*idx + 1) {
+            Some(next) if !next.starts_with('-') => {
+                *idx += 1;
+                parse_bool(next)
             }
-            let _ = key;
-            Ok(true)
-        }
+            _ => {
+                let _ = key;
+                Ok(true)
+            }
+        },
     }
 }
 
