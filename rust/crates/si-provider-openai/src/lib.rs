@@ -234,12 +234,10 @@ fn resolve_api_key(
     }
     if let Some(reference) =
         account.api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = resolve_openai_env(alias, account, env, "API_KEY") {
         return (value, format!("env:{}API_KEY", account_env_prefix(alias, account)));
@@ -266,12 +264,10 @@ fn resolve_admin_api_key(
     }
     if let Some(reference) =
         account.admin_api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = resolve_openai_env(alias, account, env, "ADMIN_API_KEY") {
         return (value, format!("env:{}ADMIN_API_KEY", account_env_prefix(alias, account)));
@@ -312,12 +308,10 @@ fn resolve_org_id(
     }
     if let Some(reference) =
         account.organization_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = resolve_openai_env(alias, account, env, "ORG_ID") {
         return (value, format!("env:{}ORG_ID", account_env_prefix(alias, account)));
@@ -363,12 +357,10 @@ fn resolve_project_id(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = resolve_openai_env(alias, account, env, "PROJECT_ID") {
         return (value, format!("env:{}PROJECT_ID", account_env_prefix(alias, account)));
@@ -840,12 +832,12 @@ pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> Stri
     if !response.request_id.trim().is_empty() {
         out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
     }
-    if let Some(data) = &response.data {
-        if let Ok(pretty) = serde_json::to_string_pretty(data) {
-            out.push_str(&pretty);
-            out.push('\n');
-            return out;
-        }
+    if let Some(data) = &response.data
+        && let Ok(pretty) = serde_json::to_string_pretty(data)
+    {
+        out.push_str(&pretty);
+        out.push('\n');
+        return out;
     }
     if !response.body.trim().is_empty() {
         out.push_str(response.body.trim());
@@ -1112,12 +1104,12 @@ fn resolve_url(base_url: &str, path: &str, params: &[(&str, String)]) -> Result<
 
 fn first_header(headers: &HeaderMap, names: &[&str]) -> String {
     for name in names {
-        if let Some(value) = headers.get(*name) {
-            if let Ok(value) = value.to_str() {
-                let value = value.trim();
-                if !value.is_empty() {
-                    return value.to_owned();
-                }
+        if let Some(value) = headers.get(*name)
+            && let Ok(value) = value.to_str()
+        {
+            let value = value.trim();
+            if !value.is_empty() {
+                return value.to_owned();
             }
         }
     }

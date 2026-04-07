@@ -18465,23 +18465,22 @@ where
                     break;
                 }
                 request.extend_from_slice(&buffer[..read]);
-                if header_end.is_none() {
-                    if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
-                        header_end = Some(pos + 4);
-                        let headers =
-                            String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
-                        for line in headers.lines() {
-                            if let Some(value) = line.strip_prefix("content-length:") {
-                                content_length = value.trim().parse::<usize>().unwrap_or(0);
-                                break;
-                            }
+                if header_end.is_none()
+                    && let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n")
+                {
+                    header_end = Some(pos + 4);
+                    let headers = String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
+                    for line in headers.lines() {
+                        if let Some(value) = line.strip_prefix("content-length:") {
+                            content_length = value.trim().parse::<usize>().unwrap_or(0);
+                            break;
                         }
                     }
                 }
-                if let Some(end) = header_end {
-                    if request.len() >= end + content_length {
-                        break;
-                    }
+                if let Some(end) = header_end
+                    && request.len() >= end + content_length
+                {
+                    break;
                 }
             }
             let request = String::from_utf8(request).expect("request utf8");

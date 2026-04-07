@@ -353,19 +353,19 @@ pub fn render_api_response_text(response: &CloudflareAPIResponse, raw: bool) -> 
     if !response.request_id.trim().is_empty() {
         out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
     }
-    if let Some(data) = &response.data {
-        if let Ok(pretty) = serde_json::to_string_pretty(data) {
-            out.push_str(&pretty);
-            out.push('\n');
-            return out;
-        }
+    if let Some(data) = &response.data
+        && let Ok(pretty) = serde_json::to_string_pretty(data)
+    {
+        out.push_str(&pretty);
+        out.push('\n');
+        return out;
     }
-    if let Some(list) = &response.list {
-        if let Ok(pretty) = serde_json::to_string_pretty(list) {
-            out.push_str(&pretty);
-            out.push('\n');
-            return out;
-        }
+    if let Some(list) = &response.list
+        && let Ok(pretty) = serde_json::to_string_pretty(list)
+    {
+        out.push_str(&pretty);
+        out.push('\n');
+        return out;
     }
     if !response.body.trim().is_empty() {
         out.push_str(response.body.trim());
@@ -432,23 +432,23 @@ fn normalize_api_response(
         list: None,
         messages: None,
     };
-    if let Ok(value) = serde_json::from_str::<Value>(body.trim()) {
-        if let Some(object) = value.as_object() {
-            if let Some(success) = object.get("success").and_then(Value::as_bool) {
-                payload.success = success;
-            }
-            if let Some(messages) = object.get("messages").and_then(Value::as_array) {
-                payload.messages = Some(messages.clone());
-            }
-            if let Some(result) = object.get("result") {
-                if let Some(list) = result.as_array() {
-                    payload.list = Some(list.clone());
-                } else {
-                    payload.data = Some(result.clone());
-                }
+    if let Ok(value) = serde_json::from_str::<Value>(body.trim())
+        && let Some(object) = value.as_object()
+    {
+        if let Some(success) = object.get("success").and_then(Value::as_bool) {
+            payload.success = success;
+        }
+        if let Some(messages) = object.get("messages").and_then(Value::as_array) {
+            payload.messages = Some(messages.clone());
+        }
+        if let Some(result) = object.get("result") {
+            if let Some(list) = result.as_array() {
+                payload.list = Some(list.clone());
             } else {
-                payload.data = Some(value);
+                payload.data = Some(result.clone());
             }
+        } else {
+            payload.data = Some(value);
         }
     }
     if !status.is_success() || !payload.success {
@@ -504,12 +504,12 @@ fn resolve_api_url(
 
 fn first_header(headers: &HeaderMap, names: &[&str]) -> String {
     for name in names {
-        if let Some(value) = headers.get(*name) {
-            if let Ok(text) = value.to_str() {
-                let text = text.trim();
-                if !text.is_empty() {
-                    return text.to_owned();
-                }
+        if let Some(value) = headers.get(*name)
+            && let Ok(text) = value.to_str()
+        {
+            let text = text.trim();
+            if !text.is_empty() {
+                return text.to_owned();
             }
         }
     }
@@ -557,12 +557,10 @@ fn resolve_account_id(
     }
     if let Some(reference) =
         account.account_id_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = env_key(alias, account, "ACCOUNT_ID", env) {
         return (value, format!("env:{}ACCOUNT_ID", env_prefix(alias, account)));
@@ -620,10 +618,10 @@ fn resolve_zone_id(
         "dev" => "DEV_ZONE_ID",
         _ => "",
     };
-    if !key.is_empty() {
-        if let Some(value) = env_key(alias, account, key, env) {
-            return (value, format!("env:{}{}", env_prefix(alias, account), key));
-        }
+    if !key.is_empty()
+        && let Some(value) = env_key(alias, account, key, env)
+    {
+        return (value, format!("env:{}{}", env_prefix(alias, account), key));
     }
     (String::new(), String::new())
 }
@@ -639,12 +637,10 @@ fn resolve_api_token(
     }
     if let Some(reference) =
         account.api_token_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-        {
-            return Ok((value.to_owned(), format!("env:{reference}")));
-        }
+    {
+        return Ok((value.to_owned(), format!("env:{reference}")));
     }
     if let Some(value) = env_key(alias, account, "API_TOKEN", env) {
         return Ok((value, format!("env:{}API_TOKEN", env_prefix(alias, account))));

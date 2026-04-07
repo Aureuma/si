@@ -374,12 +374,10 @@ fn resolve_api_key(
         "prod" => {
             if let Some(reference) =
                 account.prod_api_key_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-            {
-                if let Some(value) =
+                && let Some(value) =
                     env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-                {
-                    return (value.to_owned(), format!("env:{reference}"));
-                }
+            {
+                return (value.to_owned(), format!("env:{reference}"));
             }
             let value = resolve_env(alias, account, "PROD_API_KEY", env);
             if !value.is_empty() {
@@ -389,12 +387,10 @@ fn resolve_api_key(
         "staging" => {
             if let Some(reference) =
                 account.staging_api_key_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-            {
-                if let Some(value) =
+                && let Some(value) =
                     env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-                {
-                    return (value.to_owned(), format!("env:{reference}"));
-                }
+            {
+                return (value.to_owned(), format!("env:{reference}"));
             }
             let value = resolve_env(alias, account, "STAGING_API_KEY", env);
             if !value.is_empty() {
@@ -407,12 +403,10 @@ fn resolve_api_key(
         "dev" => {
             if let Some(reference) =
                 account.dev_api_key_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-            {
-                if let Some(value) =
+                && let Some(value) =
                     env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-                {
-                    return (value.to_owned(), format!("env:{reference}"));
-                }
+            {
+                return (value.to_owned(), format!("env:{reference}"));
             }
             let value = resolve_env(alias, account, "DEV_API_KEY", env);
             if !value.is_empty() {
@@ -423,12 +417,10 @@ fn resolve_api_key(
     }
 
     if let Some(reference) = account.api_key_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let value = resolve_env(alias, account, "API_KEY", env);
     if !value.is_empty() {
@@ -455,12 +447,10 @@ fn resolve_client_id(
     }
     if let Some(reference) =
         account.client_id_env.as_deref().map(str::trim).filter(|v| !v.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|v| !v.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let value = resolve_env(alias, account, "CLIENT_ID", env);
     if !value.is_empty() {
@@ -565,12 +555,12 @@ fn preview_secret(secret: &str) -> String {
 
 fn first_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> String {
     for name in names {
-        if let Some(value) = headers.get(*name) {
-            if let Ok(value) = value.to_str() {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() {
-                    return trimmed.to_owned();
-                }
+        if let Some(value) = headers.get(*name)
+            && let Ok(value) = value.to_str()
+        {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_owned();
             }
         }
     }

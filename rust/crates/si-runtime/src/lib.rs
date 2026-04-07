@@ -47,10 +47,10 @@ pub fn build_container_core_mounts(
 
     let mut mounts = Vec::new();
     append_unique_mount(&mut mounts, BindMount::new(&workspace_host, &primary));
-    if let Some(mirror) = mirror {
-        if mirror != primary {
-            append_unique_mount(&mut mounts, BindMount::new(&workspace_host, mirror));
-        }
+    if let Some(mirror) = mirror
+        && mirror != primary
+    {
+        append_unique_mount(&mut mounts, BindMount::new(&workspace_host, mirror));
     }
     if let Some(mount) = infer_development_mount(&workspace_host, &plan.container_home, ctx) {
         append_unique_mount(&mut mounts, mount);
