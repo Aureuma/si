@@ -392,13 +392,13 @@ pub fn execute_api_request_with_auth(
             data: None,
             list: None,
         };
-        if !out.body.is_empty() {
-            if let Ok(parsed) = serde_json::from_str::<Value>(&out.body) {
-                match parsed {
-                    Value::Object(_) => out.data = Some(parsed),
-                    Value::Array(values) => out.list = Some(values),
-                    _ => {}
-                }
+        if !out.body.is_empty()
+            && let Ok(parsed) = serde_json::from_str::<Value>(&out.body)
+        {
+            match parsed {
+                Value::Object(_) => out.data = Some(parsed),
+                Value::Array(values) => out.list = Some(values),
+                _ => {}
             }
         }
         return Ok(out);

@@ -703,17 +703,19 @@ fn resolve_youtube_runtime_context(
         &overrides.refresh_token,
     );
     let mut session_source = String::new();
-    if auth_mode == "oauth" && access_token.trim().is_empty() && refresh_token.trim().is_empty() {
-        if let Some(entry) = load_youtube_oauth_token_entry(env, &alias, &environment) {
-            access_token = entry.access_token;
-            refresh_token = entry.refresh_token;
-            session_source = "store".to_owned();
-            if access_source.trim().is_empty() && !access_token.trim().is_empty() {
-                access_source = "store:access_token".to_owned();
-            }
-            if refresh_source.trim().is_empty() && !refresh_token.trim().is_empty() {
-                refresh_source = "store:refresh_token".to_owned();
-            }
+    if auth_mode == "oauth"
+        && access_token.trim().is_empty()
+        && refresh_token.trim().is_empty()
+        && let Some(entry) = load_youtube_oauth_token_entry(env, &alias, &environment)
+    {
+        access_token = entry.access_token;
+        refresh_token = entry.refresh_token;
+        session_source = "store".to_owned();
+        if access_source.trim().is_empty() && !access_token.trim().is_empty() {
+            access_source = "store:access_token".to_owned();
+        }
+        if refresh_source.trim().is_empty() && !refresh_token.trim().is_empty() {
+            refresh_source = "store:refresh_token".to_owned();
         }
     }
     if auth_mode == "api-key" && api_key.trim().is_empty() {
@@ -992,12 +994,12 @@ pub fn download_youtube_caption(
             body.trim()
         ));
     }
-    if let Some(parent) = output.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent).map_err(|err| {
-                format!("failed to create caption output directory {:?}: {err}", parent)
-            })?;
-        }
+    if let Some(parent) = output.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            format!("failed to create caption output directory {:?}: {err}", parent)
+        })?;
     }
     std::fs::write(output, &bytes)
         .map_err(|err| format!("failed to write youtube caption output {:?}: {err}", output))?;
@@ -1647,12 +1649,10 @@ fn resolve_project_id(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -1690,12 +1690,10 @@ fn resolve_project_id_from_youtube(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = youtube_account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -1734,12 +1732,10 @@ fn resolve_play_project_id(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = play_account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -1757,12 +1753,10 @@ fn resolve_play_project_id(
     }
     if let Some(reference) =
         generic_account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = env
         .get("GOOGLE_PROJECT_ID")
@@ -1792,12 +1786,11 @@ fn resolve_places_api_key(
         "dev" => account.dev_places_api_key_env.as_deref(),
         _ => None,
     };
-    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(value) =
+    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty())
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if !prefix.is_empty() {
         let key = match environment {
@@ -1806,22 +1799,19 @@ fn resolve_places_api_key(
             "dev" => format!("{prefix}DEV_PLACES_API_KEY"),
             _ => String::new(),
         };
-        if !key.is_empty() {
-            if let Some(value) =
+        if !key.is_empty()
+            && let Some(value) =
                 env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-            {
-                return (value.to_owned(), format!("env:{key}"));
-            }
+        {
+            return (value.to_owned(), format!("env:{key}"));
         }
     }
     if let Some(reference) =
         account.places_api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if !prefix.is_empty() {
         let key = format!("{prefix}PLACES_API_KEY");
@@ -1859,12 +1849,11 @@ fn resolve_youtube_api_key(
         "dev" => account.dev_youtube_api_key_env.as_deref(),
         _ => None,
     };
-    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(value) =
+    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty())
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if !prefix.is_empty() {
         let key = match environment {
@@ -1873,22 +1862,19 @@ fn resolve_youtube_api_key(
             "dev" => format!("{prefix}DEV_YOUTUBE_API_KEY"),
             _ => String::new(),
         };
-        if !key.is_empty() {
-            if let Some(value) =
+        if !key.is_empty()
+            && let Some(value) =
                 env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-            {
-                return (value.to_owned(), format!("env:{key}"));
-            }
+        {
+            return (value.to_owned(), format!("env:{key}"));
         }
     }
     if let Some(reference) =
         account.youtube_api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if !prefix.is_empty() {
         let key = format!("{prefix}YOUTUBE_API_KEY");
@@ -1936,12 +1922,11 @@ fn resolve_play_service_account_json(
         "dev" => account.dev_service_account_json_env.as_deref(),
         _ => None,
     };
-    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(value) =
+    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty())
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
-        }
+    {
+        return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
     }
     if !prefix.is_empty() {
         let key = match environment {
@@ -1950,22 +1935,19 @@ fn resolve_play_service_account_json(
             "dev" => format!("{prefix}DEV_PLAY_SERVICE_ACCOUNT_JSON"),
             _ => String::new(),
         };
-        if !key.is_empty() {
-            if let Some(value) =
+        if !key.is_empty()
+            && let Some(value) =
                 env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-            {
-                return Ok((resolve_play_json_input(value)?, format!("env:{key}")));
-            }
+        {
+            return Ok((resolve_play_json_input(value)?, format!("env:{key}")));
         }
     }
     if let Some(reference) =
         account.service_account_json_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
-        }
+    {
+        return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
     }
     if !prefix.is_empty() {
         let key = format!("{prefix}PLAY_SERVICE_ACCOUNT_JSON");
@@ -1985,12 +1967,10 @@ fn resolve_play_service_account_json(
     }
     if let Some(reference) =
         account.service_account_file_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return Ok((resolve_play_json_file(value)?, format!("env:{reference}")));
-        }
+    {
+        return Ok((resolve_play_json_file(value)?, format!("env:{reference}")));
     }
     if !prefix.is_empty() {
         let key = format!("{prefix}PLAY_SERVICE_ACCOUNT_FILE");
@@ -2311,12 +2291,10 @@ fn resolve_youtube_client_id(
     }
     if let Some(reference) =
         account.youtube_client_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = youtube_account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -2352,12 +2330,10 @@ fn resolve_youtube_client_secret(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = youtube_account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -2390,12 +2366,10 @@ fn resolve_youtube_redirect_uri(
     }
     if let Some(reference) =
         account.youtube_redirect_uri_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     let prefix = youtube_account_env_prefix(alias, account);
     if !prefix.is_empty() {
@@ -2464,12 +2438,11 @@ fn resolve_youtube_refresh_token(
             "dev" => format!("{prefix}DEV_YOUTUBE_REFRESH_TOKEN"),
             _ => String::new(),
         };
-        if !key.is_empty() {
-            if let Some(value) =
+        if !key.is_empty()
+            && let Some(value) =
                 env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-            {
-                return (value.to_owned(), format!("env:{key}"));
-            }
+        {
+            return (value.to_owned(), format!("env:{key}"));
         }
     }
     if let Some(reference) = account
@@ -2477,12 +2450,10 @@ fn resolve_youtube_refresh_token(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if !prefix.is_empty() {
         let key = format!("{prefix}YOUTUBE_REFRESH_TOKEN");

@@ -259,15 +259,13 @@ fn resolve_api_key(
             }
             if let Some(reference) =
                 account.live_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-            {
-                if let Some(value) = env
+                && let Some(value) = env
                     .get(reference)
                     .map(String::as_str)
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
-                {
-                    return (value.to_owned(), format!("env:{reference}"));
-                }
+            {
+                return (value.to_owned(), format!("env:{reference}"));
             }
             if let Some(value) = env
                 .get("SI_STRIPE_LIVE_API_KEY")
@@ -286,15 +284,13 @@ fn resolve_api_key(
             }
             if let Some(reference) =
                 account.sandbox_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-            {
-                if let Some(value) = env
+                && let Some(value) = env
                     .get(reference)
                     .map(String::as_str)
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
-                {
-                    return (value.to_owned(), format!("env:{reference}"));
-                }
+            {
+                return (value.to_owned(), format!("env:{reference}"));
             }
             if let Some(value) = env
                 .get("SI_STRIPE_SANDBOX_API_KEY")
@@ -489,12 +485,12 @@ pub fn render_api_response_text(response: &StripeAPIResponse, raw: bool) -> Stri
     if !response.idempotency_key.trim().is_empty() {
         out.push_str(&format!("Idempotency Key: {}\n", response.idempotency_key.trim()));
     }
-    if let Some(data) = &response.data {
-        if let Ok(pretty) = serde_json::to_string_pretty(data) {
-            out.push_str(&pretty);
-            out.push('\n');
-            return out;
-        }
+    if let Some(data) = &response.data
+        && let Ok(pretty) = serde_json::to_string_pretty(data)
+    {
+        out.push_str(&pretty);
+        out.push('\n');
+        return out;
     }
     if !response.body.trim().is_empty() {
         out.push_str(response.body.trim());

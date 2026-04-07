@@ -406,12 +406,10 @@ fn resolve_project_id(
     }
     if let Some(reference) =
         account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "PROJECT_ID", env) {
         return (value, format!("env:{}PROJECT_ID", account_env_prefix(alias, account)));
@@ -446,12 +444,10 @@ fn resolve_access_token(
     }
     if let Some(reference) =
         account.access_token_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        if let Some(value) =
+        && let Some(value) =
             env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
-        {
-            return (value.to_owned(), format!("env:{reference}"));
-        }
+    {
+        return (value.to_owned(), format!("env:{reference}"));
     }
     if let Some(value) = account_env(alias, account, "ACCESS_TOKEN", env) {
         return (value, format!("env:{}ACCESS_TOKEN", account_env_prefix(alias, account)));
