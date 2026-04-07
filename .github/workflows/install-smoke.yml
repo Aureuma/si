@@ -123,29 +123,4 @@ jobs:
         uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Run docker installer smoke tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          image="rust:1.86-bookworm"
-
-          docker pull "${image}"
-          docker run --rm \
-            -v "${PWD}:/workspace/si" \
-            -w /workspace/si \
-            "${image}" \
-            bash -lc '
-              set -euo pipefail
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update
-              apt-get install -y --no-install-recommends ca-certificates pkg-config libssl-dev
-              cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-install-smoke-root --
-              useradd -m -u 1000 si
-              su - si -c "
-                export HOME=/home/si
-                export CARGO_HOME=\$HOME/.cargo
-                export CARGO_TARGET_DIR=\$HOME/target
-                export SI_INSTALL_SOURCE_DIR=/workspace/si
-                cd /workspace/si
-                cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-install-smoke-nonroot --
-              "
-            '
+        run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker
