@@ -70,18 +70,18 @@ pub fn resolve_workspace_directory(
     }
 
     let mut stale_settings = false;
-    if let Some(settings) = settings {
-        if let Some(configured) = workspace_default_value(settings, scope) {
-            match resolve_directory_path(Path::new(configured), &label) {
-                Ok(path) => {
-                    return Ok(ResolvedDirectory {
-                        path,
-                        source: ResolvedPathSource::Settings,
-                        stale_settings: false,
-                    });
-                }
-                Err(_) => stale_settings = true,
+    if let Some(settings) = settings
+        && let Some(configured) = workspace_default_value(settings, scope)
+    {
+        match resolve_directory_path(Path::new(configured), &label) {
+            Ok(path) => {
+                return Ok(ResolvedDirectory {
+                    path,
+                    source: ResolvedPathSource::Settings,
+                    stale_settings: false,
+                });
             }
+            Err(_) => stale_settings = true,
         }
     }
 
@@ -118,18 +118,18 @@ pub fn resolve_workspace_root_directory(
     }
 
     let mut stale_settings = false;
-    if let Some(settings) = settings {
-        if let Some(configured) = settings.paths.workspace_root.as_deref() {
-            match resolve_directory_path(Path::new(configured), "workspace root") {
-                Ok(path) => {
-                    return Ok(ResolvedDirectory {
-                        path,
-                        source: ResolvedPathSource::Settings,
-                        stale_settings: false,
-                    });
-                }
-                Err(_) => stale_settings = true,
+    if let Some(settings) = settings
+        && let Some(configured) = settings.paths.workspace_root.as_deref()
+    {
+        match resolve_directory_path(Path::new(configured), "workspace root") {
+            Ok(path) => {
+                return Ok(ResolvedDirectory {
+                    path,
+                    source: ResolvedPathSource::Settings,
+                    stale_settings: false,
+                });
             }
+            Err(_) => stale_settings = true,
         }
     }
 
