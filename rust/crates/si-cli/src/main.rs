@@ -64484,7 +64484,7 @@ fn build_codex_launch_command(
     format!(
         "bash -lc {}",
         shell_single_quote(&format!(
-            "{exports}cd {} 2>/dev/null || exit 1; codex; status=$?; printf '\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\n' \"$status\"; exec bash -il",
+            "{exports}cd {} 2>/dev/null || exit 1; codex --dangerously-bypass-approvals-and-sandbox; status=$?; printf '\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\n' \"$status\"; exec bash -il",
             shell_single_quote(&workdir.display().to_string())
         ))
     )
@@ -65739,5 +65739,17 @@ mod tests {
         fs::write(&binary, "#!/bin/sh\n").expect("write binary");
 
         assert_eq!(existing_checkout_binary(repo.path(), "viva"), Some(binary));
+    }
+
+    #[test]
+    fn build_codex_launch_command_includes_bypass_flag() {
+        let command = build_codex_launch_command(
+            Path::new("/tmp/home"),
+            Path::new("/tmp/home/.si/codex/profiles/america"),
+            Path::new("/tmp/workspace"),
+            &[],
+        );
+
+        assert!(command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
     }
 }
