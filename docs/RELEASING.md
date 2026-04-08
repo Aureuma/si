@@ -149,6 +149,18 @@ Notes:
 - Add `--notes-start-tag vA.B.C` to define the start tag for generated notes when needed.
 - Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
 
+Option D: Use the Releasemind GitHub workflow for draft + publish orchestration.
+1. Add the required repo secrets:
+   - `RELEASEMIND_API_BASE_URL`
+   - `RELEASEMIND_AUTOMATION_TOKEN`
+2. Push the release tag.
+3. Let `.github/workflows/releasemind-release.yml` create or refresh the draft release notes and publish the release.
+4. The publish step triggers `.github/workflows/cli-release-assets.yml`, and the Releasemind workflow waits for that downstream distribution workflow to complete.
+
+Notes:
+- The Releasemind workflow keeps release publication and asset distribution aligned by waiting on the downstream `CLI Release Assets` release-event workflow.
+- The workflow pins the reusable Releasemind action to a specific commit SHA rather than a moving branch ref.
+
 ### 8) Verify the published release
 ```
 gh release view vX.Y.Z --web
