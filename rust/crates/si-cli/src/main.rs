@@ -35703,7 +35703,7 @@ fn refresh_fort_access_token(
         refresh_command.env_remove("FORT_REFRESH_TOKEN");
         let output = refresh_command
             .output()
-            .with_context(|| format!("refresh fort bootstrap session via {}", program.display()))?;
+            .with_context(|| format!("refresh fort session via {}", program.display()))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -35714,13 +35714,13 @@ fn refresh_fort_access_token(
             } else {
                 format!("exit status {}", output.status)
             };
-            anyhow::bail!("refresh fort bootstrap session: {detail}");
+            anyhow::bail!("refresh fort session: {detail}");
         }
         let payload: Value = serde_json::from_slice(&output.stdout)
-            .context("parse fort bootstrap refresh response")?;
+            .context("parse fort session refresh response")?;
         let access_token = payload["access_token"].as_str().unwrap_or_default().trim();
         if access_token.is_empty() {
-            anyhow::bail!("fort bootstrap refresh response missing access_token");
+            anyhow::bail!("fort session refresh response missing access_token");
         }
         write_secret_text_file(token_path, access_token)?;
         Ok(())
@@ -36195,12 +36195,13 @@ fn load_codex_profiles_for_display(
 }
 
 fn resolve_codex_profile(
+    home: &Path,
     settings: &Settings,
     paths: &SiPaths,
     profile: Option<&str>,
     purpose: &str,
 ) -> Result<String> {
-    let profiles = load_codex_profiles_for_display(&default_home_dir(), settings, paths);
+    let profiles = load_codex_profiles_for_display(home, settings, paths);
 
     if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
         let candidates = find_codex_profile_candidates(&profiles, query);
@@ -36221,11 +36222,12 @@ fn resolve_codex_profile(
 }
 
 fn resolve_codex_requested_profile(
+    home: &Path,
     settings: &Settings,
     paths: &SiPaths,
     profile: Option<&str>,
 ) -> Result<String> {
-    resolve_codex_profile(settings, paths, profile, "codex")
+    resolve_codex_profile(home, settings, paths, profile, "codex")
 }
 
 fn default_codex_profile_auth_path(paths: &SiPaths, profile: &str) -> String {
@@ -36380,11 +36382,6 @@ fn codex_status_has_live_quota(status: &CodexStatusView) -> bool {
     status.five_hour_left_pct.is_some() && status.weekly_left_pct.is_some()
 }
 
-fn mark_codex_profile_missing(view: &mut CodexProfileView) {
-    view.state = "Missing".to_owned();
-    clear_codex_profile_live_status(view);
-}
-
 fn resolve_codex_profile_live_view(
     mut profile: CodexProfileView,
     home: PathBuf,
@@ -36403,7 +36400,7 @@ fn resolve_codex_profile_live_view(
             apply_codex_status_to_profile(&mut profile, &status);
         }
         _ => {
-            mark_codex_profile_missing(&mut profile);
+            clear_codex_profile_live_status(&mut profile);
         }
     }
     profile
@@ -36500,7 +36497,7 @@ fn show_codex_profile(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "show")?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "show")?;
     let entry = settings
         .codex
         .profiles
@@ -36584,7 +36581,8 @@ fn remove_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "remove")?;
+    let profile_id =
+        resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "remove")?;
     let mut document = load_settings_document(&settings_path)?;
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
@@ -36622,7 +36620,7 @@ fn login_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "login")?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "login")?;
     let entry = settings
         .codex
         .profiles
@@ -36714,7 +36712,7 @@ fn swap_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "swap")?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "swap")?;
     let entry = settings
         .codex
         .profiles
@@ -64316,7 +64314,8 @@ fn show_codex_spawn_start(
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile.as_deref(), "spawn")?;
+    let profile_id =
+        resolve_codex_profile(&settings_home, &settings, &paths, profile.as_deref(), "spawn")?;
     let workspace = resolve_codex_workspace(workspace, &settings)?;
     let workdir = resolve_codex_workdir(workdir, &workspace)?;
     let state = ensure_codex_worker_session(
@@ -64621,7 +64620,7 @@ fn resolve_codex_worker_for_profile(
         }
     }
 
-    let profile_id = resolve_codex_requested_profile(&settings, &paths, profile)?;
+    let profile_id = resolve_codex_requested_profile(&home, &settings, &paths, profile)?;
     states
         .into_iter()
         .find(|state| state.profile_id == profile_id)
@@ -65089,7 +65088,7 @@ fn run_codex_warmup(
     let profile_ids = if let Some(profile) =
         profile.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
-        vec![resolve_codex_requested_profile(&settings, &paths, Some(profile))?]
+        vec![resolve_codex_requested_profile(&settings_home, &settings, &paths, Some(profile))?]
     } else if all || profile.is_none() {
         let mut items = settings.codex.profiles.entries.keys().cloned().collect::<Vec<_>>();
         items.sort();
@@ -65386,7 +65385,7 @@ fn run_codex_respawn_plan(
 ) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&settings, &paths, profile, "respawn")?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile, "respawn")?;
     let discovered = if profile_sessions.is_empty() {
         read_codex_worker_states(&paths)?
             .into_iter()
@@ -65771,11 +65770,12 @@ mod tests {
             "[build]\ntarget-dir = \".artifacts/cargo-target\"\n",
         )
         .expect("write cargo config");
-        let binary = repo.path().join(".artifacts").join("cargo-target").join("debug").join(if cfg!(windows) {
-            "viva.exe"
-        } else {
-            "viva"
-        });
+        let binary = repo
+            .path()
+            .join(".artifacts")
+            .join("cargo-target")
+            .join("debug")
+            .join(if cfg!(windows) { "viva.exe" } else { "viva" });
         fs::create_dir_all(binary.parent().expect("binary parent")).expect("mkdir binary parent");
         fs::write(&binary, "#!/bin/sh\n").expect("write binary");
 

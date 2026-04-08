@@ -70,6 +70,38 @@ fn write_named_codex_profile_settings(
     fs::write(settings_dir.join("settings.toml"), source).expect("write named codex settings");
 }
 
+fn fake_jwt(payload: Value) -> String {
+    format!(
+        "header.{}.signature",
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("serialize jwt payload"))
+    )
+}
+
+fn write_codex_auth_file(path: &Path, email: &str) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("mkdir auth dir");
+    }
+    let access_token = fake_jwt(json!({
+        "https://api.openai.com/profile": {
+            "email": email,
+        }
+    }));
+    let id_token = fake_jwt(json!({
+        "email": email,
+    }));
+    fs::write(
+        path,
+        serde_json::to_vec_pretty(&json!({
+            "tokens": {
+                "access_token": access_token,
+                "id_token": id_token,
+            }
+        }))
+        .expect("serialize auth json"),
+    )
+    .expect("write auth json");
+}
+
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -23494,6 +23526,56 @@ fn codex_profile_swap_requires_logged_in_profile() {
         "model = \"gpt-5\"\n"
     );
     assert!(!host_codex_home.join("auth.json").exists());
+}
+
+#[test]
+fn codex_profile_list_preserves_logged_in_state_when_live_probe_fails() {
+    let home = tempdir().expect("tempdir");
+    write_named_codex_profile_settings(
+        home.path(),
+        "america",
+        &[("america", "America", "america@example.test")],
+    );
+    write_codex_auth_file(
+        &home.path().join(".si/codex/profiles/america/auth.json"),
+        "america@example.test",
+    );
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let codex_path = bin_dir.path().join("codex");
+    write_executable_shell_script(
+        &codex_path,
+        "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = \"app-server\" ]; then\n  printf 'temporary app-server failure\\n' >&2\n  exit 1\nfi\nprintf 'unexpected codex invocation\\n' >&2\nexit 1\n",
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("PATH", path_env)
+        .args([
+            "codex",
+            "profile",
+            "list",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let profiles: Value = serde_json::from_slice(&output).expect("parse profile list");
+    let profile = profiles
+        .as_array()
+        .expect("profile list array")
+        .iter()
+        .find(|profile| profile["profile"] == "america")
+        .expect("america profile");
+    assert_eq!(profile["state"], "Logged-In");
+    assert!(profile["five_hour_left_pct"].is_null());
+    assert!(profile["weekly_left_pct"].is_null());
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {
