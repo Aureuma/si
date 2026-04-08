@@ -357,6 +357,11 @@ fn warmup_profile_is_due(profile: &WarmupProfileState, now: DateTime<Utc>) -> bo
     if profile.paused {
         return false;
     }
+    if profile.last_result.eq_ignore_ascii_case("warmed")
+        && (!profile.last_weekly_used_ok || profile.last_weekly_used_pct <= 0.0)
+    {
+        return true;
+    }
     let next_due = profile.next_due.trim();
     if next_due.is_empty() {
         return true;
@@ -675,5 +680,29 @@ mod tests {
         );
         assert_eq!(decision.reason, "scheduled");
         assert!(!decision.requested);
+
+        let threshold_state = super::WarmupState {
+            version: WARMUP_STATE_VERSION,
+            updated_at: String::new(),
+            profiles: [(
+                "profile-reach".to_owned(),
+                WarmupProfileState {
+                    last_result: "warmed".to_owned(),
+                    last_weekly_used_ok: true,
+                    last_weekly_used_pct: 0.0,
+                    next_due: "2030-03-19T12:10:00Z".to_owned(),
+                    ..WarmupProfileState::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: false, autostart_present: true },
+            &threshold_state,
+            now,
+        );
+        assert_eq!(decision.reason, "due");
+        assert!(decision.requested);
     }
 }
