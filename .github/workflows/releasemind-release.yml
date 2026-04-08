@@ -1,0 +1,104 @@
+name: ReleaseMind Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to run against (for example v0.57.0)
+        required: true
+        type: string
+      publish:
+        description: Publish the release after draft generation
+        required: true
+        default: true
+        type: boolean
+      base_tag:
+        description: Optional base tag override for changelog diff
+        required: false
+        type: string
+      pull_request_numbers:
+        description: Optional comma-separated PR numbers
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: releasemind-release-${{ github.event.inputs.tag || github.ref_name || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  runbook:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          fi
+          if [[ -z "${tag}" ]]; then
+            echo "Unable to resolve release tag." >&2
+            exit 1
+          fi
+
+          publish="true"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            publish="${{ inputs.publish }}"
+          fi
+
+          base_tag="${{ inputs.base_tag }}"
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || -z "${base_tag}" ]]; then
+            git fetch --tags --force
+            base_tag="$(git tag --sort=-v:refname | grep -E '^v' | grep -Fxv "${tag}" | head -n1 || true)"
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          echo "base_tag=${base_tag}" >> "${GITHUB_OUTPUT}"
+          echo "pull_request_numbers=${{ inputs.pull_request_numbers }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure draft release exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.resolve.outputs.tag }}"
+          if gh release view "${tag}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists."
+          else
+            gh release create "${tag}" \
+              --repo "${{ github.repository }}" \
+              --verify-tag \
+              --title "${tag}" \
+              --notes "Preparing release notes via ReleaseMind automation." \
+              --draft
+          fi
+
+      - name: Run ReleaseMind automation
+        uses: Aureuma/releasemind/.github/actions/releasemind-release-runbook@d117d52422083f393fcc9bbf4b6884ac52e49e3c
+        with:
+          api_base_url: ${{ secrets.RELEASEMIND_API_BASE_URL }}
+          automation_token: ${{ secrets.RELEASEMIND_AUTOMATION_TOKEN }}
+          repo_full_name: ${{ github.repository }}
+          release_tag: ${{ steps.resolve.outputs.tag }}
+          base_tag: ${{ steps.resolve.outputs.base_tag }}
+          pull_request_numbers: ${{ steps.resolve.outputs.pull_request_numbers }}
+          changelog_path: CHANGELOG.md
+          publish: ${{ steps.resolve.outputs.publish }}
+          preflight_command: cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
+          post_publish_command: ./.github/scripts/wait-cli-release-assets.sh "${{ steps.resolve.outputs.tag }}" "${{ github.repository }}"

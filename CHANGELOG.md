@@ -12,6 +12,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.57.0] - 2026-04-08
+### Changed
+- Bumped the minor release after wiring `si` to the Releasemind release-runbook workflow for GitHub Releases and downstream asset distribution.
+- Changed `si codex spawn` to launch Codex with the approvals-and-sandbox bypass flag required by the current worker runtime.
+
+### Fixed
+- Fixed `si codex profile list` and related profile displays so a failed live quota probe no longer downgrades a valid logged-in profile to `Missing`.
+- Fixed `si fort` wrapper refresh errors to report generic Fort session refresh failures instead of incorrectly blaming bootstrap auth in every case.
+
 ## [v0.56.0] - 2026-04-06
 ### Changed
 - Bumped the minor release after completing the current Nucleus architecture and live contract verification set.
