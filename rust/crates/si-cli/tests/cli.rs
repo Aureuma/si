@@ -4158,6 +4158,203 @@ fn nucleus_hook_producer_task_matches_cli_and_websocket_state() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_hook_rule_cli_round_trips_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let upsert_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "upsert",
+            "github-notify",
+            "--match-event-type",
+            "github.notification",
+            "--instructions",
+            "Reply with nucleus-github-hook",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let upserted: Value = serde_json::from_slice(&upsert_output).expect("parse hook upsert");
+    assert_eq!(upserted["name"], json!("github-notify"));
+    assert_eq!(upserted["match_event_type"], json!("github.notification"));
+    assert_eq!(upserted["enabled"], json!(true));
+
+    let list_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "list",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("parse hook list");
+    assert_eq!(listed.as_array().map(Vec::len), Some(1));
+    assert_eq!(listed[0]["name"], json!("github-notify"));
+
+    let inspect_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "inspect",
+            "github-notify",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let inspected: Value = serde_json::from_slice(&inspect_output).expect("parse hook inspect");
+    assert_eq!(inspected["instructions"], json!("Reply with nucleus-github-hook"));
+
+    let delete_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "delete",
+            "github-notify",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let deleted: Value = serde_json::from_slice(&delete_output).expect("parse hook delete");
+    assert_eq!(deleted["rule_name"], json!("github-notify"));
+    assert_eq!(deleted["deleted"], json!(true));
+
+    let list_after_delete_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "list",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed_after_delete: Value =
+        serde_json::from_slice(&list_after_delete_output).expect("parse hook list after delete");
+    assert_eq!(listed_after_delete.as_array().map(Vec::len), Some(0));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
+fn nucleus_github_notification_event_ingest_routes_hook_task_and_logs_event() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let home_dir = temp.path().join("home");
+    let codex_home = home_dir.join(".si/codex/profiles/america");
+    create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "upsert",
+            "github-notify",
+            "--match-event-type",
+            "github.notification",
+            "--instructions",
+            "Reply with nucleus-github-hook",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let ingest_output = cargo_bin()
+        .args([
+            "nucleus",
+            "events",
+            "ingest",
+            "--endpoint",
+            &ws_url,
+            "--type",
+            "github.notification",
+            "--source",
+            "github",
+            "--payload",
+            "{\"repository\":\"Aureuma/si\",\"reason\":\"mention\",\"subject\":{\"type\":\"PullRequest\",\"title\":\"Stabilize nucleus ingress\"}}",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let ingested: Value = serde_json::from_slice(&ingest_output).expect("parse event ingest");
+    assert_eq!(ingested["type"], json!("github.notification"));
+    assert_eq!(ingested["source"], json!("github"));
+
+    let listed = wait_for_cli_task(&ws_url, Duration::from_secs(5), |task| {
+        task["source"] == "hook" && task["producer_rule_name"] == "github-notify"
+    });
+    let task_id = listed["task_id"].as_str().expect("task id").to_owned();
+    let inspected = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let websocket = inspect_task_over_websocket(&ws_url, &task_id);
+
+    for field in ["task_id", "source", "producer_rule_name", "status", "checkpoint_summary"] {
+        assert_eq!(inspected[field], websocket[field], "github hook field mismatch: {field}");
+    }
+
+    let events = load_event_log_values(&state_root);
+    assert!(events.iter().any(|event| {
+        event["type"] == json!("github.notification")
+            && event["source"] == json!("github")
+            && event["data"]["payload"]["repository"] == json!("Aureuma/si")
+    }));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");

@@ -506,6 +506,8 @@ pub enum CanonicalEventType {
     RunCancelled,
     #[serde(rename = "profile.loaded")]
     ProfileLoaded,
+    #[serde(rename = "github.notification")]
+    GithubNotification,
     #[serde(rename = "system.warning")]
     SystemWarning,
 }
@@ -533,6 +535,7 @@ impl CanonicalEventType {
             Self::RunFailed => "run.failed",
             Self::RunCancelled => "run.cancelled",
             Self::ProfileLoaded => "profile.loaded",
+            Self::GithubNotification => "github.notification",
             Self::SystemWarning => "system.warning",
         }
     }
@@ -547,6 +550,7 @@ pub enum CanonicalEventSource {
     Websocket,
     Cron,
     Hook,
+    Github,
     Fort,
     System,
 }
@@ -768,6 +772,10 @@ mod tests {
         assert_eq!(CanonicalEventType::RunRequiresAuth.as_str(), "run.requires_auth");
         assert_eq!(CanonicalEventType::RunBlocked.as_str(), "run.blocked");
         assert_eq!(CanonicalEventType::WorkerReady.as_str(), "worker.ready");
+        assert_eq!(
+            CanonicalEventType::GithubNotification.as_str(),
+            "github.notification"
+        );
     }
 
     #[test]

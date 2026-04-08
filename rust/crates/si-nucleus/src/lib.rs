@@ -53,10 +53,13 @@ const REST_STATUS_PATH: &str = "/status";
 const REST_TASKS_PATH: &str = "/tasks";
 const REST_TASK_PATH: &str = "/tasks/{task_id}";
 const REST_TASK_CANCEL_PATH: &str = "/tasks/{task_id}/cancel";
+const REST_EVENTS_PATH: &str = "/events";
 const REST_WORKERS_PATH: &str = "/workers";
 const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
+const REST_HOOK_RULES_PATH: &str = "/producers/hook";
+const REST_HOOK_RULE_PATH: &str = "/producers/hook/{rule_name}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
 const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
@@ -844,6 +847,39 @@ impl NucleusStore {
     pub fn list_profiles(&self) -> Result<Vec<Value>> {
         let profiles = load_json_records_from_dir::<Value>(&self.paths.profiles_state_dir)?;
         Ok(profiles)
+    }
+
+    fn list_hook_rules(&self) -> Result<Vec<HookRuleRecord>> {
+        let mut rules = load_json_records_from_dir::<HookRuleRecord>(&self.paths.hook_state_dir)?;
+        rules.sort_by(|left, right| left.name.cmp(&right.name));
+        Ok(rules)
+    }
+
+    fn inspect_hook_rule(&self, rule_name: &str) -> Result<Option<HookRuleRecord>> {
+        let path = self.paths.hook_rule_path(rule_name);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let rule = serde_json::from_slice::<HookRuleRecord>(&bytes)
+            .with_context(|| format!("parse {}", path.display()))?;
+        Ok(Some(rule))
+    }
+
+    fn upsert_hook_rule(&self, rule: &HookRuleRecord) -> Result<HookRuleRecord> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        write_json_atomic(&self.paths.hook_rule_path(&rule.name), rule)?;
+        Ok(rule.clone())
+    }
+
+    fn delete_hook_rule(&self, rule_name: &str) -> Result<bool> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let path = self.paths.hook_rule_path(rule_name);
+        if !path.exists() {
+            return Ok(false);
+        }
+        fs::remove_file(&path).with_context(|| format!("remove {}", path.display()))?;
+        Ok(true)
     }
 
     pub fn list_profile_records(&self) -> Result<Vec<ProfileRecord>> {
@@ -2324,10 +2360,19 @@ impl NucleusService {
             .route(REST_TASKS_PATH, get(rest_list_tasks_handler).post(rest_create_task_handler))
             .route(REST_TASK_PATH, get(rest_inspect_task_handler))
             .route(REST_TASK_CANCEL_PATH, post(rest_cancel_task_handler))
+            .route(REST_EVENTS_PATH, post(rest_ingest_event_handler))
             .route(REST_WORKERS_PATH, get(rest_list_workers_handler))
             .route(REST_WORKER_PATH, get(rest_inspect_worker_handler))
             .route(REST_SESSION_PATH, get(rest_show_session_handler))
             .route(REST_RUN_PATH, get(rest_inspect_run_handler))
+            .route(
+                REST_HOOK_RULES_PATH,
+                get(rest_list_hook_rules_handler).post(rest_upsert_hook_rule_handler),
+            )
+            .route(
+                REST_HOOK_RULE_PATH,
+                get(rest_inspect_hook_rule_handler).delete(rest_delete_hook_rule_handler),
+            )
             .with_state(Arc::new(self))
     }
 
@@ -3543,6 +3588,48 @@ impl NucleusService {
                 })?)
             }
             "profile.list" => Ok(serde_json::to_value(self.store.list_profiles()?)?),
+            "producer.hook.list" => Ok(serde_json::to_value(self.store.list_hook_rules()?)?),
+            "producer.hook.inspect" => {
+                let params: HookRuleInspectParams =
+                    serde_json::from_value(params).context("parse producer.hook.inspect params")?;
+                let rule_name = normalize_hook_rule_name(&params.rule_name)?;
+                match self.store.inspect_hook_rule(&rule_name)? {
+                    Some(rule) => Ok(serde_json::to_value(rule)?),
+                    None => Err(anyhow!("hook rule not found")),
+                }
+            }
+            "producer.hook.upsert" => {
+                let params: HookRuleUpsertParams =
+                    serde_json::from_value(params).context("parse producer.hook.upsert params")?;
+                let rule_name = normalize_hook_rule_name(&params.name)?;
+                let match_event_type =
+                    normalize_canonical_event_type_string(&params.match_event_type)?;
+                let existing = self.store.inspect_hook_rule(&rule_name)?;
+                let rule = HookRuleRecord {
+                    name: rule_name,
+                    enabled: params
+                        .enabled
+                        .unwrap_or_else(|| existing.as_ref().map(|rule| rule.enabled).unwrap_or(true)),
+                    match_event_type,
+                    instructions: params.instructions,
+                    last_processed_event_seq: existing
+                        .as_ref()
+                        .map(|rule| rule.last_processed_event_seq)
+                        .unwrap_or(0),
+                    version: current_persisted_version().to_owned(),
+                };
+                let rule = self.store.upsert_hook_rule(&rule)?;
+                self.process_hook_producers()?;
+                self.dispatch_queued_tasks()?;
+                Ok(serde_json::to_value(rule)?)
+            }
+            "producer.hook.delete" => {
+                let params: HookRuleDeleteParams =
+                    serde_json::from_value(params).context("parse producer.hook.delete params")?;
+                let rule_name = normalize_hook_rule_name(&params.rule_name)?;
+                let deleted = self.store.delete_hook_rule(&rule_name)?;
+                Ok(serde_json::to_value(HookRuleDeleteResultView { rule_name, deleted })?)
+            }
             "worker.probe" => {
                 let runtime =
                     self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
@@ -3801,6 +3888,39 @@ impl NucleusService {
                 let run =
                     self.store.inspect_run(&run_id)?.ok_or_else(|| anyhow!("run not found"))?;
                 Ok(serde_json::to_value(run)?)
+            }
+            "events.ingest" => {
+                let params: EventIngestParams =
+                    serde_json::from_value(params).context("parse events.ingest params")?;
+                let event_type = parse_canonical_event_type(&params.event_type)?;
+                let source = parse_canonical_event_source(&params.source)?;
+                if event_type != CanonicalEventType::GithubNotification
+                    || source != CanonicalEventSource::Github
+                {
+                    anyhow::bail!(
+                        "events.ingest currently supports only type=github.notification with source=github"
+                    );
+                }
+                let profile = match params.profile {
+                    Some(value) => Some(ProfileName::new(value)?),
+                    None => None,
+                };
+                let event = self.store.append_aux_event(
+                    event_type,
+                    source,
+                    EventDataEnvelope {
+                        task_id: None,
+                        worker_id: None,
+                        session_id: None,
+                        run_id: None,
+                        profile,
+                        payload: params.payload,
+                    },
+                )?;
+                let _ = self.events.send(event.clone());
+                self.process_hook_producers()?;
+                self.dispatch_queued_tasks()?;
+                Ok(serde_json::to_value(event)?)
             }
             "events.subscribe" => Ok(json!({ "subscribed": true })),
             _ => Err(anyhow!("method not found: {method}")),
@@ -4105,6 +4225,32 @@ async fn recv_event(
     }
 }
 
+fn parse_canonical_event_type(value: &str) -> Result<CanonicalEventType> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("canonical event type cannot be empty");
+    }
+    serde_json::from_value(json!(trimmed))
+        .with_context(|| format!("unknown canonical event type: {trimmed}"))
+}
+
+fn normalize_canonical_event_type_string(value: &str) -> Result<String> {
+    Ok(parse_canonical_event_type(value)?.as_str().to_owned())
+}
+
+fn parse_canonical_event_source(value: &str) -> Result<CanonicalEventSource> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("canonical event source cannot be empty");
+    }
+    serde_json::from_value(json!(trimmed))
+        .with_context(|| format!("unknown canonical event source: {trimmed}"))
+}
+
+fn normalize_hook_rule_name(value: &str) -> Result<String> {
+    Ok(ProfileName::new(value.trim().to_owned())?.to_string())
+}
+
 fn is_read_gateway_method(method: &str) -> bool {
     matches!(
         method,
@@ -4112,6 +4258,8 @@ fn is_read_gateway_method(method: &str) -> bool {
             | "task.list"
             | "task.inspect"
             | "profile.list"
+            | "producer.hook.list"
+            | "producer.hook.inspect"
             | "worker.list"
             | "worker.inspect"
             | "session.list"
@@ -4691,6 +4839,25 @@ async fn rest_cancel_task_handler(
     )
 }
 
+async fn rest_ingest_event_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    Json(request): Json<EventIngestParams>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request(
+                    "events.ingest",
+                    serde_json::to_value(request).unwrap_or_else(|_| json!({})),
+                ),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::CREATED,
+    )
+}
+
 async fn rest_list_workers_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
@@ -4699,6 +4866,72 @@ async fn rest_list_workers_handler(
         service
             .dispatch_request_authorized(
                 rest_request("worker.list", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_list_hook_rules_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.hook.list", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_upsert_hook_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    Json(request): Json<HookRuleUpsertParams>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request(
+                    "producer.hook.upsert",
+                    serde_json::to_value(request).unwrap_or_else(|_| json!({})),
+                ),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_inspect_hook_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    AxumPath(rule_name): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.hook.inspect", json!({ "rule_name": rule_name })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_delete_hook_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    AxumPath(rule_name): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.hook.delete", json!({ "rule_name": rule_name })),
                 extract_bearer_token(&headers).as_deref(),
             )
             .await,
@@ -4835,6 +5068,15 @@ struct TaskPruneParams {
     older_than_days: Option<u64>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct EventIngestParams {
+    #[serde(rename = "type")]
+    event_type: String,
+    source: String,
+    profile: Option<String>,
+    payload: Value,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct WorkerProbeParams {
     worker_id: Option<String>,
@@ -4897,6 +5139,30 @@ struct RunInspectParams {
 #[derive(Clone, Debug, Deserialize)]
 struct RunCancelParams {
     run_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct HookRuleInspectParams {
+    rule_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct HookRuleUpsertParams {
+    name: String,
+    enabled: Option<bool>,
+    match_event_type: String,
+    instructions: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct HookRuleDeleteParams {
+    rule_name: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct HookRuleDeleteResultView {
+    rule_name: String,
+    deleted: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -5594,6 +5860,111 @@ mod tests {
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn gateway_ingests_github_notification_and_emits_hook_task() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let upsert = service
+            .dispatch_request(GatewayRequest {
+                id: json!("hook-upsert"),
+                method: "producer.hook.upsert".to_owned(),
+                params: json!({
+                    "name": "github-notify",
+                    "match_event_type": "github.notification",
+                    "instructions": "Triage the GitHub notification",
+                }),
+            })
+            .await;
+        assert!(upsert.ok);
+        assert_eq!(
+            upsert.result.expect("hook rule")["match_event_type"],
+            json!("github.notification")
+        );
+
+        let ingested = service
+            .dispatch_request(GatewayRequest {
+                id: json!("event-ingest"),
+                method: "events.ingest".to_owned(),
+                params: json!({
+                    "type": "github.notification",
+                    "source": "github",
+                    "payload": {
+                        "repository": "Aureuma/si",
+                        "reason": "mention",
+                        "subject": {
+                            "type": "PullRequest",
+                            "title": "Stabilize nucleus ingress"
+                        }
+                    }
+                }),
+            })
+            .await;
+        assert!(ingested.ok);
+        let ingested_event = ingested.result.expect("ingested event");
+        assert_eq!(ingested_event["type"], json!("github.notification"));
+        assert_eq!(ingested_event["source"], json!("github"));
+
+        let events = load_canonical_events(&service.store.paths().events_path).expect("load events");
+        assert!(events.iter().any(|event| {
+            event.event_type == CanonicalEventType::GithubNotification
+                && event.source == CanonicalEventSource::Github
+                && event.data.payload["repository"] == json!("Aureuma/si")
+        }));
+
+        let tasks = service.store.list_tasks().expect("list tasks");
+        let hook_task = tasks
+            .iter()
+            .find(|task| task.source == TaskSource::Hook)
+            .expect("hook task");
+        assert_eq!(hook_task.producer_rule_name.as_deref(), Some("github-notify"));
+        assert!(
+            hook_task
+                .instructions
+                .contains("Canonical event type: github.notification")
+        );
+
+        let stored_rule = read_hook_rule(&state_root, "github-notify");
+        assert_eq!(stored_rule.last_processed_event_seq, 1);
+    }
+
+    #[tokio::test]
+    async fn gateway_rejects_non_github_external_event_ingest() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let ingested = service
+            .dispatch_request(GatewayRequest {
+                id: json!("event-ingest-invalid"),
+                method: "events.ingest".to_owned(),
+                params: json!({
+                    "type": "task.created",
+                    "source": "websocket",
+                    "payload": {}
+                }),
+            })
+            .await;
+        assert!(!ingested.ok);
+        assert!(
+            ingested
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("github.notification"))
+                .unwrap_or(false)
+        );
     }
 
     #[tokio::test]

@@ -387,6 +387,10 @@ enum NucleusCommand {
         #[command(subcommand)]
         command: NucleusProfileCommand,
     },
+    Producer {
+        #[command(subcommand)]
+        command: NucleusProducerCommand,
+    },
     Service {
         #[command(subcommand)]
         command: NucleusServiceCommand,
@@ -416,6 +420,51 @@ enum NucleusCommand {
 #[derive(Debug, Subcommand)]
 enum NucleusProfileCommand {
     List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusProducerCommand {
+    Hook {
+        #[command(subcommand)]
+        command: NucleusHookCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusHookCommand {
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Inspect {
+        rule_name: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Upsert {
+        name: String,
+        #[arg(long)]
+        match_event_type: String,
+        #[arg(long)]
+        instructions: String,
+        #[arg(long)]
+        enabled: Option<bool>,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Delete {
+        rule_name: String,
         #[arg(long)]
         endpoint: Option<String>,
         #[arg(long, default_value = "json")]
@@ -629,6 +678,20 @@ enum NucleusEventsCommand {
         endpoint: Option<String>,
         #[arg(long)]
         count: Option<usize>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Ingest {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long = "type")]
+        event_type: String,
+        #[arg(long)]
+        source: String,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        payload: String,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
@@ -16074,6 +16137,63 @@ fn run_nucleus_profile_list(endpoint: Option<String>, format: OutputFormat) -> R
     print_nucleus_output(format, &payload)
 }
 
+fn parse_nucleus_json_arg(value: &str, flag: &str) -> Result<Value> {
+    serde_json::from_str(value).with_context(|| format!("parse {flag} as JSON"))
+}
+
+fn run_nucleus_hook_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload =
+        run_nucleus_gateway_request(endpoint.as_deref(), "producer.hook.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_hook_inspect(
+    endpoint: Option<String>,
+    rule_name: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.hook.inspect",
+        json!({ "rule_name": rule_name }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_hook_upsert(
+    endpoint: Option<String>,
+    name: String,
+    match_event_type: String,
+    instructions: String,
+    enabled: Option<bool>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.hook.upsert",
+        json!({
+            "name": name,
+            "match_event_type": match_event_type,
+            "instructions": instructions,
+            "enabled": enabled,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_hook_delete(
+    endpoint: Option<String>,
+    rule_name: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.hook.delete",
+        json!({ "rule_name": rule_name }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
 fn default_nucleus_state_dir() -> PathBuf {
     default_home_dir().join(".si").join("nucleus")
 }
@@ -16775,6 +16895,27 @@ fn run_nucleus_events_subscribe(
             }
         }
     }
+}
+
+fn run_nucleus_events_ingest(
+    endpoint: Option<String>,
+    event_type: String,
+    source: String,
+    profile: Option<String>,
+    payload: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "events.ingest",
+        json!({
+            "type": event_type,
+            "source": source,
+            "profile": profile,
+            "payload": parse_nucleus_json_arg(&payload, "--payload")?,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
 }
 
 #[derive(Debug, Serialize)]
@@ -33545,6 +33686,34 @@ fn main() -> Result<()> {
                     run_nucleus_profile_list(endpoint, format)?
                 }
             },
+            NucleusCommand::Producer { command } => match command {
+                NucleusProducerCommand::Hook { command } => match command {
+                    NucleusHookCommand::List { endpoint, format } => {
+                        run_nucleus_hook_list(endpoint, format)?
+                    }
+                    NucleusHookCommand::Inspect { rule_name, endpoint, format } => {
+                        run_nucleus_hook_inspect(endpoint, rule_name, format)?
+                    }
+                    NucleusHookCommand::Upsert {
+                        name,
+                        match_event_type,
+                        instructions,
+                        enabled,
+                        endpoint,
+                        format,
+                    } => run_nucleus_hook_upsert(
+                        endpoint,
+                        name,
+                        match_event_type,
+                        instructions,
+                        enabled,
+                        format,
+                    )?,
+                    NucleusHookCommand::Delete { rule_name, endpoint, format } => {
+                        run_nucleus_hook_delete(endpoint, rule_name, format)?
+                    }
+                },
+            },
             NucleusCommand::Service { command } => match command {
                 NucleusServiceCommand::Install { state_dir, bind_addr, service_dir, format } => {
                     run_nucleus_service_install(state_dir, bind_addr, service_dir, format)?
@@ -33646,6 +33815,16 @@ fn main() -> Result<()> {
                 NucleusEventsCommand::Subscribe { endpoint, count, format } => {
                     run_nucleus_events_subscribe(endpoint, count, format)?
                 }
+                NucleusEventsCommand::Ingest {
+                    endpoint,
+                    event_type,
+                    source,
+                    profile,
+                    payload,
+                    format,
+                } => run_nucleus_events_ingest(
+                    endpoint, event_type, source, profile, payload, format,
+                )?,
             },
         },
         Command::Surf { home, settings_file, build, no_build, bin, args } => {
