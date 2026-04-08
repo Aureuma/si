@@ -685,7 +685,7 @@ mod tests {
             version: WARMUP_STATE_VERSION,
             updated_at: String::new(),
             profiles: [(
-                "profile-reach".to_owned(),
+                "profile-threshold".to_owned(),
                 WarmupProfileState {
                     last_result: "warmed".to_owned(),
                     last_weekly_used_ok: true,
@@ -704,5 +704,34 @@ mod tests {
         );
         assert_eq!(decision.reason, "due");
         assert!(decision.requested);
+    }
+
+    #[test]
+    fn classify_autostart_request_leaves_used_warmed_profiles_scheduled() {
+        let now = Utc.with_ymd_and_hms(2030, 3, 19, 12, 0, 0).unwrap();
+        let state = super::WarmupState {
+            version: WARMUP_STATE_VERSION,
+            updated_at: String::new(),
+            profiles: [(
+                "profile-generic".to_owned(),
+                WarmupProfileState {
+                    last_result: "warmed".to_owned(),
+                    last_weekly_used_ok: true,
+                    last_weekly_used_pct: 1.0,
+                    next_due: "2030-03-19T12:10:00Z".to_owned(),
+                    ..WarmupProfileState::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: false, autostart_present: true },
+            &state,
+            now,
+        );
+        assert_eq!(decision.reason, "scheduled");
+        assert!(!decision.requested);
     }
 }
