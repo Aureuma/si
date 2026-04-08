@@ -3620,7 +3620,6 @@ impl NucleusService {
                 };
                 let rule = self.store.upsert_hook_rule(&rule)?;
                 self.process_hook_producers()?;
-                self.dispatch_queued_tasks()?;
                 Ok(serde_json::to_value(rule)?)
             }
             "producer.hook.delete" => {
@@ -3919,7 +3918,6 @@ impl NucleusService {
                 )?;
                 let _ = self.events.send(event.clone());
                 self.process_hook_producers()?;
-                self.dispatch_queued_tasks()?;
                 Ok(serde_json::to_value(event)?)
             }
             "events.subscribe" => Ok(json!({ "subscribed": true })),
