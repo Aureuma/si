@@ -882,6 +882,23 @@ impl NucleusStore {
         Ok(true)
     }
 
+    fn persist_hook_rule_progress(&self, progress: &HookRuleRecord) -> Result<bool> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let path = self.paths.hook_rule_path(&progress.name);
+        if !path.exists() {
+            return Ok(false);
+        }
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let mut current = serde_json::from_slice::<HookRuleRecord>(&bytes)
+            .with_context(|| format!("parse {}", path.display()))?;
+        current.last_processed_event_seq = current
+            .last_processed_event_seq
+            .max(progress.last_processed_event_seq);
+        current.version = current_persisted_version().to_owned();
+        write_json_atomic(&path, &current)?;
+        Ok(true)
+    }
+
     pub fn list_profile_records(&self) -> Result<Vec<ProfileRecord>> {
         let mut profiles =
             load_json_records_from_dir::<ProfileRecord>(&self.paths.profiles_state_dir)?;
@@ -2614,17 +2631,13 @@ impl NucleusService {
             changed = true;
         }
         if changed {
-            self.write_hook_rule(rule)?;
+            self.store.persist_hook_rule_progress(rule)?;
         }
         Ok(())
     }
 
     fn write_cron_rule(&self, rule: &CronRuleRecord) -> Result<()> {
         write_json_atomic(&self.store.paths().cron_rule_path(&rule.name), rule)
-    }
-
-    fn write_hook_rule(&self, rule: &HookRuleRecord) -> Result<()> {
-        write_json_atomic(&self.store.paths().hook_rule_path(&rule.name), rule)
     }
 
     fn reconcile_inflight_runs(&self, block_ambiguous_healthy_runs: bool) -> Result<()> {
@@ -3605,6 +3618,10 @@ impl NucleusService {
                 let match_event_type =
                     normalize_canonical_event_type_string(&params.match_event_type)?;
                 let existing = self.store.inspect_hook_rule(&rule_name)?;
+                let last_processed_event_seq = existing
+                    .as_ref()
+                    .map(|rule| rule.last_processed_event_seq)
+                    .unwrap_or_else(|| self.store.next_event_seq().saturating_sub(1));
                 let rule = HookRuleRecord {
                     name: rule_name,
                     enabled: params
@@ -3612,10 +3629,7 @@ impl NucleusService {
                         .unwrap_or_else(|| existing.as_ref().map(|rule| rule.enabled).unwrap_or(true)),
                     match_event_type,
                     instructions: params.instructions,
-                    last_processed_event_seq: existing
-                        .as_ref()
-                        .map(|rule| rule.last_processed_event_seq)
-                        .unwrap_or(0),
+                    last_processed_event_seq,
                     version: current_persisted_version().to_owned(),
                 };
                 let rule = self.store.upsert_hook_rule(&rule)?;
@@ -5963,6 +5977,152 @@ mod tests {
                 .map(|error| error.message.contains("github.notification"))
                 .unwrap_or(false)
         );
+    }
+
+    #[tokio::test]
+    async fn new_hook_rule_upsert_starts_after_existing_event_history() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+
+        let ingested = service
+            .dispatch_request(GatewayRequest {
+                id: json!("event-ingest-before-upsert"),
+                method: "events.ingest".to_owned(),
+                params: json!({
+                    "type": "github.notification",
+                    "source": "github",
+                    "payload": { "repository": "Aureuma/si", "reason": "mention" }
+                }),
+            })
+            .await;
+        assert!(ingested.ok);
+        let first_seq = ingested.result.expect("first event")["seq"]
+            .as_u64()
+            .expect("first seq");
+
+        let upsert = service
+            .dispatch_request(GatewayRequest {
+                id: json!("hook-upsert-after-history"),
+                method: "producer.hook.upsert".to_owned(),
+                params: json!({
+                    "name": "github-notify",
+                    "match_event_type": "github.notification",
+                    "instructions": "Triage the GitHub notification",
+                }),
+            })
+            .await;
+        assert!(upsert.ok);
+        assert_eq!(
+            upsert.result.expect("hook rule")["last_processed_event_seq"],
+            json!(first_seq)
+        );
+        assert!(service.store.list_tasks().expect("list tasks").is_empty());
+        assert_eq!(
+            read_hook_rule(&state_root, "github-notify").last_processed_event_seq,
+            first_seq
+        );
+
+        let ingested = service
+            .dispatch_request(GatewayRequest {
+                id: json!("event-ingest-after-upsert"),
+                method: "events.ingest".to_owned(),
+                params: json!({
+                    "type": "github.notification",
+                    "source": "github",
+                    "payload": { "repository": "Aureuma/si", "reason": "assign" }
+                }),
+            })
+            .await;
+        assert!(ingested.ok);
+        let second_seq = ingested.result.expect("second event")["seq"]
+            .as_u64()
+            .expect("second seq");
+        let tasks = service.store.list_tasks().expect("list tasks");
+        let hook_task = tasks.iter().find(|task| task.source == TaskSource::Hook).expect("hook task");
+        let expected_dedup = format!("github-notify:{second_seq}");
+        assert_eq!(
+            hook_task.producer_dedup_key.as_deref(),
+            Some(expected_dedup.as_str())
+        );
+    }
+
+    #[test]
+    fn persist_hook_rule_progress_preserves_concurrent_operator_updates() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let store = NucleusStore::open(state_root.clone()).expect("open store");
+
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "github-notify".to_owned(),
+                enabled: true,
+                match_event_type: "github.notification".to_owned(),
+                instructions: "old instructions".to_owned(),
+                last_processed_event_seq: 0,
+                version: current_persisted_version().to_owned(),
+            },
+        );
+        let mut stale = read_hook_rule(&state_root, "github-notify");
+        stale.last_processed_event_seq = 9;
+        stale.instructions = "stale instructions".to_owned();
+
+        store
+            .upsert_hook_rule(&HookRuleRecord {
+                name: "github-notify".to_owned(),
+                enabled: false,
+                match_event_type: "github.notification".to_owned(),
+                instructions: "new instructions".to_owned(),
+                last_processed_event_seq: 3,
+                version: current_persisted_version().to_owned(),
+            })
+            .expect("upsert hook rule");
+
+        assert!(
+            store
+                .persist_hook_rule_progress(&stale)
+                .expect("persist hook progress")
+        );
+
+        let stored = read_hook_rule(&state_root, "github-notify");
+        assert!(!stored.enabled);
+        assert_eq!(stored.instructions, "new instructions");
+        assert_eq!(stored.last_processed_event_seq, 9);
+    }
+
+    #[test]
+    fn persist_hook_rule_progress_does_not_recreate_deleted_rule() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let store = NucleusStore::open(state_root.clone()).expect("open store");
+
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "github-notify".to_owned(),
+                enabled: true,
+                match_event_type: "github.notification".to_owned(),
+                instructions: "old instructions".to_owned(),
+                last_processed_event_seq: 0,
+                version: current_persisted_version().to_owned(),
+            },
+        );
+        let mut stale = read_hook_rule(&state_root, "github-notify");
+        stale.last_processed_event_seq = 9;
+        assert!(store.delete_hook_rule("github-notify").expect("delete hook rule"));
+
+        assert!(
+            !store
+                .persist_hook_rule_progress(&stale)
+                .expect("skip deleted rule progress")
+        );
+        assert!(store.inspect_hook_rule("github-notify").expect("inspect hook rule").is_none());
     }
 
     #[tokio::test]

@@ -4355,6 +4355,113 @@ fn nucleus_github_notification_event_ingest_routes_hook_task_and_logs_event() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_new_hook_rule_does_not_backfill_old_github_notifications_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let first_ingest_output = cargo_bin()
+        .args([
+            "nucleus",
+            "events",
+            "ingest",
+            "--endpoint",
+            &ws_url,
+            "--type",
+            "github.notification",
+            "--source",
+            "github",
+            "--payload",
+            "{\"repository\":\"Aureuma/si\",\"reason\":\"mention\",\"subject\":{\"type\":\"Issue\",\"title\":\"Older github notification\"}}",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let first_ingested: Value =
+        serde_json::from_slice(&first_ingest_output).expect("parse first event ingest");
+    let first_seq = first_ingested["seq"].as_u64().expect("first seq");
+
+    let upsert_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "hook",
+            "upsert",
+            "github-notify",
+            "--match-event-type",
+            "github.notification",
+            "--instructions",
+            "Reply with nucleus-github-hook",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let upserted: Value = serde_json::from_slice(&upsert_output).expect("parse hook upsert");
+    assert_eq!(upserted["last_processed_event_seq"], json!(first_seq));
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let tasks: Value = serde_json::from_slice(&list_output).expect("parse task list");
+    assert!(
+        tasks.as_array()
+            .expect("task list array")
+            .iter()
+            .all(|task| task["source"] != "hook"),
+        "new hook rule should not backfill old github events"
+    );
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "events",
+            "ingest",
+            "--endpoint",
+            &ws_url,
+            "--type",
+            "github.notification",
+            "--source",
+            "github",
+            "--payload",
+            "{\"repository\":\"Aureuma/si\",\"reason\":\"assign\",\"subject\":{\"type\":\"Issue\",\"title\":\"Fresh github notification\"}}",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+
+    let listed = wait_for_cli_task(&ws_url, Duration::from_secs(5), |task| {
+        task["source"] == "hook" && task["producer_rule_name"] == "github-notify"
+    });
+    assert!(
+        listed["instructions"]
+            .as_str()
+            .expect("hook instructions")
+            .contains("Canonical event sequence"),
+        "fresh github event should create the hook task"
+    );
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_fort_ready_task_executes_and_projects_event_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
