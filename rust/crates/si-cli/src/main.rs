@@ -214,7 +214,7 @@ use std::process::{Command as StdCommand, ExitStatus};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tar::Builder as TarBuilder;
 use tungstenite::client::IntoClientRequest;
 use tungstenite::http::header::{AUTHORIZATION, HeaderValue};
@@ -64956,6 +64956,45 @@ fn read_codex_status_with_retry(
 }
 
 const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
+const CODEX_WARMUP_SUCCESS_TIMEOUT: Duration = Duration::from_secs(120);
+const CODEX_WARMUP_SUCCESS_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
+fn codex_warmup_weekly_quota_reached(status: &CodexStatusView) -> bool {
+    status.weekly_left_pct.is_some_and(|value| value < 100.0)
+}
+
+fn read_codex_status_until_warm(
+    profile_id: &str,
+    home: &Path,
+    paths: &SiPaths,
+    settings: &Settings,
+    workspace: Option<PathBuf>,
+) -> Result<CodexStatusView> {
+    let started_at = Instant::now();
+    let mut last_status: Option<CodexStatusView> = None;
+    let mut last_error: Option<anyhow::Error> = None;
+
+    loop {
+        match read_codex_status_with_retry(profile_id, home, paths, settings, workspace.clone()) {
+            Ok(status) if codex_warmup_weekly_quota_reached(&status) => return Ok(status),
+            Ok(status) => last_status = Some(status),
+            Err(err) => last_error = Some(err),
+        }
+
+        if started_at.elapsed() >= CODEX_WARMUP_SUCCESS_TIMEOUT {
+            if let Some(status) = last_status {
+                anyhow::bail!(
+                    "weekly quota is still {} left; warmup only completes once it drops below 100%",
+                    render_option_percent_value(status.weekly_left_pct)
+                );
+            }
+            return Err(last_error
+                .unwrap_or_else(|| anyhow!("codex warmup did not reach a live weekly quota")));
+        }
+
+        std::thread::sleep(CODEX_WARMUP_SUCCESS_POLL_INTERVAL);
+    }
+}
 
 fn codex_profile_auth_path_from_settings(
     paths: &SiPaths,
@@ -65079,7 +65118,7 @@ fn run_codex_warmup(
             settings_file.clone(),
             workspace.clone(),
         ) {
-            Ok(ensure) => match read_codex_status_with_retry(
+            Ok(ensure) => match read_codex_status_until_warm(
                 &profile_id,
                 &settings_home,
                 &paths,
@@ -65119,6 +65158,7 @@ fn run_codex_warmup(
                 Err(err) => {
                     entry.last_result = "failed".to_owned();
                     entry.last_error = err.to_string();
+                    entry.next_due.clear();
                     entry.failure_count += 1;
                     results.push(CodexWarmupRunProfileView {
                         profile_id,
@@ -65137,6 +65177,7 @@ fn run_codex_warmup(
             Err(err) => {
                 entry.last_result = "failed".to_owned();
                 entry.last_error = err.to_string();
+                entry.next_due.clear();
                 entry.failure_count += 1;
                 results.push(CodexWarmupRunProfileView {
                     profile_id,
@@ -65751,5 +65792,31 @@ mod tests {
         );
 
         assert!(command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
+    }
+
+    #[test]
+    fn codex_warmup_weekly_quota_requires_less_than_one_hundred_percent_left() {
+        let mut status = CodexStatusView {
+            source: None,
+            raw: None,
+            model: None,
+            reasoning_effort: None,
+            account_email: None,
+            account_plan: None,
+            five_hour_left_pct: None,
+            five_hour_reset: None,
+            five_hour_remaining_minutes: None,
+            weekly_left_pct: Some(100.0),
+            weekly_reset: None,
+            weekly_remaining_minutes: None,
+        };
+
+        assert!(!codex_warmup_weekly_quota_reached(&status));
+
+        status.weekly_left_pct = Some(99.0);
+        assert!(codex_warmup_weekly_quota_reached(&status));
+
+        status.weekly_left_pct = None;
+        assert!(!codex_warmup_weekly_quota_reached(&status));
     }
 }

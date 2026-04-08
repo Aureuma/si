@@ -59,6 +59,7 @@ Warmup runtime files are also stored under `~/.si`:
 
 Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
 Warmup only inspects persistent Codex worker status and schedules the next run from the reported reset windows with a small jitter.
+Warmup only reports a profile as warmed once the live weekly quota drops below `100%` left.
 
 ## Nucleus gateway discovery and auth
 
