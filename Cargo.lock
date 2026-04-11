@@ -2122,6 +2122,7 @@ dependencies = [
  "si-nucleus-core",
  "si-nucleus-runtime",
  "si-nucleus-runtime-codex",
+ "si-rs-codex",
  "si-rs-fort",
  "tempfile",
  "tokio",
@@ -2159,6 +2160,7 @@ dependencies = [
  "serde_json",
  "si-nucleus-core",
  "si-nucleus-runtime",
+ "si-rs-codex",
  "si-rs-core",
  "si-rs-process",
 ]

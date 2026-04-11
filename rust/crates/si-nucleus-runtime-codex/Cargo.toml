@@ -15,6 +15,7 @@ si-nucleus-core = { path = "../si-nucleus-core" }
 si-nucleus-runtime = { path = "../si-nucleus-runtime" }
 si-rs-process = { path = "../si-process" }
 si-rs-core = { path = "../si-core" }
+si-rs-codex = { path = "../si-codex" }
 
 [lib]
 path = "src/lib.rs"

@@ -18,10 +18,15 @@ use si_nucleus_runtime::{
     RuntimeRunOutcome, RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
     WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
+use si_rs_codex::codex_profile_fort_runtime_env;
 use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const TURN_TIMEOUT: Duration = Duration::from_secs(900);
+
+fn is_managed_codex_runtime_env(key: &str) -> bool {
+    matches!(key, "HOME" | "CODEX_HOME" | "FORT_TOKEN_PATH" | "FORT_REFRESH_TOKEN_PATH" | "TERM")
+}
 
 #[derive(Debug)]
 struct ManagedCodexWorker {
@@ -291,7 +296,11 @@ impl NucleusRuntime for CodexNucleusRuntime {
         env.insert("HOME".to_owned(), spec.home_dir.display().to_string());
         env.insert("CODEX_HOME".to_owned(), spec.codex_home.display().to_string());
         env.insert("TERM".to_owned(), "xterm-256color".to_owned());
+        env.extend(codex_profile_fort_runtime_env(&spec.codex_home));
         for (key, value) in &spec.extra_env {
+            if is_managed_codex_runtime_env(key) {
+                continue;
+            }
             env.insert(key.clone(), value.clone());
         }
         RuntimeCommand {
@@ -1089,7 +1098,10 @@ mod tests {
             home_dir: PathBuf::from("/tmp/home"),
             codex_home: PathBuf::from("/tmp/home/.si/codex/profiles/america"),
             workdir: PathBuf::from("/tmp/work"),
-            extra_env: BTreeMap::from([("EXTRA_FLAG".to_owned(), "1".to_owned())]),
+            extra_env: BTreeMap::from([
+                ("EXTRA_FLAG".to_owned(), "1".to_owned()),
+                ("FORT_TOKEN_PATH".to_owned(), "/tmp/override.token".to_owned()),
+            ]),
         };
         let command = runtime.build_worker_command(&spec);
         assert_eq!(command.program, "codex");
@@ -1099,6 +1111,14 @@ mod tests {
         assert_eq!(
             command.env.get("CODEX_HOME").map(String::as_str),
             Some("/tmp/home/.si/codex/profiles/america")
+        );
+        assert_eq!(
+            command.env.get("FORT_TOKEN_PATH").map(String::as_str),
+            Some("/tmp/home/.si/codex/profiles/america/fort/access.token")
+        );
+        assert_eq!(
+            command.env.get("FORT_REFRESH_TOKEN_PATH").map(String::as_str),
+            Some("/tmp/home/.si/codex/profiles/america/fort/refresh.token")
         );
         assert_eq!(command.env.get("EXTRA_FLAG").map(String::as_str), Some("1"));
     }

@@ -15,6 +15,7 @@ futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 si-rs-fort = { path = "../si-fort" }
+si-rs-codex = { path = "../si-codex" }
 si-nucleus-core = { path = "../si-nucleus-core" }
 si-nucleus-runtime = { path = "../si-nucleus-runtime" }
 si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }

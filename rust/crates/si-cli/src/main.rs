@@ -34,7 +34,10 @@ use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use si_rs_codex::{RespawnRequest, build_respawn_plan, codex_tmux_session_name, codex_worker_name};
+use si_rs_codex::{
+    CodexProfileFortSessionPaths, RespawnRequest, build_respawn_plan,
+    codex_profile_fort_session_paths, codex_tmux_session_name, codex_worker_name,
+};
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
@@ -16130,6 +16133,38 @@ fn parse_env_assignments(entries: &[String]) -> Result<BTreeMap<String, String>>
     Ok(map)
 }
 
+fn validate_nucleus_profile_slug(profile: &str) -> Result<()> {
+    let trimmed = profile.trim();
+    let Some(first) = trimmed.chars().next() else {
+        anyhow::bail!("profile name cannot be empty");
+    };
+    if !first.is_ascii_lowercase()
+        || !trimmed
+            .chars()
+            .skip(1)
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+    {
+        anyhow::bail!("profile name must match ^[a-z][a-z0-9-]*$, got {trimmed}");
+    }
+    Ok(())
+}
+
+fn prepare_nucleus_codex_profile_runtime(
+    profile: &str,
+    home_dir: Option<PathBuf>,
+    codex_home: Option<PathBuf>,
+    env_entries: Vec<String>,
+) -> Result<(PathBuf, PathBuf, BTreeMap<String, String>)> {
+    validate_nucleus_profile_slug(profile)?;
+    let (settings_home, settings) = load_codex_runtime_settings(home_dir.clone(), None)?;
+    let paths = SiPaths::from_settings(&settings_home, &settings);
+    let prepared =
+        prepare_codex_profile_runtime(&settings_home, &paths, &settings, profile, codex_home)?;
+    let mut env = parse_env_assignments(&env_entries)?;
+    insert_codex_profile_fort_env(&mut env, &prepared.fort_paths);
+    Ok((home_dir.unwrap_or(settings_home), prepared.codex_home, env))
+}
+
 fn run_nucleus_status(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
     let payload = run_nucleus_gateway_request(endpoint.as_deref(), "nucleus.status", json!({}))?;
     print_nucleus_output(format, &payload)
@@ -16684,6 +16719,8 @@ fn run_nucleus_worker_probe(
     env_entries: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let (home_dir, codex_home, env) =
+        prepare_nucleus_codex_profile_runtime(&profile, home_dir, codex_home, env_entries)?;
     let payload = run_nucleus_gateway_request(
         endpoint.as_deref(),
         "worker.probe",
@@ -16693,7 +16730,7 @@ fn run_nucleus_worker_probe(
             "home_dir": home_dir,
             "codex_home": codex_home,
             "workdir": workdir,
-            "env": parse_env_assignments(&env_entries)?,
+            "env": env,
         }),
     )?;
     print_nucleus_output(format, &payload)
@@ -16754,6 +16791,8 @@ fn run_nucleus_session_create(
     env_entries: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let (home_dir, codex_home, env) =
+        prepare_nucleus_codex_profile_runtime(&profile, home_dir, codex_home, env_entries)?;
     let payload = run_nucleus_gateway_request(
         endpoint.as_deref(),
         "session.create",
@@ -16764,7 +16803,7 @@ fn run_nucleus_session_create(
             "home_dir": home_dir,
             "codex_home": codex_home,
             "workdir": workdir,
-            "env": parse_env_assignments(&env_entries)?,
+            "env": env,
         }),
     )?;
     print_nucleus_output(format, &payload)
@@ -35667,15 +35706,6 @@ struct FortTokenFileAuth {
     label: String,
 }
 
-#[derive(Clone, Debug)]
-struct FortProfileSessionPaths {
-    dir: PathBuf,
-    session_path: PathBuf,
-    access_token_path: PathBuf,
-    refresh_token_path: PathBuf,
-    lock_path: PathBuf,
-}
-
 #[derive(Debug)]
 struct FortApiClient {
     host: String,
@@ -35957,17 +35987,6 @@ fn resolve_fort_active_profile_id(settings: &Settings, home: &Path) -> Option<St
     resolve_codex_active_profile_id(settings)
 }
 
-fn fort_profile_session_paths(codex_home: &Path) -> FortProfileSessionPaths {
-    let dir = codex_home.join("fort");
-    FortProfileSessionPaths {
-        session_path: dir.join("session.json"),
-        access_token_path: dir.join("access.token"),
-        refresh_token_path: dir.join("refresh.token"),
-        lock_path: dir.join("runtime.lock"),
-        dir,
-    }
-}
-
 fn ensure_fort_secret_dir(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir)
         .with_context(|| format!("create Fort profile dir {}", dir.display()))?;
@@ -36054,7 +36073,7 @@ fn refresh_bootstrap_admin_token_for_fort_provisioning(
 }
 
 fn fort_profile_session_is_reusable(
-    paths: &FortProfileSessionPaths,
+    paths: &CodexProfileFortSessionPaths,
     profile_id: &str,
     agent_id: &str,
 ) -> Result<bool> {
@@ -36150,7 +36169,7 @@ fn open_fort_profile_session(
     agent_id: &str,
     host: &str,
     runtime_host: &str,
-    paths: &FortProfileSessionPaths,
+    paths: &CodexProfileFortSessionPaths,
 ) -> Result<()> {
     let (status, response) = client.request(
         Method::POST,
@@ -36205,8 +36224,8 @@ fn ensure_codex_profile_fort_session(
     settings: &Settings,
     codex_home: &Path,
     profile_id: &str,
-) -> Result<FortProfileSessionPaths> {
-    let paths = fort_profile_session_paths(codex_home);
+) -> Result<CodexProfileFortSessionPaths> {
+    let paths = codex_profile_fort_session_paths(codex_home);
     ensure_fort_secret_dir(&paths.dir)?;
     let _lock = acquire_session_lock(&paths.lock_path)
         .with_context(|| format!("lock Fort profile session {}", paths.lock_path.display()))?;
@@ -65177,7 +65196,7 @@ fn build_codex_launch_command(
     codex_home: &Path,
     workdir: &Path,
     env_entries: &[String],
-    fort_paths: &FortProfileSessionPaths,
+    fort_paths: &CodexProfileFortSessionPaths,
 ) -> String {
     let mut exports = format!(
         "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={}; ",
@@ -65205,18 +65224,16 @@ fn build_codex_launch_command(
     )
 }
 
-fn sync_codex_profile_auth_into_home(
+fn sync_codex_profile_auth_to_home(
     paths: &SiPaths,
     settings: &Settings,
     profile_id: &str,
+    codex_home: &Path,
 ) -> Result<()> {
-    let Some(auth_path) = codex_profile_auth_path_from_settings(paths, settings, profile_id) else {
-        return Ok(());
-    };
+    let auth_path = codex_profile_auth_source_path(paths, settings, profile_id);
     if !auth_path.is_file() {
         return Ok(());
     }
-    let codex_home = codex_profile_home_dir(paths, settings, profile_id);
     fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
     let target_path = codex_home.join("auth.json");
     if auth_path != target_path {
@@ -65228,6 +65245,38 @@ fn sync_codex_profile_auth_into_home(
     fs::set_permissions(&target_path, fs::Permissions::from_mode(0o600))
         .with_context(|| format!("chmod {}", target_path.display()))?;
     Ok(())
+}
+
+#[derive(Debug)]
+struct PreparedCodexProfileRuntime {
+    codex_home: PathBuf,
+    fort_paths: CodexProfileFortSessionPaths,
+}
+
+fn prepare_codex_profile_runtime(
+    home: &Path,
+    paths: &SiPaths,
+    settings: &Settings,
+    profile_id: &str,
+    codex_home_override: Option<PathBuf>,
+) -> Result<PreparedCodexProfileRuntime> {
+    let codex_home =
+        codex_home_override.unwrap_or_else(|| codex_profile_home_dir(paths, settings, profile_id));
+    fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
+    sync_codex_profile_auth_to_home(paths, settings, profile_id, &codex_home)?;
+    let fort_paths = ensure_codex_profile_fort_session(home, settings, &codex_home, profile_id)?;
+    Ok(PreparedCodexProfileRuntime { codex_home, fort_paths })
+}
+
+fn insert_codex_profile_fort_env(
+    env: &mut BTreeMap<String, String>,
+    fort_paths: &CodexProfileFortSessionPaths,
+) {
+    env.insert("FORT_TOKEN_PATH".to_owned(), fort_paths.access_token_path.display().to_string());
+    env.insert(
+        "FORT_REFRESH_TOKEN_PATH".to_owned(),
+        fort_paths.refresh_token_path.display().to_string(),
+    );
 }
 
 fn ensure_codex_worker_session(
@@ -65243,10 +65292,7 @@ fn ensure_codex_worker_session(
     let profile_name = codex_profile_display_name_from_settings(settings, profile_id);
     let session_name = codex_tmux_session_name(profile_id);
     let state_path = codex_worker_state_path(paths, profile_id);
-    let codex_home = codex_profile_home_dir(paths, settings, profile_id);
-    fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
-    sync_codex_profile_auth_into_home(paths, settings, profile_id)?;
-    let fort_paths = ensure_codex_profile_fort_session(home, settings, &codex_home, profile_id)?;
+    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
 
     let existing = find_codex_worker_state(paths, profile_id)?;
     let restart_needed = existing.as_ref().is_some_and(|state| {
@@ -65260,8 +65306,13 @@ fn ensure_codex_worker_session(
     }
     if !tmux_session_exists(tmux_bin, &tmux_term, &session_name)? {
         let window_name = codex_tmux_window_name(profile_id, profile_name.as_deref());
-        let launch_command =
-            build_codex_launch_command(home, &codex_home, &workdir, env_entries, &fort_paths);
+        let launch_command = build_codex_launch_command(
+            home,
+            &prepared.codex_home,
+            &workdir,
+            env_entries,
+            &prepared.fort_paths,
+        );
         let status = StdCommand::new(tmux_bin)
             .env("TERM", &tmux_term)
             .args(["new-session", "-d", "-s", &session_name, "-n", &window_name, &launch_command])
@@ -65473,19 +65524,17 @@ fn run_codex_shell(
     if command.is_empty() {
         anyhow::bail!("shell command is required");
     }
-    sync_codex_profile_auth_into_home(&paths, &settings, &target.profile_id)?;
-    let codex_home = codex_profile_home_dir(&paths, &settings, &target.profile_id);
-    let fort_paths =
-        ensure_codex_profile_fort_session(&home, &settings, &codex_home, &target.profile_id)?;
+    let prepared =
+        prepare_codex_profile_runtime(&home, &paths, &settings, &target.profile_id, None)?;
     let resolved_workdir = workdir.unwrap_or_else(|| PathBuf::from(target.workdir.clone()));
     let mut process = StdCommand::new(&command[0]);
     process
         .args(&command[1..])
         .current_dir(&resolved_workdir)
         .env("HOME", &home)
-        .env("CODEX_HOME", &codex_home)
-        .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
-        .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
+        .env("CODEX_HOME", &prepared.codex_home)
+        .env("FORT_TOKEN_PATH", &prepared.fort_paths.access_token_path)
+        .env("FORT_REFRESH_TOKEN_PATH", &prepared.fort_paths.refresh_token_path)
         .env("TERM", env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
     for entry in env_entries {
         let trimmed = entry.trim();
@@ -65578,6 +65627,7 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
 fn run_local_codex_app_server_status(
     home: &Path,
     codex_home: &Path,
+    fort_paths: &CodexProfileFortSessionPaths,
     workdir: &Path,
 ) -> Result<CodexStatusView> {
     let mut child = StdCommand::new("codex")
@@ -65585,6 +65635,8 @@ fn run_local_codex_app_server_status(
         .current_dir(workdir)
         .env("HOME", home)
         .env("CODEX_HOME", codex_home)
+        .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
+        .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
         .env("TERM", "xterm-256color")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -65629,8 +65681,7 @@ fn read_codex_status_for_profile(
     workspace: Option<PathBuf>,
     raw: bool,
 ) -> Result<CodexStatusView> {
-    sync_codex_profile_auth_into_home(paths, settings, profile_id)?;
-    let codex_home = codex_profile_home_dir(paths, settings, profile_id);
+    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
     let workdir = if let Some(state) = find_codex_worker_state(paths, profile_id)? {
         PathBuf::from(state.workdir)
     } else if let Some(workspace) = workspace {
@@ -65640,7 +65691,12 @@ fn read_codex_status_for_profile(
     } else {
         std::env::current_dir().context("read current dir for codex status")?
     };
-    let mut status = run_local_codex_app_server_status(home, &codex_home, &workdir)?;
+    let mut status = run_local_codex_app_server_status(
+        home,
+        &prepared.codex_home,
+        &prepared.fort_paths,
+        &workdir,
+    )?;
     if !raw {
         status.raw = None;
     }
@@ -65729,6 +65785,15 @@ fn codex_profile_auth_path_from_settings(
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(default_codex_profile_auth_path(paths, profile_id)))
     })
+}
+
+fn codex_profile_auth_source_path(
+    paths: &SiPaths,
+    settings: &Settings,
+    profile_id: &str,
+) -> PathBuf {
+    codex_profile_auth_path_from_settings(paths, settings, profile_id)
+        .unwrap_or_else(|| PathBuf::from(default_codex_profile_auth_path(paths, profile_id)))
 }
 
 fn ensure_codex_worker_running(
@@ -66507,7 +66572,7 @@ mod tests {
     #[test]
     fn build_codex_launch_command_includes_bypass_flag() {
         let fort_paths =
-            fort_profile_session_paths(Path::new("/tmp/home/.si/codex/profiles/america"));
+            codex_profile_fort_session_paths(Path::new("/tmp/home/.si/codex/profiles/america"));
         let command = build_codex_launch_command(
             Path::new("/tmp/home"),
             Path::new("/tmp/home/.si/codex/profiles/america"),
