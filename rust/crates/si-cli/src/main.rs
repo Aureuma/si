@@ -29,6 +29,7 @@ use comfy_table::{Attribute, Cell, Color, ColumnConstraint, ContentArrangement, 
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use regex::Regex;
+use reqwest::Method;
 use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -44,8 +45,9 @@ use si_rs_config::settings::{
 };
 use si_rs_fort::{
     BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
-    RefreshSuccess, SessionState, apply_refresh_outcome_to_persisted_session_state,
-    build_bootstrap_view, classify_persisted_session_state, clear_persisted_runtime_agent_state,
+    RefreshSuccess, SessionState, acquire_session_lock,
+    apply_refresh_outcome_to_persisted_session_state, build_bootstrap_view,
+    classify_persisted_session_state, clear_persisted_runtime_agent_state,
     clear_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
@@ -35662,6 +35664,54 @@ struct FortTokenFileAuth {
     token_path: PathBuf,
     refresh_token_path: Option<PathBuf>,
     refresh_lock_path: PathBuf,
+    label: String,
+}
+
+#[derive(Clone, Debug)]
+struct FortProfileSessionPaths {
+    dir: PathBuf,
+    session_path: PathBuf,
+    access_token_path: PathBuf,
+    refresh_token_path: PathBuf,
+    lock_path: PathBuf,
+}
+
+#[derive(Debug)]
+struct FortApiClient {
+    host: String,
+    http: BlockingHttpClient,
+}
+
+impl FortApiClient {
+    fn new(host: String) -> Result<Self> {
+        Ok(Self {
+            host,
+            http: BlockingHttpClient::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .build()
+                .context("build Fort HTTP client")?,
+        })
+    }
+
+    fn request(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+        bearer_token: Option<&str>,
+    ) -> Result<(u16, Value)> {
+        let mut request = self.http.request(method, format!("{}{}", self.host, path));
+        if let Some(token) = bearer_token.map(str::trim).filter(|value| !value.is_empty()) {
+            request = request.bearer_auth(token);
+        }
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().context("send Fort API request")?;
+        let status = response.status().as_u16();
+        let body = response.json::<Value>().unwrap_or_else(|_| json!({}));
+        Ok((status, body))
+    }
 }
 
 const FORT_ACCESS_TOKEN_REFRESH_SKEW_SECONDS: i64 = 300;
@@ -35730,32 +35780,87 @@ fn resolve_fort_default_token_file(
     settings: &Settings,
     home: &Path,
 ) -> Result<Option<PathBuf>> {
-    let mut last_error = None;
-    for auth in resolve_fort_default_auths(settings, home) {
-        match refresh_fort_access_token(program, args, resolved_host, &auth) {
-            Ok(Some(path)) => return Ok(Some(path)),
-            Ok(None) => continue,
-            Err(error) => last_error = Some(error),
+    if let Some(auth) = resolve_fort_env_runtime_auth() {
+        return resolve_required_fort_auth(program, args, resolved_host, &auth);
+    }
+    if let Some(codex_home) = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        let profile_dir = codex_home.join("fort");
+        if let Some(auth) =
+            resolve_fort_runtime_auth_from_dir(profile_dir.clone(), "CODEX_HOME Fort session")
+        {
+            return resolve_required_fort_auth(program, args, resolved_host, &auth);
+        }
+        if fort_command_requires_runtime_auth(args) {
+            anyhow::bail!(
+                "Fort runtime session is required for CODEX_HOME={}, but no usable session files were found at {}; run `si codex spawn --profile <profile>` to provision it",
+                codex_home.display(),
+                profile_dir.display()
+            );
         }
     }
-    if let Some(error) = last_error {
-        return Err(error);
+    if let Some(auth) = resolve_fort_profile_runtime_auth(settings, home) {
+        return resolve_required_fort_auth(program, args, resolved_host, &auth);
+    }
+    if fort_command_requires_runtime_auth(args) {
+        if let Some(profile_id) = resolve_fort_active_profile_id(settings, home) {
+            let profile_dir = SiPaths::from_settings(home, settings)
+                .codex_profiles_dir
+                .join(&profile_id)
+                .join("fort");
+            anyhow::bail!(
+                "Fort runtime session is required for profile {profile_id}, but no usable session files were found at {}; run `si codex spawn --profile {profile_id}` to provision it",
+                profile_dir.display()
+            );
+        }
+        anyhow::bail!(
+            "Fort runtime session is required; run `si codex spawn --profile <profile>` or set FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH explicitly"
+        );
+    }
+    if fort_command_allows_bootstrap_auth(args) {
+        let auth = resolve_fort_bootstrap_auth(home).ok_or_else(|| {
+            anyhow!(
+                "Fort bootstrap admin session is required for this admin command; provision ~/.si/fort/bootstrap/admin.token and admin.refresh.token explicitly"
+            )
+        })?;
+        return resolve_required_fort_auth(program, args, resolved_host, &auth);
     }
     Ok(None)
 }
 
-fn resolve_fort_default_auths(settings: &Settings, home: &Path) -> Vec<FortTokenFileAuth> {
-    let mut auths = Vec::new();
-    if let Some(auth) = resolve_fort_env_runtime_auth() {
-        auths.push(auth);
+fn resolve_required_fort_auth(
+    program: &Path,
+    args: &[String],
+    resolved_host: Option<&str>,
+    auth: &FortTokenFileAuth,
+) -> Result<Option<PathBuf>> {
+    match refresh_fort_access_token(program, args, resolved_host, auth)? {
+        Some(path) => Ok(Some(path)),
+        None => Err(anyhow!(
+            "{} is configured, but neither {} nor its refresh token is usable",
+            auth.label,
+            auth.token_path.display()
+        )),
     }
-    if let Some(auth) = resolve_fort_profile_runtime_auth(settings, home) {
-        auths.push(auth);
+}
+
+fn fort_command_requires_runtime_auth(args: &[String]) -> bool {
+    matches!(
+        fort_command_tokens(args).first().copied(),
+        Some("get" | "set" | "list" | "batch-get" | "run")
+    )
+}
+
+fn fort_command_allows_bootstrap_auth(args: &[String]) -> bool {
+    let tokens = fort_command_tokens(args);
+    match tokens.as_slice() {
+        ["agent", ..] => true,
+        ["auth", "issue" | "login" | "list" | "revoke", ..] => true,
+        ["auth", "session", "open", ..] => true,
+        _ => false,
     }
-    if let Some(auth) = resolve_fort_bootstrap_auth(home) {
-        auths.push(auth);
-    }
-    auths
 }
 
 fn resolve_fort_env_runtime_auth() -> Option<FortTokenFileAuth> {
@@ -35777,6 +35882,7 @@ fn resolve_fort_env_runtime_auth() -> Option<FortTokenFileAuth> {
             token_path,
             refresh_token_path: runtime_refresh_token_path,
             refresh_lock_path,
+            label: "FORT_TOKEN_PATH runtime session".to_owned(),
         });
     }
     None
@@ -35790,6 +35896,7 @@ fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
             token_path,
             refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path.clone()),
             refresh_lock_path: default_fort_bootstrap_refresh_lock_path(home),
+            label: "bootstrap admin Fort session".to_owned(),
         });
     }
     None
@@ -35801,7 +35908,17 @@ fn resolve_fort_profile_runtime_auth(
 ) -> Option<FortTokenFileAuth> {
     let profile_id = resolve_fort_active_profile_id(settings, home)?;
     let profile_dir =
-        SiPaths::from_settings(home, settings).codex_profiles_dir.join(profile_id).join("fort");
+        SiPaths::from_settings(home, settings).codex_profiles_dir.join(&profile_id).join("fort");
+    resolve_fort_runtime_auth_from_dir(
+        profile_dir,
+        format!("active Codex profile {profile_id} Fort session"),
+    )
+}
+
+fn resolve_fort_runtime_auth_from_dir(
+    profile_dir: PathBuf,
+    label: impl Into<String>,
+) -> Option<FortTokenFileAuth> {
     let session_path = profile_dir.join("session.json");
     let default_token_path = profile_dir.join("access.token");
     let default_refresh_path = profile_dir.join("refresh.token");
@@ -35828,6 +35945,7 @@ fn resolve_fort_profile_runtime_auth(
             token_path,
             refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path),
             refresh_lock_path: profile_dir.join("runtime.lock"),
+            label: label.into(),
         });
     }
     None
@@ -35836,6 +35954,280 @@ fn resolve_fort_profile_runtime_auth(
 fn resolve_fort_active_profile_id(settings: &Settings, home: &Path) -> Option<String> {
     let _ = home;
     resolve_codex_active_profile_id(settings)
+}
+
+fn fort_profile_session_paths(codex_home: &Path) -> FortProfileSessionPaths {
+    let dir = codex_home.join("fort");
+    FortProfileSessionPaths {
+        session_path: dir.join("session.json"),
+        access_token_path: dir.join("access.token"),
+        refresh_token_path: dir.join("refresh.token"),
+        lock_path: dir.join("runtime.lock"),
+        dir,
+    }
+}
+
+fn ensure_fort_secret_dir(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir)
+        .with_context(|| format!("create Fort profile dir {}", dir.display()))?;
+    #[cfg(unix)]
+    fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
+        .with_context(|| format!("chmod {}", dir.display()))?;
+    Ok(())
+}
+
+fn resolve_configured_fort_runtime_host(
+    settings: &Settings,
+    fallback_host: &str,
+) -> Result<String> {
+    if let Some(host) =
+        settings.fort.runtime_host.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        return normalize_fort_public_https_host(host, "fort.runtime_host");
+    }
+    Ok(fallback_host.trim().to_owned())
+}
+
+fn fort_api_status_error(status: u16, body: &Value, action: &str) -> anyhow::Error {
+    let message = body.get("error").and_then(Value::as_str).unwrap_or("Fort request failed");
+    anyhow!("{action} failed (status={status}): {message}")
+}
+
+fn ensure_fort_api_status(status: u16, expected: u16, body: &Value, action: &str) -> Result<()> {
+    if status == expected { Ok(()) } else { Err(fort_api_status_error(status, body, action)) }
+}
+
+fn fort_path_escape(value: &str) -> String {
+    url::form_urlencoded::byte_serialize(value.as_bytes()).collect::<String>()
+}
+
+fn read_fort_token_file(path: &Path, label: &str) -> Result<String> {
+    let token =
+        fs::read_to_string(path).with_context(|| format!("read {label} {}", path.display()))?;
+    let token = token.trim().to_owned();
+    if token.is_empty() {
+        anyhow::bail!("{label} {} is empty", path.display());
+    }
+    Ok(token)
+}
+
+fn refresh_bootstrap_admin_token_for_fort_provisioning(
+    client: &FortApiClient,
+    home: &Path,
+) -> Result<String> {
+    let refresh_lock_path = default_fort_bootstrap_refresh_lock_path(home);
+    with_fort_bootstrap_refresh_lock(&refresh_lock_path, || {
+        let token_path = default_fort_bootstrap_token_path(home);
+        if fort_access_token_is_fresh(&token_path) {
+            return read_fort_token_file(&token_path, "Fort bootstrap admin access token");
+        }
+
+        let refresh_token_path = default_fort_bootstrap_refresh_token_path(home);
+        if !refresh_token_path.is_file() {
+            anyhow::bail!(
+                "Fort profile provisioning requires a bootstrap admin session, but {} is missing or stale and {} is missing; rebootstrap Fort admin auth first",
+                token_path.display(),
+                refresh_token_path.display()
+            );
+        }
+        let refresh_token =
+            read_fort_token_file(&refresh_token_path, "Fort bootstrap admin refresh token")?;
+        let (status, response) = client.request(
+            Method::POST,
+            "/v1/auth/session/refresh",
+            Some(json!({ "refresh_token": refresh_token })),
+            None,
+        )?;
+        ensure_fort_api_status(status, 200, &response, "refresh Fort bootstrap admin session")?;
+        let access_token = response["access_token"].as_str().unwrap_or_default().trim();
+        let next_refresh_token = response["refresh_token"].as_str().unwrap_or_default().trim();
+        if access_token.is_empty() || next_refresh_token.is_empty() {
+            anyhow::bail!(
+                "Fort bootstrap refresh response is missing access_token or refresh_token"
+            );
+        }
+        write_secret_text_file(&token_path, access_token)?;
+        write_secret_text_file(&refresh_token_path, next_refresh_token)?;
+        Ok(access_token.to_owned())
+    })
+}
+
+fn fort_profile_session_is_reusable(
+    paths: &FortProfileSessionPaths,
+    profile_id: &str,
+    agent_id: &str,
+) -> Result<bool> {
+    if !paths.session_path.is_file()
+        || !paths.access_token_path.is_file()
+        || !paths.refresh_token_path.is_file()
+    {
+        return Ok(false);
+    }
+    let state = load_persisted_session_state(&paths.session_path)
+        .with_context(|| format!("load Fort session state {}", paths.session_path.display()))?;
+    let state = state.normalized();
+    if state.profile_id != profile_id || state.agent_id != agent_id {
+        anyhow::bail!(
+            "Fort session state {} belongs to profile={} agent={}, expected profile={} agent={}",
+            paths.session_path.display(),
+            state.profile_id,
+            state.agent_id,
+            profile_id,
+            agent_id
+        );
+    }
+    match classify_persisted_session_state(&state, Utc::now().timestamp())
+        .with_context(|| format!("classify Fort session state {}", paths.session_path.display()))?
+    {
+        SessionState::Resumable(_) | SessionState::Refreshing(_) => Ok(true),
+        SessionState::BootstrapRequired
+        | SessionState::Revoked { .. }
+        | SessionState::TeardownPending(_)
+        | SessionState::Closed => Ok(false),
+    }
+}
+
+fn ensure_fort_profile_agent(
+    client: &FortApiClient,
+    admin_token: &str,
+    agent_id: &str,
+) -> Result<()> {
+    let escaped = fort_path_escape(agent_id);
+    let (status, response) =
+        client.request(Method::GET, &format!("/v1/agents/{escaped}"), None, Some(admin_token))?;
+    match status {
+        200 => {
+            if response["status"].as_str() == Some("disabled") {
+                let (status, response) = client.request(
+                    Method::POST,
+                    &format!("/v1/agents/{escaped}/enable"),
+                    Some(json!({})),
+                    Some(admin_token),
+                )?;
+                ensure_fort_api_status(status, 200, &response, "enable Fort profile agent")?;
+            }
+            Ok(())
+        }
+        404 => {
+            let (status, response) = client.request(
+                Method::POST,
+                "/v1/agents",
+                Some(json!({ "id": agent_id, "type": "workload", "status": "active" })),
+                Some(admin_token),
+            )?;
+            ensure_fort_api_status(status, 201, &response, "create Fort profile agent")
+        }
+        _ => Err(fort_api_status_error(status, &response, "load Fort profile agent")),
+    }
+}
+
+fn ensure_fort_profile_policy(
+    client: &FortApiClient,
+    admin_token: &str,
+    agent_id: &str,
+) -> Result<()> {
+    let escaped = fort_path_escape(agent_id);
+    let (status, response) = client.request(
+        Method::PUT,
+        &format!("/v1/agents/{escaped}/policy"),
+        Some(json!({
+            "bindings": [{
+                "repo": "*",
+                "env": "*",
+                "ops": ["*"]
+            }]
+        })),
+        Some(admin_token),
+    )?;
+    ensure_fort_api_status(status, 200, &response, "set Fort profile policy")
+}
+
+fn open_fort_profile_session(
+    client: &FortApiClient,
+    admin_token: &str,
+    profile_id: &str,
+    agent_id: &str,
+    host: &str,
+    runtime_host: &str,
+    paths: &FortProfileSessionPaths,
+) -> Result<()> {
+    let (status, response) = client.request(
+        Method::POST,
+        "/v1/auth/session/open",
+        Some(json!({ "agent_id": agent_id, "aud": "fort-api" })),
+        Some(admin_token),
+    )?;
+    ensure_fort_api_status(status, 200, &response, "open Fort profile session")?;
+    let access_token = response["access_token"].as_str().unwrap_or_default().trim();
+    let refresh_token = response["refresh_token"].as_str().unwrap_or_default().trim();
+    let session_id = response["session_id"].as_str().unwrap_or_default().trim();
+    if access_token.is_empty() || refresh_token.is_empty() || session_id.is_empty() {
+        anyhow::bail!(
+            "Fort session open response is missing access_token, refresh_token, or session_id"
+        );
+    }
+    write_secret_text_file(&paths.access_token_path, access_token)?;
+    write_secret_text_file(&paths.refresh_token_path, refresh_token)?;
+    save_persisted_session_state(
+        &paths.session_path,
+        &PersistedSessionState {
+            profile_id: profile_id.to_owned(),
+            agent_id: agent_id.to_owned(),
+            session_id: session_id.to_owned(),
+            host: host.to_owned(),
+            runtime_host: runtime_host.to_owned(),
+            access_token_path: paths.access_token_path.display().to_string(),
+            refresh_token_path: paths.refresh_token_path.display().to_string(),
+            access_expires_at: response["access_expires_at"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_owned(),
+            refresh_expires_at: response["refresh_expires_at"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_owned(),
+            updated_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        },
+    )
+    .with_context(|| format!("write Fort session state {}", paths.session_path.display()))?;
+    Ok(())
+}
+
+fn ensure_codex_profile_fort_session(
+    home: &Path,
+    settings: &Settings,
+    codex_home: &Path,
+    profile_id: &str,
+) -> Result<FortProfileSessionPaths> {
+    let paths = fort_profile_session_paths(codex_home);
+    ensure_fort_secret_dir(&paths.dir)?;
+    let _lock = acquire_session_lock(&paths.lock_path)
+        .with_context(|| format!("lock Fort profile session {}", paths.lock_path.display()))?;
+    let agent_id = format!("si-codex-{profile_id}");
+    if fort_profile_session_is_reusable(&paths, profile_id, &agent_id)? {
+        return Ok(paths);
+    }
+
+    let host = resolve_configured_fort_public_host(settings, home)?.ok_or_else(|| {
+        anyhow!("fort.host must be configured to provision Codex profile Fort sessions")
+    })?;
+    let runtime_host = resolve_configured_fort_runtime_host(settings, &host)?;
+    let client = FortApiClient::new(host.clone())?;
+    let admin_token = refresh_bootstrap_admin_token_for_fort_provisioning(&client, home)?;
+    ensure_fort_profile_agent(&client, &admin_token, &agent_id)?;
+    ensure_fort_profile_policy(&client, &admin_token, &agent_id)?;
+    open_fort_profile_session(
+        &client,
+        &admin_token,
+        profile_id,
+        &agent_id,
+        &host,
+        &runtime_host,
+        &paths,
+    )?;
+    Ok(paths)
 }
 
 fn refresh_fort_access_token(
@@ -64780,11 +65172,14 @@ fn build_codex_launch_command(
     codex_home: &Path,
     workdir: &Path,
     env_entries: &[String],
+    fort_paths: &FortProfileSessionPaths,
 ) -> String {
     let mut exports = format!(
-        "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME={} CODEX_HOME={}; ",
+        "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={}; ",
         shell_single_quote(&home.display().to_string()),
-        shell_single_quote(&codex_home.display().to_string())
+        shell_single_quote(&codex_home.display().to_string()),
+        shell_single_quote(&fort_paths.access_token_path.display().to_string()),
+        shell_single_quote(&fort_paths.refresh_token_path.display().to_string())
     );
     for entry in env_entries {
         let Some((key, value)) = entry.split_once('=') else {
@@ -64846,6 +65241,7 @@ fn ensure_codex_worker_session(
     let codex_home = codex_profile_home_dir(paths, settings, profile_id);
     fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
     sync_codex_profile_auth_into_home(paths, settings, profile_id)?;
+    let fort_paths = ensure_codex_profile_fort_session(home, settings, &codex_home, profile_id)?;
 
     let existing = find_codex_worker_state(paths, profile_id)?;
     let restart_needed = existing.as_ref().is_some_and(|state| {
@@ -64859,7 +65255,8 @@ fn ensure_codex_worker_session(
     }
     if !tmux_session_exists(tmux_bin, &tmux_term, &session_name)? {
         let window_name = codex_tmux_window_name(profile_id, profile_name.as_deref());
-        let launch_command = build_codex_launch_command(home, &codex_home, &workdir, env_entries);
+        let launch_command =
+            build_codex_launch_command(home, &codex_home, &workdir, env_entries, &fort_paths);
         let status = StdCommand::new(tmux_bin)
             .env("TERM", &tmux_term)
             .args(["new-session", "-d", "-s", &session_name, "-n", &window_name, &launch_command])
@@ -65073,6 +65470,8 @@ fn run_codex_shell(
     }
     sync_codex_profile_auth_into_home(&paths, &settings, &target.profile_id)?;
     let codex_home = codex_profile_home_dir(&paths, &settings, &target.profile_id);
+    let fort_paths =
+        ensure_codex_profile_fort_session(&home, &settings, &codex_home, &target.profile_id)?;
     let resolved_workdir = workdir.unwrap_or_else(|| PathBuf::from(target.workdir.clone()));
     let mut process = StdCommand::new(&command[0]);
     process
@@ -65080,6 +65479,8 @@ fn run_codex_shell(
         .current_dir(&resolved_workdir)
         .env("HOME", &home)
         .env("CODEX_HOME", &codex_home)
+        .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
+        .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
         .env("TERM", env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
     for entry in env_entries {
         let trimmed = entry.trim();
@@ -66100,14 +66501,21 @@ mod tests {
 
     #[test]
     fn build_codex_launch_command_includes_bypass_flag() {
+        let fort_paths =
+            fort_profile_session_paths(Path::new("/tmp/home/.si/codex/profiles/america"));
         let command = build_codex_launch_command(
             Path::new("/tmp/home"),
             Path::new("/tmp/home/.si/codex/profiles/america"),
             Path::new("/tmp/workspace"),
             &[],
+            &fort_paths,
         );
 
         assert!(command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
+        assert!(command.contains("FORT_TOKEN_PATH="));
+        assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/access.token"));
+        assert!(command.contains("FORT_REFRESH_TOKEN_PATH="));
+        assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/refresh.token"));
     }
 
     #[test]

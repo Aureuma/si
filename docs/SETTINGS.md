@@ -115,9 +115,10 @@ CLI and runtime behavior:
 - `si fort config set ...` writes these values to settings.
 - `si fort` injects `--host` from `[fort].host` when no explicit native `--host` flag is passed.
 - `si fort` prefers runtime file-path auth from `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` when those paths are set in the caller environment, and refreshes that session in place when possible.
-- `si fort` otherwise prefers the active Codex profile Fort session under `paths.codex_profiles_dir/<profile>/fort/` and refreshes that file-backed session in place when possible.
-- `si fort` only falls back to the host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` when no runtime session is available or runtime refresh fails.
-- Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files.
+- `si fort` otherwise prefers the profile Fort session under `CODEX_HOME/fort/` when `CODEX_HOME` is set, then the active Codex profile Fort session under `paths.codex_profiles_dir/<profile>/fort/`.
+- `si fort` fails loudly for runtime secret commands when no usable runtime session exists or runtime refresh fails; it does not silently fall back to host/bootstrap admin auth.
+- `si fort` uses host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` only for explicit admin/provisioning commands.
+- Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files provisioned by `si codex spawn` or `si codex shell`.
 - Runtime worker token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
 ### `[stripe]`
