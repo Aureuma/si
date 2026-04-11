@@ -207,6 +207,7 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::{self, IsTerminal, Read, Write};
+use std::net::IpAddr;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -35308,14 +35309,10 @@ fn existing_checkout_binary(repo: &Path, name: &str) -> Option<PathBuf> {
 }
 
 fn checkout_target_dirs(repo: &Path) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    dirs.push(repo.join("target"));
     if let Some(configured) = configured_checkout_target_dir(repo) {
-        if !dirs.iter().any(|existing| existing == &configured) {
-            dirs.push(configured);
-        }
+        return vec![configured];
     }
-    dirs
+    vec![repo.join("target")]
 }
 
 fn configured_checkout_target_dir(repo: &Path) -> Option<PathBuf> {
@@ -35554,6 +35551,8 @@ fn set_fort_config(
     if !document.contains_key("schema_version") {
         document.insert("schema_version".to_owned(), toml::Value::Integer(1));
     }
+    let host = normalize_fort_persistent_host_option(host, "fort.host")?;
+    let runtime_host = normalize_fort_persistent_host_option(runtime_host, "fort.runtime_host")?;
     let fort = ensure_toml_table(&mut document, "fort")?;
     set_toml_string(fort, "repo", repo);
     set_toml_string(fort, "bin", bin);
@@ -35614,6 +35613,7 @@ fn run_fort_program(
     let mut command = StdCommand::new(program);
     command.args(build_fort_command_args(program, args, settings, home)?);
     command.env_remove("FORT_HOST");
+    command.env_remove("FORT_SETTINGS_FILE");
     command.env_remove("FORT_TOKEN_PATH");
     command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
     command.env_remove("FORT_REFRESH_TOKEN_PATH");
@@ -35629,15 +35629,12 @@ fn build_fort_command_args(
     home: &Path,
 ) -> Result<Vec<String>> {
     let mut command_args = Vec::new();
-    let resolved_host = fort_option_value(args, "--host").map(ToOwned::to_owned).or_else(|| {
-        settings
-            .fort
-            .host
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-    });
+    let explicit_host = fort_option_value(args, "--host").map(ToOwned::to_owned);
+    let resolved_host = if explicit_host.is_some() {
+        explicit_host
+    } else {
+        resolve_configured_fort_public_host(settings, home)?
+    };
     if !fort_args_include_option(args, "--host")
         && let Some(host) = resolved_host.as_deref()
     {
@@ -35666,6 +35663,9 @@ struct FortTokenFileAuth {
     refresh_token_path: Option<PathBuf>,
     refresh_lock_path: PathBuf,
 }
+
+const FORT_ACCESS_TOKEN_REFRESH_SKEW_SECONDS: i64 = 300;
+const FORT_REFRESH_LOCK_STALE_AFTER_SECONDS: u64 = 120;
 
 fn fort_args_include_option(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
@@ -35875,6 +35875,7 @@ fn refresh_fort_access_token(
             .arg("--refresh-token-out")
             .arg(refresh_token_path);
         refresh_command.env_remove("FORT_HOST");
+        refresh_command.env_remove("FORT_SETTINGS_FILE");
         refresh_command.env_remove("FORT_TOKEN_PATH");
         refresh_command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
         refresh_command.env_remove("FORT_REFRESH_TOKEN_PATH");
@@ -35924,7 +35925,7 @@ fn fort_access_token_is_fresh(path: &Path) -> bool {
     let Some(exp) = claims["exp"].as_i64() else {
         return false;
     };
-    exp > Utc::now().timestamp() + 60
+    exp > Utc::now().timestamp() + FORT_ACCESS_TOKEN_REFRESH_SKEW_SECONDS
 }
 
 fn with_fort_bootstrap_refresh_lock<T>(
@@ -35940,6 +35941,9 @@ fn with_fort_bootstrap_refresh_lock<T>(
         match std::fs::OpenOptions::new().write(true).create_new(true).open(lock_path) {
             Ok(_) => break,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if remove_stale_fort_refresh_lock(lock_path)? {
+                    continue;
+                }
                 if std::time::Instant::now() >= deadline {
                     return Err(anyhow!(
                         "timed out waiting for fort bootstrap refresh lock {}",
@@ -35962,6 +35966,24 @@ fn with_fort_bootstrap_refresh_lock<T>(
     }
     let _guard = RefreshLockGuard(lock_path.to_path_buf());
     action()
+}
+
+fn remove_stale_fort_refresh_lock(lock_path: &Path) -> Result<bool> {
+    let Ok(metadata) = fs::metadata(lock_path) else {
+        return Ok(false);
+    };
+    let Ok(modified) = metadata.modified() else {
+        return Ok(false);
+    };
+    let Ok(age) = modified.elapsed() else {
+        return Ok(false);
+    };
+    if age < std::time::Duration::from_secs(FORT_REFRESH_LOCK_STALE_AFTER_SECONDS) {
+        return Ok(false);
+    }
+    fs::remove_file(lock_path)
+        .with_context(|| format!("remove stale fort refresh lock {}", lock_path.display()))?;
+    Ok(true)
 }
 
 fn resolve_fort_program(
@@ -36026,20 +36048,135 @@ fn default_fort_refresh_lock_path_for(path: &Path) -> PathBuf {
     path.with_extension("lock")
 }
 
+fn normalize_fort_persistent_host_option(
+    value: Option<String>,
+    label: &str,
+) -> Result<Option<String>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(Some(String::new()));
+    }
+    Ok(Some(normalize_fort_public_https_host(trimmed, label)?))
+}
+
+fn resolve_configured_fort_public_host(settings: &Settings, home: &Path) -> Result<Option<String>> {
+    if let Some(host) =
+        settings.fort.host.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        return normalize_fort_public_https_host(host, "fort.host").map(Some);
+    }
+    for path in [home.join(".si/fort/settings.toml"), home.join(".si/settings.toml")] {
+        if let Some(host) = read_fort_host_from_settings_file(&path)? {
+            return normalize_fort_public_https_host(
+                &host,
+                &format!("{} [fort].host", path.display()),
+            )
+            .map(Some);
+        }
+    }
+    Ok(None)
+}
+
+fn read_fort_host_from_settings_file(path: &Path) -> Result<Option<String>> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let source = fs::read_to_string(path)
+        .with_context(|| format!("read fort settings {}", path.display()))?;
+    let parsed = toml::from_str::<toml::Value>(&source)
+        .with_context(|| format!("parse fort settings {}", path.display()))?;
+    let host = parsed
+        .get("fort")
+        .and_then(toml::Value::as_table)
+        .and_then(|fort| fort.get("host").or_else(|| fort.get("host_url")))
+        .and_then(toml::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    Ok(host)
+}
+
+fn normalize_fort_public_https_host(value: &str, label: &str) -> Result<String> {
+    let parsed = url::Url::parse(value.trim())
+        .with_context(|| format!("{label} must be a valid Fort endpoint URL"))?;
+    if parsed.scheme() != "https" {
+        anyhow::bail!("{label} must use https for persistent Fort configuration");
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        anyhow::bail!("{label} must not include credentials");
+    }
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        anyhow::bail!("{label} must not include query or fragment components");
+    }
+    if parsed.path() != "/" {
+        anyhow::bail!("{label} must be an origin URL without a path");
+    }
+    let host = parsed
+        .host_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("{label} must include a host"))?;
+    if fort_host_is_local_or_private(host) {
+        anyhow::bail!(
+            "{label} must resolve through a public Fort HTTPS endpoint; use an explicit native --host only for temporary local development or break/fix debugging"
+        );
+    }
+    Ok(parsed.to_string().trim_end_matches('/').to_owned())
+}
+
+fn fort_host_is_local_or_private(host: &str) -> bool {
+    let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    if host.is_empty()
+        || host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host.ends_with(".internal")
+        || host.ends_with(".lan")
+    {
+        return true;
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return match ip {
+            IpAddr::V4(value) => {
+                value.is_private()
+                    || value.is_loopback()
+                    || value.is_link_local()
+                    || value.is_unspecified()
+            }
+            IpAddr::V6(value) => {
+                value.is_loopback()
+                    || value.is_unspecified()
+                    || value.is_unique_local()
+                    || value.is_unicast_link_local()
+            }
+        };
+    }
+    false
+}
+
 fn write_secret_text_file(path: &Path, value: &str) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| anyhow!("secret file path {} has no parent", path.display()))?;
     fs::create_dir_all(parent).with_context(|| format!("create dir {}", parent.display()))?;
-    let tmp = parent.join(format!(
-        ".{}.tmp",
-        path.file_name().and_then(|name| name.to_str()).unwrap_or("secret")
-    ));
-    fs::write(&tmp, format!("{value}\n")).with_context(|| format!("write {}", tmp.display()))?;
+    let prefix =
+        format!(".{}.", path.file_name().and_then(|name| name.to_str()).unwrap_or("secret"));
+    let mut tmp = tempfile::Builder::new()
+        .prefix(&prefix)
+        .tempfile_in(parent)
+        .with_context(|| format!("create temp secret file in {}", parent.display()))?;
+    tmp.write_all(format!("{value}\n").as_bytes())
+        .with_context(|| format!("write {}", tmp.path().display()))?;
     #[cfg(unix)]
-    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))
-        .with_context(|| format!("chmod {}", tmp.display()))?;
-    fs::rename(&tmp, path).with_context(|| format!("rename {}", path.display()))?;
+    fs::set_permissions(tmp.path(), fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", tmp.path().display()))?;
+    tmp.into_temp_path()
+        .persist(path)
+        .map_err(|error| error.error)
+        .with_context(|| format!("rename {}", path.display()))?;
     Ok(())
 }
 
