@@ -8693,6 +8693,68 @@ fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
 }
 
 #[test]
+fn fort_wrapper_refreshes_bootstrap_token_before_near_expiry() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let bootstrap_dir = home.path().join(".si/fort/bootstrap");
+    fs::create_dir_all(&bootstrap_dir).expect("mkdir fort bootstrap");
+    let token_path = bootstrap_dir.join("admin.token");
+    let refresh_path = bootstrap_dir.join("admin.refresh.token");
+    let payload = format!(
+        "{{\"exp\":{},\"iss\":\"fortd\",\"aud\":[\"fort-api\"]}}",
+        chrono::Utc::now().timestamp() + 120
+    );
+    let token = format!("header.{}.signature\n", URL_SAFE_NO_PAD.encode(payload.as_bytes()));
+    fs::write(&token_path, token).expect("write near-expiry admin token");
+    fs::write(&refresh_path, "near-expiry-refresh-token\n").expect("write refresh token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&token_path, &refresh_path] {
+            let mut perms = fs::metadata(path).expect("stat token file").permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(path, perms).expect("chmod token file");
+        }
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  refresh_out=\"${{10}}\"\n  printf '%s\\n' 'rotated-refresh-token' > \"$refresh_out\"\n  printf '%s\\n' '{{\"access_token\":\"rotated-access-token\",\"refresh_token_file\":\"'\"$refresh_out\"'\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"agent\" ] && [ \"$6\" = \"list\" ]; then\n  test \"$(cat \"$4\")\" = 'rotated-access-token'\n  exit 0\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            args = shell_escape_for_test(&args_file),
+            token = token_path.display(),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "agent", "list"])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read fort args");
+    assert!(args.contains("--json\nauth\nsession\nrefresh\n--refresh-token-file\n"));
+    assert_eq!(
+        fs::read_to_string(&token_path).expect("read refreshed admin token"),
+        "rotated-access-token\n"
+    );
+}
+
+#[test]
 fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -8922,6 +8984,11 @@ fn fort_wrapper_builds_configured_repo_from_custom_target_dir() {
         "[build]\ntarget-dir = \".artifacts/cargo-target\"\n",
     )
     .expect("write cargo config");
+    fs::create_dir_all(repo.path().join("target/debug")).expect("mkdir stale target dir");
+    write_executable_shell_script(
+        &repo.path().join("target/debug/fort"),
+        "#!/bin/sh\nprintf 'stale default target fort binary should not be used\\n' >&2\nexit 1\n",
+    );
     let args_file = repo.path().join("fort-args.txt");
     let env_file = repo.path().join("fort-env.txt");
     fs::write(
@@ -8989,7 +9056,7 @@ fn fort_config_set_and_show_round_trip_si_settings() {
             "--host",
             "https://fort.example.test",
             "--runtime-host",
-            "http://fort.internal:8088",
+            "https://fort-runtime.example.test",
         ])
         .assert()
         .success();
@@ -9021,7 +9088,77 @@ fn fort_config_set_and_show_round_trip_si_settings() {
     assert_eq!(parsed["bin"], "/tmp/fort-bin");
     assert_eq!(parsed["build"], true);
     assert_eq!(parsed["host"], "https://fort.example.test");
-    assert_eq!(parsed["runtime_host"], "http://fort.internal:8088");
+    assert_eq!(parsed["runtime_host"], "https://fort-runtime.example.test");
+}
+
+#[test]
+fn fort_config_set_rejects_persistent_local_hosts() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+
+    let output = cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "set",
+            "--host",
+            "http://127.0.0.1:8088",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&output);
+    assert!(stderr.contains("fort.host must use https"));
+
+    let output = cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "config",
+            "set",
+            "--runtime-host",
+            "https://fort.internal",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&output);
+    assert!(stderr.contains("fort.runtime_host must resolve through a public Fort HTTPS endpoint"));
+}
+
+#[test]
+fn fort_wrapper_rejects_persistent_local_host_from_settings() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"http://127.0.0.1:8088\"\n",
+    )
+    .expect("write settings");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(&fort_path, "#!/bin/sh\nexit 0\n");
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .args(["fort", "--home", home.path().to_str().expect("home path"), "doctor"])
+        .env("PATH", path_env)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&output);
+    assert!(stderr.contains("fort.host must use https"));
 }
 
 #[test]
