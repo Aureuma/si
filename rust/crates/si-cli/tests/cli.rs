@@ -102,6 +102,43 @@ fn write_codex_auth_file(path: &Path, email: &str) {
     .expect("write auth json");
 }
 
+fn write_reusable_codex_fort_session(codex_home: &Path, profile_id: &str) {
+    let fort_dir = codex_home.join("fort");
+    fs::create_dir_all(&fort_dir).expect("mkdir fort session dir");
+    let access_token_path = fort_dir.join("access.token");
+    let refresh_token_path = fort_dir.join("refresh.token");
+    fs::write(&access_token_path, "access-token\n").expect("write fort access token");
+    fs::write(&refresh_token_path, "refresh-token\n").expect("write fort refresh token");
+    let access_expires_at = (Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+    let refresh_expires_at = (Utc::now() + chrono::Duration::days(30)).to_rfc3339();
+    let session_path = fort_dir.join("session.json");
+    fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&json!({
+            "profile_id": profile_id,
+            "agent_id": format!("si-codex-{profile_id}"),
+            "session_id": format!("fort-session-{profile_id}"),
+            "host": "https://fort.example.test",
+            "runtime_host": "https://fort.example.test",
+            "access_token_path": access_token_path,
+            "refresh_token_path": refresh_token_path,
+            "access_expires_at": access_expires_at,
+            "refresh_expires_at": refresh_expires_at,
+            "updated_at": Utc::now().to_rfc3339(),
+        }))
+        .expect("serialize fort session"),
+    )
+    .expect("write fort session state");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&session_path, &access_token_path, &refresh_token_path] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+                .expect("chmod fort session file");
+        }
+    }
+}
+
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -776,6 +813,7 @@ fn create_session_via_cli_with_options(
     codex_home: &Path,
     workdir: &Path,
 ) -> Value {
+    write_reusable_codex_fort_session(codex_home, profile);
     let mut command = cargo_bin();
     command.args([
         "nucleus",
@@ -935,7 +973,8 @@ fn create_session_via_cli(
 }
 
 fn write_fort_session_state_via_cli(codex_home: &Path, profile: &str) {
-    let session_path = codex_home.join("fort").join("session.json");
+    let fort_dir = codex_home.join("fort");
+    let session_path = fort_dir.join("session.json");
     cargo_bin()
         .args(["fort", "session", "write", "--path"])
         .arg(&session_path)
@@ -954,6 +993,8 @@ fn write_fort_session_state_via_cli(codex_home: &Path, profile: &str) {
         ])
         .assert()
         .success();
+    fs::write(fort_dir.join("access.token"), "access-token\n").expect("write fort access token");
+    fs::write(fort_dir.join("refresh.token"), "refresh-token\n").expect("write fort refresh token");
 }
 
 fn clear_fort_session_state_via_cli(codex_home: &Path) {
@@ -2506,6 +2547,17 @@ fn nucleus_worker_list_requests_gateway_worker_list_method() {
 #[test]
 #[allow(clippy::result_large_err)]
 fn nucleus_worker_probe_requests_gateway_worker_probe_method() {
+    let temp = tempdir().expect("tempdir");
+    let home_dir = temp.path().join("si-home");
+    let codex_home = temp.path().join("si-codex");
+    let workdir = temp.path().join("si-work");
+    fs::create_dir_all(&workdir).expect("mkdir workdir");
+    write_reusable_codex_fort_session(&codex_home, "america");
+    let expected_home_dir = home_dir.display().to_string();
+    let expected_codex_home = codex_home.display().to_string();
+    let expected_workdir = workdir.display().to_string();
+    let expected_access_token = codex_home.join("fort/access.token").display().to_string();
+    let expected_refresh_token = codex_home.join("fort/refresh.token").display().to_string();
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
     thread::spawn(move || {
@@ -2522,10 +2574,12 @@ fn nucleus_worker_probe_requests_gateway_worker_probe_method() {
         assert_eq!(payload["method"], "worker.probe");
         assert_eq!(payload["params"]["profile"], "america");
         assert_eq!(payload["params"]["worker_id"], "si-worker-123");
-        assert_eq!(payload["params"]["home_dir"], "/tmp/si-home");
-        assert_eq!(payload["params"]["codex_home"], "/tmp/si-codex");
-        assert_eq!(payload["params"]["workdir"], "/tmp/si-work");
+        assert_eq!(payload["params"]["home_dir"], expected_home_dir);
+        assert_eq!(payload["params"]["codex_home"], expected_codex_home);
+        assert_eq!(payload["params"]["workdir"], expected_workdir);
         assert_eq!(payload["params"]["env"]["FOO"], "bar");
+        assert_eq!(payload["params"]["env"]["FORT_TOKEN_PATH"], expected_access_token);
+        assert_eq!(payload["params"]["env"]["FORT_REFRESH_TOKEN_PATH"], expected_refresh_token);
         let response = serde_json::json!({
             "id": payload["id"].clone(),
             "ok": true,
@@ -2547,11 +2601,11 @@ fn nucleus_worker_probe_requests_gateway_worker_probe_method() {
             "--worker-id",
             "si-worker-123",
             "--home-dir",
-            "/tmp/si-home",
+            home_dir.to_str().expect("home dir"),
             "--codex-home",
-            "/tmp/si-codex",
+            codex_home.to_str().expect("codex home"),
             "--workdir",
-            "/tmp/si-work",
+            workdir.to_str().expect("workdir"),
             "--env",
             "FOO=bar",
             "--endpoint",
@@ -2769,6 +2823,17 @@ fn nucleus_session_list_requests_gateway_session_list_method() {
 #[test]
 #[allow(clippy::result_large_err)]
 fn nucleus_session_create_requests_gateway_session_create_method() {
+    let temp = tempdir().expect("tempdir");
+    let home_dir = temp.path().join("si-home");
+    let codex_home = temp.path().join("si-codex");
+    let workdir = temp.path().join("si-work");
+    fs::create_dir_all(&workdir).expect("mkdir workdir");
+    write_reusable_codex_fort_session(&codex_home, "america");
+    let expected_home_dir = home_dir.display().to_string();
+    let expected_codex_home = codex_home.display().to_string();
+    let expected_workdir = workdir.display().to_string();
+    let expected_access_token = codex_home.join("fort/access.token").display().to_string();
+    let expected_refresh_token = codex_home.join("fort/refresh.token").display().to_string();
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("listener addr");
     thread::spawn(move || {
@@ -2786,10 +2851,12 @@ fn nucleus_session_create_requests_gateway_session_create_method() {
         assert_eq!(payload["params"]["profile"], "america");
         assert_eq!(payload["params"]["worker_id"], "si-worker-123");
         assert_eq!(payload["params"]["thread_id"], "thread-123");
-        assert_eq!(payload["params"]["home_dir"], "/tmp/si-home");
-        assert_eq!(payload["params"]["codex_home"], "/tmp/si-codex");
-        assert_eq!(payload["params"]["workdir"], "/tmp/si-work");
+        assert_eq!(payload["params"]["home_dir"], expected_home_dir);
+        assert_eq!(payload["params"]["codex_home"], expected_codex_home);
+        assert_eq!(payload["params"]["workdir"], expected_workdir);
         assert_eq!(payload["params"]["env"]["FOO"], "bar");
+        assert_eq!(payload["params"]["env"]["FORT_TOKEN_PATH"], expected_access_token);
+        assert_eq!(payload["params"]["env"]["FORT_REFRESH_TOKEN_PATH"], expected_refresh_token);
         let response = serde_json::json!({
             "id": payload["id"].clone(),
             "ok": true,
@@ -2813,11 +2880,11 @@ fn nucleus_session_create_requests_gateway_session_create_method() {
             "--thread-id",
             "thread-123",
             "--home-dir",
-            "/tmp/si-home",
+            home_dir.to_str().expect("home dir"),
             "--codex-home",
-            "/tmp/si-codex",
+            codex_home.to_str().expect("codex home"),
             "--workdir",
-            "/tmp/si-work",
+            workdir.to_str().expect("workdir"),
             "--env",
             "FOO=bar",
             "--endpoint",
@@ -4952,6 +5019,7 @@ fn nucleus_worker_probe_persists_worker_state_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
     let output = cargo_bin()
         .args([
             "nucleus",
@@ -6098,6 +6166,7 @@ fn nucleus_worker_repair_auth_reprobes_and_starts_missing_runtime_on_live_servic
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
     let probe_output = cargo_bin()
         .args([
             "nucleus",

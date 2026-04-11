@@ -1,7 +1,22 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
+pub const CODEX_PROFILE_FORT_DIR_NAME: &str = "fort";
+pub const CODEX_PROFILE_FORT_SESSION_FILE_NAME: &str = "session.json";
+pub const CODEX_PROFILE_FORT_ACCESS_TOKEN_FILE_NAME: &str = "access.token";
+pub const CODEX_PROFILE_FORT_REFRESH_TOKEN_FILE_NAME: &str = "refresh.token";
+pub const CODEX_PROFILE_FORT_RUNTIME_LOCK_FILE_NAME: &str = "runtime.lock";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodexProfileFortSessionPaths {
+    pub dir: PathBuf,
+    pub session_path: PathBuf,
+    pub access_token_path: PathBuf,
+    pub refresh_token_path: PathBuf,
+    pub lock_path: PathBuf,
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RespawnRequest {
@@ -45,6 +60,25 @@ pub fn codex_tmux_session_name(profile_id: &str) -> String {
     } else {
         format!("{TMUX_SESSION_PREFIX}{suffix}")
     }
+}
+
+pub fn codex_profile_fort_session_paths(codex_home: &Path) -> CodexProfileFortSessionPaths {
+    let dir = codex_home.join(CODEX_PROFILE_FORT_DIR_NAME);
+    CodexProfileFortSessionPaths {
+        session_path: dir.join(CODEX_PROFILE_FORT_SESSION_FILE_NAME),
+        access_token_path: dir.join(CODEX_PROFILE_FORT_ACCESS_TOKEN_FILE_NAME),
+        refresh_token_path: dir.join(CODEX_PROFILE_FORT_REFRESH_TOKEN_FILE_NAME),
+        lock_path: dir.join(CODEX_PROFILE_FORT_RUNTIME_LOCK_FILE_NAME),
+        dir,
+    }
+}
+
+pub fn codex_profile_fort_runtime_env(codex_home: &Path) -> BTreeMap<String, String> {
+    let paths = codex_profile_fort_session_paths(codex_home);
+    BTreeMap::from([
+        ("FORT_TOKEN_PATH".to_owned(), paths.access_token_path.display().to_string()),
+        ("FORT_REFRESH_TOKEN_PATH".to_owned(), paths.refresh_token_path.display().to_string()),
+    ])
 }
 
 pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
@@ -213,9 +247,11 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        RespawnPlanError, RespawnRequest, build_respawn_plan, codex_tmux_session_name,
-        parse_prompt_segments_dual, parse_report_capture,
+        RespawnPlanError, RespawnRequest, build_respawn_plan, codex_profile_fort_runtime_env,
+        codex_profile_fort_session_paths, codex_tmux_session_name, parse_prompt_segments_dual,
+        parse_report_capture,
     };
+    use std::path::Path;
 
     #[test]
     fn build_respawn_plan_collects_sorted_unique_targets() {
@@ -245,6 +281,44 @@ mod tests {
     #[test]
     fn codex_tmux_session_name_uses_profile_slug() {
         assert_eq!(codex_tmux_session_name("profile-delta"), "si-codex-pane-profile-delta");
+    }
+
+    #[test]
+    fn codex_profile_fort_session_paths_are_under_codex_home() {
+        let paths =
+            codex_profile_fort_session_paths(Path::new("/tmp/home/.si/codex/profiles/cadma"));
+
+        assert_eq!(paths.dir, Path::new("/tmp/home/.si/codex/profiles/cadma/fort"));
+        assert_eq!(
+            paths.session_path,
+            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/session.json")
+        );
+        assert_eq!(
+            paths.access_token_path,
+            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/access.token")
+        );
+        assert_eq!(
+            paths.refresh_token_path,
+            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/refresh.token")
+        );
+        assert_eq!(
+            paths.lock_path,
+            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/runtime.lock")
+        );
+    }
+
+    #[test]
+    fn codex_profile_fort_runtime_env_exports_token_paths() {
+        let env = codex_profile_fort_runtime_env(Path::new("/tmp/home/.si/codex/profiles/cadma"));
+
+        assert_eq!(
+            env.get("FORT_TOKEN_PATH").map(String::as_str),
+            Some("/tmp/home/.si/codex/profiles/cadma/fort/access.token")
+        );
+        assert_eq!(
+            env.get("FORT_REFRESH_TOKEN_PATH").map(String::as_str),
+            Some("/tmp/home/.si/codex/profiles/cadma/fort/refresh.token")
+        );
     }
 
     #[test]

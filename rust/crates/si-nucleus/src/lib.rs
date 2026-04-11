@@ -39,6 +39,7 @@ use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
     WorkerLaunchSpec, WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
+use si_rs_codex::codex_profile_fort_session_paths;
 use si_rs_fort::{
     SessionState, SessionStateFileError, build_bootstrap_view, classify_persisted_session_state,
     load_persisted_session_state,
@@ -1727,20 +1728,23 @@ fn task_requires_fort(task: &TaskRecord, prompt_override: Option<&str>) -> bool 
 }
 
 fn default_fort_profile_dir(home_dir: &Path, profile: &ProfileName) -> PathBuf {
-    home_dir.join(".si").join("codex").join("profiles").join(profile.as_str()).join("fort")
+    codex_profile_fort_session_paths(
+        &home_dir.join(".si").join("codex").join("profiles").join(profile.as_str()),
+    )
+    .dir
 }
 
 fn fort_profile_dir(worker: &WorkerRecord, profile: &ProfileName) -> PathBuf {
     let codex_home = worker.codex_home.trim();
     if !codex_home.is_empty() {
-        return PathBuf::from(codex_home).join("fort");
+        return codex_profile_fort_session_paths(&PathBuf::from(codex_home)).dir;
     }
     if let Some(home_dir) =
         worker.home_dir.as_deref().map(str::trim).filter(|value| !value.is_empty())
     {
         return default_fort_profile_dir(Path::new(home_dir), profile);
     }
-    default_codex_home_dir(profile.as_str()).join("fort")
+    codex_profile_fort_session_paths(&default_codex_home_dir(profile.as_str())).dir
 }
 
 fn fort_capability_event_type(state: FortCapabilityState) -> CanonicalEventType {
@@ -1911,6 +1915,23 @@ fn classify_fort_requirement(
             ),
         ),
     };
+    if state == FortCapabilityState::Ready && !refresh_token_path.is_file() {
+        let message = format!(
+            "Fort authentication is required for profile {}: refresh token is missing",
+            profile
+        );
+        return Ok(Some((
+            FortCapabilityState::AuthRequired,
+            message,
+            json!({
+                "fort_profile_dir": fort_dir.display().to_string(),
+                "session_path": session_path.display().to_string(),
+                "access_token_path": access_token_path.display().to_string(),
+                "refresh_token_path": refresh_token_path.display().to_string(),
+                "fort_state": "refresh_token_missing",
+            }),
+        )));
+    }
     let payload = merge_json_objects(
         payload_base,
         json!({
@@ -3959,6 +3980,15 @@ impl NucleusService {
             .as_ref()
             .map(|worker| worker.worker_id.clone())
             .unwrap_or_else(WorkerId::generate);
+        let profile_codex_home = self
+            .store
+            .list_profile_records()?
+            .into_iter()
+            .find(|record| record.profile == *profile)
+            .and_then(|record| {
+                let codex_home = record.codex_home.trim();
+                (!codex_home.is_empty()).then(|| PathBuf::from(codex_home))
+            });
         let home_dir = request
             .home_dir
             .or_else(|| {
@@ -3968,6 +3998,7 @@ impl NucleusService {
         let codex_home = request
             .codex_home
             .or_else(|| existing.as_ref().map(|worker| PathBuf::from(worker.codex_home.clone())))
+            .or(profile_codex_home)
             .unwrap_or_else(|| default_codex_home_dir(profile.as_str()));
         let workdir = request
             .workdir
@@ -5588,6 +5619,10 @@ mod tests {
             &PersistedSessionState { profile_id: profile.to_owned(), ..state },
         )
         .expect("write fort session state");
+        fs::write(fort_dir.join("access.token"), "access-token\n")
+            .expect("write fort access token");
+        fs::write(fort_dir.join("refresh.token"), "refresh-token\n")
+            .expect("write fort refresh token");
         session_path
     }
 
@@ -11830,6 +11865,80 @@ mod tests {
         assert!(
             events.iter().any(|event| event.event_type == CanonicalEventType::FortAuthRequired)
         );
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_fort_task_when_refresh_token_file_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        write_fort_session_state(
+            &codex_home,
+            "america",
+            PersistedSessionState {
+                agent_id: "si-codex-america".to_owned(),
+                session_id: "fort-session".to_owned(),
+                host: "https://fort.example.invalid".to_owned(),
+                runtime_host: "https://fort-runtime.example.invalid".to_owned(),
+                access_expires_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+                refresh_expires_at: (Utc::now() + ChronoDuration::hours(12)).to_rfc3339(),
+                ..PersistedSessionState::default()
+            },
+        );
+        fs::remove_file(codex_home.join("fort/refresh.token")).expect("remove refresh token");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-refresh-missing"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home,
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-refresh-missing"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Check Fort refresh",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch fort task");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::AuthRequired));
+        let events = fort_events_for_task(&service, task_id);
+        assert!(events.iter().any(|event| {
+            event.event_type == CanonicalEventType::FortAuthRequired
+                && event.data.payload["fort_state"] == json!("refresh_token_missing")
+        }));
     }
 
     #[tokio::test]
