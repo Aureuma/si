@@ -119,6 +119,7 @@ CLI and runtime behavior:
 - `si fort` fails loudly for runtime secret commands when no usable runtime session exists or runtime refresh fails; it does not silently fall back to host/bootstrap admin auth.
 - `si fort` uses host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` only for explicit admin/provisioning commands.
 - Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files provisioned by `si codex spawn` or `si codex shell`.
+- Codex profile provisioning explicitly requests a `30d` Fort refresh-session TTL even if Fort's general default refresh-session TTL is shorter.
 - Runtime worker token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
 
 ### `[stripe]`

@@ -41,7 +41,7 @@ Architecture boundary:
 - Operational guidance:
   - keep `~/.si/fort/bootstrap/*` for break-glass recovery only
   - keep routine Fort access in `~/.si/codex/profiles/<profile>/fort/access.token` and `refresh.token`
-  - let Fort assign its configured default refresh-session TTL; SI does not override it during Codex profile provisioning
+  - Codex profile provisioning explicitly requests a `30d` refresh-session TTL; Fort's general default may be shorter for non-Codex sessions
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 

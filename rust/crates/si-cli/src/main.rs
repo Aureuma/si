@@ -35716,6 +35716,7 @@ impl FortApiClient {
 
 const FORT_ACCESS_TOKEN_REFRESH_SKEW_SECONDS: i64 = 300;
 const FORT_REFRESH_LOCK_STALE_AFTER_SECONDS: u64 = 120;
+const CODEX_PROFILE_FORT_REFRESH_TTL: &str = "30d";
 
 fn fort_args_include_option(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
@@ -36154,7 +36155,11 @@ fn open_fort_profile_session(
     let (status, response) = client.request(
         Method::POST,
         "/v1/auth/session/open",
-        Some(json!({ "agent_id": agent_id, "aud": "fort-api" })),
+        Some(json!({
+            "agent_id": agent_id,
+            "aud": "fort-api",
+            "refresh_ttl": CODEX_PROFILE_FORT_REFRESH_TTL
+        })),
         Some(admin_token),
     )?;
     ensure_fort_api_status(status, 200, &response, "open Fort profile session")?;
