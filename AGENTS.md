@@ -6,12 +6,13 @@
 # Release Discipline
 
 - Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
-- For ordinary SI changes that should result in a fresh usable SI binary, bump the workspace patch version.
-- Bump the minor version only when the change is genuinely larger and deserves a broader version step.
+- Every commit that changes SI must bump the workspace patch version in the same commit. Do not batch multiple commits under one unchanged patch version and do not defer the bump.
+- Bump the workspace minor version only when publishing a new SI release to GitHub Releases or another distribution channel such as npm or Homebrew. Reset the patch component to `0` in that release commit.
+- Create git tags only for those minor release commits; do not tag patch-only commits.
+- Release notes for each minor release must cover every commit and patch-version bump since the previous minor release.
 - When the SI version changes, that one version change applies everywhere in SI at once.
 - After bumping the version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
 - Prefer rebuild paths that reuse cached Cargo artifacts so incremental follow-up builds stay fast.
-- Patch versions may be bumped sequentially as often as needed; do not avoid a patch bump merely because another recent patch bump already happened.
 
 # Secrets And Credential Access
 

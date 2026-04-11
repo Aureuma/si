@@ -1,20 +1,19 @@
 # Releasing and Changelog Guide
 
-This project follows Semantic Versioning and keeps a human-focused changelog.
+This document is the single source for SI release policy and the release checklist. It follows Semantic Versioning and keeps a human-focused changelog.
 
 ## Versioning Rules
-- Use SemVer: MAJOR.MINOR.PATCH (tag format: `vX.Y.Z`).
-- Breaking changes:
-  - While the project is on the `v0.x` line: bump MINOR.
-  - After the project graduates off the `v0.x` line: bump MAJOR.
-- Features: bump MINOR.
-- Fixes/docs-only releases: bump PATCH.
+- Use the SemVer shape `MAJOR.MINOR.PATCH`, but apply it operationally in this repo.
+- Every commit must bump PATCH in the same commit.
+- A published release bumps MINOR, resets PATCH to `0`, and uses a release tag of `vX.Y.0`.
+- Only minor release versions are tagged and published to GitHub Releases or external distribution channels.
+- MAJOR changes remain exceptional and must be called out explicitly when they happen.
 
 ## Changelog Format (Predefined)
 Use this structure for each release entry:
 
 ```
-## [vX.Y.Z] - YYYY-MM-DD
+## [vX.Y.0] - YYYY-MM-DD
 ### Added
 - ...
 ### Changed
@@ -43,22 +42,25 @@ git fetch --tags origin
 git switch main
 git pull --ff-only
 ```
+- Ensure CI is green on `main`.
+- Ensure you can push tags and create GitHub releases.
 - Ensure the working tree is clean and the branch is up to date.
 - Make sure you have all remote tags locally before picking the next version.
 
 ### 1) Determine the next version + release name
-- Decide `vX.Y.Z` using the SemVer rules above.
+- Decide the next release version `vX.Y.0`.
 - Choose a short suggested name for the release title (e.g., “Safari Login Flow”).
-- Title format for GitHub Release: `vX.Y.Z - Suggested Name`.
+- Title format for GitHub Release: `vX.Y.0 - Suggested Name`.
 
 ### 2) Draft the changelog entry (authoritative notes)
 1. Add a new entry to the top of `CHANGELOG.md` with today’s UTC date.
 2. Summarize user-facing changes in 2–6 bullets.
 3. Keep language past tense and user-focused.
+4. Cover the full set of patch-bump commits since the previous minor release.
 
 ### 3) Bump version strings in code
 Update release version metadata:
-- root `Cargo.toml` `workspace.package.version`
+- root `Cargo.toml` `workspace.package.version = "X.Y.0"`
 
 ### 4) Verify and commit the release prep
 ```
@@ -66,10 +68,10 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
-./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight
-./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.Z --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.0 --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml
-git commit -m "Bump version to vX.Y.Z"
+git commit -m "release: vX.Y.0"
 ```
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
@@ -78,14 +80,14 @@ git commit -m "Bump version to vX.Y.Z"
 
 ### 5) Create an annotated tag for the release commit
 ```
-git tag -a vX.Y.Z -m "vX.Y.Z"
+git tag -a vX.Y.0 -m "vX.Y.0"
 ```
 - Annotated tags are recommended for releases and are the best practice (they store metadata like tagger, date, and message).
 
 ### 6) Push commits and the new tag
 ```
 git push
-git push origin vX.Y.Z
+git push origin vX.Y.0
 ```
 - Push the tag explicitly to avoid conflicts with existing tags.
 - `gh release create` can auto-create a tag if it doesn't exist; using `--verify-tag` ensures you only release a tag you already created and pushed.
@@ -99,36 +101,37 @@ If you need a quick summary of commits since the last release:
 git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
 ```
 GitHub Releases should include a clear, hand-written release note (not just a verbatim copy of `CHANGELOG.md`). Use the changelog and commit history as inputs, then write a concise, user-facing summary of what changed since the last published GitHub Release.
+Because only minor releases are tagged, this range is the full set of patch-bump commits that must be reflected in the release notes.
 Option A: Use the changelog entry as the release body.
-1. Extract the new `vX.Y.Z` section into `release-notes.md` (manual or script).
+1. Extract the new `vX.Y.0` section into `release-notes.md` (manual or script).
 2. Create the release with a title and notes file:
 ```
 si orbit github release create Aureuma/si \
-  --tag vX.Y.Z \
-  --title "vX.Y.Z - Suggested Name" \
+  --tag vX.Y.0 \
+  --title "vX.Y.0 - Suggested Name" \
   --notes-file release-notes.md \
   --draft
 ```
 3. If the tag is not pushed yet, use:
 ```
 si orbit github release create Aureuma/si \
-  --tag vX.Y.Z \
-  --title "vX.Y.Z - Suggested Name" \
+  --tag vX.Y.0 \
+  --title "vX.Y.0 - Suggested Name" \
   --notes-file release-notes.md \
   --target "$(git rev-parse HEAD)" \
   --draft
 ```
 4. Equivalent `gh` fallback:
 ```
-gh release create vX.Y.Z \\
-  --title "vX.Y.Z - Suggested Name" \\
+gh release create vX.Y.0 \\
+  --title "vX.Y.0 - Suggested Name" \\
   --notes-file release-notes.md \\
   --verify-tag
 ```
 Option B: Use the annotated tag message as the release body.
 ```
-gh release create vX.Y.Z \\
-  --title "vX.Y.Z - Suggested Name" \\
+gh release create vX.Y.0 \\
+  --title "vX.Y.0 - Suggested Name" \\
   --notes-from-tag \\
   --verify-tag
 ```
@@ -136,17 +139,17 @@ Notes:
 - `--notes-from-tag` uses the annotated tag message when present; otherwise it falls back to the commit message.
 Option C: Use GitHub auto-generated release notes and prepend highlights.
 ```
-gh release create vX.Y.Z \\
-  --title "vX.Y.Z - Suggested Name" \\
+gh release create vX.Y.0 \\
+  --title "vX.Y.0 - Suggested Name" \\
   --generate-notes \\
-  --notes-start-tag vA.B.C \\
+  --notes-start-tag vA.B.0 \\
   --notes "Highlights:\\n- ...\\n- ..." \\
   --verify-tag
 ```
 Notes:
 - `--verify-tag` aborts if the tag doesn’t already exist on the remote.
 - `--generate-notes` uses GitHub’s Release Notes API and can be combined with `--notes`.
-- Add `--notes-start-tag vA.B.C` to define the start tag for generated notes when needed.
+- Add `--notes-start-tag vA.B.0` to define the start tag for generated notes when needed.
 - Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
 
 Option D: Use the Releasemind GitHub workflow for draft + publish orchestration.
@@ -163,10 +166,10 @@ Notes:
 
 ### 8) Verify the published release
 ```
-gh release view vX.Y.Z --web
+gh release view vX.Y.0 --web
 ```
 - Confirm title, notes, and tag target are correct.
-- Optional: if your repo uses release attestations, run `gh release verify vX.Y.Z`.
+- Optional: if your repo uses release attestations, run `gh release verify vX.Y.0`.
 
 ### 9) Verify automated CLI release assets
 When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
@@ -194,7 +197,7 @@ Expected assets:
 Verification commands:
 ```
 gh run list --workflow "CLI Release Assets" --limit 1
-gh release view vX.Y.Z --json assets --jq '.assets[].name'
+gh release view vX.Y.0 --json assets --jq '.assets[].name'
 npm view @aureuma/si version
 ```
 
@@ -208,9 +211,9 @@ Notes:
 - The workflow uses `si build self assets` as the single build path and `si build self verify` as the local archive verification path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
-- Use `si build npm publish --version vX.Y.Z --dry-run` for local npm publish rehearsal.
-- Use `si build npm vault --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
-- Use `si build homebrew core --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
+- Use `si build npm publish --version vX.Y.0 --dry-run` for local npm publish rehearsal.
+- Use `si build npm vault --version vX.Y.0` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
+- Use `si build homebrew core --version vX.Y.0 --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 
 ### 10) Verify repo-boundary stability for Viva integrations
 When a release changes `si viva`, Viva-related settings, or shared orchestration/config behavior, validate the adjacent Viva repo before closing the release:
@@ -230,9 +233,9 @@ Notes:
 - Prefer `si orbit github release create Aureuma/viva ...` for Viva releases so the GitHub release flow stays operationally consistent across the stack.
 
 ## Tagging Rules
-- Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.
+- Use annotated tags only for minor releases: `git tag -a vX.Y.0 -m "vX.Y.0" <commit>`.
 - Tags should point at the release commit that includes the changelog update.
-- Push tags explicitly: `git push origin vX.Y.Z`.
+- Push tags explicitly: `git push origin vX.Y.0`.
 
 ## Release Notes Style
 - Lead with 2–4 key changes.

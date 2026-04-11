@@ -177,10 +177,9 @@ Run static analysis:
 
 ## Releases
 
-Release process and runbook:
+Release process:
 
 - [`docs/RELEASING.md`](docs/RELEASING.md)
-- [`docs/RELEASE_RUNBOOK.md`](docs/RELEASE_RUNBOOK.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
 
 Published GitHub Releases automatically include multi-arch CLI archives for:
@@ -188,8 +187,8 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:
-- `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
-- `./.artifacts/cargo-target/release/si-rs build npm vault --version vX.Y.Z` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
+- `./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.0 --out-dir .artifacts/release-preflight`
+- `./.artifacts/cargo-target/release/si-rs build npm vault --version vX.Y.0` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 ## License
 
