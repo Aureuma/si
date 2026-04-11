@@ -132,7 +132,8 @@ si build self --timings
 - CLI endpoint discovery for `si nucleus ...` resolves from `--endpoint`, then `SI_NUCLEUS_WS_ADDR`, then `~/.si/nucleus/gateway/metadata.json`, then the default local websocket URL.
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - For SI runtime workers, use `si fort ...` for secret access.
-- `si fort` wrapper passes explicit Fort file-path auth flags when defaults are available: `--host` from settings and `--token-file` from `~/.si/fort/bootstrap/admin.token`.
+- `si fort` wrapper passes explicit Fort file-path auth flags when defaults are available: runtime token paths from `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH`, then `CODEX_HOME/fort/`, then the active Codex profile Fort session.
+- Runtime secret commands fail loudly when no usable runtime Fort session exists; bootstrap/admin token files are only for explicit admin/provisioning commands.
 - If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.

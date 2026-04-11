@@ -25,12 +25,15 @@ Architecture boundary:
 ## `si fort` Wrapper Contract
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
-- Host bootstrap/admin auth for `si codex spawn ...` provisioning uses the bootstrap token file at `~/.si/fort/bootstrap/admin.token`.
-- Runtime worker sessions use file-backed token paths for the short-lived access token and rotating refresh token.
+- `si codex spawn ...` and `si codex shell ...` provision or reuse a profile-scoped Fort session under `~/.si/codex/profiles/<profile>/fort/`.
+- Host bootstrap/admin auth for provisioning uses the bootstrap token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token`.
+- Runtime worker sessions use profile-local file-backed token paths for the short-lived access token and rotating refresh token.
 - Wrapper behavior:
   - prefers caller-supplied runtime token paths (`FORT_TOKEN_PATH`, `FORT_REFRESH_TOKEN_PATH`) and refreshes those file-backed sessions in place when possible
+  - otherwise prefers the Fort session under `CODEX_HOME/fort/` when `CODEX_HOME` is set
   - otherwise prefers the active profile-scoped Fort session under `~/.si/codex/profiles/<profile>/fort/` and refreshes that file-backed session in place when possible
-  - only falls back to bootstrap/admin auth when no runtime session is available or runtime refresh fails
+  - fails loudly for runtime secret commands (`get`, `set`, `list`, `batch-get`, `run`) when no usable runtime session exists or runtime refresh fails
+  - uses bootstrap/admin auth only for explicit provisioning and admin commands (`agent ...`, `auth issue|login|list|revoke`, `auth session open`)
   - runtime refresh is owned by the profile-scoped Fort refresher
   - passes explicit token-file auth to native `fort` when default files are available (no bearer token argv injection)
   - rejects deprecated token-value env vars (`FORT_TOKEN`, `FORT_REFRESH_TOKEN`)
@@ -38,6 +41,7 @@ Architecture boundary:
 - Operational guidance:
   - keep `~/.si/fort/bootstrap/*` for break-glass recovery only
   - keep routine Fort access in `~/.si/codex/profiles/<profile>/fort/access.token` and `refresh.token`
+  - let Fort assign its configured default refresh-session TTL; SI does not override it during Codex profile provisioning
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 

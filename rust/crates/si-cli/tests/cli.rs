@@ -8226,6 +8226,7 @@ fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .env("FORT_TOKEN", "legacy-token")
         .env("FORT_REFRESH_TOKEN", "legacy-refresh-token")
         .assert()
@@ -8234,10 +8235,7 @@ fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert_eq!(
         args,
-        format!(
-            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
-            home.path().join(".si/fort/bootstrap/admin.token").display()
-        )
+        "--host\nhttps://fort.example.test\ndoctor\n"
     );
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
@@ -8286,6 +8284,7 @@ fn fort_wrapper_preserves_explicit_native_flags() {
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
@@ -8346,6 +8345,7 @@ fn fort_wrapper_refreshes_bootstrap_session_from_file_paths() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
@@ -8424,6 +8424,7 @@ fn fort_wrapper_refreshes_runtime_session_from_file_paths_before_bootstrap() {
         )
         .env_remove("FORT_HOST")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
@@ -8479,7 +8480,10 @@ fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
     }
     fs::write(
         home.path().join(".si/settings.toml"),
-        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
+        format!(
+            "schema_version = 1\n[paths]\ncodex_profiles_dir = {:?}\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
+            home.path().join(".si/codex/profiles")
+        ),
     )
     .expect("write settings");
 
@@ -8515,14 +8519,13 @@ fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert!(args.contains(&format!(
-        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
-        profile_refresh_path.display()
-    )));
+    assert!(args.contains(&profile_refresh_path.display().to_string()));
+    assert!(args.contains("--json\nauth\nsession\nrefresh"));
     assert!(args.contains(&format!(
         "--token-file\n{}\nlist\n--repo\nsafe\n--env\ndev\n",
         profile_token_path.display()
@@ -8538,7 +8541,7 @@ fn fort_wrapper_prefers_active_profile_runtime_session_over_bootstrap() {
 }
 
 #[test]
-fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
+fn fort_wrapper_fails_loudly_when_profile_runtime_refresh_fails() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si/codex")).expect("mkdir codex dir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -8571,7 +8574,10 @@ fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
     }
     fs::write(
         home.path().join(".si/settings.toml"),
-        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
+        format!(
+            "schema_version = 1\n[paths]\ncodex_profiles_dir = {:?}\n[fort]\nhost = \"https://fort.example.test\"\n[codex]\nprofile = \"profile-delta\"\n[codex.profiles]\nactive = \"profile-delta\"\n[codex.profiles.entries.profile-delta]\nname = \"Profile Delta\"\n",
+            home.path().join(".si/codex/profiles")
+        ),
     )
     .expect("write settings");
 
@@ -8591,7 +8597,7 @@ fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
-    cargo_bin()
+    let assert = cargo_bin()
         .args([
             "fort",
             "--home",
@@ -8607,30 +8613,85 @@ fn fort_wrapper_falls_back_to_bootstrap_when_profile_runtime_refresh_fails() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
-        .success();
+        .failure();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert!(args.contains(&format!(
-        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
-        profile_refresh_path.display()
-    )));
-    assert!(args.contains(&format!(
-        "--json\nauth\nsession\nrefresh\n--refresh-token-file\n{}\n",
-        bootstrap_refresh_path.display()
-    )));
-    assert!(args.contains(&format!(
-        "--token-file\n{}\nlist\n--repo\nsafe\n--env\ndev\n",
-        bootstrap_token_path.display()
-    )));
+    assert!(
+        args.contains(&profile_refresh_path.display().to_string()),
+        "fort args did not include profile refresh path; args={args}"
+    );
+    assert!(args.contains("auth\nsession\nrefresh"), "fort args did not refresh; args={args}");
+    assert!(!args.contains(&bootstrap_refresh_path.display().to_string()));
+    assert!(!args.contains(&bootstrap_token_path.display().to_string()));
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("refresh fort session"));
+    assert!(stderr.contains("unauthorized"));
     assert_eq!(
         fs::read_to_string(&bootstrap_token_path).expect("read refreshed bootstrap token"),
-        "rotated-bootstrap-access\n"
+        "stale-admin-token\n"
     );
     assert_eq!(
         fs::read_to_string(&bootstrap_refresh_path).expect("read rotated bootstrap refresh"),
-        "rotated-bootstrap-refresh\n"
+        "stale-admin-refresh\n"
     );
+}
+
+#[test]
+fn fort_wrapper_does_not_fall_back_to_bootstrap_when_codex_home_session_is_missing() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si/fort/bootstrap")).expect("mkdir fort bootstrap");
+    fs::write(home.path().join(".si/fort/bootstrap/admin.token"), "bootstrap-token\n")
+        .expect("write bootstrap token");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[fort]\nhost = \"https://fort.example.test\"\n",
+    )
+    .expect("write settings");
+
+    let codex_home = home.path().join(".si/codex/profiles/profile-epsilon");
+    fs::create_dir_all(&codex_home).expect("mkdir codex home");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n",
+            shell_escape_for_test(&args_file),
+        ),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let assert = cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "list",
+            "--repo",
+            "safe",
+            "--env",
+            "dev",
+        ])
+        .env("PATH", path_env)
+        .env("CODEX_HOME", &codex_home)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .assert()
+        .failure();
+
+    assert!(
+        !args_file.exists(),
+        "fort binary should not be invoked after missing CODEX_HOME session"
+    );
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("Fort runtime session is required for CODEX_HOME"));
+    assert!(stderr.contains(codex_home.join("fort").display().to_string().as_str()));
 }
 
 #[test]
@@ -8684,6 +8745,7 @@ fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
@@ -8743,6 +8805,7 @@ fn fort_wrapper_refreshes_bootstrap_token_before_near_expiry() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
@@ -8785,9 +8848,8 @@ fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
     write_executable_shell_script(
         &fort_path,
         &format!(
-            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"doctor\" ]; then\n  exit 0\nfi\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"doctor\" ]; then\n  exit 0\nfi\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
             args = shell_escape_for_test(&args_file),
-            token = token_path.display(),
         ),
     );
     let path_env =
@@ -8800,12 +8862,13 @@ fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
         .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert!(!args.contains("--json\nauth\nsession\nrefresh\n"));
-    assert!(args.contains(&format!("--token-file\n{}\ndoctor\n", token_path.display())));
+    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
 }
 
 #[test]
@@ -8845,16 +8908,14 @@ fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert_eq!(
         args,
-        format!(
-            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
-            home.path().join(".si/fort/bootstrap/admin.token").display()
-        )
+        "--host\nhttps://fort.example.test\ndoctor\n"
     );
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
@@ -8901,16 +8962,14 @@ fn fort_wrapper_builds_sibling_checkout_from_runtime_workspace_when_settings_rep
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert_eq!(
         args,
-        format!(
-            "--token-file\n{}\ndoctor\n",
-            home.path().join(".si/fort/bootstrap/admin.token").display()
-        )
+        "doctor\n"
     );
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
@@ -8953,16 +9012,14 @@ fn fort_wrapper_prefers_existing_sibling_binary_before_cargo_build_fallback() {
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert_eq!(
         args,
-        format!(
-            "--token-file\n{}\ndoctor\n",
-            home.path().join(".si/fort/bootstrap/admin.token").display()
-        )
+        "doctor\n"
     );
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
@@ -9018,16 +9075,14 @@ fn fort_wrapper_builds_configured_repo_from_custom_target_dir() {
         .env_remove("FORT_HOST")
         .env_remove("FORT_TOKEN_PATH")
         .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("CODEX_HOME")
         .assert()
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert_eq!(
         args,
-        format!(
-            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
-            home.path().join(".si/fort/bootstrap/admin.token").display()
-        )
+        "--host\nhttps://fort.example.test\ndoctor\n"
     );
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));

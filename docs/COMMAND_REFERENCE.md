@@ -100,7 +100,8 @@ si orbit github release create Aureuma/si --tag vX.Y.Z --title "vX.Y.Z" --target
 - Prefer `si nucleus service ...` over handwritten service units or launch agents.
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
-- `si fort` bootstrap/admin auth is file-backed and prefers explicit `--token-file` injection from `~/.si/fort/bootstrap/admin.token` when present.
+- `si fort` runtime auth is file-backed and resolves from explicit runtime token paths, `CODEX_HOME/fort/`, or the active Codex profile Fort session.
+- Bootstrap/admin Fort token files are reserved for explicit admin and provisioning commands; runtime secret commands fail loudly instead of falling back to bootstrap/admin auth.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
 - Run `si help --format json` or `si commands` when updating CLI docs.
