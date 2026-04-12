@@ -36017,6 +36017,37 @@ fn ensure_fort_api_status(status: u16, expected: u16, body: &Value, action: &str
     if status == expected { Ok(()) } else { Err(fort_api_status_error(status, body, action)) }
 }
 
+fn fort_bootstrap_admin_refresh_repair_message(
+    token_path: &Path,
+    refresh_token_path: &Path,
+    detail: &str,
+) -> String {
+    format!(
+        "{detail}. Fort bootstrap admin refresh token {} is not accepted by Fort, so bootstrap admin access token {} cannot be refreshed. This usually means the host Fort bootstrap admin session expired, was rotated, or was revoked by a break-glass reissue. Reissue Fort break-glass/admin bootstrap auth on the Fort host using production Fort state/signing material, then open a new file-backed admin session and replace both bootstrap files. SI did not fall back to any local bypass.",
+        refresh_token_path.display(),
+        token_path.display(),
+    )
+}
+
+fn fort_bootstrap_admin_refresh_error(
+    status: u16,
+    body: &Value,
+    token_path: &Path,
+    refresh_token_path: &Path,
+) -> anyhow::Error {
+    let detail =
+        fort_api_status_error(status, body, "refresh Fort bootstrap admin session").to_string();
+    if matches!(status, 401 | 403) {
+        anyhow!(fort_bootstrap_admin_refresh_repair_message(
+            token_path,
+            refresh_token_path,
+            &detail,
+        ))
+    } else {
+        anyhow!(detail)
+    }
+}
+
 fn fort_path_escape(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect::<String>()
 }
@@ -36058,7 +36089,14 @@ fn refresh_bootstrap_admin_token_for_fort_provisioning(
             Some(json!({ "refresh_token": refresh_token })),
             None,
         )?;
-        ensure_fort_api_status(status, 200, &response, "refresh Fort bootstrap admin session")?;
+        if status != 200 {
+            return Err(fort_bootstrap_admin_refresh_error(
+                status,
+                &response,
+                &token_path,
+                &refresh_token_path,
+            ));
+        }
         let access_token = response["access_token"].as_str().unwrap_or_default().trim();
         let next_refresh_token = response["refresh_token"].as_str().unwrap_or_default().trim();
         if access_token.is_empty() || next_refresh_token.is_empty() {
@@ -36310,6 +36348,18 @@ fn refresh_fort_access_token(
             } else {
                 format!("exit status {}", output.status)
             };
+            if auth.label == "bootstrap admin Fort session"
+                && (detail.contains("status=401") || detail.contains("status=403"))
+            {
+                anyhow::bail!(
+                    "{}",
+                    fort_bootstrap_admin_refresh_repair_message(
+                        token_path,
+                        refresh_token_path,
+                        &detail,
+                    )
+                );
+            }
             anyhow::bail!("refresh fort session: {detail}");
         }
         let payload: Value = serde_json::from_slice(&output.stdout)
@@ -66586,6 +66636,28 @@ mod tests {
         assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/access.token"));
         assert!(command.contains("FORT_REFRESH_TOKEN_PATH="));
         assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/refresh.token"));
+    }
+
+    #[test]
+    fn fort_bootstrap_admin_refresh_unauthorized_error_explains_host_rebootstrap() {
+        let token_path = Path::new("/home/test/.si/fort/bootstrap/admin.token");
+        let refresh_token_path = Path::new("/home/test/.si/fort/bootstrap/admin.refresh.token");
+        let error = fort_bootstrap_admin_refresh_error(
+            401,
+            &json!({ "error": "unauthorized" }),
+            token_path,
+            refresh_token_path,
+        )
+        .to_string();
+
+        assert!(
+            error
+                .contains("refresh Fort bootstrap admin session failed (status=401): unauthorized")
+        );
+        assert!(error.contains("/home/test/.si/fort/bootstrap/admin.refresh.token"));
+        assert!(error.contains("/home/test/.si/fort/bootstrap/admin.token"));
+        assert!(error.contains("Reissue Fort break-glass/admin bootstrap auth on the Fort host"));
+        assert!(error.contains("SI did not fall back to any local bypass"));
     }
 
     #[test]
