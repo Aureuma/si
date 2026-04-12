@@ -19,6 +19,7 @@
 - For any credentials, secret reads, secret writes, bootstrap flows, or operator secret work, always use `si fort` rather than calling Vault directly or bypassing Fort.
 - Do not jump around Fort by using raw `si vault` commands, ad-hoc local secret files, or alternate secret access paths when `si fort` is the supported workflow.
 - Keep Fort's guiding principles in mind for all secret-related work, especially the public HTTPS runtime path, file-backed token handling, scoped policy enforcement, and the rule that Fort remains the auth boundary over SI Vault-backed `safe` data.
+- `safe` is the literal name of the separate repository that stores encrypted secret material; it is not a generic label or an arbitrary local folder.
 
 # Node Package Manager Discipline
 
