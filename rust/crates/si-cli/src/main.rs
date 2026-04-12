@@ -35704,6 +35704,13 @@ struct FortTokenFileAuth {
     refresh_token_path: Option<PathBuf>,
     refresh_lock_path: PathBuf,
     label: String,
+    scope: FortAuthScope,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FortAuthScope {
+    Runtime,
+    BootstrapAdmin,
 }
 
 #[derive(Debug)]
@@ -35793,15 +35800,21 @@ fn fort_command_tokens(args: &[String]) -> Vec<&str> {
     tokens
 }
 
-fn should_auto_refresh_fort_bootstrap_token(args: &[String]) -> bool {
+fn should_auto_refresh_fort_access_token(args: &[String], scope: FortAuthScope) -> bool {
     let tokens = fort_command_tokens(args);
     if tokens.is_empty() {
         return false;
     }
-    if matches!(tokens.first(), Some(&"doctor") | Some(&"version")) {
+    if matches!(tokens.first(), Some(&"version")) {
         return false;
     }
-    !(tokens.first() == Some(&"auth") && tokens.get(1) == Some(&"session"))
+    if tokens.first() == Some(&"auth") && tokens.get(1) == Some(&"session") {
+        return false;
+    }
+    if scope == FortAuthScope::BootstrapAdmin && tokens.first() == Some(&"doctor") {
+        return false;
+    }
+    true
 }
 
 fn resolve_fort_default_token_file(
@@ -35824,7 +35837,7 @@ fn resolve_fort_default_token_file(
         {
             return resolve_required_fort_auth(program, args, resolved_host, &auth);
         }
-        if fort_command_requires_runtime_auth(args) {
+        if fort_command_prefers_runtime_auth(args) {
             anyhow::bail!(
                 "Fort runtime session is required for CODEX_HOME={}, but no usable session files were found at {}; run `si codex spawn --profile <profile>` to provision it",
                 codex_home.display(),
@@ -35835,7 +35848,7 @@ fn resolve_fort_default_token_file(
     if let Some(auth) = resolve_fort_profile_runtime_auth(settings, home) {
         return resolve_required_fort_auth(program, args, resolved_host, &auth);
     }
-    if fort_command_requires_runtime_auth(args) {
+    if fort_command_prefers_runtime_auth(args) {
         if let Some(profile_id) = resolve_fort_active_profile_id(settings, home) {
             let profile_dir = SiPaths::from_settings(home, settings)
                 .codex_profiles_dir
@@ -35846,6 +35859,8 @@ fn resolve_fort_default_token_file(
                 profile_dir.display()
             );
         }
+    }
+    if fort_command_requires_runtime_auth(args) {
         anyhow::bail!(
             "Fort runtime session is required; run `si codex spawn --profile <profile>` or set FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH explicitly"
         );
@@ -35878,18 +35893,27 @@ fn resolve_required_fort_auth(
 }
 
 fn fort_command_requires_runtime_auth(args: &[String]) -> bool {
-    matches!(
-        fort_command_tokens(args).first().copied(),
-        Some("get" | "set" | "list" | "batch-get" | "run")
-    )
+    let tokens = fort_command_tokens(args);
+    match tokens.as_slice() {
+        ["get" | "set" | "list" | "batch-get" | "run", ..] => true,
+        ["auth", "whoami", ..] => true,
+        _ => false,
+    }
+}
+
+fn fort_command_prefers_runtime_auth(args: &[String]) -> bool {
+    let tokens = fort_command_tokens(args);
+    match tokens.as_slice() {
+        ["doctor"] => true,
+        _ => fort_command_requires_runtime_auth(args),
+    }
 }
 
 fn fort_command_allows_bootstrap_auth(args: &[String]) -> bool {
     let tokens = fort_command_tokens(args);
     match tokens.as_slice() {
-        ["doctor"] => true,
         ["agent", ..] => true,
-        ["auth", "issue" | "login" | "whoami" | "list" | "revoke", ..] => true,
+        ["auth", "issue" | "login" | "list" | "revoke", ..] => true,
         ["auth", "session", "open", ..] => true,
         _ => false,
     }
@@ -35915,6 +35939,7 @@ fn resolve_fort_env_runtime_auth() -> Option<FortTokenFileAuth> {
             refresh_token_path: runtime_refresh_token_path,
             refresh_lock_path,
             label: "FORT_TOKEN_PATH runtime session".to_owned(),
+            scope: FortAuthScope::Runtime,
         });
     }
     None
@@ -35929,6 +35954,7 @@ fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
             refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path.clone()),
             refresh_lock_path: default_fort_bootstrap_refresh_lock_path(home),
             label: "bootstrap admin Fort session".to_owned(),
+            scope: FortAuthScope::BootstrapAdmin,
         });
     }
     None
@@ -35978,6 +36004,7 @@ fn resolve_fort_runtime_auth_from_dir(
             refresh_token_path: refresh_token_path.is_file().then_some(refresh_token_path),
             refresh_lock_path: profile_dir.join("runtime.lock"),
             label: label.into(),
+            scope: FortAuthScope::Runtime,
         });
     }
     None
@@ -36299,7 +36326,7 @@ fn refresh_fort_access_token(
     resolved_host: Option<&str>,
     auth: &FortTokenFileAuth,
 ) -> Result<Option<PathBuf>> {
-    if !should_auto_refresh_fort_bootstrap_token(args) {
+    if !should_auto_refresh_fort_access_token(args, auth.scope) {
         return Ok(auth.token_path.is_file().then_some(auth.token_path.clone()));
     }
     let token_path = &auth.token_path;
@@ -65250,7 +65277,7 @@ fn build_codex_launch_command(
     fort_paths: &CodexProfileFortSessionPaths,
 ) -> String {
     let mut exports = format!(
-        "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={}; ",
+        "export COLORTERM=truecolor HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={}; ",
         shell_single_quote(&home.display().to_string()),
         shell_single_quote(&codex_home.display().to_string()),
         shell_single_quote(&fort_paths.access_token_path.display().to_string()),
@@ -66637,6 +66664,9 @@ mod tests {
         assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/access.token"));
         assert!(command.contains("FORT_REFRESH_TOKEN_PATH="));
         assert!(command.contains("/tmp/home/.si/codex/profiles/america/fort/refresh.token"));
+        assert!(!command.contains("TERM=xterm-256color"));
+        assert!(!command.contains("COLUMNS=160"));
+        assert!(!command.contains("LINES=60"));
     }
 
     #[test]
