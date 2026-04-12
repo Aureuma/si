@@ -35887,8 +35887,9 @@ fn fort_command_requires_runtime_auth(args: &[String]) -> bool {
 fn fort_command_allows_bootstrap_auth(args: &[String]) -> bool {
     let tokens = fort_command_tokens(args);
     match tokens.as_slice() {
+        ["doctor"] => true,
         ["agent", ..] => true,
-        ["auth", "issue" | "login" | "list" | "revoke", ..] => true,
+        ["auth", "issue" | "login" | "whoami" | "list" | "revoke", ..] => true,
         ["auth", "session", "open", ..] => true,
         _ => false,
     }

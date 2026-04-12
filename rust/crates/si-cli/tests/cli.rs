@@ -8917,8 +8917,9 @@ fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
     write_executable_shell_script(
         &fort_path,
         &format!(
-            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"doctor\" ]; then\n  exit 0\nfi\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$@\" >> {args}\nif [ \"$1\" = \"--host\" ] && [ \"$2\" = \"https://fort.example.test\" ] && [ \"$3\" = \"--token-file\" ] && [ \"$4\" = \"{token}\" ] && [ \"$5\" = \"doctor\" ]; then\n  exit 0\nfi\nif [ \"$3\" = \"--json\" ] && [ \"$4\" = \"auth\" ] && [ \"$5\" = \"session\" ] && [ \"$6\" = \"refresh\" ]; then\n  printf 'unexpected refresh\\n' >&2\n  exit 1\nfi\nprintf 'unexpected fort invocation\\n' >&2\nexit 1\n",
             args = shell_escape_for_test(&args_file),
+            token = token_path.display(),
         ),
     );
     let path_env =
@@ -8937,7 +8938,13 @@ fn fort_wrapper_does_not_refresh_stale_bootstrap_session_for_doctor() {
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
     assert!(!args.contains("--json\nauth\nsession\nrefresh\n"));
-    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
+    assert_eq!(
+        args,
+        format!(
+            "--host\nhttps://fort.example.test\n--token-file\n{}\ndoctor\n",
+            token_path.display()
+        )
+    );
 }
 
 #[test]
