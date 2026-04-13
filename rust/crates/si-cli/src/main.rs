@@ -35670,6 +35670,7 @@ fn build_fort_command_args(
     home: &Path,
 ) -> Result<Vec<String>> {
     let mut command_args = Vec::new();
+    guard_fort_profile_refresh_token_rotation(args, settings, home)?;
     let explicit_host = fort_option_value(args, "--host").map(ToOwned::to_owned);
     let resolved_host = if explicit_host.is_some() {
         explicit_host
@@ -35683,13 +35684,9 @@ fn build_fort_command_args(
         command_args.push(host.to_owned());
     }
     if !fort_args_include_option(args, "--token-file") {
-        if let Some(token_file) = resolve_fort_default_token_file(
-            program,
-            args,
-            resolved_host.as_deref(),
-            settings,
-            home,
-        )? {
+        if let Some(token_file) =
+            resolve_fort_default_token_file(program, args, resolved_host.as_deref(), home)?
+        {
             command_args.push("--token-file".to_owned());
             command_args.push(token_file.display().to_string());
         }
@@ -35821,12 +35818,8 @@ fn resolve_fort_default_token_file(
     program: &Path,
     args: &[String],
     resolved_host: Option<&str>,
-    settings: &Settings,
     home: &Path,
 ) -> Result<Option<PathBuf>> {
-    if let Some(auth) = resolve_fort_env_runtime_auth() {
-        return resolve_required_fort_auth(program, args, resolved_host, &auth);
-    }
     if let Some(codex_home) = std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
@@ -35845,24 +35838,9 @@ fn resolve_fort_default_token_file(
             );
         }
     }
-    if let Some(auth) = resolve_fort_profile_runtime_auth(settings, home) {
-        return resolve_required_fort_auth(program, args, resolved_host, &auth);
-    }
-    if fort_command_prefers_runtime_auth(args) {
-        if let Some(profile_id) = resolve_fort_active_profile_id(settings, home) {
-            let profile_dir = SiPaths::from_settings(home, settings)
-                .codex_profiles_dir
-                .join(&profile_id)
-                .join("fort");
-            anyhow::bail!(
-                "Fort runtime session is required for profile {profile_id}, but no usable session files were found at {}; run `si codex spawn --profile {profile_id}` to provision it",
-                profile_dir.display()
-            );
-        }
-    }
     if fort_command_requires_runtime_auth(args) {
         anyhow::bail!(
-            "Fort runtime session is required; run `si codex spawn --profile <profile>` or set FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH explicitly"
+            "Fort runtime session is required; run through `si codex shell <profile> -- si fort ...` or set CODEX_HOME to a managed Codex profile home"
         );
     }
     if fort_command_allows_bootstrap_auth(args) {
@@ -35874,6 +35852,74 @@ fn resolve_fort_default_token_file(
         return resolve_required_fort_auth(program, args, resolved_host, &auth);
     }
     Ok(None)
+}
+
+fn guard_fort_profile_refresh_token_rotation(
+    args: &[String],
+    settings: &Settings,
+    home: &Path,
+) -> Result<()> {
+    let tokens = fort_command_tokens(args);
+    if tokens.first() != Some(&"auth")
+        || tokens.get(1) != Some(&"session")
+        || tokens.get(2) != Some(&"refresh")
+    {
+        return Ok(());
+    }
+    let Some(refresh_token_file) = fort_option_value(args, "--refresh-token-file") else {
+        return Ok(());
+    };
+    let refresh_path = normalize_fort_path_for_compare(home, Path::new(refresh_token_file));
+    if !is_codex_profile_refresh_token_path(&refresh_path, settings, home) {
+        return Ok(());
+    }
+    let out_path = fort_option_value(args, "--refresh-token-out")
+        .map(|value| normalize_fort_path_for_compare(home, Path::new(value)))
+        .unwrap_or_else(|| refresh_path.clone());
+    if out_path != refresh_path {
+        anyhow::bail!(
+            "refusing to rotate Codex profile Fort refresh token {} into {}; profile refresh tokens must be refreshed in place",
+            refresh_path.display(),
+            out_path.display()
+        );
+    }
+    Ok(())
+}
+
+fn normalize_fort_path_for_compare(home: &Path, path: &Path) -> PathBuf {
+    let base = if path.is_absolute() { PathBuf::new() } else { home.to_path_buf() };
+    normalize_path_components(base.join(path))
+}
+
+fn normalize_path_components(path: PathBuf) -> PathBuf {
+    use std::path::Component;
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn is_codex_profile_refresh_token_path(path: &Path, settings: &Settings, home: &Path) -> bool {
+    let profiles_dir =
+        normalize_path_components(SiPaths::from_settings(home, settings).codex_profiles_dir);
+    let Ok(relative_path) = path.strip_prefix(&profiles_dir) else {
+        return false;
+    };
+    let parts = relative_path
+        .components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => value.to_str(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    parts.len() == 3 && parts[1] == "fort" && parts[2] == "refresh.token"
 }
 
 fn resolve_required_fort_auth(
@@ -35919,32 +35965,6 @@ fn fort_command_allows_bootstrap_auth(args: &[String]) -> bool {
     }
 }
 
-fn resolve_fort_env_runtime_auth() -> Option<FortTokenFileAuth> {
-    let runtime_token_path = std::env::var("FORT_TOKEN_PATH").ok().and_then(|value| {
-        let value = value.trim();
-        (!value.is_empty()).then(|| PathBuf::from(value))
-    });
-    let runtime_refresh_token_path =
-        std::env::var("FORT_REFRESH_TOKEN_PATH").ok().and_then(|value| {
-            let value = value.trim();
-            (!value.is_empty()).then(|| PathBuf::from(value))
-        });
-    if let Some(token_path) = runtime_token_path {
-        let refresh_lock_path = runtime_refresh_token_path
-            .as_deref()
-            .map(default_fort_refresh_lock_path_for)
-            .unwrap_or_else(|| default_fort_refresh_lock_path_for(&token_path));
-        return Some(FortTokenFileAuth {
-            token_path,
-            refresh_token_path: runtime_refresh_token_path,
-            refresh_lock_path,
-            label: "FORT_TOKEN_PATH runtime session".to_owned(),
-            scope: FortAuthScope::Runtime,
-        });
-    }
-    None
-}
-
 fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
     let token_path = default_fort_bootstrap_token_path(home);
     let refresh_token_path = default_fort_bootstrap_refresh_token_path(home);
@@ -35958,19 +35978,6 @@ fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
         });
     }
     None
-}
-
-fn resolve_fort_profile_runtime_auth(
-    settings: &Settings,
-    home: &Path,
-) -> Option<FortTokenFileAuth> {
-    let profile_id = resolve_fort_active_profile_id(settings, home)?;
-    let profile_dir =
-        SiPaths::from_settings(home, settings).codex_profiles_dir.join(&profile_id).join("fort");
-    resolve_fort_runtime_auth_from_dir(
-        profile_dir,
-        format!("active Codex profile {profile_id} Fort session"),
-    )
 }
 
 fn resolve_fort_runtime_auth_from_dir(
@@ -36008,11 +36015,6 @@ fn resolve_fort_runtime_auth_from_dir(
         });
     }
     None
-}
-
-fn resolve_fort_active_profile_id(settings: &Settings, home: &Path) -> Option<String> {
-    let _ = home;
-    resolve_codex_active_profile_id(settings)
 }
 
 fn ensure_fort_secret_dir(dir: &Path) -> Result<()> {
@@ -36536,10 +36538,6 @@ fn default_fort_bootstrap_refresh_token_path(home: &Path) -> PathBuf {
 
 fn default_fort_bootstrap_refresh_lock_path(home: &Path) -> PathBuf {
     home.join(".si").join("fort").join("bootstrap").join("admin.refresh.lock")
-}
-
-fn default_fort_refresh_lock_path_for(path: &Path) -> PathBuf {
-    path.with_extension("lock")
 }
 
 fn normalize_fort_persistent_host_option(

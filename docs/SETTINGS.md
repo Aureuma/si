@@ -114,13 +114,13 @@ CLI and runtime behavior:
 - `si fort config show` reads these values.
 - `si fort config set ...` writes these values to settings.
 - `si fort` injects `--host` from `[fort].host` when no explicit native `--host` flag is passed.
-- `si fort` prefers runtime file-path auth from `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` when those paths are set in the caller environment, and refreshes that session in place when possible.
-- `si fort` otherwise prefers the profile Fort session under `CODEX_HOME/fort/` when `CODEX_HOME` is set, then the active Codex profile Fort session under `paths.codex_profiles_dir/<profile>/fort/`.
+- `si fort` prefers the profile Fort session under `CODEX_HOME/fort/` when `CODEX_HOME` is set by a managed Codex profile runtime.
+- `si fort` does not accept caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` as a normal runtime fallback and does not fall back to the active Codex profile outside `si codex spawn` / `si codex shell`.
 - `si fort` fails loudly for runtime secret commands when no usable runtime session exists or runtime refresh fails; it does not silently fall back to host/bootstrap admin auth.
 - `si fort` uses host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` only for explicit admin/provisioning commands.
 - Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files provisioned by `si codex spawn` or `si codex shell`.
 - Codex profile provisioning explicitly requests a `30d` Fort refresh-session TTL even if Fort's general default refresh-session TTL is shorter.
-- Runtime worker token state remains file-backed; pass explicit file paths to native Fort commands instead of token-value env vars.
+- Runtime worker token state remains file-backed under `~/.si/codex/profiles/<profile>/fort/`; profile refresh tokens must be rotated in place.
 
 ### `[stripe]`
 Defaults for `si orbit stripe` account and environment context.
