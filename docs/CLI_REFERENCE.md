@@ -128,7 +128,7 @@ si build self --timings
 
 ## Safety guidance
 
-- For Nucleus gateway writes beyond loopback, set `SI_NUCLEUS_AUTH_TOKEN` and use the same bearer token from CLI clients.
+- For Nucleus deployments protected by `SI_NUCLEUS_AUTH_TOKEN`, all gateway and REST operations require that bearer token; use the same token from CLI clients.
 - CLI endpoint discovery for `si nucleus ...` resolves from `--endpoint`, then `SI_NUCLEUS_WS_ADDR`, then `~/.si/nucleus/gateway/metadata.json`, then the default local websocket URL.
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - For SI runtime workers, use `si fort ...` for secret access.

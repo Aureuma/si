@@ -3520,12 +3520,12 @@ impl NucleusService {
         }
     }
 
-    fn authorize_request_method(&self, method: &str, bearer_token: Option<&str>) -> Result<()> {
-        if !self.requires_gateway_auth() || is_read_gateway_method(method) {
+    fn authorize_request_method(&self, _method: &str, bearer_token: Option<&str>) -> Result<()> {
+        if !self.requires_gateway_auth() {
             return Ok(());
         }
         let expected = self.config.auth_token.as_deref().ok_or_else(|| {
-            anyhow!("unauthorized: SI_NUCLEUS_AUTH_TOKEN must be set when bound beyond loopback")
+            anyhow!("unauthorized: SI_NUCLEUS_AUTH_TOKEN must be set when authentication is required")
         })?;
         let provided = bearer_token
             .map(str::trim)
@@ -3538,7 +3538,7 @@ impl NucleusService {
     }
 
     fn requires_gateway_auth(&self) -> bool {
-        !self.config.bind_addr.ip().is_loopback()
+        self.config.auth_token.is_some() || !self.config.bind_addr.ip().is_loopback()
     }
 
     async fn handle_request(&self, method: &str, params: Value) -> Result<Value> {
@@ -4294,24 +4294,6 @@ fn normalize_hook_rule_name(value: &str) -> Result<String> {
     Ok(ProfileName::new(value.trim().to_owned())?.to_string())
 }
 
-fn is_read_gateway_method(method: &str) -> bool {
-    matches!(
-        method,
-        "nucleus.status"
-            | "task.list"
-            | "task.inspect"
-            | "profile.list"
-            | "producer.hook.list"
-            | "producer.hook.inspect"
-            | "worker.list"
-            | "worker.inspect"
-            | "session.list"
-            | "session.show"
-            | "run.inspect"
-            | "events.subscribe"
-    )
-}
-
 fn rest_request(method: &str, params: Value) -> GatewayRequest {
     GatewayRequest { id: json!(method), method: method.to_owned(), params }
 }
@@ -4367,12 +4349,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
             { "url": "/" }
         ],
         "paths": {
-            "/status": {
-                "get": {
-                    "summary": "Inspect Nucleus status",
-                    "description": "Read the current Nucleus status projection, including bind address, state directory, and durable object counts.",
-                    "x-si-purpose": "Use this for bounded external health and topology inspection without opening the websocket control plane.",
-                    "responses": {
+                "/status": {
+                    "get": {
+                        "summary": "Inspect Nucleus status",
+                        "description": "Read the current Nucleus status projection, including bind address, state directory, and durable object counts.",
+                        "x-si-purpose": "Use this for bounded external health and topology inspection without opening the websocket control plane.",
+                        "security": [{ "bearerAuth": [] }],
+                        "responses": {
                         "200": {
                             "description": "Current nucleus status.",
                             "content": { "application/json": { "schema": schema_ref("NucleusStatusView") } }
@@ -4384,12 +4367,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/tasks": {
-                "get": {
-                    "summary": "List tasks",
-                    "description": "List durable tasks from the same source of truth used by the websocket gateway and CLI.",
-                    "x-si-purpose": "Use this for bounded task inspection and polling from external tools such as GPT Actions.",
-                    "responses": {
+                "/tasks": {
+                    "get": {
+                        "summary": "List tasks",
+                        "description": "List durable tasks from the same source of truth used by the websocket gateway and CLI.",
+                        "x-si-purpose": "Use this for bounded task inspection and polling from external tools such as GPT Actions.",
+                        "security": [{ "bearerAuth": [] }],
+                        "responses": {
                         "200": {
                             "description": "All durable tasks.",
                             "content": {
@@ -4423,7 +4407,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                             "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
                         },
                         "401": {
-                            "description": "Bearer token missing or invalid for a non-loopback write request.",
+                            "description": "Bearer token missing or invalid for an authenticated request.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         },
                         "400": {
@@ -4437,12 +4421,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/tasks/{task_id}": {
-                "get": {
-                    "summary": "Inspect one task",
-                    "description": "Read one durable task projection by task id.",
-                    "x-si-purpose": "Use this to inspect bounded task state from external tooling.",
-                    "parameters": [
+                "/tasks/{task_id}": {
+                    "get": {
+                        "summary": "Inspect one task",
+                        "description": "Read one durable task projection by task id.",
+                        "x-si-purpose": "Use this to inspect bounded task state from external tooling.",
+                        "security": [{ "bearerAuth": [] }],
+                        "parameters": [
                         {
                             "name": "task_id",
                             "in": "path",
@@ -4488,7 +4473,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                             "content": { "application/json": { "schema": schema_ref("TaskCancelResultView") } }
                         },
                         "401": {
-                            "description": "Bearer token missing or invalid for a non-loopback write request.",
+                            "description": "Bearer token missing or invalid for an authenticated request.",
                             "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
                         },
                         "404": {
@@ -4506,12 +4491,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/workers": {
-                "get": {
-                    "summary": "List workers",
-                    "description": "List durable worker records tracked by Nucleus.",
-                    "x-si-purpose": "Use this for bounded worker inspection without relying on tmux or direct runtime internals.",
-                    "responses": {
+                "/workers": {
+                    "get": {
+                        "summary": "List workers",
+                        "description": "List durable worker records tracked by Nucleus.",
+                        "x-si-purpose": "Use this for bounded worker inspection without relying on tmux or direct runtime internals.",
+                        "security": [{ "bearerAuth": [] }],
+                        "responses": {
                         "200": {
                             "description": "All durable workers.",
                             "content": {
@@ -4527,12 +4513,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/workers/{worker_id}": {
-                "get": {
-                    "summary": "Inspect one worker",
-                    "description": "Read one worker projection, including persisted runtime view when available.",
-                    "x-si-purpose": "Use this to inspect worker assignment and runtime attachment through the Nucleus model.",
-                    "parameters": [
+                "/workers/{worker_id}": {
+                    "get": {
+                        "summary": "Inspect one worker",
+                        "description": "Read one worker projection, including persisted runtime view when available.",
+                        "x-si-purpose": "Use this to inspect worker assignment and runtime attachment through the Nucleus model.",
+                        "security": [{ "bearerAuth": [] }],
+                        "parameters": [
                         {
                             "name": "worker_id",
                             "in": "path",
@@ -4557,12 +4544,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/sessions/{session_id}": {
-                "get": {
-                    "summary": "Inspect one session",
-                    "description": "Read one durable session projection by session id.",
-                    "x-si-purpose": "Use this to inspect worker/session binding and reusable thread identity from external tooling.",
-                    "parameters": [
+                "/sessions/{session_id}": {
+                    "get": {
+                        "summary": "Inspect one session",
+                        "description": "Read one durable session projection by session id.",
+                        "x-si-purpose": "Use this to inspect worker/session binding and reusable thread identity from external tooling.",
+                        "security": [{ "bearerAuth": [] }],
+                        "parameters": [
                         {
                             "name": "session_id",
                             "in": "path",
@@ -4587,12 +4575,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/runs/{run_id}": {
-                "get": {
-                    "summary": "Inspect one run",
-                    "description": "Read one durable run projection by run id.",
-                    "x-si-purpose": "Use this to inspect bounded run state from external tools without subscribing to websocket events.",
-                    "parameters": [
+                "/runs/{run_id}": {
+                    "get": {
+                        "summary": "Inspect one run",
+                        "description": "Read one durable run projection by run id.",
+                        "x-si-purpose": "Use this to inspect bounded run state from external tools without subscribing to websocket events.",
+                        "security": [{ "bearerAuth": [] }],
+                        "parameters": [
                         {
                             "name": "run_id",
                             "in": "path",
@@ -4617,12 +4606,13 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     }
                 }
             },
-            "/openapi.json": {
-                "get": {
-                    "summary": "Fetch the OpenAPI document",
-                    "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
-                    "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
-                    "responses": {
+                "/openapi.json": {
+                    "get": {
+                        "summary": "Fetch the OpenAPI document",
+                        "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
+                        "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
+                        "security": [{ "bearerAuth": [] }],
+                        "responses": {
                         "200": {
                             "description": "OpenAPI document.",
                             "content": { "application/json": { "schema": { "type": "object" } } }
@@ -4797,8 +4787,17 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
     })
 }
 
-async fn rest_openapi_handler(State(service): State<Arc<NucleusService>>) -> impl IntoResponse {
-    (StatusCode::OK, Json(openapi_document(&service.config)))
+async fn rest_openapi_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    match service.authorize_request_method("openapi.read", extract_bearer_token(&headers).as_deref()) {
+        Ok(()) => (StatusCode::OK, Json(openapi_document(&service.config))).into_response(),
+        Err(error) => rest_gateway_response(
+            GatewayResponse::err(json!(null), infer_error_code(&error), error.to_string(), None),
+            StatusCode::OK,
+        ),
+    }
 }
 
 async fn rest_status_handler(
@@ -6527,14 +6526,24 @@ mod tests {
                 ["schema"]["type"],
             json!("object")
         );
-        assert!(body["paths"]["/status"]["get"]["security"].is_null());
-        assert!(body["paths"]["/tasks"]["get"]["security"].is_null());
-        assert!(body["paths"]["/tasks/{task_id}"]["get"]["security"].is_null());
-        assert!(body["paths"]["/workers"]["get"]["security"].is_null());
-        assert!(body["paths"]["/workers/{worker_id}"]["get"]["security"].is_null());
-        assert!(body["paths"]["/sessions/{session_id}"]["get"]["security"].is_null());
-        assert!(body["paths"]["/runs/{run_id}"]["get"]["security"].is_null());
-        assert!(body["paths"]["/openapi.json"]["get"]["security"].is_null());
+        for (path, method) in [
+            ("/status", "get"),
+            ("/tasks", "get"),
+            ("/tasks", "post"),
+            ("/tasks/{task_id}", "get"),
+            ("/tasks/{task_id}/cancel", "post"),
+            ("/workers", "get"),
+            ("/workers/{worker_id}", "get"),
+            ("/sessions/{session_id}", "get"),
+            ("/runs/{run_id}", "get"),
+            ("/openapi.json", "get"),
+        ] {
+            assert_eq!(
+                body["paths"][path][method]["security"],
+                json!([{ "bearerAuth": [] }]),
+                "OpenAPI security must require bearer auth for {method} {path}"
+            );
+        }
         assert_eq!(
             body["components"]["schemas"]["TaskCancelResultView"]["required"],
             json!(["task", "cancellation_requested"])
@@ -6546,7 +6555,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_write_requests_require_bearer_token_when_bound_beyond_loopback() {
+    async fn rest_all_requests_require_bearer_token_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let app = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -6582,7 +6591,7 @@ mod tests {
             .oneshot(Request::builder().uri("/status").body(Body::empty()).expect("request"))
             .await
             .expect("status response");
-        assert_eq!(status_response.status(), StatusCode::OK);
+        assert_eq!(status_response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -6620,7 +6629,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_read_requests_remain_available_without_bearer_token_when_bound_beyond_loopback() {
+    async fn rest_read_requests_accept_matching_bearer_token_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let app = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -6656,7 +6665,13 @@ mod tests {
 
         let list_response = app
             .clone()
-            .oneshot(Request::builder().uri("/tasks").body(Body::empty()).expect("request"))
+            .oneshot(
+                Request::builder()
+                    .uri("/tasks")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
             .await
             .expect("list response");
         assert_eq!(list_response.status(), StatusCode::OK);
@@ -6673,6 +6688,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri(format!("/tasks/{task_id}"))
+                    .header("authorization", "Bearer secret-token")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -6684,7 +6700,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_openapi_remains_available_without_bearer_token_when_bound_beyond_loopback() {
+    async fn rest_openapi_requires_bearer_token_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let app = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -6698,13 +6714,37 @@ mod tests {
             .oneshot(Request::builder().uri("/openapi.json").body(Body::empty()).expect("request"))
             .await
             .expect("openapi response");
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn rest_openapi_accepts_matching_bearer_token_when_auth_is_configured() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/openapi.json")
+                    .header("authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("openapi response");
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
     }
 
     #[tokio::test]
-    async fn gateway_mutations_require_bearer_token_when_bound_beyond_loopback() {
+    async fn gateway_all_requests_require_bearer_token_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -6739,11 +6779,12 @@ mod tests {
                 None,
             )
             .await;
-        assert!(read.ok);
+        assert!(!read.ok);
+        assert_eq!(read.error.as_ref().map(|error| error.code.as_str()), Some("unauthorized"));
     }
 
     #[tokio::test]
-    async fn gateway_reads_remain_available_without_bearer_token_when_bound_beyond_loopback() {
+    async fn gateway_reads_accept_matching_bearer_token_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -6777,7 +6818,7 @@ mod tests {
                     method: "task.list".to_owned(),
                     params: json!({}),
                 },
-                None,
+                Some("secret-token"),
             )
             .await;
         assert!(listed.ok);
@@ -6798,14 +6839,14 @@ mod tests {
                     method: "task.inspect".to_owned(),
                     params: json!({ "task_id": task_id }),
                 },
-                None,
+                Some("secret-token"),
             )
             .await;
         assert!(inspected.ok);
     }
 
     #[tokio::test]
-    async fn read_only_gateway_and_rest_inspect_surfaces_remain_available_without_bearer_token_when_bound_beyond_loopback()
+    async fn read_only_gateway_and_rest_inspect_surfaces_require_bearer_token_when_auth_is_configured()
      {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
@@ -6889,7 +6930,11 @@ mod tests {
                 None,
             )
             .await;
-        assert!(profile_list.ok);
+        assert!(!profile_list.ok);
+        assert_eq!(
+            profile_list.error.as_ref().map(|error| error.code.as_str()),
+            Some("unauthorized")
+        );
 
         let worker_list = service
             .dispatch_request_authorized(
@@ -6901,16 +6946,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(worker_list.ok);
-        assert!(
-            worker_list
-                .result
-                .expect("worker list")
-                .as_array()
-                .expect("worker list array")
-                .iter()
-                .any(|worker| worker["worker_id"] == json!(worker_id.clone()))
-        );
+        assert!(!worker_list.ok);
 
         let worker_inspect = service
             .dispatch_request_authorized(
@@ -6922,7 +6958,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(worker_inspect.ok);
+        assert!(!worker_inspect.ok);
 
         let session_list = service
             .dispatch_request_authorized(
@@ -6934,16 +6970,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(session_list.ok);
-        assert!(
-            session_list
-                .result
-                .expect("session list")
-                .as_array()
-                .expect("session list array")
-                .iter()
-                .any(|session| session["session_id"] == json!(session_id.clone()))
-        );
+        assert!(!session_list.ok);
 
         let session_show = service
             .dispatch_request_authorized(
@@ -6955,7 +6982,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(session_show.ok);
+        assert!(!session_show.ok);
 
         let run_inspect = service
             .dispatch_request_authorized(
@@ -6967,8 +6994,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(run_inspect.ok);
-        assert_eq!(run_inspect.result.expect("run inspect")["status"], json!("completed"));
+        assert!(!run_inspect.ok);
 
         let subscribed = service
             .dispatch_request_authorized(
@@ -6980,8 +7006,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(subscribed.ok);
-        assert_eq!(subscribed.result.expect("subscribe")["subscribed"], json!(true));
+        assert!(!subscribed.ok);
 
         let app = service.clone().router();
 
@@ -6990,7 +7015,7 @@ mod tests {
             .oneshot(Request::builder().uri("/workers").body(Body::empty()).expect("request"))
             .await
             .expect("workers response");
-        assert_eq!(workers_response.status(), StatusCode::OK);
+        assert_eq!(workers_response.status(), StatusCode::UNAUTHORIZED);
 
         let worker_response = app
             .clone()
@@ -7002,7 +7027,7 @@ mod tests {
             )
             .await
             .expect("worker response");
-        assert_eq!(worker_response.status(), StatusCode::OK);
+        assert_eq!(worker_response.status(), StatusCode::UNAUTHORIZED);
 
         let session_response = app
             .clone()
@@ -7014,7 +7039,7 @@ mod tests {
             )
             .await
             .expect("session response");
-        assert_eq!(session_response.status(), StatusCode::OK);
+        assert_eq!(session_response.status(), StatusCode::UNAUTHORIZED);
 
         let run_response = app
             .oneshot(
@@ -7025,7 +7050,7 @@ mod tests {
             )
             .await
             .expect("run response");
-        assert_eq!(run_response.status(), StatusCode::OK);
+        assert_eq!(run_response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

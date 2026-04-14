@@ -110,11 +110,14 @@ Default behavior:
 - Nucleus binds to loopback only
 - local reads and writes work without extra auth on loopback
 
+When `SI_NUCLEUS_AUTH_TOKEN` is set:
+
+- all WebSocket and REST operations require bearer auth from `SI_NUCLEUS_AUTH_TOKEN`
+- the `si nucleus ...` CLI forwards that token automatically when the env var is set
+
 When the gateway binds beyond loopback:
 
-- read operations remain available
-- mutating WebSocket and REST operations require bearer auth from `SI_NUCLEUS_AUTH_TOKEN`
-- the `si nucleus ...` CLI forwards that token automatically when the env var is set
+- set `SI_NUCLEUS_AUTH_TOKEN` so public reads and writes are both protected
 
 ## State layout
 

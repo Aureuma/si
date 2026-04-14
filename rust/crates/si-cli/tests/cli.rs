@@ -206,7 +206,7 @@ fn spawn_live_nucleus_service_with_options(
         drop(listener);
 
         let state_dir = state_dir.clone();
-        let auth_token = auth_token.clone();
+        let service_auth_token = auth_token.clone();
         let runtime = runtime.clone();
         thread::spawn(move || {
             let tokio_runtime = tokio::runtime::Builder::new_current_thread()
@@ -214,7 +214,11 @@ fn spawn_live_nucleus_service_with_options(
                 .build()
                 .expect("tokio runtime");
             tokio_runtime.block_on(async move {
-                let config = NucleusConfig { bind_addr: addr, state_dir, auth_token };
+                let config = NucleusConfig {
+                    bind_addr: addr,
+                    state_dir,
+                    auth_token: service_auth_token,
+                };
                 let service = match runtime {
                     Some(runtime) => NucleusService::open_with_runtime(config, runtime),
                     None => NucleusService::open(config),
@@ -226,7 +230,11 @@ fn spawn_live_nucleus_service_with_options(
 
         let base_url = format!("http://{client_host}:{}", addr.port());
         for _ in 0..50 {
-            if let Ok(response) = client.get(format!("{base_url}/status")).send()
+            let mut request = client.get(format!("{base_url}/status"));
+            if let Some(token) = auth_token.as_deref() {
+                request = request.bearer_auth(token);
+            }
+            if let Ok(response) = request.send()
                 && response.status().is_success()
             {
                 return base_url;
@@ -751,10 +759,32 @@ fn wait_for_cli_task(ws_url: &str, timeout: Duration, predicate: impl Fn(&Value)
 }
 
 fn wait_for_cli_task_status(ws_url: &str, task_id: &str, expected: &str) -> Value {
+    wait_for_cli_task_status_with_token(ws_url, task_id, expected, None)
+}
+
+fn wait_for_cli_task_status_with_token(
+    ws_url: &str,
+    task_id: &str,
+    expected: &str,
+    auth_token: Option<&str>,
+) -> Value {
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(5) {
-        let output = cargo_bin()
-            .args(["nucleus", "task", "inspect", task_id, "--endpoint", ws_url, "--format", "json"])
+        let mut command = cargo_bin();
+        if let Some(token) = auth_token {
+            command.env("SI_NUCLEUS_AUTH_TOKEN", token);
+        }
+        let output = command
+            .args([
+                "nucleus",
+                "task",
+                "inspect",
+                task_id,
+                "--endpoint",
+                ws_url,
+                "--format",
+                "json",
+            ])
             .assert()
             .success()
             .get_output()
@@ -794,7 +824,15 @@ fn wait_for_cli_task_predicate(
 }
 
 fn inspect_run_via_cli(ws_url: &str, run_id: &str) -> Value {
-    let output = cargo_bin()
+    inspect_run_via_cli_with_token(ws_url, run_id, None)
+}
+
+fn inspect_run_via_cli_with_token(ws_url: &str, run_id: &str, auth_token: Option<&str>) -> Value {
+    let mut command = cargo_bin();
+    if let Some(token) = auth_token {
+        command.env("SI_NUCLEUS_AUTH_TOKEN", token);
+    }
+    let output = command
         .args(["nucleus", "run", "inspect", run_id, "--endpoint", ws_url, "--format", "json"])
         .assert()
         .success()
@@ -7064,7 +7102,7 @@ fn nucleus_worker_repair_auth_does_not_requeue_other_profile_task_on_live_servic
 
 #[test]
 #[allow(clippy::result_large_err)]
-fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
+fn nucleus_live_gateway_auth_requires_token_for_all_operations() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let base_url = spawn_live_nucleus_service_with_options(
@@ -7076,11 +7114,13 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     );
     let ws_url = format!("{}/ws", base_url.replacen("http", "ws", 1));
 
-    cargo_bin()
+    let status = cargo_bin()
         .env_remove("SI_NUCLEUS_AUTH_TOKEN")
         .args(["nucleus", "status", "--endpoint", &ws_url, "--format", "json"])
         .assert()
-        .success();
+        .failure();
+    let stderr = String::from_utf8(status.get_output().stderr.clone()).expect("utf8 stderr");
+    assert!(stderr.contains("unauthorized: missing bearer token"));
 
     let mutation = cargo_bin()
         .env_remove("SI_NUCLEUS_AUTH_TOKEN")
@@ -7127,7 +7167,7 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     assert_eq!(payload["title"], "Auth gated task");
 
     let listed = cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "task", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
@@ -7144,7 +7184,7 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
     );
 
     cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "task", "inspect", task_id, "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success();
@@ -7152,7 +7192,7 @@ fn nucleus_live_gateway_auth_requires_token_for_mutations_but_not_reads() {
 
 #[test]
 #[allow(clippy::result_large_err)]
-fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
+fn nucleus_live_gateway_read_surfaces_require_token() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::default();
@@ -7167,6 +7207,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
     let created_session = cargo_bin()
         .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
@@ -7218,11 +7259,11 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
         .clone();
     let created_task: Value = serde_json::from_slice(&created_task).expect("parse created task");
     let task_id = created_task["task_id"].as_str().expect("task id").to_owned();
-    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let task = wait_for_cli_task_status_with_token(&ws_url, &task_id, "done", Some("test-token"));
     let run_id = task["latest_run_id"].as_str().expect("latest run id").to_owned();
 
     let profiles = cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "profile", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
@@ -7235,7 +7276,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
     }));
 
     let workers = cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "worker", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
@@ -7252,7 +7293,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
     );
 
     cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
             "nucleus",
             "worker",
@@ -7267,7 +7308,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
         .success();
 
     let sessions = cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "session", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
@@ -7284,7 +7325,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
     );
 
     cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
             "nucleus",
             "session",
@@ -7299,13 +7340,13 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
         .success();
 
     cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args(["nucleus", "run", "inspect", &run_id, "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success();
 
     cargo_bin()
-        .env_remove("SI_NUCLEUS_AUTH_TOKEN")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
             "nucleus",
             "events",
@@ -7323,7 +7364,7 @@ fn nucleus_live_gateway_read_surfaces_remain_available_without_token() {
 
 #[test]
 #[allow(clippy::result_large_err)]
-fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_require_token() {
+fn nucleus_live_rest_operations_require_token_when_auth_is_configured() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let base_url = spawn_live_nucleus_service_with_options(
@@ -7338,10 +7379,10 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let openapi_response =
         client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
-    assert!(openapi_response.status().is_success());
+    assert_eq!(openapi_response.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     let status_response = client.get(format!("{base_url}/status")).send().expect("status response");
-    assert!(status_response.status().is_success());
+    assert_eq!(status_response.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     let unauthorized_create = client
         .post(format!("{base_url}/tasks"))
@@ -7358,6 +7399,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
     let created_session = cargo_bin()
         .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
@@ -7400,11 +7442,12 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
     assert!(created_task.status().is_success());
     let created_task: Value = created_task.json().expect("parse created task");
     let task_id = created_task["task_id"].as_str().expect("task id").to_owned();
-    let task = wait_for_cli_task_status(&ws_url, &task_id, "done");
+    let task = wait_for_cli_task_status_with_token(&ws_url, &task_id, "done", Some("test-token"));
     let run_id = task["latest_run_id"].as_str().expect("run id").to_owned();
 
     let tasks: Value = client
         .get(format!("{base_url}/tasks"))
+        .bearer_auth("test-token")
         .send()
         .expect("list tasks")
         .json()
@@ -7415,6 +7458,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let task_inspect: Value = client
         .get(format!("{base_url}/tasks/{task_id}"))
+        .bearer_auth("test-token")
         .send()
         .expect("inspect task")
         .json()
@@ -7424,6 +7468,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let workers: Value = client
         .get(format!("{base_url}/workers"))
+        .bearer_auth("test-token")
         .send()
         .expect("list workers")
         .json()
@@ -7438,6 +7483,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let worker: Value = client
         .get(format!("{base_url}/workers/{worker_id}"))
+        .bearer_auth("test-token")
         .send()
         .expect("inspect worker")
         .json()
@@ -7446,6 +7492,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let session: Value = client
         .get(format!("{base_url}/sessions/{session_id}"))
+        .bearer_auth("test-token")
         .send()
         .expect("inspect session")
         .json()
@@ -7454,6 +7501,7 @@ fn nucleus_live_rest_read_surfaces_remain_available_without_token_and_writes_req
 
     let run: Value = client
         .get(format!("{base_url}/runs/{run_id}"))
+        .bearer_auth("test-token")
         .send()
         .expect("inspect run")
         .json()
@@ -7475,7 +7523,11 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     let client = BlockingClient::new();
 
-    let response = client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
+    let response = client
+        .get(format!("{base_url}/openapi.json"))
+        .bearer_auth("test-token")
+        .send()
+        .expect("openapi response");
     assert!(response.status().is_success());
     let body: Value = response.json().expect("parse openapi");
 
@@ -7495,19 +7547,29 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
         json!("opaque token")
     );
+    for (path, method) in [
+        ("/status", "get"),
+        ("/tasks", "get"),
+        ("/tasks", "post"),
+        ("/tasks/{task_id}", "get"),
+        ("/tasks/{task_id}/cancel", "post"),
+        ("/workers", "get"),
+        ("/workers/{worker_id}", "get"),
+        ("/sessions/{session_id}", "get"),
+        ("/runs/{run_id}", "get"),
+        ("/openapi.json", "get"),
+    ] {
+        assert_eq!(
+            body["paths"][path][method]["security"],
+            json!([{ "bearerAuth": [] }]),
+            "OpenAPI security must require bearer auth for {method} {path}"
+        );
+    }
     assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"],
         json!([])
     );
-    assert!(body["paths"]["/tasks"]["get"]["security"].is_null());
-    assert!(body["paths"]["/tasks/{task_id}"]["get"]["security"].is_null());
-    assert!(body["paths"]["/workers"]["get"]["security"].is_null());
-    assert!(body["paths"]["/workers/{worker_id}"]["get"]["security"].is_null());
-    assert!(body["paths"]["/sessions/{session_id}"]["get"]["security"].is_null());
-    assert!(body["paths"]["/runs/{run_id}"]["get"]["security"].is_null());
-    assert!(body["paths"]["/status"]["get"]["security"].is_null());
-    assert!(body["paths"]["/openapi.json"]["get"]["security"].is_null());
     assert_eq!(
         body["paths"]["/status"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
             ["$ref"],
@@ -7581,7 +7643,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["responses"]["401"]["description"],
-        json!("Bearer token missing or invalid for a non-loopback write request.")
+        json!("Bearer token missing or invalid for an authenticated request.")
     );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["responses"]["400"]["content"]["application/json"]["schema"]
@@ -7679,7 +7741,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["responses"]["401"]["description"],
-        json!("Bearer token missing or invalid for a non-loopback write request.")
+        json!("Bearer token missing or invalid for an authenticated request.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["parameters"][0]["schema"]["type"],
@@ -7998,6 +8060,7 @@ fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
     cargo_bin()
         .env("SI_NUCLEUS_AUTH_TOKEN", "test-token")
         .args([
@@ -8032,7 +8095,8 @@ fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
     assert!(created.status().is_success());
     let created: Value = created.json().expect("parse created task");
     let task_id = created["task_id"].as_str().expect("task id").to_owned();
-    let running = wait_for_cli_task_status(&ws_url, &task_id, "running");
+    let running =
+        wait_for_cli_task_status_with_token(&ws_url, &task_id, "running", Some("test-token"));
     let run_id = running["latest_run_id"].as_str().expect("run id").to_owned();
 
     let unauthorized_cancel = client
@@ -8053,10 +8117,11 @@ fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
     assert_eq!(authorized_cancel["task"]["task_id"], task_id);
     assert_eq!(authorized_cancel["run"]["run_id"], run_id);
 
-    let cancelled_task = wait_for_cli_task_status(&ws_url, &task_id, "cancelled");
+    let cancelled_task =
+        wait_for_cli_task_status_with_token(&ws_url, &task_id, "cancelled", Some("test-token"));
     assert_eq!(cancelled_task["status"], "cancelled");
 
-    let cancelled_run = inspect_run_via_cli(&ws_url, &run_id);
+    let cancelled_run = inspect_run_via_cli_with_token(&ws_url, &run_id, Some("test-token"));
     assert_eq!(cancelled_run["status"], "cancelled");
 }
 
@@ -8079,7 +8144,11 @@ fn nucleus_live_rest_missing_targets_preserve_auth_split() {
         "/sessions/si-session-missing",
         "/runs/si-run-missing",
     ] {
-        let response = client.get(format!("{base_url}{path}")).send().expect("missing read");
+        let response = client
+            .get(format!("{base_url}{path}"))
+            .bearer_auth("test-token")
+            .send()
+            .expect("missing read");
         assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND, "{path}");
         let body: Value = response.json().expect("parse missing read body");
         assert_eq!(body["error"]["code"], "not_found", "{path}");
@@ -8186,6 +8255,7 @@ fn nucleus_live_rest_error_envelopes_keep_canonical_shape() {
 
     let missing_task = client
         .get(format!("{auth_base_url}/tasks/si-task-missing"))
+        .bearer_auth("test-token")
         .send()
         .expect("missing task read");
     assert_eq!(missing_task.status(), reqwest::StatusCode::NOT_FOUND);
