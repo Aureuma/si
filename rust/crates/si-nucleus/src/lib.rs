@@ -4392,6 +4392,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     "summary": "Create a task",
                     "description": "Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.",
                     "x-si-purpose": "Use this to create bounded external work without bypassing Nucleus task intake rules.",
+                    "x-openai-isConsequential": true,
                     "security": [{ "bearerAuth": [] }],
                     "requestBody": {
                         "required": true,
@@ -4457,6 +4458,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     "summary": "Cancel one task",
                     "description": "Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.",
                     "x-si-purpose": "Use this for bounded external cancellation requests and then re-read the task or run to observe final state.",
+                    "x-openai-isConsequential": true,
                     "security": [{ "bearerAuth": [] }],
                     "parameters": [
                         {
