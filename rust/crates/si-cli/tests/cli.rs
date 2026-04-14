@@ -1688,6 +1688,7 @@ fn nucleus_service_install_writes_launchd_agent_definition() {
     assert!(plist.contains("<string>service</string>"));
     assert!(plist.contains("<string>run</string>"));
     assert!(plist.contains(state_dir.to_str().expect("state dir")));
+    assert!(!plist.contains("SI_NUCLEUS_AUTH_TOKEN"));
 }
 
 #[test]
@@ -1864,7 +1865,7 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
     write_executable_shell_script(
         &nucleus_path,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_NUCLEUS_STATE_DIR=%s\\nSI_NUCLEUS_BIND_ADDR=%s\\n' \"${{SI_NUCLEUS_STATE_DIR:-}}\" \"${{SI_NUCLEUS_BIND_ADDR:-}}\" > {}\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_NUCLEUS_STATE_DIR=%s\\nSI_NUCLEUS_BIND_ADDR=%s\\nSI_NUCLEUS_AUTH_TOKEN=%s\\n' \"${{SI_NUCLEUS_STATE_DIR:-}}\" \"${{SI_NUCLEUS_BIND_ADDR:-}}\" \"${{SI_NUCLEUS_AUTH_TOKEN:-}}\" > {}\n",
             shell_escape_for_test(&args_file),
             shell_escape_for_test(&env_file),
         ),
@@ -1891,6 +1892,59 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
     let env = fs::read_to_string(&env_file).expect("read env");
     assert!(env.contains(&format!("SI_NUCLEUS_STATE_DIR={}\n", state_dir.display())));
     assert!(env.contains("SI_NUCLEUS_BIND_ADDR=127.0.0.1:4888\n"));
+    assert!(env.contains("SI_NUCLEUS_AUTH_TOKEN=\n"));
+}
+
+#[test]
+fn nucleus_service_install_persists_auth_token_in_definitions() {
+    let temp = tempdir().expect("tempdir");
+    let state_dir = temp.path().join("state");
+    let service_dir = temp.path().join("service-dir");
+
+    let systemd_output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", "/bin/true")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .assert()
+        .success();
+    let _systemd_payload: Value =
+        serde_json::from_slice(&systemd_output.get_output().stdout).expect("parse systemd json");
+    let systemd_unit = fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
+    assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_AUTH_TOKEN=secret-token\""));
+
+    let launchd_dir = temp.path().join("launch-agents");
+    let launchd_output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--service-dir",
+            launchd_dir.to_str().expect("launchd dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
+        .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .assert()
+        .success();
+    let _launchd_payload: Value =
+        serde_json::from_slice(&launchd_output.get_output().stdout).expect("parse launchd json");
+    let plist = fs::read_to_string(launchd_dir.join("com.aureuma.si.nucleus.plist")).expect("read launchd plist");
+    assert!(plist.contains("<key>SI_NUCLEUS_AUTH_TOKEN</key>"));
+    assert!(plist.contains("<string>secret-token</string>"));
 }
 
 #[test]

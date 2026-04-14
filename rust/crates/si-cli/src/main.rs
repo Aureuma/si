@@ -16353,26 +16353,50 @@ fn xml_escape(value: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-fn render_nucleus_systemd_unit(si_binary: &Path, state_dir: &Path, bind_addr: &str) -> String {
+fn render_nucleus_systemd_unit(
+    si_binary: &Path,
+    state_dir: &Path,
+    bind_addr: &str,
+    auth_token: Option<&str>,
+) -> String {
     let exec_start = nucleus_service_program_args(si_binary, state_dir, bind_addr)
         .into_iter()
         .map(|arg| systemd_quote_arg(&arg))
         .collect::<Vec<_>>()
         .join(" ");
+    let auth_env = auth_token
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("Environment={}\n", systemd_quote_arg(&format!("SI_NUCLEUS_AUTH_TOKEN={value}"))))
+        .unwrap_or_default();
     format!(
-        "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\nExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
+        "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\n{auth_env}ExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
     )
 }
 
-fn render_nucleus_launchd_plist(si_binary: &Path, state_dir: &Path, bind_addr: &str) -> String {
+fn render_nucleus_launchd_plist(
+    si_binary: &Path,
+    state_dir: &Path,
+    bind_addr: &str,
+    auth_token: Option<&str>,
+) -> String {
     let program_arguments = nucleus_service_program_args(si_binary, state_dir, bind_addr)
         .into_iter()
         .map(|arg| format!("    <string>{}</string>\n", xml_escape(&arg)))
         .collect::<String>();
+    let environment_variables = auth_token
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            format!(
+                "  <key>EnvironmentVariables</key>\n  <dict>\n    <key>SI_NUCLEUS_AUTH_TOKEN</key>\n    <string>{}</string>\n  </dict>\n",
+                xml_escape(value)
+            )
+        })
+        .unwrap_or_default();
     format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>{}</string>\n  <key>ProgramArguments</key>\n  <array>\n{}  </array>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n</dict>\n</plist>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>{}</string>\n  <key>ProgramArguments</key>\n  <array>\n{}  </array>\n{}  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n</dict>\n</plist>\n",
         nucleus_service_name(NucleusServicePlatform::LaunchdAgent),
-        program_arguments
+        program_arguments,
+        environment_variables
     )
 }
 
@@ -16437,14 +16461,15 @@ fn run_nucleus_service_install(
     let platform = resolve_nucleus_service_platform()?;
     let state_dir = state_dir.unwrap_or_else(default_nucleus_state_dir);
     let bind_addr = bind_addr.unwrap_or_else(|| default_nucleus_bind_addr().to_owned());
+    let auth_token = env::var("SI_NUCLEUS_AUTH_TOKEN").ok().filter(|value| !value.trim().is_empty());
     let definition_path = nucleus_service_definition_path(platform, service_dir);
     let si_binary = env::current_exe().context("resolve current si executable")?;
     let definition = match platform {
         NucleusServicePlatform::SystemdUser => {
-            render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr)
+            render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr, auth_token.as_deref())
         }
         NucleusServicePlatform::LaunchdAgent => {
-            render_nucleus_launchd_plist(&si_binary, &state_dir, &bind_addr)
+            render_nucleus_launchd_plist(&si_binary, &state_dir, &bind_addr, auth_token.as_deref())
         }
     };
     let parent = definition_path

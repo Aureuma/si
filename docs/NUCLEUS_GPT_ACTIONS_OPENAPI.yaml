@@ -1,0 +1,352 @@
+openapi: 3.1.0
+info:
+  title: SI Nucleus REST API
+  version: 0.57.5
+  description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
+servers:
+  - url: https://nucleus.aureuma.ai
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque token
+  schemas:
+    RestErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details: {}
+    NucleusStatusView:
+      type: object
+      required:
+        - version
+        - bind_addr
+        - ws_url
+        - state_dir
+        - task_count
+        - worker_count
+        - session_count
+        - run_count
+        - next_event_seq
+      properties:
+        version:
+          type: string
+        bind_addr:
+          type: string
+        ws_url:
+          type: string
+        state_dir:
+          type: string
+        task_count:
+          type: integer
+        worker_count:
+          type: integer
+        session_count:
+          type: integer
+        run_count:
+          type: integer
+        next_event_seq:
+          type: integer
+    TaskCreateParams:
+      type: object
+      required:
+        - title
+        - instructions
+      properties:
+        title:
+          type: string
+        instructions:
+          type: string
+        profile:
+          type:
+            - string
+            - "null"
+        session_id:
+          type:
+            - string
+            - "null"
+        max_retries:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        timeout_seconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+    TaskRecord:
+      type: object
+      required:
+        - task_id
+        - source
+        - title
+        - instructions
+        - status
+        - created_at
+        - updated_at
+      properties:
+        task_id:
+          type: string
+        source:
+          type: string
+        title:
+          type: string
+        instructions:
+          type: string
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - blocked
+            - done
+            - failed
+            - cancelled
+        profile:
+          type:
+            - string
+            - "null"
+        session_id:
+          type:
+            - string
+            - "null"
+        latest_run_id:
+          type:
+            - string
+            - "null"
+        checkpoint_summary:
+          type:
+            - string
+            - "null"
+        blocked_reason:
+          type:
+            - string
+            - "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RunRecord:
+      type: object
+      required:
+        - run_id
+        - task_id
+        - session_id
+        - status
+      properties:
+        run_id:
+          type: string
+        task_id:
+          type: string
+        session_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - queued
+            - running
+            - blocked
+            - completed
+            - failed
+            - cancelled
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        ended_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+security:
+  - bearerAuth: []
+paths:
+  /openapi.json:
+    get:
+      operationId: getOpenApiDocument
+      summary: Fetch the OpenAPI document
+      description: Read the bounded SI Nucleus OpenAPI description.
+      responses:
+        "200":
+          description: OpenAPI document.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+  /status:
+    get:
+      operationId: getNucleusStatus
+      summary: Inspect Nucleus status
+      description: Read the current Nucleus status projection.
+      responses:
+        "200":
+          description: Current nucleus status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NucleusStatusView"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+  /tasks:
+    get:
+      operationId: listTasks
+      summary: List tasks
+      description: List durable tasks from the Nucleus ledger.
+      responses:
+        "200":
+          description: Durable tasks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskRecord"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+    post:
+      operationId: createTask
+      summary: Create a task
+      description: Create a durable task through Nucleus.
+      x-openai-isConsequential: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreateParams"
+      responses:
+        "201":
+          description: Created task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskRecord"
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+  /tasks/{task_id}:
+    get:
+      operationId: inspectTask
+      summary: Inspect one task
+      description: Read one task by task id.
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskRecord"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+        "404":
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+  /tasks/{task_id}/cancel:
+    post:
+      operationId: cancelTask
+      summary: Cancel one task
+      description: Request cancellation for a task.
+      x-openai-isConsequential: true
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancellation result.
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+        "404":
+          description: Task not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+  /runs/{run_id}:
+    get:
+      operationId: inspectRun
+      summary: Inspect one run
+      description: Read one run by run id.
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Run record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRecord"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
+        "404":
+          description: Run not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestErrorEnvelope"
