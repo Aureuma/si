@@ -238,7 +238,7 @@ paths:
     post:
       operationId: createTask
       summary: Create a task
-      description: Create a durable task through Nucleus.
+      description: Create a durable task in Nucleus.
       x-openai-isConsequential: true
       requestBody:
         required: true
@@ -253,12 +253,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaskRecord"
-        "400":
-          description: Invalid request.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
         "401":
           description: Unauthorized.
           content:
@@ -289,12 +283,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Task not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
   /tasks/{task_id}/cancel:
     post:
       operationId: cancelTask
@@ -309,15 +297,9 @@ paths:
             type: string
       responses:
         "200":
-          description: Cancellation result.
+          description: Cancellation accepted.
         "401":
           description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Task not found.
           content:
             application/json:
               schema:
@@ -342,12 +324,6 @@ paths:
                 $ref: "#/components/schemas/RunRecord"
         "401":
           description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Run not found.
           content:
             application/json:
               schema:
