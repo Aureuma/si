@@ -36415,6 +36415,12 @@ fn refresh_fort_access_token(
                     )
                 );
             }
+            if auth.scope == FortAuthScope::Runtime
+                && (detail.contains("status=401") || detail.contains("status=403"))
+            {
+                persist_revoked_fort_runtime_session(auth)
+                    .context("persist revoked Fort runtime session state")?;
+            }
             anyhow::bail!("refresh fort session: {detail}");
         }
         let payload: Value = serde_json::from_slice(&output.stdout)
@@ -36427,6 +36433,27 @@ fn refresh_fort_access_token(
         Ok(())
     })?;
     Ok(Some(token_path.clone()))
+}
+
+fn persist_revoked_fort_runtime_session(auth: &FortTokenFileAuth) -> Result<()> {
+    let Some(session_dir) = auth.token_path.parent() else {
+        return Ok(());
+    };
+    let session_path = session_dir.join("session.json");
+    if !session_path.is_file() {
+        return Ok(());
+    }
+    let state = load_persisted_session_state(&session_path)
+        .with_context(|| format!("load Fort session state {}", session_path.display()))?;
+    let transition = apply_refresh_outcome_to_persisted_session_state(
+        &state,
+        RefreshOutcome::Unauthorized,
+        Utc::now().timestamp(),
+    )
+    .with_context(|| format!("update Fort session state {}", session_path.display()))?;
+    save_persisted_session_state(&session_path, &transition.state)
+        .with_context(|| format!("write Fort session state {}", session_path.display()))?;
+    Ok(())
 }
 
 fn fort_access_token_is_fresh(path: &Path) -> bool {
