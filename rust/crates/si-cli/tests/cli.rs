@@ -15,6 +15,7 @@ use si_nucleus_runtime::{
     RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec, WorkerProbeResult,
     WorkerRuntimeView, WorkerStartResult,
 };
+use si_rs_fort::{SessionState, classify_persisted_session_state, load_persisted_session_state};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::fs::File;
@@ -8787,9 +8788,27 @@ fn fort_wrapper_fails_loudly_when_codex_home_runtime_refresh_fails() {
     fs::create_dir_all(&profile_fort_dir).expect("mkdir profile fort dir");
     let profile_token_path = profile_fort_dir.join("access.token");
     let profile_refresh_path = profile_fort_dir.join("refresh.token");
+    let profile_session_path = profile_fort_dir.join("session.json");
     fs::write(&profile_token_path, "stale-profile-token\n").expect("write stale profile token");
     fs::write(&profile_refresh_path, "stale-profile-refresh\n")
         .expect("write stale profile refresh");
+    fs::write(
+        &profile_session_path,
+        serde_json::to_vec_pretty(&json!({
+            "profile_id": "profile-delta",
+            "agent_id": "si-codex-profile-delta",
+            "session_id": "fort-session-profile-delta",
+            "host": "https://fort.example.test",
+            "runtime_host": "https://fort.example.test",
+            "access_token_path": profile_token_path,
+            "refresh_token_path": profile_refresh_path,
+            "access_expires_at": (Utc::now() - chrono::Duration::hours(1)).to_rfc3339(),
+            "refresh_expires_at": (Utc::now() + chrono::Duration::days(30)).to_rfc3339(),
+            "updated_at": Utc::now().to_rfc3339(),
+        }))
+        .expect("serialize fort session"),
+    )
+    .expect("write fort session state");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -8798,6 +8817,7 @@ fn fort_wrapper_fails_loudly_when_codex_home_runtime_refresh_fails() {
             &bootstrap_refresh_path,
             &profile_token_path,
             &profile_refresh_path,
+            &profile_session_path,
         ] {
             let mut perms = fs::metadata(path).expect("stat token file").permissions();
             perms.set_mode(0o600);
@@ -8868,6 +8888,15 @@ fn fort_wrapper_fails_loudly_when_codex_home_runtime_refresh_fails() {
         fs::read_to_string(&bootstrap_refresh_path).expect("read rotated bootstrap refresh"),
         "stale-admin-refresh\n"
     );
+    let persisted = load_persisted_session_state(&profile_session_path)
+        .expect("load revoked profile session state");
+    assert!(persisted.session_id.trim().is_empty());
+    match classify_persisted_session_state(&persisted, Utc::now().timestamp())
+        .expect("classify revoked profile session state")
+    {
+        SessionState::Revoked { .. } => {}
+        other => panic!("expected revoked profile session state, got {other:?}"),
+    }
 }
 
 #[test]
