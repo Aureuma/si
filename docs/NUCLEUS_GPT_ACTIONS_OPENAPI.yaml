@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SI Nucleus REST API
-  version: 0.57.5
+  version: 0.57.7
   description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
 servers:
   - url: https://nucleus.aureuma.ai
@@ -189,6 +189,8 @@ paths:
             application/json:
               schema:
                 type: object
+                properties: {}
+                additionalProperties: true
         "401":
           description: Unauthorized.
           content:
