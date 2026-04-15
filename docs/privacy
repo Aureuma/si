@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aureuma API Privacy Policy</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f3ea;
+        --panel: #fffdf7;
+        --ink: #1f2421;
+        --muted: #56615c;
+        --line: #d8d1c2;
+        --accent: #0b6b57;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(11, 107, 87, 0.08), transparent 28rem),
+          linear-gradient(180deg, #f9f6ee 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 48rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 4rem;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 2rem;
+        box-shadow: 0 18px 48px rgba(31, 36, 33, 0.08);
+      }
+
+      h1, h2 {
+        line-height: 1.15;
+        margin: 0 0 0.75rem;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 5vw, 3rem);
+        letter-spacing: -0.03em;
+      }
+
+      h2 {
+        font-size: 1.1rem;
+        margin-top: 2rem;
+      }
+
+      p, li {
+        line-height: 1.65;
+        color: var(--muted);
+      }
+
+      ul {
+        padding-left: 1.25rem;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        margin-bottom: 1rem;
+        padding: 0.3rem 0.65rem;
+        border-radius: 999px;
+        background: rgba(11, 107, 87, 0.1);
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .meta {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.95rem;
+      }
+
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <div class="eyebrow">Privacy Policy</div>
+        <h1>Aureuma API Privacy Policy</h1>
+        <p>
+          This page describes how Aureuma handles information sent to API endpoints hosted at
+          <strong>nucleus.aureuma.ai</strong>.
+        </p>
+
+        <h2>What this service does</h2>
+        <p>
+          This service accepts authenticated API requests and returns API responses needed to operate
+          an Aureuma-hosted integration.
+        </p>
+
+        <h2>Information we process</h2>
+        <p>When you use this service, we may process:</p>
+        <ul>
+          <li>request content you send to the API;</li>
+          <li>response content returned by the API;</li>
+          <li>technical metadata such as timestamps, request identifiers, and status codes;</li>
+          <li>authentication data needed to validate access to the service.</li>
+        </ul>
+
+        <h2>How we use information</h2>
+        <p>We use this information to:</p>
+        <ul>
+          <li>authenticate and authorize API access;</li>
+          <li>operate, maintain, and secure the service;</li>
+          <li>debug failures, investigate abuse, and improve reliability;</li>
+          <li>keep records needed for service continuity and auditing.</li>
+        </ul>
+
+        <h2>Data sharing</h2>
+        <p>
+          We do not sell API request data. We may share data only with infrastructure or service
+          providers that help us host, secure, or operate this service, or when required by law.
+        </p>
+
+        <h2>Data retention</h2>
+        <p>
+          We retain API data and service logs only for as long as reasonably needed for operations,
+          security, legal compliance, and troubleshooting.
+        </p>
+
+        <h2>Security</h2>
+        <p>
+          We use reasonable administrative, technical, and organizational measures designed to protect
+          the service and the information processed through it.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          For privacy questions about this service, contact
+          <a href="mailto:privacy@aureuma.ai">privacy@aureuma.ai</a>.
+        </p>
+
+        <p class="meta">Effective date: 2026-04-15</p>
+      </section>
+    </main>
+  </body>
+</html>
