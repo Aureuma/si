@@ -35,3 +35,8 @@
 - Do not introduce abbreviated namespace prefixes such as `nuc`, `wrk`, `sess`, `evt`, `svc`, or similar short forms when the name is intended to represent an SI-owned concept or resource.
 - Prefer full names such as `si-nucleus`, `si-worker`, `si-session`, `si-run`, `si-event`, and `SI_NUCLEUS_*` over compressed tokens.
 - This rule applies both to user-facing names and internal implementation identifiers when those identifiers may surface in logs, paths, IDs, configuration, or adjacent-repo integrations.
+- For Viva-managed app Docker runtime names, use `viva-<app_code>-<env>-<component>[-<slot>]`.
+- Use `dev` and `prod` literally for the environment segment.
+- Use real component names such as `web`, `api`, `worker`, `postgres`, `walg`, `db-init`, and `databasus`.
+- Add the slot segment last, and only for blue/green swappable runtime components, such as `viva-rm-prod-api-blue` or `viva-ls-prod-web-green`.
+- Do not use `blue` or `green` as component names. For example, a frontend service should use `web-blue` or `web-green`, not a component named `blue`.
