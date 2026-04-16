@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- Fixed Nucleus cleanup paths so empty hook configuration no longer replays malformed event history and cancelled terminal tasks can be pruned with other old terminal work.
 - Fixed `si-nucleus` startup so duplicate state-dir owners, failed gateway binds, and accidental arguments cannot start runtime loops that write to the Nucleus state root without owning the listener.
 - Fixed Nucleus dispatch so unprofiled tasks that cannot be routed are blocked with an explicit profile-unavailable reason, missing-session tasks surface immediately, and recoverable tasks are re-queued once a single profile can be inferred.
 - Fixed `si codex respawn` to behave as the same remove-then-spawn lifecycle as running `si codex remove` followed by `si codex spawn`.

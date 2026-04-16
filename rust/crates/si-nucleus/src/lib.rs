@@ -2338,7 +2338,7 @@ fn worker_restart_backoff(attempt: u32) -> ChronoDuration {
 }
 
 fn is_prunable_task_status(status: TaskStatus) -> bool {
-    matches!(status, TaskStatus::Done | TaskStatus::Failed)
+    matches!(status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Cancelled)
 }
 
 fn append_jsonl<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -2637,10 +2637,14 @@ impl NucleusService {
     }
 
     fn process_hook_producers(&self) -> Result<()> {
+        let rules =
+            load_json_records_from_dir::<HookRuleRecord>(&self.store.paths().hook_state_dir)?;
+        if rules.is_empty() {
+            return Ok(());
+        }
+
         let events = load_canonical_events_for_live_iteration(&self.store.paths().events_path)?;
-        for mut rule in
-            load_json_records_from_dir::<HookRuleRecord>(&self.store.paths().hook_state_dir)?
-        {
+        for mut rule in rules {
             if let Err(error) = self.process_single_hook_rule(&mut rule, &events) {
                 if let Ok(event) = self.store.append_system_warning(
                     "hook producer iteration failed",
@@ -9611,10 +9615,13 @@ mod tests {
             .await;
         assert!(response.ok);
         let payload = response.result.expect("prune payload");
-        assert_eq!(payload["pruned_task_ids"], json!([old_done_id.as_str()]));
+        assert_eq!(
+            payload["pruned_task_ids"],
+            json!([old_done_id.as_str(), old_cancelled_id.as_str()])
+        );
 
         assert!(!service.store.paths().task_path(&old_done_id).exists());
-        assert!(service.store.paths().task_path(&old_cancelled_id).exists());
+        assert!(!service.store.paths().task_path(&old_cancelled_id).exists());
         assert!(service.store.paths().task_path(&old_queued_id).exists());
         assert!(service.store.paths().task_path(&recent_done_id).exists());
     }
@@ -11782,6 +11789,22 @@ mod tests {
                 .expect("warning error")
                 .contains("validate cron rule name")
         );
+    }
+
+    #[tokio::test]
+    async fn hook_processing_skips_event_replay_when_no_rules_exist() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+
+        fs::write(&service.store.paths().events_path, b"{\"seq\":")
+            .expect("write malformed event ledger");
+
+        service.process_hook_producers().expect("skip hook processing without rules");
     }
 
     #[tokio::test]
