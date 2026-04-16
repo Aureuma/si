@@ -4,6 +4,8 @@ use std::fs::{self, File, OpenOptions};
 use std::future::pending;
 use std::io::{BufRead, BufReader, Write};
 use std::net::SocketAddr;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::str::FromStr;
@@ -365,15 +367,71 @@ pub struct NucleusStore {
     paths: NucleusPaths,
     next_event_seq: AtomicU64,
     write_lock: Mutex<()>,
+    _instance_lock: NucleusInstanceLock,
+}
+
+struct NucleusInstanceLock {
+    #[allow(dead_code)]
+    file: File,
+}
+
+impl NucleusInstanceLock {
+    fn acquire(paths: &NucleusPaths) -> Result<Self> {
+        let path = paths.run_dir.join("nucleus.lock");
+        let mut file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+            .with_context(|| format!("open nucleus instance lock {}", path.display()))?;
+        lock_instance_file(&file, &path)?;
+        file.set_len(0)
+            .with_context(|| format!("truncate nucleus instance lock {}", path.display()))?;
+        writeln!(
+            &mut file,
+            "pid={}\nversion={}\nstate_dir={}",
+            process::id(),
+            env!("CARGO_PKG_VERSION"),
+            paths.root.display()
+        )
+        .with_context(|| format!("write nucleus instance lock {}", path.display()))?;
+        Ok(Self { file })
+    }
+}
+
+#[cfg(unix)]
+fn lock_instance_file(file: &File, path: &Path) -> Result<()> {
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 {
+        return Ok(());
+    }
+    let err = std::io::Error::last_os_error();
+    if err.raw_os_error() == Some(libc::EWOULDBLOCK) {
+        anyhow::bail!(
+            "nucleus state directory is already locked by another si-nucleus process: {}",
+            path.display()
+        );
+    }
+    Err(err).with_context(|| format!("lock nucleus instance file {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn lock_instance_file(_file: &File, _path: &Path) -> Result<()> {
+    Ok(())
 }
 
 impl NucleusStore {
     pub fn open(state_dir: PathBuf) -> Result<Self> {
         let paths = NucleusPaths::new(state_dir);
         paths.ensure_layout()?;
+        let instance_lock = NucleusInstanceLock::acquire(&paths)?;
         let last_seq = load_last_event_seq(&paths.events_path)?;
-        let store =
-            Self { paths, next_event_seq: AtomicU64::new(last_seq), write_lock: Mutex::new(()) };
+        let store = Self {
+            paths,
+            next_event_seq: AtomicU64::new(last_seq),
+            write_lock: Mutex::new(()),
+            _instance_lock: instance_lock,
+        };
         let mut warnings = store.rebuild_markdown_projections()?;
         warnings.extend(store.scan_persisted_state_health()?);
         for warning in warnings {
@@ -2346,7 +2404,6 @@ impl NucleusService {
 
     pub fn open_without_runtime(config: NucleusConfig) -> Result<Self> {
         let store = Arc::new(NucleusStore::open(config.state_dir.clone())?);
-        persist_gateway_metadata(store.paths(), config.bind_addr)?;
         let (events, _) = broadcast::channel(256);
         Ok(Self {
             config,
@@ -2363,7 +2420,6 @@ impl NucleusService {
         runtime: Arc<dyn NucleusRuntime>,
     ) -> Result<Self> {
         let store = Arc::new(NucleusStore::open(config.state_dir.clone())?);
-        persist_gateway_metadata(store.paths(), config.bind_addr)?;
         let (events, _) = broadcast::channel(256);
         Ok(Self {
             config,
@@ -2414,10 +2470,12 @@ impl NucleusService {
     }
 
     pub async fn serve(self) -> Result<()> {
-        self.initialize_runtime_loops()?;
         let bind_addr = self.config.bind_addr;
         let listener =
             TcpListener::bind(bind_addr).await.with_context(|| format!("bind {}", bind_addr))?;
+        let bound_addr = listener.local_addr().context("read bound si-nucleus address")?;
+        persist_gateway_metadata(self.store.paths(), bound_addr)?;
+        self.initialize_runtime_loops()?;
         axum::serve(listener, self.router()).await.context("serve si-nucleus websocket gateway")
     }
 
@@ -5731,10 +5789,27 @@ mod tests {
         );
         assert!(created.ok);
 
+        drop(service);
+
         let reopened = NucleusService::open(config).expect("reopen");
         let status = reopened.status().expect("status");
         assert_eq!(status.task_count, 1);
         assert_eq!(status.next_event_seq, 2);
+    }
+
+    #[test]
+    fn store_rejects_second_open_for_same_state_directory() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let _store = NucleusStore::open(state_dir.clone()).expect("open store");
+
+        let error = match NucleusStore::open(state_dir) {
+            Ok(_) => panic!("second open should fail"),
+            Err(error) => error,
+        };
+        let message = format!("{error:#}");
+        assert!(message.contains("already locked"));
+        assert!(message.contains("nucleus.lock"));
     }
 
     #[test]
@@ -6257,21 +6332,75 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn service_open_writes_gateway_metadata_with_version_and_bind_address() {
+    async fn service_open_waits_for_successful_bind_before_writing_gateway_metadata() {
         let temp = tempdir().expect("tempdir");
         let state_dir = temp.path().join("nucleus");
-        let _service = NucleusService::open(NucleusConfig {
-            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:0".parse().expect("addr"),
             state_dir: state_dir.clone(),
             auth_token: None,
         })
         .expect("service");
+        let metadata_path = state_dir.join("gateway").join("metadata.json");
+        assert!(!metadata_path.exists());
 
-        let raw = fs::read(state_dir.join("gateway").join("metadata.json")).expect("read metadata");
-        let metadata: serde_json::Value = serde_json::from_slice(&raw).expect("parse metadata");
+        let handle = tokio::spawn(service.serve());
+        let metadata = loop {
+            if metadata_path.exists() {
+                let raw = fs::read(&metadata_path).expect("read metadata");
+                break serde_json::from_slice::<serde_json::Value>(&raw).expect("parse metadata");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        };
+        handle.abort();
+
         assert_eq!(metadata["version"], json!(env!("CARGO_PKG_VERSION")));
-        assert_eq!(metadata["bind_addr"], json!("127.0.0.1:9898"));
-        assert_eq!(metadata["ws_url"], json!("ws://127.0.0.1:9898/ws"));
+        let bind_addr = metadata["bind_addr"].as_str().expect("bind addr");
+        assert!(bind_addr.starts_with("127.0.0.1:"));
+        assert_ne!(bind_addr, "127.0.0.1:0");
+        assert_eq!(metadata["ws_url"], json!(format!("ws://{bind_addr}/ws")));
+    }
+
+    #[tokio::test]
+    async fn serve_does_not_start_runtime_loops_when_bind_fails() {
+        let temp = tempdir().expect("tempdir");
+        let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("bind occupied addr");
+        let bind_addr = occupied.local_addr().expect("occupied addr");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig { bind_addr, state_dir: temp.path().join("nucleus"), auth_token: None },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-before-bind-failure"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Do not dispatch without listener",
+                    "instructions": "This task must not start when the gateway cannot bind",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|task| task["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let error = service.clone().serve().await.expect_err("serve should fail to bind");
+        assert!(error.to_string().contains("bind"));
+        assert_eq!(runtime.start_call_count(), 0);
+        let task = service.store.inspect_task(&task_id).expect("inspect task").expect("task");
+        assert_eq!(task.status, TaskStatus::Queued);
+        assert!(task.latest_run_id.is_none());
     }
 
     #[tokio::test]
@@ -11505,6 +11634,8 @@ mod tests {
         assert!(stored.next_due_at.is_some_and(|value| value > now));
 
         service.process_cron_producers_at(now).expect("replay cron");
+        drop(service);
+
         let reopened = NucleusService::open(NucleusConfig {
             bind_addr: "127.0.0.1:4747".parse().expect("addr"),
             state_dir: state_root,
@@ -11698,6 +11829,8 @@ mod tests {
         assert_eq!(hook_task.producer_rule_name.as_deref(), Some("task-created"));
         let stored = read_hook_rule(&state_root, "task-created");
         assert_eq!(stored.last_processed_event_seq, 2);
+
+        drop(service);
 
         let reopened = NucleusService::open(NucleusConfig {
             bind_addr: "127.0.0.1:4747".parse().expect("addr"),
