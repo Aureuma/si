@@ -136,8 +136,8 @@ Important paths:
 
 Retention and cleanup:
 
-- use `si nucleus task prune --older-than-days 30` to explicitly remove old completed or failed task records from the durable task ledger
-- pruning is conservative: it removes only old completed or failed task records and does not silently delete active worker, session, or run state
+- use `si nucleus task prune --older-than-days 30` to explicitly remove old completed, failed, or cancelled task records from the durable task ledger
+- pruning is conservative: it removes only old terminal task records and does not silently delete active worker, session, or run state
 
 ## Related docs
 
