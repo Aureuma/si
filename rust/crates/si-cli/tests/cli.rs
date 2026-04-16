@@ -12164,6 +12164,22 @@ fn help_output_uses_single_word_operational_subcommands() {
     assert!(!codex_spawn_help.contains("args"));
     assert!(!codex_spawn_help.contains("Commands:"));
 
+    let codex_respawn_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "respawn", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex respawn help");
+    assert!(codex_respawn_help.contains("--workspace"));
+    assert!(codex_respawn_help.contains("--profile"));
+    assert!(!codex_respawn_help.contains("profile-session"));
+    assert!(!codex_respawn_help.contains("plan"));
+    assert!(!codex_respawn_help.contains("Commands:"));
+
     let codex_tmux_help = String::from_utf8(
         cargo_bin()
             .args(["codex", "tmux", "--help"])

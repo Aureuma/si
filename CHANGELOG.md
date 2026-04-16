@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Fixed
+- Fixed `si codex respawn` to behave as the same remove-then-spawn lifecycle as running `si codex remove` followed by `si codex spawn`.
 
 ## [v0.57.0] - 2026-04-08
 ### Changed

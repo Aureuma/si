@@ -35,8 +35,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use si_rs_codex::{
-    CodexProfileFortSessionPaths, RespawnRequest, build_respawn_plan,
-    codex_profile_fort_session_paths, codex_tmux_session_name, codex_worker_name,
+    CodexProfileFortSessionPaths, codex_profile_fort_session_paths, codex_tmux_session_name,
+    codex_worker_name,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -15680,14 +15680,8 @@ enum CodexCommand {
         #[command(subcommand)]
         command: WarmupCommand,
     },
-    #[command(name = "respawn", alias = "respawnplan", alias = "respawn-plan")]
-    Respawn {
-        profile: Option<String>,
-        #[arg(long = "profile-session")]
-        profile_sessions: Vec<String>,
-        #[arg(long, default_value = "json")]
-        format: OutputFormat,
-    },
+    #[command(name = "respawn")]
+    Respawn(CodexSpawnStartArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -17734,12 +17728,6 @@ struct CodexStatusView {
     weekly_reset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_remaining_minutes: Option<i32>,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexRespawnPlanView {
-    profile_id: String,
-    remove_targets: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33742,9 +33730,14 @@ fn main() -> Result<()> {
                     }
                 },
             },
-            CodexCommand::Respawn { profile, profile_sessions, format } => {
-                run_codex_respawn_plan(profile.as_deref(), profile_sessions, format)?
-            }
+            CodexCommand::Respawn(CodexSpawnStartArgs {
+                profile,
+                workspace,
+                workdir,
+                detach,
+                home,
+                env,
+            }) => run_codex_respawn(profile, workspace, workdir, detach, home, env)?,
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
@@ -34036,7 +34029,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "tmux"] => Some("Attach to a Codex tmux session."),
         ["codex", "warmup"] => Some("Inspect Codex warmup state."),
         ["codex", "warmup", "run"] => Some("Warm configured Codex profiles."),
-        ["codex", "respawn"] => Some("Plan replacement Codex worker sessions."),
+        ["codex", "respawn"] => Some("Remove and recreate a Codex worker session."),
         ["codex", "warmup", "decision"] => Some("Decide whether warmup should run."),
         ["codex", "warmup", "status"] => Some("Show warmup status."),
         ["codex", "warmup", "state"] => Some("Warmup state file commands."),
@@ -65203,6 +65196,24 @@ fn show_codex_spawn_start(
     Ok(())
 }
 
+fn run_codex_respawn(
+    profile: Option<String>,
+    workspace: Option<PathBuf>,
+    workdir: Option<String>,
+    detach: bool,
+    home: Option<PathBuf>,
+    env: Vec<String>,
+) -> Result<()> {
+    run_codex_remove_with_settings(
+        profile.as_deref(),
+        false,
+        OutputFormat::Text,
+        home.clone(),
+        None,
+    )?;
+    show_codex_spawn_start(profile, workspace, workdir, detach, home, env)
+}
+
 fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<PathBuf> {
     let Some(workdir) = workdir.as_deref().map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(workspace.to_path_buf());
@@ -65550,8 +65561,14 @@ fn remove_codex_worker_state(
     })
 }
 
-fn run_codex_remove(profile: Option<&str>, all: bool, format: OutputFormat) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(None, None)?;
+fn run_codex_remove_with_settings(
+    profile: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let (home, settings) = load_codex_runtime_settings(home, settings_file)?;
     let paths = SiPaths::from_settings(&home, &settings);
     if all {
         let states = read_codex_worker_states(&paths)?;
@@ -65603,13 +65620,17 @@ fn run_codex_remove(profile: Option<&str>, all: bool, format: OutputFormat) -> R
         return Ok(());
     }
 
-    let target = resolve_codex_worker_for_profile(profile, "remove", None, None)?;
+    let target = resolve_codex_worker_for_profile(profile, "remove", Some(home), None)?;
     let view = remove_codex_worker_state(&paths, &target)?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => print!("{}", view.output),
     }
     Ok(())
+}
+
+fn run_codex_remove(profile: Option<&str>, all: bool, format: OutputFormat) -> Result<()> {
+    run_codex_remove_with_settings(profile, all, format, None, None)
 }
 
 fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String> {
@@ -66293,38 +66314,6 @@ fn apply_codex_tmux_window_identity(
         .status();
 }
 
-fn run_codex_respawn_plan(
-    profile: Option<&str>,
-    profile_sessions: Vec<String>,
-    format: OutputFormat,
-) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(None, None)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile, "respawn")?;
-    let discovered = if profile_sessions.is_empty() {
-        read_codex_worker_states(&paths)?
-            .into_iter()
-            .filter(|item| item.profile_id == profile_id)
-            .map(|item| item.session_name)
-            .collect::<Vec<_>>()
-    } else {
-        profile_sessions
-    };
-    let plan =
-        build_respawn_plan(&RespawnRequest { profile_id, profile_session_names: discovered })?;
-    let view =
-        CodexRespawnPlanView { profile_id: plan.profile_id, remove_targets: plan.reset_targets };
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("profile_id={}", view.profile_id);
-            for target in view.remove_targets {
-                println!("remove_target={target}");
-            }
-        }
-    }
-    Ok(())
-}
 fn build_app_server_request(id: i64, method: &str, params: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "jsonrpc": "2.0",
