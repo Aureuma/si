@@ -1,6 +1,5 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 pub const CODEX_PROFILE_FORT_DIR_NAME: &str = "fort";
@@ -18,18 +17,6 @@ pub struct CodexProfileFortSessionPaths {
     pub lock_path: PathBuf,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct RespawnRequest {
-    pub profile_id: String,
-    pub profile_session_names: Vec<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RespawnPlan {
-    pub profile_id: String,
-    pub reset_targets: Vec<String>,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PromptSegment {
     pub prompt: String,
@@ -41,12 +28,6 @@ pub struct PromptSegment {
 pub struct ReportParseResult {
     pub segments: Vec<PromptSegment>,
     pub report: String,
-}
-
-#[derive(Debug, Error, Eq, PartialEq)]
-pub enum RespawnPlanError {
-    #[error("respawn profile is required")]
-    MissingProfile,
 }
 
 pub fn codex_worker_name(profile_id: &str) -> String {
@@ -79,24 +60,6 @@ pub fn codex_profile_fort_runtime_env(codex_home: &Path) -> BTreeMap<String, Str
         ("FORT_TOKEN_PATH".to_owned(), paths.access_token_path.display().to_string()),
         ("FORT_REFRESH_TOKEN_PATH".to_owned(), paths.refresh_token_path.display().to_string()),
     ])
-}
-
-pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
-    let profile_id = request.profile_id.trim();
-    if profile_id.is_empty() {
-        return Err(RespawnPlanError::MissingProfile);
-    }
-    let mut targets = BTreeSet::new();
-    for item in &request.profile_session_names {
-        let item = item.trim();
-        if !item.is_empty() {
-            targets.insert(item.to_owned());
-        }
-    }
-    Ok(RespawnPlan {
-        profile_id: profile_id.to_owned(),
-        reset_targets: targets.into_iter().collect(),
-    })
 }
 
 pub fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> {
@@ -247,36 +210,10 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        RespawnPlanError, RespawnRequest, build_respawn_plan, codex_profile_fort_runtime_env,
-        codex_profile_fort_session_paths, codex_tmux_session_name, parse_prompt_segments_dual,
-        parse_report_capture,
+        codex_profile_fort_runtime_env, codex_profile_fort_session_paths, codex_tmux_session_name,
+        parse_prompt_segments_dual, parse_report_capture,
     };
     use std::path::Path;
-
-    #[test]
-    fn build_respawn_plan_collects_sorted_unique_targets() {
-        let plan = build_respawn_plan(&RespawnRequest {
-            profile_id: "profile-zeta".to_owned(),
-            profile_session_names: vec![
-                "si-codex-pane-profile-zeta".to_owned(),
-                "si-codex-pane-profile-alpha".to_owned(),
-                "si-codex-pane-profile-zeta".to_owned(),
-            ],
-        })
-        .expect("respawn plan");
-
-        assert_eq!(
-            plan.reset_targets,
-            vec!["si-codex-pane-profile-alpha".to_owned(), "si-codex-pane-profile-zeta".to_owned()]
-        );
-    }
-
-    #[test]
-    fn build_respawn_plan_rejects_empty_profile() {
-        let err =
-            build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn profile");
-        assert_eq!(err, RespawnPlanError::MissingProfile);
-    }
 
     #[test]
     fn codex_tmux_session_name_uses_profile_slug() {

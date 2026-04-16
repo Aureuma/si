@@ -94,7 +94,7 @@ This matrix validates:
 - worker-shell access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
-- `si codex respawn --volumes` auth continuity
+- `si codex respawn` auth continuity
 - ciphertext-at-rest plus manual ECIES decrypt parity with `fort get`
 
 For local-only integration harnesses that use HTTP Fort endpoints, set:
