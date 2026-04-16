@@ -892,9 +892,8 @@ impl NucleusStore {
         let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
         let mut current = serde_json::from_slice::<HookRuleRecord>(&bytes)
             .with_context(|| format!("parse {}", path.display()))?;
-        current.last_processed_event_seq = current
-            .last_processed_event_seq
-            .max(progress.last_processed_event_seq);
+        current.last_processed_event_seq =
+            current.last_processed_event_seq.max(progress.last_processed_event_seq);
         current.version = current_persisted_version().to_owned();
         write_json_atomic(&path, &current)?;
         Ok(true)
@@ -2769,7 +2768,7 @@ impl NucleusService {
         let Some(runtime) = self.runtime.as_ref() else {
             return Ok(());
         };
-        let tasks = self.store.list_tasks()?;
+        let mut tasks = self.store.list_tasks()?;
         let sessions = self
             .store
             .list_sessions()?
@@ -2783,6 +2782,9 @@ impl NucleusService {
             .map(|worker| (worker.worker_id.clone(), worker))
             .collect::<HashMap<_, _>>();
         let profiles = self.store.list_profile_records()?;
+        if self.requeue_profile_unavailable_tasks(&tasks, &sessions, &workers, &profiles)? {
+            tasks = self.store.list_tasks()?;
+        }
         let runs = self.store.list_runs()?;
         let runs_by_id =
             runs.into_iter().map(|run| (run.run_id.clone(), run)).collect::<HashMap<_, _>>();
@@ -2816,8 +2818,31 @@ impl NucleusService {
                 if active_sessions.contains(session_id) {
                     continue;
                 }
+                if !sessions.contains_key(session_id) {
+                    if let Some(event) = self.store.mark_task_blocked(
+                        &task.task_id,
+                        None,
+                        Some(session_id.clone()),
+                        task.profile.clone(),
+                        BlockedReason::SessionBroken,
+                        "task references a missing session",
+                    )? {
+                        let _ = self.events.send(event);
+                    }
+                    continue;
+                }
             }
             let Some(profile) = derive_task_profile(&task, &sessions, &workers, &profiles) else {
+                if let Some(event) = self.store.mark_task_blocked(
+                    &task.task_id,
+                    None,
+                    task.session_id.clone(),
+                    None,
+                    BlockedReason::ProfileUnavailable,
+                    "task has no profile and Nucleus cannot infer exactly one profile",
+                )? {
+                    let _ = self.events.send(event);
+                }
                 continue;
             };
             if !selected_profiles.insert(profile.clone()) {
@@ -2826,6 +2851,35 @@ impl NucleusService {
             self.try_dispatch_task(runtime.as_ref(), task, profile)?;
         }
         Ok(())
+    }
+
+    fn requeue_profile_unavailable_tasks(
+        &self,
+        tasks: &[TaskRecord],
+        sessions: &HashMap<SessionId, SessionRecord>,
+        workers: &HashMap<WorkerId, WorkerRecord>,
+        profiles: &[ProfileRecord],
+    ) -> Result<bool> {
+        let mut requeued_any = false;
+        for task in tasks {
+            if task.status != TaskStatus::Blocked
+                || task.blocked_reason != Some(BlockedReason::ProfileUnavailable)
+            {
+                continue;
+            }
+            let Some(profile) = derive_task_profile(task, sessions, workers, profiles) else {
+                continue;
+            };
+            if let Some(event) = self.store.requeue_blocked_task(
+                &task.task_id,
+                Some(profile),
+                "task re-queued after Nucleus resolved a profile",
+            )? {
+                let _ = self.events.send(event);
+                requeued_any = true;
+            }
+        }
+        Ok(requeued_any)
     }
 
     fn try_dispatch_task(
@@ -3525,7 +3579,9 @@ impl NucleusService {
             return Ok(());
         }
         let expected = self.config.auth_token.as_deref().ok_or_else(|| {
-            anyhow!("unauthorized: SI_NUCLEUS_AUTH_TOKEN must be set when authentication is required")
+            anyhow!(
+                "unauthorized: SI_NUCLEUS_AUTH_TOKEN must be set when authentication is required"
+            )
         })?;
         let provided = bearer_token
             .map(str::trim)
@@ -3645,9 +3701,9 @@ impl NucleusService {
                     .unwrap_or_else(|| self.store.next_event_seq().saturating_sub(1));
                 let rule = HookRuleRecord {
                     name: rule_name,
-                    enabled: params
-                        .enabled
-                        .unwrap_or_else(|| existing.as_ref().map(|rule| rule.enabled).unwrap_or(true)),
+                    enabled: params.enabled.unwrap_or_else(|| {
+                        existing.as_ref().map(|rule| rule.enabled).unwrap_or(true)
+                    }),
                     match_event_type,
                     instructions: params.instructions,
                     last_processed_event_seq,
@@ -4699,7 +4755,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                         "producer_dedup_key": { "type": ["string", "null"] },
                         "blocked_reason": {
                             "type": ["string", "null"],
-                            "enum": [null, "auth_required", "worker_unavailable", "session_broken", "producer_error", "operator_hold", "fort_unavailable"]
+                            "enum": [null, "auth_required", "worker_unavailable", "profile_unavailable", "session_broken", "producer_error", "operator_hold", "fort_unavailable"]
                         },
                         "created_at": { "type": "string", "format": "date-time" },
                         "updated_at": { "type": "string", "format": "date-time" },
@@ -4793,7 +4849,9 @@ async fn rest_openapi_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    match service.authorize_request_method("openapi.read", extract_bearer_token(&headers).as_deref()) {
+    match service
+        .authorize_request_method("openapi.read", extract_bearer_token(&headers).as_deref())
+    {
         Ok(()) => (StatusCode::OK, Json(openapi_document(&service.config))).into_response(),
         Err(error) => rest_gateway_response(
             GatewayResponse::err(json!(null), infer_error_code(&error), error.to_string(), None),
@@ -5961,7 +6019,8 @@ mod tests {
         assert_eq!(ingested_event["type"], json!("github.notification"));
         assert_eq!(ingested_event["source"], json!("github"));
 
-        let events = load_canonical_events(&service.store.paths().events_path).expect("load events");
+        let events =
+            load_canonical_events(&service.store.paths().events_path).expect("load events");
         assert!(events.iter().any(|event| {
             event.event_type == CanonicalEventType::GithubNotification
                 && event.source == CanonicalEventSource::Github
@@ -5969,16 +6028,10 @@ mod tests {
         }));
 
         let tasks = service.store.list_tasks().expect("list tasks");
-        let hook_task = tasks
-            .iter()
-            .find(|task| task.source == TaskSource::Hook)
-            .expect("hook task");
+        let hook_task =
+            tasks.iter().find(|task| task.source == TaskSource::Hook).expect("hook task");
         assert_eq!(hook_task.producer_rule_name.as_deref(), Some("github-notify"));
-        assert!(
-            hook_task
-                .instructions
-                .contains("Canonical event type: github.notification")
-        );
+        assert!(hook_task.instructions.contains("Canonical event type: github.notification"));
 
         let stored_rule = read_hook_rule(&state_root, "github-notify");
         assert_eq!(stored_rule.last_processed_event_seq, 1);
@@ -6038,9 +6091,7 @@ mod tests {
             })
             .await;
         assert!(ingested.ok);
-        let first_seq = ingested.result.expect("first event")["seq"]
-            .as_u64()
-            .expect("first seq");
+        let first_seq = ingested.result.expect("first event")["seq"].as_u64().expect("first seq");
 
         let upsert = service
             .dispatch_request(GatewayRequest {
@@ -6054,10 +6105,7 @@ mod tests {
             })
             .await;
         assert!(upsert.ok);
-        assert_eq!(
-            upsert.result.expect("hook rule")["last_processed_event_seq"],
-            json!(first_seq)
-        );
+        assert_eq!(upsert.result.expect("hook rule")["last_processed_event_seq"], json!(first_seq));
         assert!(service.store.list_tasks().expect("list tasks").is_empty());
         assert_eq!(
             read_hook_rule(&state_root, "github-notify").last_processed_event_seq,
@@ -6076,16 +6124,13 @@ mod tests {
             })
             .await;
         assert!(ingested.ok);
-        let second_seq = ingested.result.expect("second event")["seq"]
-            .as_u64()
-            .expect("second seq");
+        let second_seq =
+            ingested.result.expect("second event")["seq"].as_u64().expect("second seq");
         let tasks = service.store.list_tasks().expect("list tasks");
-        let hook_task = tasks.iter().find(|task| task.source == TaskSource::Hook).expect("hook task");
+        let hook_task =
+            tasks.iter().find(|task| task.source == TaskSource::Hook).expect("hook task");
         let expected_dedup = format!("github-notify:{second_seq}");
-        assert_eq!(
-            hook_task.producer_dedup_key.as_deref(),
-            Some(expected_dedup.as_str())
-        );
+        assert_eq!(hook_task.producer_dedup_key.as_deref(), Some(expected_dedup.as_str()));
     }
 
     #[test]
@@ -6120,11 +6165,7 @@ mod tests {
             })
             .expect("upsert hook rule");
 
-        assert!(
-            store
-                .persist_hook_rule_progress(&stale)
-                .expect("persist hook progress")
-        );
+        assert!(store.persist_hook_rule_progress(&stale).expect("persist hook progress"));
 
         let stored = read_hook_rule(&state_root, "github-notify");
         assert!(!stored.enabled);
@@ -6153,11 +6194,7 @@ mod tests {
         stale.last_processed_event_seq = 9;
         assert!(store.delete_hook_rule("github-notify").expect("delete hook rule"));
 
-        assert!(
-            !store
-                .persist_hook_rule_progress(&stale)
-                .expect("skip deleted rule progress")
-        );
+        assert!(!store.persist_hook_rule_progress(&stale).expect("skip deleted rule progress"));
         assert!(store.inspect_hook_rule("github-notify").expect("inspect hook rule").is_none());
     }
 
@@ -9748,6 +9785,148 @@ mod tests {
             .expect("task exists");
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_unprofiled_task_when_profile_cannot_be_derived() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-no-profile"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Unroutable task",
+                    "instructions": "Block until one profile is available",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::ProfileUnavailable));
+        assert!(task.latest_run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_requeues_profile_unavailable_task_when_profile_becomes_resolvable() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-profile-later"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Routable later",
+                    "instructions": "Run after one profile is known",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("block unresolved task");
+        let blocked = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::ProfileUnavailable));
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-profile-later"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        service.reconcile_and_dispatch_once().expect("requeue and dispatch resolved task");
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(task.blocked_reason, None);
+        assert!(task.latest_run_id.is_some());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_blocks_unprofiled_task_when_referenced_session_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-no-profile-missing-session"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Missing session without profile",
+                    "instructions": "Do not wait on profile inference before surfacing session loss",
+                    "session_id": "si-session-missing",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.status, TaskStatus::Blocked);
+        assert_eq!(task.blocked_reason, Some(BlockedReason::SessionBroken));
         assert!(task.latest_run_id.is_none());
     }
 
