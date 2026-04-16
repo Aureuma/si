@@ -158,6 +158,7 @@ impl TaskStatus {
 pub enum BlockedReason {
     AuthRequired,
     WorkerUnavailable,
+    ProfileUnavailable,
     SessionBroken,
     ProducerError,
     OperatorHold,
@@ -772,10 +773,7 @@ mod tests {
         assert_eq!(CanonicalEventType::RunRequiresAuth.as_str(), "run.requires_auth");
         assert_eq!(CanonicalEventType::RunBlocked.as_str(), "run.blocked");
         assert_eq!(CanonicalEventType::WorkerReady.as_str(), "worker.ready");
-        assert_eq!(
-            CanonicalEventType::GithubNotification.as_str(),
-            "github.notification"
-        );
+        assert_eq!(CanonicalEventType::GithubNotification.as_str(), "github.notification");
     }
 
     #[test]
