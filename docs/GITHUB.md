@@ -230,15 +230,16 @@ si orbit github workflow logs Aureuma/si 1234567890 --raw
 
 ```bash
 si orbit github release list Aureuma/si
-si orbit github release get Aureuma/si v0.44.0
-si orbit github release create Aureuma/si --tag v0.44.0 --title "v0.44.0" --notes-file ./notes.md
-si orbit github release create Aureuma/si --tag v0.44.1 --title "v0.44.1" --target "$(git rev-parse HEAD)" --draft
-si orbit github release upload Aureuma/si v0.44.0 --asset ./dist/si-linux-amd64
-si orbit github release delete Aureuma/si v0.44.0 --force
+si orbit github release get Aureuma/si vX.Y.0
+si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --notes-file ./notes.md
+si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
+si orbit github release upload Aureuma/si vX.Y.0 --asset ./dist/si-linux-amd64
+si orbit github release delete Aureuma/si vX.Y.0 --force
 ```
 
 Release create behavior:
 
+- For SI itself, the release tag should come from the one repo-wide version in root `Cargo.toml [workspace.package].version`.
 - If the requested tag already exists remotely, `si orbit github release create` reuses it.
 - If the tag is missing and `--target <sha>` is provided, SI creates `refs/tags/<tag>` first, then creates the release.
 - If the tag is missing and `--target` is omitted, the command fails clearly instead of creating a broken/tagless release flow.

@@ -4,6 +4,8 @@ This document is the single source for SI release policy and the release checkli
 
 ## Versioning Rules
 - Use the SemVer shape `MAJOR.MINOR.PATCH`, but apply it operationally in this repo.
+- Keep one hard-coded SI version source of truth: root `Cargo.toml` under `[workspace.package].version`.
+- Treat every other SI version surface as derived data from that root workspace version, not as an independently maintained version.
 - Every commit must bump PATCH in the same commit.
 - A published release bumps MINOR, resets PATCH to `0`, and uses a release tag of `vX.Y.0`.
 - Only minor release versions are tagged and published to GitHub Releases or external distribution channels.
@@ -61,6 +63,9 @@ git pull --ff-only
 ### 3) Bump version strings in code
 Update release version metadata:
 - root `Cargo.toml` `workspace.package.version = "X.Y.0"`
+- `Cargo.lock` follows that same workspace version update in the same commit.
+
+Do not invent or hand-maintain separate SI versions in crate manifests, provider/orbit surfaces, packaging templates, or docs. Those must derive from the root workspace version.
 
 ### 4) Verify and commit the release prep
 ```
@@ -68,13 +73,14 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
-./.artifacts/cargo-target/release/si-rs build self assets --version vX.Y.0 --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight
 ./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
-git add CHANGELOG.md Cargo.toml
+git add CHANGELOG.md Cargo.toml Cargo.lock
 git commit -m "release: vX.Y.0"
 ```
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
+- `si build self assets` reads the canonical version from root `Cargo.toml` when `--version` is omitted.
 - Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
 - Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary.
 
@@ -211,9 +217,10 @@ Notes:
 - The workflow uses `si build self assets` as the single build path and `si build self verify` as the local archive verification path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
-- Use `si build npm publish --version vX.Y.0 --dry-run` for local npm publish rehearsal.
-- Use `si build npm vault --version vX.Y.0` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
-- Use `si build homebrew core --version vX.Y.0 --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
+- Use `si build npm publish --dry-run` for local npm publish rehearsal.
+- Use `si build npm vault` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
+- Use `si build homebrew core --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
+- Those commands default to the canonical SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached version target.
 
 ### 10) Verify repo-boundary stability for Viva integrations
 When a release changes `si viva`, Viva-related settings, or shared orchestration/config behavior, validate the adjacent Viva repo before closing the release:

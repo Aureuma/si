@@ -6,6 +6,8 @@
 # Release Discipline
 
 - Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
+- Keep exactly one hard-coded source of truth for that SI version: root `Cargo.toml` under `[workspace.package].version`.
+- Rust crates, orbit/provider surfaces, packaging flows, release tooling, docs, and examples must derive from that root workspace version instead of maintaining independent SI version values.
 - Every commit that changes SI must bump the workspace patch version in the same commit. Do not batch multiple commits under one unchanged patch version and do not defer the bump.
 - Bump the workspace minor version only when publishing a new SI release to GitHub Releases or another distribution channel such as npm or Homebrew. Reset the patch component to `0` in that release commit.
 - Create git tags only for those minor release commits; do not tag patch-only commits.

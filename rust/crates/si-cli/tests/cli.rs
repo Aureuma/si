@@ -9681,6 +9681,45 @@ fn build_homebrew_render_core_formula_writes_formula() {
 }
 
 #[test]
+fn build_homebrew_render_core_formula_without_version_uses_workspace_version() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    let out = repo.path().join("Formula/si.rb");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let url = format!("http://{}", addr);
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /Aureuma/si/archive/refs/tags/v1.2.3.tar.gz"));
+        let body = b"archive";
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len());
+        stream.write_all(response.as_bytes()).expect("write head");
+        stream.write_all(body).expect("write body");
+    });
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "homebrew",
+            "render-core-formula",
+            "--output",
+            out.to_str().expect("out"),
+        ])
+        .env("SI_RUST_HOMEBREW_SOURCE_BASE_URL", url)
+        .assert()
+        .success();
+
+    let rendered = fs::read_to_string(out).expect("read formula");
+    assert!(rendered.contains("url \"http://"));
+}
+
+#[test]
 fn build_homebrew_render_tap_formula_writes_formula() {
     let dir = tempdir().expect("tempdir");
     let checksums = dir.path().join("checksums.txt");
@@ -9711,6 +9750,37 @@ fn build_homebrew_render_tap_formula_writes_formula() {
     assert!(rendered.contains("si_1.2.3_linux_amd64.tar.gz"));
     assert!(rendered.contains("sha4"));
     assert!(rendered.contains("bin.install binary => \"si\""));
+}
+
+#[test]
+fn build_homebrew_render_tap_formula_without_version_uses_workspace_version() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    let checksums = repo.path().join("checksums.txt");
+    fs::write(
+        &checksums,
+        "sha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\n",
+    )
+    .expect("write checksums");
+    let output = repo.path().join("Formula/si.rb");
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "homebrew",
+            "render-tap-formula",
+            "--checksums",
+            checksums.to_str().expect("checksums"),
+            "--output",
+            output.to_str().expect("output"),
+        ])
+        .assert()
+        .success();
+
+    let rendered = fs::read_to_string(output).expect("read formula");
+    assert!(rendered.contains("version \"1.2.3\""));
 }
 
 #[test]
@@ -9790,6 +9860,38 @@ fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
         .success();
 
     assert!(tap_dir.join("Formula/si.rb").exists());
+}
+
+#[test]
+fn build_homebrew_update_tap_repo_without_version_uses_workspace_version() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    let tap_dir = repo.path().join("homebrew-si");
+    fs::create_dir_all(&tap_dir).expect("mkdir tap dir");
+    let checksums = repo.path().join("checksums.txt");
+    fs::write(
+        &checksums,
+        "sha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\n",
+    )
+    .expect("write checksums");
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "homebrew",
+            "update-tap-repo",
+            "--checksums",
+            checksums.to_str().expect("checksums"),
+            "--tap-dir",
+            tap_dir.to_str().expect("tap dir"),
+        ])
+        .assert()
+        .success();
+
+    let rendered = fs::read_to_string(tap_dir.join("Formula/si.rb")).expect("read formula");
+    assert!(rendered.contains("version \"1.2.3\""));
 }
 
 #[test]
