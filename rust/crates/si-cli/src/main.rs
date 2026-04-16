@@ -1052,8 +1052,10 @@ enum BuildNpmCommand {
 enum BuildHomebrewCommand {
     #[command(name = "core", alias = "rendercoreformula", alias = "render-core-formula")]
     RenderCoreFormula {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
         #[arg(long)]
-        version: String,
+        version: Option<String>,
         #[arg(long)]
         output: PathBuf,
         #[arg(long, default_value = "Aureuma/si")]
@@ -1061,8 +1063,10 @@ enum BuildHomebrewCommand {
     },
     #[command(name = "tap", alias = "rendertapformula", alias = "render-tap-formula")]
     RenderTapFormula {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
         #[arg(long)]
-        version: String,
+        version: Option<String>,
         #[arg(long)]
         checksums: PathBuf,
         #[arg(long)]
@@ -1072,8 +1076,10 @@ enum BuildHomebrewCommand {
     },
     #[command(name = "update", alias = "updatetaprepo", alias = "update-tap-repo")]
     UpdateTapRepo {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
         #[arg(long)]
-        version: String,
+        version: Option<String>,
         #[arg(long)]
         checksums: PathBuf,
         #[arg(long = "tap-dir")]
@@ -19885,7 +19891,14 @@ fn vault_key_exists(output: &str, key: &str) -> bool {
         .any(|line| line.split_whitespace().next().map(|value| value == key).unwrap_or(false))
 }
 
-fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: String) -> Result<()> {
+fn run_homebrew_render_core_formula(
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
+    output: PathBuf,
+    repo: String,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, version)?;
     validate_release_version(&version)?;
     let source_base = std::env::var("SI_RUST_HOMEBREW_SOURCE_BASE_URL")
         .unwrap_or_else(|_| "https://github.com".to_owned());
@@ -19910,22 +19923,28 @@ fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: Stri
 }
 
 fn run_homebrew_render_tap_formula(
-    version: String,
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
     checksums: PathBuf,
     output: PathBuf,
     repo: String,
 ) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, version)?;
     render_tap_formula_with_base_url(&version, &checksums, &output, &repo, None)
 }
 
 fn run_homebrew_update_tap_repo(
-    version: String,
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
     checksums: PathBuf,
     tap_dir: PathBuf,
     repo: String,
     do_commit: bool,
     do_push: bool,
 ) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, version)?;
     validate_release_version(&version)?;
     if !tap_dir.is_dir() {
         return Err(anyhow!("tap dir does not exist: {}", tap_dir.display()));
@@ -20479,20 +20498,27 @@ fn main() -> Result<()> {
                 )?,
             },
             BuildCommand::Homebrew { command } => match command {
-                BuildHomebrewCommand::RenderCoreFormula { version, output, repo } => {
-                    run_homebrew_render_core_formula(version, output, repo)?
+                BuildHomebrewCommand::RenderCoreFormula { repo_root, version, output, repo } => {
+                    run_homebrew_render_core_formula(repo_root, version, output, repo)?
                 }
-                BuildHomebrewCommand::RenderTapFormula { version, checksums, output, repo } => {
-                    run_homebrew_render_tap_formula(version, checksums, output, repo)?
-                }
+                BuildHomebrewCommand::RenderTapFormula {
+                    repo_root,
+                    version,
+                    checksums,
+                    output,
+                    repo,
+                } => run_homebrew_render_tap_formula(repo_root, version, checksums, output, repo)?,
                 BuildHomebrewCommand::UpdateTapRepo {
+                    repo_root,
                     version,
                     checksums,
                     tap_dir,
                     repo,
                     commit,
                     push,
-                } => run_homebrew_update_tap_repo(version, checksums, tap_dir, repo, commit, push)?,
+                } => run_homebrew_update_tap_repo(
+                    repo_root, version, checksums, tap_dir, repo, commit, push,
+                )?,
             },
         },
         Command::Commands(args) => match args.command {
