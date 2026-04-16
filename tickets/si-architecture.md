@@ -1313,7 +1313,7 @@ Current audit status as of 2026-04-16:
 - all seven tracked work items remain relevant and accepted
 - no `planned` or `active` ticket work remains open in this directory
 - the latest implementation follow-up tightened unroutable-task blocking, single-owner state locking, bind-before-runtime startup, empty-hook replay behavior, and cancelled-task pruning
-- the live Nucleus service was verified on `v0.57.18` with two ready workers, no queued/running/blocked tasks, and a clean canonical event-ledger parse
+- the live Nucleus service was verified on `v0.57.19` with two ready workers, no queued/running/blocked tasks, and a clean canonical event-ledger parse
 
 Implementation notes:
 - `[implementation-note:nucleus-phase1-2026-04-05]` Phase 1 landed in `rust/crates/si-nucleus-core` with canonical task, worker, session, run, event, and profile types; explicit transition validation; and App Server thread, turn, item, account, and config projection types.

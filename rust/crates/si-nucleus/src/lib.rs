@@ -754,6 +754,7 @@ impl NucleusStore {
                 .with_context(|| format!("remove {}", entry.path().display()))?;
             pruned_task_ids.push(task.task_id);
         }
+        pruned_task_ids.sort();
         Ok(TaskPruneOutcome { pruned_task_ids, skipped })
     }
 
@@ -5387,7 +5388,8 @@ mod tests {
         CreateTaskInput, CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
         append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
-        load_canonical_events, load_last_event_seq, write_json_atomic,
+        load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
+        write_json_atomic,
     };
     use anyhow::Result;
     use axum::body::{Body, to_bytes};
@@ -9546,8 +9548,8 @@ mod tests {
         assert_ne!(run_id, turn_id);
         assert!(!turn_id.starts_with("si-run-"));
 
-        let events =
-            load_canonical_events(&service.store.paths().events_path).expect("load events");
+        let events = load_canonical_events_for_live_iteration(&service.store.paths().events_path)
+            .expect("load events");
         assert!(!events.is_empty());
         assert!(
             events.iter().all(|event| event.event_id.as_str().starts_with("si-event-")),

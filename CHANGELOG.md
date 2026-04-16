@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Fixed
+- Fixed Nucleus validation stability by returning pruned task ids in deterministic order and using the live event-ledger retry reader in runtime-backed id-boundary coverage.
 - Fixed Nucleus cleanup paths so empty hook configuration no longer replays malformed event history and cancelled terminal tasks can be pruned with other old terminal work.
 - Fixed `si-nucleus` startup so duplicate state-dir owners, failed gateway binds, and accidental arguments cannot start runtime loops that write to the Nucleus state root without owning the listener.
 - Fixed Nucleus dispatch so unprofiled tasks that cannot be routed are blocked with an explicit profile-unavailable reason, missing-session tasks surface immediately, and recoverable tasks are re-queued once a single profile can be inferred.
