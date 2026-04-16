@@ -293,7 +293,9 @@ struct EncryptStats {
 
 pub(crate) fn run_vault_command(command: VaultCommand) -> Result<()> {
     match command {
-        VaultCommand::Keypair { target, rotate, format } => run_vault_keypair(target, rotate, format),
+        VaultCommand::Keypair { target, rotate, format } => {
+            run_vault_keypair(target, rotate, format)
+        }
         VaultCommand::Status { target, vault_dir, format } => {
             run_vault_status(target, vault_dir, format)
         }
@@ -313,7 +315,9 @@ pub(crate) fn run_vault_command(command: VaultCommand) -> Result<()> {
         }
         VaultCommand::Unset { target, key } => run_vault_unset(target, key),
         VaultCommand::Get { target, key, reveal } => run_vault_get(target, key, reveal),
-        VaultCommand::List { target, vault_dir, format } => run_vault_list(target, vault_dir, format),
+        VaultCommand::List { target, vault_dir, format } => {
+            run_vault_list(target, vault_dir, format)
+        }
         VaultCommand::Run {
             target,
             vault_dir,
@@ -474,7 +478,8 @@ fn run_vault_check(
         return Ok(());
     }
 
-    let mut message = String::from("[si vault] plaintext values detected; encrypt before committing.\n");
+    let mut message =
+        String::from("[si vault] plaintext values detected; encrypt before committing.\n");
     for (file, keys) in findings {
         message.push_str("  - ");
         message.push_str(&file);
@@ -490,7 +495,9 @@ fn run_vault_check(
 
 fn run_vault_hooks(command: VaultHooksCommand) -> Result<()> {
     match command {
-        VaultHooksCommand::Install { vault_dir, force } => run_vault_hooks_install(vault_dir, force),
+        VaultHooksCommand::Install { vault_dir, force } => {
+            run_vault_hooks_install(vault_dir, force)
+        }
         VaultHooksCommand::Status { vault_dir } => run_vault_hooks_status(vault_dir),
         VaultHooksCommand::Uninstall { vault_dir } => run_vault_hooks_uninstall(vault_dir),
     }
@@ -502,7 +509,8 @@ fn run_vault_hooks_install(vault_dir: Option<PathBuf>, force: bool) -> Result<()
     fs::create_dir_all(&hooks_dir).with_context(|| format!("create {}", hooks_dir.display()))?;
     let hook_path = hooks_dir.join("pre-commit");
     if hook_path.exists() {
-        let existing = fs::read(&hook_path).with_context(|| format!("read {}", hook_path.display()))?;
+        let existing =
+            fs::read(&hook_path).with_context(|| format!("read {}", hook_path.display()))?;
         if !is_managed_hook(&existing) && !force {
             bail!("hook already exists (use --force): {}", hook_path.display());
         }
@@ -573,7 +581,8 @@ fn run_vault_decrypt(target: VaultTargetArgs, stdout: bool, inplace: bool) -> Re
     let keyring_path = resolve_keyring_path();
     let entry = load_keyring_entry_or_canonical(&keyring_path, &target)?;
     let mut doc = DotenvDoc::read(&target.env_file)?;
-    let original = fs::read(&target.env_file).with_context(|| format!("read {}", target.env_file.display()))?;
+    let original = fs::read(&target.env_file)
+        .with_context(|| format!("read {}", target.env_file.display()))?;
     let decrypted = doc.decrypt(&private_key_candidates(&entry))?;
     let print_stdout = stdout || !inplace;
     if inplace {
@@ -595,7 +604,8 @@ fn run_vault_restore(path: Option<PathBuf>) -> Result<()> {
     let cwd = env::current_dir().context("read current dir")?;
     let env_file = absolutize_path(path.as_deref().unwrap_or(Path::new(".env")), &cwd);
     let backup_path = restore_backup_path(&env_file);
-    let bytes = fs::read(&backup_path).with_context(|| format!("read {}", backup_path.display()))?;
+    let bytes =
+        fs::read(&backup_path).with_context(|| format!("read {}", backup_path.display()))?;
     write_dotenv_atomic(&env_file, &bytes)?;
     let _ = fs::remove_file(&backup_path);
     println!("restored: {}", env_file.display());
@@ -759,7 +769,10 @@ fn run_vault_run(
     Ok(())
 }
 
-fn resolve_vault_target(target: &VaultTargetArgs, vault_dir: Option<PathBuf>) -> Result<VaultTarget> {
+fn resolve_vault_target(
+    target: &VaultTargetArgs,
+    vault_dir: Option<PathBuf>,
+) -> Result<VaultTarget> {
     let cwd = env::current_dir().context("read current dir")?;
     let explicit_env_name = target
         .env
@@ -787,12 +800,7 @@ fn resolve_vault_target(target: &VaultTargetArgs, vault_dir: Option<PathBuf>) ->
     let repo_root = env_file
         .parent()
         .and_then(|path| git_repo_root_from(path).ok())
-        .unwrap_or_else(|| {
-            env_file
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|| cwd.clone())
-        });
+        .unwrap_or_else(|| env_file.parent().map(Path::to_path_buf).unwrap_or_else(|| cwd.clone()));
     let repo = target
         .repo
         .as_deref()
@@ -802,8 +810,8 @@ fn resolve_vault_target(target: &VaultTargetArgs, vault_dir: Option<PathBuf>) ->
         .or_else(|| repo_root.file_name().map(|value| value.to_string_lossy().trim().to_string()))
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow!("unable to determine vault repo name"))?;
-    let env_name =
-        explicit_env_name.unwrap_or_else(|| infer_env_name(&env_file).unwrap_or_else(|| "dev".to_owned()));
+    let env_name = explicit_env_name
+        .unwrap_or_else(|| infer_env_name(&env_file).unwrap_or_else(|| "dev".to_owned()));
     Ok(VaultTarget { repo_root, repo, env: env_name, env_file })
 }
 
@@ -911,9 +919,13 @@ fn find_keyring_entry(doc: &KeyringDoc, target: &VaultTarget) -> Option<KeyringE
     if let Some(entry) = doc.entries.get(&key) {
         return Some(entry.clone());
     }
-    doc.entries.values().find(|entry| {
-        entry.repo.eq_ignore_ascii_case(&target.repo) && entry.env.eq_ignore_ascii_case(&target.env)
-    }).cloned()
+    doc.entries
+        .values()
+        .find(|entry| {
+            entry.repo.eq_ignore_ascii_case(&target.repo)
+                && entry.env.eq_ignore_ascii_case(&target.env)
+        })
+        .cloned()
 }
 
 fn canonical_keypair(doc: &KeyringDoc) -> Result<Option<(String, String)>> {
@@ -942,7 +954,9 @@ fn canonical_keypair(doc: &KeyringDoc) -> Result<Option<(String, String)>> {
 
 fn load_keyring_doc(path: &Path) -> Result<KeyringDoc> {
     match fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display())),
+        Ok(bytes) => {
+            serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))
+        }
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(KeyringDoc::default()),
         Err(err) => Err(err).with_context(|| format!("read {}", path.display())),
     }
@@ -1060,10 +1074,7 @@ impl DotenvDoc {
             self.lines[index].text = assignment;
             return;
         }
-        self.lines.insert(
-            0,
-            DotenvLine { text: assignment, nl: self.default_nl.clone() },
-        );
+        self.lines.insert(0, DotenvLine { text: assignment, nl: self.default_nl.clone() });
     }
 
     fn lookup(&self, key: &str) -> Option<String> {
@@ -1129,10 +1140,7 @@ impl DotenvDoc {
             }
             entries.insert(key.clone(), DotenvEntry { key, value_raw });
         }
-        Ok(order
-            .into_iter()
-            .filter_map(|key| entries.remove(&key))
-            .collect())
+        Ok(order.into_iter().filter_map(|key| entries.remove(&key)).collect())
     }
 
     fn scan(&self) -> Result<DotenvScan> {
@@ -1201,7 +1209,10 @@ impl DotenvDoc {
             if !is_encrypted_value(&value) {
                 continue;
             }
-            line.text = format!("{key}={}", render_dotenv_plain(&decrypt_value(&value, private_key_hexes)?)?);
+            line.text = format!(
+                "{key}={}",
+                render_dotenv_plain(&decrypt_value(&value, private_key_hexes)?)?
+            );
             decrypted += 1;
         }
         Ok(decrypted)
@@ -1215,7 +1226,8 @@ impl DotenvDoc {
                 continue;
             }
             if is_encrypted_value(&entry.value_raw) {
-                values.insert(entry.key.clone(), decrypt_value(&entry.value_raw, private_key_hexes)?);
+                values
+                    .insert(entry.key.clone(), decrypt_value(&entry.value_raw, private_key_hexes)?);
             } else {
                 values.insert(entry.key.clone(), entry.value_raw.clone());
                 if !entry.value_raw.is_empty() {
@@ -1322,8 +1334,8 @@ fn encrypt_value(plain: &str, public_key_hex: &str) -> Result<String> {
         return Ok(SI_VAULT_ENCRYPTED_PREFIX.to_owned());
     }
     let public = hex::decode(public_key_hex).context("decode public key")?;
-    let cipher = ecies_encrypt(&public, plain.as_bytes())
-        .map_err(|err| anyhow!("encrypt value: {err}"))?;
+    let cipher =
+        ecies_encrypt(&public, plain.as_bytes()).map_err(|err| anyhow!("encrypt value: {err}"))?;
     Ok(format!("{SI_VAULT_ENCRYPTED_PREFIX}{}", BASE64_STANDARD.encode(cipher)))
 }
 
@@ -1397,11 +1409,7 @@ fn restore_backup_path(env_file: &Path) -> PathBuf {
 
     let digest = Sha256::digest(env_file.display().to_string().as_bytes());
     let name = format!("{}.enc", hex::encode(&digest[..16]));
-    env_file
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(".si-vault-restore")
-        .join(name)
+    env_file.parent().unwrap_or_else(|| Path::new(".")).join(".si-vault-restore").join(name)
 }
 
 fn save_restore_backup(env_file: &Path, bytes: &[u8]) -> Result<()> {
@@ -1410,11 +1418,9 @@ fn save_restore_backup(env_file: &Path, bytes: &[u8]) -> Result<()> {
 
 fn resolve_hook_repo_root(vault_dir: Option<PathBuf>) -> Result<PathBuf> {
     let cwd = env::current_dir().context("read current dir")?;
-    let start = vault_dir
-        .as_deref()
-        .map(|path| absolutize_path(path, &cwd))
-        .unwrap_or(cwd);
-    git_repo_root_from(&start).map_err(|_| anyhow!("vault dir not found (run inside a git repo or set --vault-dir)"))
+    let start = vault_dir.as_deref().map(|path| absolutize_path(path, &cwd)).unwrap_or(cwd);
+    git_repo_root_from(&start)
+        .map_err(|_| anyhow!("vault dir not found (run inside a git repo or set --vault-dir)"))
 }
 
 fn git_hooks_dir(repo_root: &Path) -> Result<PathBuf> {
@@ -1466,7 +1472,11 @@ fn write_executable_file(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn staged_dotenv_files(repo_root: &Path, scan_root: &Path, include_examples: bool) -> Result<Vec<PathBuf>> {
+fn staged_dotenv_files(
+    repo_root: &Path,
+    scan_root: &Path,
+    include_examples: bool,
+) -> Result<Vec<PathBuf>> {
     let staged = git_staged_files(repo_root)?;
     let mut files = Vec::new();
     for relative in staged {
@@ -1565,11 +1575,7 @@ fn path_is_within(child: &Path, parent: &Path) -> bool {
 }
 
 fn absolutize_path(path: &Path, base: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        base.join(path)
-    }
+    if path.is_absolute() { path.to_path_buf() } else { base.join(path) }
 }
 
 fn normalize_trailing_args(mut args: Vec<String>) -> Vec<String> {
