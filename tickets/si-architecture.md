@@ -1190,13 +1190,13 @@ Most useful lessons to retain:
 - from codex-app-server-client-sdk: App Server deserves a clean client layer
 - from tmux-agent-status and opensessions: operator UX matters, but should not become runtime truth
 
-## What SI should build next
+## Accepted SI build-out
 
 ### Phase 1: domain core
 
-Create `si-nucleus-core`.
+`si-nucleus-core` is accepted.
 
-It should contain:
+It contains:
 - task, worker, session, run, event, and profile types
 - ids
 - state transitions
@@ -1206,9 +1206,9 @@ It should contain:
 
 ### Phase 2: nucleus service
 
-Create `si-nucleus`.
+`si-nucleus` is accepted.
 
-It should contain:
+It contains:
 - WebSocket gateway server
 - request dispatch
 - event fanout
@@ -1227,9 +1227,9 @@ It should contain:
 
 ### Phase 3: runtime boundary
 
-Create `si-nucleus-runtime`.
+`si-nucleus-runtime` is accepted.
 
-It should define:
+It defines:
 - runtime trait
 - worker startup contract
 - App Server client contract
@@ -1240,9 +1240,9 @@ It should define:
 
 ### Phase 4: Codex runtime implementation
 
-Create `si-nucleus-runtime-codex`.
+`si-nucleus-runtime-codex` is accepted.
 
-It should implement:
+It implements:
 - local process launch of `codex app-server`
 - worker env shaping
 - `CODEX_HOME` management
@@ -1252,7 +1252,9 @@ It should implement:
 
 ### Phase 5: CLI integration
 
-Update `si` CLI so that:
+`si` CLI integration is accepted.
+
+The CLI now follows these contracts:
 - `si codex ...` is a worker/runtime-facing surface
 - `si nucleus ...` becomes the control-plane-facing surface
 - `si nucleus task ...`, `si nucleus session ...`, and `si nucleus run ...` become the main orchestration surfaces
@@ -1261,9 +1263,9 @@ Update `si` CLI so that:
 
 ### Phase 6: Fort integration
 
-Only start this phase after phases 1 through 5 are accepted.
+Phase 6 is accepted after phases 1 through 5.
 
-It should contain:
+It contains:
 - documented worker-facing Fort access path
 - Fort capability and failure normalization into canonical SI events
 - blocked-reason projection for Fort-related failures
@@ -1271,9 +1273,9 @@ It should contain:
 
 ### Phase 7: annotated REST API for external integrations
 
-Only start this phase after phases 1 through 6 are accepted and end-to-end integration testing is passing.
+Phase 7 is accepted after phases 1 through 6 and end-to-end integration testing.
 
-It should contain:
+It contains:
 - REST handlers over the canonical Nucleus model
 - OpenAPI-compatible schema generation
 - endpoint summaries and descriptions
@@ -1300,7 +1302,7 @@ Allowed work-item statuses:
 - `accepted`
 - `dropped`
 
-Current planned work items:
+Current tracked work items:
 - Phase 1 `si-nucleus-core`: `accepted`
 - Phase 2 `si-nucleus`: `accepted`
 - Phase 3 `si-nucleus-runtime`: `accepted`
@@ -1311,9 +1313,9 @@ Current planned work items:
 
 Current audit status as of 2026-04-16:
 - all seven tracked work items remain relevant and accepted
-- no `planned` or `active` ticket work remains open in this directory
+- no ticket work remains open in this directory
 - the latest implementation follow-up tightened unroutable-task blocking, single-owner state locking, bind-before-runtime startup, empty-hook replay behavior, and cancelled-task pruning
-- the live Nucleus service was verified on `v0.57.19` with two ready workers, no queued/running/blocked tasks, and a clean canonical event-ledger parse
+- the live Nucleus service was verified on `v0.57.20` with two ready workers, no queued/running/blocked tasks, and a clean canonical event-ledger parse
 
 Implementation notes:
 - `[implementation-note:nucleus-phase1-2026-04-05]` Phase 1 landed in `rust/crates/si-nucleus-core` with canonical task, worker, session, run, event, and profile types; explicit transition validation; and App Server thread, turn, item, account, and config projection types.
