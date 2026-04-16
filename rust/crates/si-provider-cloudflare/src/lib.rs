@@ -483,10 +483,19 @@ fn resolve_api_url(
     let mut url = if path.starts_with("http://") || path.starts_with("https://") {
         Url::parse(path).map_err(|err| format!("parse cloudflare url {:?}: {err}", path))?
     } else {
-        let base = Url::parse(base_url)
+        let mut base = Url::parse(base_url)
             .map_err(|err| format!("parse cloudflare base url {:?}: {err}", base_url))?;
-        let trimmed = if path.starts_with('/') { path.to_owned() } else { format!("/{path}") };
-        base.join(&trimmed).map_err(|err| format!("resolve cloudflare path {:?}: {err}", path))?
+        let base_path = base.path().trim_end_matches('/');
+        let relative_path = path.trim_start_matches('/');
+        let resolved_path = if base_path.is_empty() || base_path == "/" {
+            format!("/{relative_path}")
+        } else if relative_path.is_empty() {
+            base_path.to_owned()
+        } else {
+            format!("{base_path}/{relative_path}")
+        };
+        base.set_path(&resolved_path);
+        base
     };
     if params.iter().any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty()) {
         let mut pairs = url.query_pairs_mut();
@@ -840,5 +849,61 @@ mod tests {
         assert_eq!(runtime.source, "flag:--account-id,flag:--zone-id,flag:--api-token");
         let status = CloudflareAuthStatus::from(&runtime);
         assert_eq!(status.token_preview, "cf-tok...");
+    }
+
+    #[test]
+    fn resolve_api_url_preserves_base_path_for_leading_slash_paths() {
+        let url = resolve_api_url(
+            "https://api.cloudflare.com/client/v4",
+            "/zones/abc/dns_records",
+            &BTreeMap::new(),
+        )
+        .expect("url");
+
+        assert_eq!(url, "https://api.cloudflare.com/client/v4/zones/abc/dns_records");
+    }
+
+    #[test]
+    fn resolve_api_url_preserves_base_path_for_relative_paths() {
+        let url = resolve_api_url(
+            "https://api.cloudflare.com/client/v4",
+            "accounts/abc/r2/buckets",
+            &BTreeMap::new(),
+        )
+        .expect("url");
+
+        assert_eq!(url, "https://api.cloudflare.com/client/v4/accounts/abc/r2/buckets");
+    }
+
+    #[test]
+    fn resolve_api_url_handles_trailing_base_slash_and_query_params() {
+        let params = BTreeMap::from([
+            ("page".to_owned(), "2".to_owned()),
+            ("per_page".to_owned(), "50".to_owned()),
+        ]);
+        let url = resolve_api_url(
+            "https://api.cloudflare.com/client/v4/",
+            "/zones/abc/dns_records",
+            &params,
+        )
+        .expect("url");
+
+        assert_eq!(
+            url,
+            "https://api.cloudflare.com/client/v4/zones/abc/dns_records?page=2&per_page=50"
+        );
+    }
+
+    #[test]
+    fn resolve_api_url_passes_through_absolute_urls() {
+        let params = BTreeMap::from([("page".to_owned(), "1".to_owned())]);
+        let url = resolve_api_url(
+            "https://api.cloudflare.com/client/v4",
+            "https://api.cloudflare.com/client/v4/certificates",
+            &params,
+        )
+        .expect("url");
+
+        assert_eq!(url, "https://api.cloudflare.com/client/v4/certificates?page=1");
     }
 }

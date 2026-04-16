@@ -773,15 +773,16 @@ fn load_rsa_private_key(path: &str, passphrase: &str) -> Result<RsaPrivateKey, S
     }
     let raw = fs::read_to_string(path)
         .map_err(|err| format!("read oci private key {:?}: {err}", path))?;
+    let pem = extract_private_key_pem(&raw);
     if passphrase.trim().is_empty() {
-        if private_key_needs_passphrase(&raw) {
+        if private_key_needs_passphrase(&pem) {
             return Err("encrypted oci private key requires passphrase".to_owned());
         }
-        return RsaPrivateKey::from_pkcs8_pem(&raw)
-            .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&raw))
+        return RsaPrivateKey::from_pkcs8_pem(&pem)
+            .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&pem))
             .map_err(|err| format!("parse oci private key: {err}"));
     }
-    if private_key_needs_passphrase(&raw) {
+    if private_key_needs_passphrase(&pem) {
         return Err(
             "encrypted oci private key format is not yet supported by the Rust OCI provider"
                 .to_owned(),
@@ -791,6 +792,37 @@ fn load_rsa_private_key(path: &str, passphrase: &str) -> Result<RsaPrivateKey, S
         "parse oci private key: passphrase was provided but the key is not a supported encrypted PKCS#8 PEM"
             .to_owned(),
     )
+}
+
+fn extract_private_key_pem(raw: &str) -> String {
+    const BEGIN_MARKERS: [&str; 3] = [
+        "-----BEGIN PRIVATE KEY-----",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----",
+    ];
+    const END_MARKERS: [&str; 3] = [
+        "-----END PRIVATE KEY-----",
+        "-----END RSA PRIVATE KEY-----",
+        "-----END ENCRYPTED PRIVATE KEY-----",
+    ];
+
+    let mut lines = Vec::new();
+    let mut collecting = false;
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if !collecting && BEGIN_MARKERS.iter().any(|marker| *marker == trimmed) {
+            collecting = true;
+        }
+        if collecting {
+            lines.push(trimmed.to_owned());
+            if END_MARKERS.iter().any(|marker| *marker == trimmed) {
+                return format!("{}
+", lines.join("
+"));
+            }
+        }
+    }
+    raw.trim().to_owned()
 }
 
 fn private_key_needs_passphrase(raw: &str) -> bool {
