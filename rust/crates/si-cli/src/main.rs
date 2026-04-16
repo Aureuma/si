@@ -1349,6 +1349,7 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareTunnelCommand,
     },
+    #[command(alias = "ssl")]
     Tls {
         #[command(subcommand)]
         command: CloudflareTLSCommand,
@@ -3177,6 +3178,10 @@ enum CloudflareCacheCommand {
         #[command(subcommand)]
         command: CloudflareCacheSettingsCommand,
     },
+    Tiered {
+        #[command(subcommand)]
+        command: CloudflareCacheTieredCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -3210,6 +3215,62 @@ enum CloudflareCacheSettingsCommand {
     Set {
         #[arg(long)]
         setting: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareCacheTieredCommand {
+    Get {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Set {
         #[arg(long)]
         value: String,
         #[arg(long)]
@@ -4140,6 +4201,81 @@ enum AWSIamCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSIamUserCommand {
+    List {
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        name: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(name = "attached", alias = "policies")]
+    AttachedPolicies {
+        user: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         name: String,
@@ -12267,6 +12403,59 @@ enum OciIdentityAvailabilityDomainsCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciIdentityCompartmentCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        parent: Option<String>,
+        #[arg(long)]
+        access_level: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        compartment_id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12328,6 +12517,13 @@ enum OciNetworkCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciNetworkVCNCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        vcn_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12366,6 +12562,13 @@ enum OciNetworkVCNCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciNetworkInternetGatewayCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        gateway_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12404,6 +12607,13 @@ enum OciNetworkInternetGatewayCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciNetworkRouteTableCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        route_table_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12442,6 +12652,13 @@ enum OciNetworkRouteTableCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciNetworkSecurityListCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        security_list_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12480,6 +12697,13 @@ enum OciNetworkSecurityListCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciNetworkSubnetCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        subnet_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -12602,6 +12826,13 @@ enum OciComputeImageCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciComputeInstanceCommand {
+    List {
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
+    Get {
+        instance_id: String,
+        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+    },
     Create {
         #[arg(long)]
         account: Option<String>,
@@ -22221,6 +22452,62 @@ fn main() -> Result<()> {
                         settings_file,
                     )?,
                 },
+                CloudflareCacheCommand::Tiered { command } => match command {
+                    CloudflareCacheTieredCommand::Get {
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_cache_tiered_get(
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareCacheTieredCommand::Set {
+                        value,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_cache_tiered_set(
+                        value,
+                        json,
+                        raw,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
@@ -22761,6 +23048,91 @@ fn main() -> Result<()> {
             },
             AWSCommand::Iam { command } => match command {
                 AWSIamCommand::User { command } => match command {
+                    AWSIamUserCommand::List {
+                        json,
+                        raw,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_iam_user_list(
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSIamUserCommand::Get {
+                        name,
+                        json,
+                        raw,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_iam_user_get(
+                            name,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    AWSIamUserCommand::AttachedPolicies {
+                        user,
+                        json,
+                        raw,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_iam_user_attached_policy_list(
+                            user,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
                     AWSIamUserCommand::Create {
                         name,
                         path,
@@ -30526,6 +30898,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciIdentityCommand::Compartment { command } => match command {
+                    OciIdentityCompartmentCommand::List { account, profile, config_file, region, base_url, auth, parent, access_level, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_identity_compartment_list(account, profile, config_file, region, base_url, auth, parent, access_level, home, settings_file, format, raw)?
+                    }
+                    OciIdentityCompartmentCommand::Get { compartment_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_identity_compartment_get(compartment_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciIdentityCompartmentCommand::Create {
                         account,
                         profile,
@@ -30563,6 +30943,14 @@ fn main() -> Result<()> {
             },
             OciCommand::Network { command } => match command {
                 OciNetworkCommand::Vcn { command } => match command {
+                    OciNetworkVCNCommand::List { account, profile, config_file, region, base_url, auth, compartment, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_vcn_list(account, profile, config_file, region, base_url, auth, compartment, home, settings_file, format, raw)?
+                    }
+                    OciNetworkVCNCommand::Get { vcn_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_vcn_get(vcn_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciNetworkVCNCommand::Create {
                         account,
                         profile,
@@ -30602,6 +30990,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::InternetGateway { command } => match command {
+                    OciNetworkInternetGatewayCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_internet_gateway_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                    }
+                    OciNetworkInternetGatewayCommand::Get { gateway_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_internet_gateway_get(gateway_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciNetworkInternetGatewayCommand::Create {
                         account,
                         profile,
@@ -30641,6 +31037,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::RouteTable { command } => match command {
+                    OciNetworkRouteTableCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_route_table_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                    }
+                    OciNetworkRouteTableCommand::Get { route_table_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_route_table_get(route_table_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciNetworkRouteTableCommand::Create {
                         account,
                         profile,
@@ -30680,6 +31084,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::SecurityList { command } => match command {
+                    OciNetworkSecurityListCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_security_list_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                    }
+                    OciNetworkSecurityListCommand::Get { security_list_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_security_list_get(security_list_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciNetworkSecurityListCommand::Create {
                         account,
                         profile,
@@ -30719,6 +31131,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::Subnet { command } => match command {
+                    OciNetworkSubnetCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_subnet_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                    }
+                    OciNetworkSubnetCommand::Get { subnet_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_subnet_get(subnet_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciNetworkSubnetCommand::Create {
                         account,
                         profile,
@@ -30834,6 +31254,14 @@ fn main() -> Result<()> {
                     }
                 },
                 OciComputeCommand::Instance { command } => match command {
+                    OciComputeInstanceCommand::List { account, profile, config_file, region, base_url, auth, compartment, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_compute_instance_list(account, profile, config_file, region, base_url, auth, compartment, home, settings_file, format, raw)?
+                    }
+                    OciComputeInstanceCommand::Get { instance_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_compute_instance_get(instance_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                    }
                     OciComputeInstanceCommand::Create {
                         account,
                         profile,
@@ -39937,6 +40365,96 @@ fn run_aws_sts_assume_role(
         home,
         settings_file,
         |runtime| execute_aws_query(&runtime, "sts", "2011-06-15", "AssumeRole", &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_user_list(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "ListUsers", &BTreeMap::new()),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_user_get(
+    name: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    params.insert("UserName".to_owned(), name);
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "GetUser", &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_user_attached_policy_list(
+    user: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    params.insert("UserName".to_owned(), user);
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "ListAttachedUserPolicies", &params),
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -54068,6 +54586,84 @@ fn maybe_absolute_oci_identity_path(base_url: &Option<String>, path: &str) -> St
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_oci_list_core_resource(
+    path: &str,
+    params: std::collections::BTreeMap<String, String>,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    execute_oci_api_command(
+        account, profile, config_file, region, base_url, auth, home, settings_file,
+        OCIAPIRequest { path: path.to_owned(), params, ..OCIAPIRequest::default() },
+        format, raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_get_core_resource(
+    path: &str,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_list_core_resource(path, std::collections::BTreeMap::new(), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_list_identity_resource(
+    path: String,
+    params: std::collections::BTreeMap<String, String>,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    execute_oci_api_command(
+        account, profile, config_file, region, base_url.clone(), auth, home, settings_file,
+        OCIAPIRequest { path, params, service: OCIAPIService::Identity, ..OCIAPIRequest::default() },
+        format, raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_get_identity_resource(
+    path: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_list_identity_resource(path, std::collections::BTreeMap::new(), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_oci_identity_availability_domains_list(
     account: Option<String>,
     profile: Option<String>,
@@ -54120,6 +54716,24 @@ fn run_oci_identity_availability_domains_list(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_oci_identity_compartment_list(
+    account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, parent: Option<String>, access_level: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool,
+) -> Result<()> {
+    let mut params = std::collections::BTreeMap::new();
+    if let Some(parent) = parent.filter(|v| !v.trim().is_empty()) { params.insert("compartmentId".to_owned(), parent); }
+    if let Some(access_level) = access_level.filter(|v| !v.trim().is_empty()) { params.insert("accessLevel".to_owned(), access_level); }
+    run_oci_list_identity_resource(maybe_absolute_oci_identity_path(&base_url, "/20160918/compartments"), params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_identity_compartment_get(
+    compartment_id: String,
+    account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool,
+) -> Result<()> {
+    run_oci_get_identity_resource(maybe_absolute_oci_identity_path(&base_url, &format!("/20160918/compartments/{}", compartment_id.trim())), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_oci_identity_compartment_create(
     account: Option<String>,
     profile: Option<String>,
@@ -54160,6 +54774,60 @@ fn run_oci_identity_compartment_create(
         format,
         raw,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_vcn_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    run_oci_list_core_resource("/20160918/vcns", std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_vcn_get(vcn_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/vcns/{}", vcn_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_internet_gateway_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
+    run_oci_list_core_resource("/20160918/internetGateways", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_internet_gateway_get(gateway_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/internetGateways/{}", gateway_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_route_table_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
+    run_oci_list_core_resource("/20160918/routeTables", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_route_table_get(route_table_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/routeTables/{}", route_table_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_security_list_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
+    run_oci_list_core_resource("/20160918/securityLists", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_security_list_get(security_list_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/securityLists/{}", security_list_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_subnet_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
+    run_oci_list_core_resource("/20160918/subnets", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_subnet_get(subnet_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/subnets/{}", subnet_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54509,6 +55177,16 @@ fn run_oci_compute_image_latest_ubuntu(
         format,
         raw,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_compute_instance_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    run_oci_list_core_resource("/20160918/instances", std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+}
+#[allow(clippy::too_many_arguments)]
+fn run_oci_compute_instance_get(instance_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+    run_oci_get_core_resource(&format!("/20160918/instances/{}", instance_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59146,6 +59824,82 @@ fn run_cloudflare_cache_setting_set(
     run_cloudflare_tls_setting_set(
         setting,
         value,
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_cache_tiered_get(
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/zones/{zone_id}/argo/tiered_caching".to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json,
+        raw,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_cache_tiered_set(
+    value: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let normalized = value.trim().to_ascii_lowercase();
+    if normalized != "on" && normalized != "off" {
+        anyhow::bail!("tiered cache value must be 'on' or 'off'");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PATCH".to_owned(),
+            path: "/zones/{zone_id}/argo/tiered_caching".to_owned(),
+            json_body: Some(serde_json::json!({ "value": normalized })),
+            ..CloudflareAPIRequest::default()
+        },
         json,
         raw,
         account,

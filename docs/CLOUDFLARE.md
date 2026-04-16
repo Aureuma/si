@@ -70,7 +70,7 @@ si orbit cloudflare dns import --zone-id <zone_id> --body '<BIND DATA>' --force
 ```bash
 si orbit cloudflare tls get --zone-id <zone_id> --setting min_tls_version
 si orbit cloudflare tls set --zone-id <zone_id> --setting min_tls_version --value 1.2
-si orbit cloudflare ssl get --zone-id <zone_id> --setting ssl
+si orbit cloudflare tls get --zone-id <zone_id> --setting ssl
 si orbit cloudflare tls cert list --zone-id <zone_id>
 si orbit cloudflare cert list --zone-id <zone_id>
 si orbit cloudflare tls origin list
@@ -78,6 +78,8 @@ si orbit cloudflare origin list
 
 si orbit cloudflare cache purge --zone-id <zone_id> --everything --force
 si orbit cloudflare cache settings get --zone-id <zone_id> --setting cache_level
+si orbit cloudflare cache tiered get --zone-id <zone_id>
+si orbit cloudflare cache tiered set --zone-id <zone_id> --value on
 
 si orbit cloudflare waf list --zone-id <zone_id>
 si orbit cloudflare ruleset list --zone-id <zone_id>
@@ -155,6 +157,16 @@ si orbit cloudflare report traffic-summary --zone-id <zone_id>
 si orbit cloudflare raw --method GET --path /zones
 si orbit cloudflare api --method GET --path /zones
 si orbit cloudflare raw --method POST --path /zones/<zone_id>/purge_cache --body '{"purge_everything":true}'
+```
+
+For routine state audits, prefer direct commands over `raw`:
+
+```bash
+si orbit cloudflare dns list --zone-id <zone_id>
+si orbit cloudflare r2 bucket list --account-id <account_id>
+si orbit cloudflare tls origin list
+si orbit cloudflare tls get --zone-id <zone_id> --setting ssl
+si orbit cloudflare cache tiered get --zone-id <zone_id>
 ```
 
 ## Error Reporting

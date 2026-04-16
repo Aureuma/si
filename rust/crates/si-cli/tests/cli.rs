@@ -17798,6 +17798,112 @@ fn cloudflare_cache_purge_json_posts_zone_endpoint() {
 }
 
 #[test]
+fn cloudflare_cache_tiered_get_json_fetches_zone_argo_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(
+            request.starts_with("GET /zones/zone_123/argo/tiered_caching?scope=all HTTP/1.1\r\n")
+        );
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_cache_tiered_get")],
+            r#"{"success":true,"result":{"id":"zone_123","value":"on"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["orbit", "cloudflare", "cache", "tiered", "get"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "scope=all",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_cache_tiered_get");
+    assert_eq!(parsed["data"]["value"], "on");
+    server.join();
+}
+
+#[test]
+fn cloudflare_cache_tiered_set_json_patches_zone_argo_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /zones/zone_123/argo/tiered_caching HTTP/1.1\r\n"));
+        assert!(request.contains("\"value\":\"off\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_cache_tiered_set")],
+            r#"{"success":true,"result":{"id":"zone_123","value":"off"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["orbit", "cloudflare", "cache", "tiered", "set"])
+        .args([
+            "--value",
+            "off",
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_cache_tiered_set");
+    assert_eq!(parsed["data"]["value"], "off");
+    server.join();
+}
+
+#[test]
+fn cloudflare_ssl_alias_get_json_fetches_zone_setting_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones/zone_123/settings/ssl HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_ssl_alias_get")],
+            r#"{"success":true,"result":{"id":"ssl","value":"strict"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["orbit", "cloudflare", "ssl", "get"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_ssl_alias_get");
+    assert_eq!(parsed["data"]["value"], "strict");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

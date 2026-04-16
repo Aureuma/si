@@ -42,6 +42,8 @@ For SI runtime workers, use `si fort ...` for secret access.
 si orbit aws sts whoami --json
 si orbit aws sts assume --role-arn arn:aws:iam::123456789012:role/Deploy --session-name si-session --json
 si orbit aws iam user list --json
+si orbit aws iam user get deploy-bot --json
+si orbit aws iam user attached deploy-bot --json
 si orbit aws iam role list --json
 ```
 

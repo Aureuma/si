@@ -35,15 +35,27 @@ si orbit oci doctor --profile DEFAULT --region us-ashburn-1 --public --json
 
 ```bash
 si orbit oci identity domains list --tenancy <tenancy_ocid> --json
+si orbit oci identity compartment list --parent <tenancy_ocid> --json
+si orbit oci identity compartment get <compartment_ocid> --json
 si orbit oci identity compartment create --parent <compartment_ocid> --name apps --description "application compartment" --json
 ```
 
-## Network bootstrap
+## Network bootstrap and reads
 
 ```bash
+si orbit oci network vcn list --compartment <ocid> --json
+si orbit oci network vcn get <vcn_ocid> --json
 si orbit oci network vcn create --compartment <ocid> --cidr 10.0.0.0/16 --display-name core-vcn --json
+si orbit oci network gateway list --compartment <ocid> --vcn-id <vcn_ocid> --json
+si orbit oci network gateway get <gateway_ocid> --json
 si orbit oci network gateway create --compartment <ocid> --vcn-id <vcn_ocid> --display-name igw --enabled --json
+si orbit oci network routes list --compartment <ocid> --vcn-id <vcn_ocid> --json
+si orbit oci network routes get <route_table_ocid> --json
+si orbit oci network security list --compartment <ocid> --vcn-id <vcn_ocid> --json
+si orbit oci network security get <security_list_ocid> --json
 si orbit oci network security create --compartment <ocid> --vcn-id <vcn_ocid> --ssh-port 22 --json
+si orbit oci network subnet list --compartment <ocid> --vcn-id <vcn_ocid> --json
+si orbit oci network subnet get <subnet_ocid> --json
 si orbit oci network subnet create --compartment <ocid> --vcn-id <vcn_ocid> --route-table-id <rt_ocid> --security-list-id <sl_ocid> --dhcp-options-id <dhcp_ocid> --json
 ```
 
@@ -51,6 +63,8 @@ si orbit oci network subnet create --compartment <ocid> --vcn-id <vcn_ocid> --ro
 
 ```bash
 si orbit oci compute image ubuntu --tenancy <ocid> --shape VM.Standard.E4.Flex --json
+si orbit oci compute instance list --compartment <ocid> --json
+si orbit oci compute instance get <instance_ocid> --json
 si orbit oci compute instance create --compartment <ocid> --ad <availability_domain> --subnet-id <subnet_ocid> --image-id <image_ocid> --json
 ```
 
