@@ -7602,6 +7602,44 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
         json!("opaque token")
     );
+    for (path, method, operation_id) in [
+        ("/status", "get", "getNucleusStatus"),
+        ("/tasks", "get", "listTasks"),
+        ("/tasks", "post", "createTask"),
+        ("/tasks/{task_id}", "get", "inspectTask"),
+        ("/tasks/{task_id}/cancel", "post", "cancelTask"),
+        ("/workers", "get", "listWorkers"),
+        ("/workers/{worker_id}", "get", "inspectWorker"),
+        ("/sessions/{session_id}", "get", "inspectSession"),
+        ("/runs/{run_id}", "get", "inspectRun"),
+        ("/openapi.json", "get", "getOpenApiDocument"),
+    ] {
+        assert_eq!(body["paths"][path][method]["operationId"], json!(operation_id));
+    }
+    assert_eq!(
+        body["components"]["schemas"]["TaskCreateParams"]["additionalProperties"],
+        json!(false)
+    );
+    assert_eq!(
+        body["components"]["schemas"]["TaskCreateParams"]["properties"]["source"]["default"],
+        json!("websocket")
+    );
+    assert_eq!(
+        body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["schema"]["pattern"],
+        json!("^si-task-.+")
+    );
+    assert_eq!(
+        body["paths"]["/workers/{worker_id}"]["get"]["parameters"][0]["schema"]["pattern"],
+        json!("^si-worker-.+")
+    );
+    assert_eq!(
+        body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["schema"]["pattern"],
+        json!("^si-session-.+")
+    );
+    assert_eq!(
+        body["paths"]["/runs/{run_id}"]["get"]["parameters"][0]["schema"]["pattern"],
+        json!("^si-run-.+")
+    );
     for (path, method) in [
         ("/status", "get"),
         ("/tasks", "get"),
@@ -7724,7 +7762,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["description"],
-        json!("Canonical SI task id.")
+        json!("Canonical SI task id returned by task creation or task listing.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["summary"],
@@ -7762,7 +7800,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["parameters"][0]["description"],
-        json!("Canonical SI task id.")
+        json!("Canonical SI task id returned by task creation or task listing.")
     );
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["summary"],
@@ -7851,7 +7889,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["parameters"][0]["description"],
-        json!("Canonical SI worker id.")
+        json!("Canonical SI worker id returned by worker listing.")
     );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["responses"]["404"]["content"]["application/json"]
@@ -7889,7 +7927,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["description"],
-        json!("Canonical SI session id.")
+        json!("Canonical SI session id returned by session or run inspection.")
     );
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["responses"]["404"]["content"]["application/json"]
@@ -7927,7 +7965,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["parameters"][0]["description"],
-        json!("Canonical SI run id.")
+        json!("Canonical SI run id returned by task or session inspection.")
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
@@ -8063,7 +8101,8 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             .is_object()
     );
     assert_eq!(
-        body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["$ref"],
+        body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["allOf"][0]
+            ["$ref"],
         json!("#/components/schemas/WorkerRecord")
     );
     for (path, method) in [
