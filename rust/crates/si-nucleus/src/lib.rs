@@ -4456,7 +4456,124 @@ fn schema_ref(name: &str) -> Value {
     json!({ "$ref": format!("#/components/schemas/{name}") })
 }
 
+fn openapi_json_content(schema: Value) -> Value {
+    json!({ "application/json": { "schema": schema } })
+}
+
+fn openapi_json_content_example(schema: Value, example: Value) -> Value {
+    json!({ "application/json": { "schema": schema, "example": example } })
+}
+
+fn openapi_id_schema(prefix: &str, example: &str) -> Value {
+    json!({
+        "type": "string",
+        "pattern": format!("^{prefix}.+"),
+        "example": example
+    })
+}
+
+fn openapi_path_id_parameter(name: &str, description: &str, prefix: &str, example: &str) -> Value {
+    json!({
+        "name": name,
+        "in": "path",
+        "required": true,
+        "schema": openapi_id_schema(prefix, example),
+        "description": description,
+        "example": example
+    })
+}
+
+fn task_record_example() -> Value {
+    json!({
+        "task_id": "si-task-0123456789abcdef00000001",
+        "source": "websocket",
+        "title": "Audit Nucleus tasks",
+        "instructions": "Inspect queued and running tasks and report any items that are stuck.",
+        "status": "queued",
+        "profile": "default",
+        "session_id": null,
+        "latest_run_id": null,
+        "checkpoint_summary": null,
+        "checkpoint_at": null,
+        "checkpoint_seq": null,
+        "parent_task_id": null,
+        "producer_rule_name": null,
+        "producer_dedup_key": null,
+        "blocked_reason": null,
+        "created_at": "2026-04-17T00:00:00Z",
+        "updated_at": "2026-04-17T00:00:00Z",
+        "max_retries": 0,
+        "timeout_seconds": 900
+    })
+}
+
+fn run_record_example() -> Value {
+    json!({
+        "run_id": "si-run-0123456789abcdef00000001",
+        "task_id": "si-task-0123456789abcdef00000001",
+        "session_id": "si-session-0123456789abcdef00000001",
+        "status": "running",
+        "started_at": "2026-04-17T00:00:05Z",
+        "ended_at": null,
+        "parent_run_id": null,
+        "app_server_turn_id": null
+    })
+}
+
+fn worker_record_example() -> Value {
+    json!({
+        "worker_id": "si-worker-0123456789abcdef00000001",
+        "profile": "default",
+        "home_dir": "/home/si",
+        "codex_home": "/home/si/.codex",
+        "workdir": "/home/si/Development/si",
+        "extra_env": {},
+        "status": "ready",
+        "capability_version": env!("CARGO_PKG_VERSION"),
+        "last_heartbeat_at": "2026-04-17T00:00:00Z",
+        "effective_account_state": "authenticated"
+    })
+}
+
+fn session_record_example() -> Value {
+    json!({
+        "session_id": "si-session-0123456789abcdef00000001",
+        "worker_id": "si-worker-0123456789abcdef00000001",
+        "profile": "default",
+        "app_server_thread_id": "thread_0123456789abcdef",
+        "workdir": "/home/si/Development/si",
+        "lifecycle_state": "ready",
+        "summary_state": "idle",
+        "created_at": "2026-04-17T00:00:00Z",
+        "updated_at": "2026-04-17T00:00:00Z"
+    })
+}
+
+fn openapi_id_property(description: &str, prefix: &str, example: &str) -> Value {
+    let mut schema = openapi_id_schema(prefix, example);
+    if let Some(object) = schema.as_object_mut() {
+        object.insert("description".to_owned(), json!(description));
+        object.insert("readOnly".to_owned(), json!(true));
+    }
+    schema
+}
+
+fn openapi_nullable_id_property(description: &str, prefix: &str, example: Value) -> Value {
+    json!({
+        "type": ["string", "null"],
+        "description": description,
+        "pattern": format!("^{prefix}.+"),
+        "example": example,
+        "readOnly": true
+    })
+}
+
 fn openapi_document(_config: &NucleusConfig) -> Value {
+    let task_example = task_record_example();
+    let run_example = run_record_example();
+    let worker_example = worker_record_example();
+    let session_example = session_record_example();
+
     json!({
         "openapi": "3.1.0",
         "info": {
@@ -4467,47 +4584,60 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
         "servers": [
             { "url": "/" }
         ],
+        "security": [{ "bearerAuth": [] }],
         "paths": {
-                "/status": {
-                    "get": {
-                        "summary": "Inspect Nucleus status",
-                        "description": "Read the current Nucleus status projection, including bind address, state directory, and durable object counts.",
-                        "x-si-purpose": "Use this for bounded external health and topology inspection without opening the websocket control plane.",
-                        "security": [{ "bearerAuth": [] }],
-                        "responses": {
+            "/status": {
+                "get": {
+                    "operationId": "getNucleusStatus",
+                    "summary": "Inspect Nucleus status",
+                    "description": "Read the current Nucleus status projection, including bind address, state directory, and durable object counts.",
+                    "x-si-purpose": "Use this for bounded external health and topology inspection without opening the websocket control plane.",
+                    "security": [{ "bearerAuth": [] }],
+                    "responses": {
                         "200": {
                             "description": "Current nucleus status.",
-                            "content": { "application/json": { "schema": schema_ref("NucleusStatusView") } }
+                            "content": openapi_json_content_example(schema_ref("NucleusStatusView"), json!({
+                                "version": env!("CARGO_PKG_VERSION"),
+                                "bind_addr": "0.0.0.0:4747",
+                                "ws_url": "ws://0.0.0.0:4747/ws",
+                                "state_dir": "/home/si/.local/state/si/nucleus",
+                                "task_count": 12,
+                                "worker_count": 2,
+                                "session_count": 2,
+                                "run_count": 8,
+                                "next_event_seq": 128
+                            }))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/tasks": {
-                    "get": {
-                        "summary": "List tasks",
-                        "description": "List durable tasks from the same source of truth used by the websocket gateway and CLI.",
-                        "x-si-purpose": "Use this for bounded task inspection and polling from external tools such as GPT Actions.",
-                        "security": [{ "bearerAuth": [] }],
-                        "responses": {
+            "/tasks": {
+                "get": {
+                    "operationId": "listTasks",
+                    "summary": "List tasks",
+                    "description": "List durable tasks from the same source of truth used by the websocket gateway and CLI.",
+                    "x-si-purpose": "Use this for bounded task inspection and polling from external tools such as GPT Actions.",
+                    "security": [{ "bearerAuth": [] }],
+                    "responses": {
                         "200": {
                             "description": "All durable tasks.",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "type": "array", "items": schema_ref("TaskRecord") }
-                                }
-                            }
+                            "content": openapi_json_content_example(
+                                json!({ "type": "array", "items": schema_ref("TaskRecord") }),
+                                json!([task_example.clone()])
+                            )
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 },
                 "post": {
+                    "operationId": "createTask",
                     "summary": "Create a task",
                     "description": "Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.",
                     "x-si-purpose": "Use this to create bounded external work without bypassing Nucleus task intake rules.",
@@ -4515,232 +4645,256 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                     "security": [{ "bearerAuth": [] }],
                     "requestBody": {
                         "required": true,
+                        "description": "Task intake request. Provide a concise title and complete operator instructions; omit optional fields unless you need a specific profile, session, retry limit, or timeout.",
                         "content": {
                             "application/json": {
-                                "schema": schema_ref("TaskCreateParams")
+                                "schema": schema_ref("TaskCreateParams"),
+                                "example": {
+                                    "title": "Audit Nucleus tasks",
+                                    "instructions": "Inspect queued and running tasks and report any items that are stuck.",
+                                    "source": "websocket",
+                                    "profile": "default",
+                                    "session_id": null,
+                                    "max_retries": 0,
+                                    "timeout_seconds": 900
+                                }
                             }
                         }
                     },
                     "responses": {
                         "201": {
                             "description": "Created task.",
-                            "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
+                            "content": openapi_json_content_example(schema_ref("TaskRecord"), task_example.clone())
                         },
                         "401": {
                             "description": "Bearer token missing or invalid for an authenticated request.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "400": {
                             "description": "Invalid request.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/tasks/{task_id}": {
-                    "get": {
-                        "summary": "Inspect one task",
-                        "description": "Read one durable task projection by task id.",
-                        "x-si-purpose": "Use this to inspect bounded task state from external tooling.",
-                        "security": [{ "bearerAuth": [] }],
-                        "parameters": [
-                        {
-                            "name": "task_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" },
-                            "description": "Canonical SI task id."
-                        }
+            "/tasks/{task_id}": {
+                "get": {
+                    "operationId": "inspectTask",
+                    "summary": "Inspect one task",
+                    "description": "Read one durable task projection by task id.",
+                    "x-si-purpose": "Use this to inspect bounded task state from external tooling.",
+                    "security": [{ "bearerAuth": [] }],
+                    "parameters": [
+                        openapi_path_id_parameter(
+                            "task_id",
+                            "Canonical SI task id returned by task creation or task listing.",
+                            "si-task-",
+                            "si-task-0123456789abcdef00000001"
+                        )
                     ],
                     "responses": {
                         "200": {
                             "description": "Task record.",
-                            "content": { "application/json": { "schema": schema_ref("TaskRecord") } }
+                            "content": openapi_json_content_example(schema_ref("TaskRecord"), task_example.clone())
                         },
                         "404": {
                             "description": "Task not found.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
             "/tasks/{task_id}/cancel": {
                 "post": {
+                    "operationId": "cancelTask",
                     "summary": "Cancel one task",
                     "description": "Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.",
                     "x-si-purpose": "Use this for bounded external cancellation requests and then re-read the task or run to observe final state.",
                     "x-openai-isConsequential": true,
                     "security": [{ "bearerAuth": [] }],
                     "parameters": [
-                        {
-                            "name": "task_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" },
-                            "description": "Canonical SI task id."
-                        }
+                        openapi_path_id_parameter(
+                            "task_id",
+                            "Canonical SI task id returned by task creation or task listing.",
+                            "si-task-",
+                            "si-task-0123456789abcdef00000001"
+                        )
                     ],
                     "responses": {
                         "200": {
                             "description": "Cancellation result.",
-                            "content": { "application/json": { "schema": schema_ref("TaskCancelResultView") } }
+                            "content": openapi_json_content_example(schema_ref("TaskCancelResultView"), json!({
+                                "task": task_example.clone(),
+                                "run": run_example.clone(),
+                                "cancellation_requested": true
+                            }))
                         },
                         "401": {
                             "description": "Bearer token missing or invalid for an authenticated request.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "404": {
                             "description": "Task not found.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "503": {
                             "description": "Runtime unavailable for active-run cancellation.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/workers": {
-                    "get": {
-                        "summary": "List workers",
-                        "description": "List durable worker records tracked by Nucleus.",
-                        "x-si-purpose": "Use this for bounded worker inspection without relying on tmux or direct runtime internals.",
-                        "security": [{ "bearerAuth": [] }],
-                        "responses": {
+            "/workers": {
+                "get": {
+                    "operationId": "listWorkers",
+                    "summary": "List workers",
+                    "description": "List durable worker records tracked by Nucleus.",
+                    "x-si-purpose": "Use this for bounded worker inspection without relying on tmux or direct runtime internals.",
+                    "security": [{ "bearerAuth": [] }],
+                    "responses": {
                         "200": {
                             "description": "All durable workers.",
-                            "content": {
-                                "application/json": {
-                                    "schema": { "type": "array", "items": schema_ref("WorkerRecord") }
-                                }
-                            }
+                            "content": openapi_json_content_example(
+                                json!({ "type": "array", "items": schema_ref("WorkerRecord") }),
+                                json!([worker_example.clone()])
+                            )
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/workers/{worker_id}": {
-                    "get": {
-                        "summary": "Inspect one worker",
-                        "description": "Read one worker projection, including persisted runtime view when available.",
-                        "x-si-purpose": "Use this to inspect worker assignment and runtime attachment through the Nucleus model.",
-                        "security": [{ "bearerAuth": [] }],
-                        "parameters": [
-                        {
-                            "name": "worker_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" },
-                            "description": "Canonical SI worker id."
-                        }
+            "/workers/{worker_id}": {
+                "get": {
+                    "operationId": "inspectWorker",
+                    "summary": "Inspect one worker",
+                    "description": "Read one worker projection, including persisted runtime view when available.",
+                    "x-si-purpose": "Use this to inspect worker assignment and runtime attachment through the Nucleus model.",
+                    "security": [{ "bearerAuth": [] }],
+                    "parameters": [
+                        openapi_path_id_parameter(
+                            "worker_id",
+                            "Canonical SI worker id returned by worker listing.",
+                            "si-worker-",
+                            "si-worker-0123456789abcdef00000001"
+                        )
                     ],
                     "responses": {
                         "200": {
                             "description": "Worker inspect view.",
-                            "content": { "application/json": { "schema": schema_ref("WorkerInspectView") } }
+                            "content": openapi_json_content_example(schema_ref("WorkerInspectView"), json!({
+                                "worker": worker_example.clone(),
+                                "runtime": {
+                                    "worker_id": "si-worker-0123456789abcdef00000001",
+                                    "runtime_name": "codex",
+                                    "pid": 12345,
+                                    "started_at": "2026-04-17T00:00:00Z",
+                                    "checked_at": "2026-04-17T00:00:10Z"
+                                }
+                            }))
                         },
                         "404": {
                             "description": "Worker not found.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/sessions/{session_id}": {
-                    "get": {
-                        "summary": "Inspect one session",
-                        "description": "Read one durable session projection by session id.",
-                        "x-si-purpose": "Use this to inspect worker/session binding and reusable thread identity from external tooling.",
-                        "security": [{ "bearerAuth": [] }],
-                        "parameters": [
-                        {
-                            "name": "session_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" },
-                            "description": "Canonical SI session id."
-                        }
+            "/sessions/{session_id}": {
+                "get": {
+                    "operationId": "inspectSession",
+                    "summary": "Inspect one session",
+                    "description": "Read one durable session projection by session id.",
+                    "x-si-purpose": "Use this to inspect worker/session binding and reusable thread identity from external tooling.",
+                    "security": [{ "bearerAuth": [] }],
+                    "parameters": [
+                        openapi_path_id_parameter(
+                            "session_id",
+                            "Canonical SI session id returned by session or run inspection.",
+                            "si-session-",
+                            "si-session-0123456789abcdef00000001"
+                        )
                     ],
                     "responses": {
                         "200": {
                             "description": "Session record.",
-                            "content": { "application/json": { "schema": schema_ref("SessionRecord") } }
+                            "content": openapi_json_content_example(schema_ref("SessionRecord"), session_example.clone())
                         },
                         "404": {
                             "description": "Session not found.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/runs/{run_id}": {
-                    "get": {
-                        "summary": "Inspect one run",
-                        "description": "Read one durable run projection by run id.",
-                        "x-si-purpose": "Use this to inspect bounded run state from external tools without subscribing to websocket events.",
-                        "security": [{ "bearerAuth": [] }],
-                        "parameters": [
-                        {
-                            "name": "run_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" },
-                            "description": "Canonical SI run id."
-                        }
+            "/runs/{run_id}": {
+                "get": {
+                    "operationId": "inspectRun",
+                    "summary": "Inspect one run",
+                    "description": "Read one durable run projection by run id.",
+                    "x-si-purpose": "Use this to inspect bounded run state from external tools without subscribing to websocket events.",
+                    "security": [{ "bearerAuth": [] }],
+                    "parameters": [
+                        openapi_path_id_parameter(
+                            "run_id",
+                            "Canonical SI run id returned by task or session inspection.",
+                            "si-run-",
+                            "si-run-0123456789abcdef00000001"
+                        )
                     ],
                     "responses": {
                         "200": {
                             "description": "Run record.",
-                            "content": { "application/json": { "schema": schema_ref("RunRecord") } }
+                            "content": openapi_json_content_example(schema_ref("RunRecord"), run_example.clone())
                         },
                         "404": {
                             "description": "Run not found.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
             },
-                "/openapi.json": {
-                    "get": {
-                        "summary": "Fetch the OpenAPI document",
-                        "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
-                        "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
-                        "security": [{ "bearerAuth": [] }],
-                        "responses": {
+            "/openapi.json": {
+                "get": {
+                    "operationId": "getOpenApiDocument",
+                    "summary": "Fetch the OpenAPI document",
+                    "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
+                    "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
+                    "security": [{ "bearerAuth": [] }],
+                    "responses": {
                         "200": {
                             "description": "OpenAPI document.",
-                            "content": { "application/json": { "schema": { "type": "object" } } }
+                            "content": openapi_json_content(json!({ "type": "object", "additionalProperties": true }))
                         },
                         "500": {
                             "description": "Request failed.",
-                            "content": { "application/json": { "schema": schema_ref("RestErrorEnvelope") } }
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
                         }
                     }
                 }
@@ -4751,156 +4905,183 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                 "bearerAuth": {
                     "type": "http",
                     "scheme": "bearer",
-                    "bearerFormat": "opaque token"
+                    "bearerFormat": "opaque token",
+                    "description": "Opaque bearer token provided by SI Fort for Nucleus REST access."
                 }
             },
             "schemas": {
                 "RestErrorEnvelope": {
                     "type": "object",
+                    "description": "Standard REST error envelope returned when a Nucleus request fails.",
+                    "additionalProperties": false,
                     "required": ["error"],
                     "properties": {
                         "error": {
                             "type": "object",
+                            "description": "Machine-readable error details.",
+                            "additionalProperties": false,
                             "required": ["code", "message"],
                             "properties": {
-                                "code": { "type": "string" },
-                                "message": { "type": "string" },
-                                "details": {}
+                                "code": { "type": "string", "description": "Stable Nucleus error code.", "example": "not_found" },
+                                "message": { "type": "string", "description": "Human-readable error summary.", "example": "task not found" },
+                                "details": { "description": "Optional structured details for debugging the request." }
                             }
                         }
                     }
                 },
                 "NucleusStatusView": {
                     "type": "object",
+                    "description": "Current Nucleus status projection and durable object counts.",
+                    "additionalProperties": false,
                     "required": ["version", "bind_addr", "ws_url", "state_dir", "task_count", "worker_count", "session_count", "run_count", "next_event_seq"],
                     "properties": {
-                        "version": { "type": "string" },
-                        "bind_addr": { "type": "string" },
-                        "ws_url": { "type": "string" },
-                        "state_dir": { "type": "string" },
-                        "task_count": { "type": "integer", "minimum": 0 },
-                        "worker_count": { "type": "integer", "minimum": 0 },
-                        "session_count": { "type": "integer", "minimum": 0 },
-                        "run_count": { "type": "integer", "minimum": 0 },
-                        "next_event_seq": { "type": "integer", "minimum": 0 }
+                        "version": { "type": "string", "description": "Running SI Nucleus package version.", "example": env!("CARGO_PKG_VERSION"), "readOnly": true },
+                        "bind_addr": { "type": "string", "description": "TCP address where Nucleus listens.", "example": "0.0.0.0:4747", "readOnly": true },
+                        "ws_url": { "type": "string", "description": "Websocket URL exposed by the same Nucleus service.", "example": "ws://0.0.0.0:4747/ws", "readOnly": true },
+                        "state_dir": { "type": "string", "description": "Filesystem directory that stores durable Nucleus state.", "example": "/home/si/.local/state/si/nucleus", "readOnly": true },
+                        "task_count": { "type": "integer", "description": "Number of durable task records.", "minimum": 0, "example": 12, "readOnly": true },
+                        "worker_count": { "type": "integer", "description": "Number of durable worker records.", "minimum": 0, "example": 2, "readOnly": true },
+                        "session_count": { "type": "integer", "description": "Number of durable session records.", "minimum": 0, "example": 2, "readOnly": true },
+                        "run_count": { "type": "integer", "description": "Number of durable run records.", "minimum": 0, "example": 8, "readOnly": true },
+                        "next_event_seq": { "type": "integer", "description": "Next canonical event sequence number that will be written.", "minimum": 0, "example": 128, "readOnly": true }
                     }
                 },
                 "TaskCreateParams": {
                     "type": "object",
+                    "description": "Request body for creating durable Nucleus work.",
+                    "additionalProperties": false,
                     "required": ["title", "instructions"],
                     "properties": {
-                        "title": { "type": "string" },
-                        "instructions": { "type": "string" },
-                        "source": { "type": "string", "enum": ["cli", "websocket", "cron", "hook", "system"] },
-                        "profile": { "type": ["string", "null"] },
-                        "session_id": { "type": ["string", "null"] },
-                        "max_retries": { "type": ["integer", "null"], "minimum": 0 },
-                        "timeout_seconds": { "type": ["integer", "null"], "minimum": 0 }
+                        "title": { "type": "string", "description": "Short operator-facing summary of the work to perform.", "minLength": 1, "example": "Audit Nucleus tasks" },
+                        "instructions": { "type": "string", "description": "Complete task instructions for the assigned worker.", "minLength": 1, "example": "Inspect queued and running tasks and report any items that are stuck." },
+                        "source": { "type": "string", "description": "Source category for the task intake request. External GPT Actions should normally use websocket.", "enum": ["cli", "websocket", "cron", "hook", "system"], "default": "websocket", "example": "websocket" },
+                        "profile": { "type": ["string", "null"], "description": "Optional SI worker profile to prefer for execution.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "default" },
+                        "session_id": { "type": ["string", "null"], "description": "Optional existing SI session id to reuse for continuity.", "pattern": "^si-session-.+", "default": null, "example": "si-session-0123456789abcdef00000001" },
+                        "max_retries": { "type": ["integer", "null"], "description": "Optional maximum retry attempts after failed execution.", "minimum": 0, "default": null, "example": 0 },
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task.", "minimum": 0, "default": null, "example": 900 }
                     }
                 },
                 "TaskRecord": {
                     "type": "object",
+                    "description": "Durable task projection stored by Nucleus.",
+                    "additionalProperties": false,
                     "required": ["task_id", "source", "title", "instructions", "status", "created_at", "updated_at"],
                     "properties": {
-                        "task_id": { "type": "string" },
-                        "source": { "type": "string", "enum": ["cli", "websocket", "cron", "hook", "system"] },
-                        "title": { "type": "string" },
-                        "instructions": { "type": "string" },
-                        "status": { "type": "string", "enum": ["queued", "running", "blocked", "done", "failed", "cancelled"] },
-                        "profile": { "type": ["string", "null"] },
-                        "session_id": { "type": ["string", "null"] },
-                        "latest_run_id": { "type": ["string", "null"] },
-                        "checkpoint_summary": { "type": ["string", "null"] },
-                        "checkpoint_at": { "type": ["string", "null"], "format": "date-time" },
-                        "checkpoint_seq": { "type": ["integer", "null"], "minimum": 0 },
-                        "parent_task_id": { "type": ["string", "null"] },
-                        "producer_rule_name": { "type": ["string", "null"] },
-                        "producer_dedup_key": { "type": ["string", "null"] },
+                        "task_id": openapi_id_property("Canonical SI task id.", "si-task-", "si-task-0123456789abcdef00000001"),
+                        "source": { "type": "string", "description": "Source category that created the task.", "enum": ["cli", "websocket", "cron", "hook", "system"], "example": "websocket", "readOnly": true },
+                        "title": { "type": "string", "description": "Short operator-facing summary of the task.", "example": "Audit Nucleus tasks" },
+                        "instructions": { "type": "string", "description": "Full worker instructions captured at intake.", "example": "Inspect queued and running tasks and report any items that are stuck." },
+                        "status": { "type": "string", "description": "Current task lifecycle status.", "enum": ["queued", "running", "blocked", "done", "failed", "cancelled"], "example": "queued", "readOnly": true },
+                        "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile for this task.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "session_id": openapi_nullable_id_property("Session currently associated with this task, if any.", "si-session-", json!("si-session-0123456789abcdef00000001")),
+                        "latest_run_id": openapi_nullable_id_property("Most recent run created for this task.", "si-run-", json!("si-run-0123456789abcdef00000001")),
+                        "checkpoint_summary": { "type": ["string", "null"], "description": "Latest durable progress summary reported by the worker.", "example": "Checked all queued tasks." },
+                        "checkpoint_at": { "type": ["string", "null"], "description": "Timestamp of the latest checkpoint.", "format": "date-time", "example": "2026-04-17T00:00:00Z" },
+                        "checkpoint_seq": { "type": ["integer", "null"], "description": "Canonical event sequence for the latest checkpoint.", "minimum": 0, "example": 128 },
+                        "parent_task_id": { "type": ["string", "null"], "description": "Parent task id when this task was produced by another task.", "pattern": "^si-task-.+", "example": "si-task-0123456789abcdef00000000" },
+                        "producer_rule_name": { "type": ["string", "null"], "description": "Hook or producer rule that created this task.", "example": "nightly-audit" },
+                        "producer_dedup_key": { "type": ["string", "null"], "description": "Producer deduplication key used to avoid duplicate task intake.", "example": "nightly-audit:2026-04-17" },
                         "blocked_reason": {
                             "type": ["string", "null"],
-                            "enum": [null, "auth_required", "worker_unavailable", "profile_unavailable", "session_broken", "producer_error", "operator_hold", "fort_unavailable"]
+                            "description": "Reason the task is blocked when status is blocked.",
+                            "enum": [null, "auth_required", "worker_unavailable", "profile_unavailable", "session_broken", "producer_error", "operator_hold", "fort_unavailable"],
+                            "example": null
                         },
-                        "created_at": { "type": "string", "format": "date-time" },
-                        "updated_at": { "type": "string", "format": "date-time" },
-                        "max_retries": { "type": ["integer", "null"], "minimum": 0 },
-                        "timeout_seconds": { "type": ["integer", "null"], "minimum": 0 }
+                        "created_at": { "type": "string", "description": "Task creation timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
+                        "updated_at": { "type": "string", "description": "Last task update timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
+                        "max_retries": { "type": ["integer", "null"], "description": "Maximum retry attempts configured for this task.", "minimum": 0, "example": 0 },
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 0, "example": 900 }
                     }
                 },
                 "WorkerRecord": {
                     "type": "object",
+                    "description": "Durable worker projection tracked by Nucleus.",
+                    "additionalProperties": false,
                     "required": ["worker_id", "profile", "codex_home", "status"],
                     "properties": {
-                        "worker_id": { "type": "string" },
-                        "profile": { "type": "string" },
-                        "home_dir": { "type": ["string", "null"] },
-                        "codex_home": { "type": "string" },
-                        "workdir": { "type": ["string", "null"] },
-                        "extra_env": { "type": "object", "additionalProperties": { "type": "string" } },
-                        "status": { "type": "string", "enum": ["starting", "ready", "degraded", "failed", "stopped"] },
-                        "capability_version": { "type": ["string", "null"] },
-                        "last_heartbeat_at": { "type": ["string", "null"], "format": "date-time" },
-                        "effective_account_state": { "type": ["string", "null"] }
+                        "worker_id": openapi_id_property("Canonical SI worker id.", "si-worker-", "si-worker-0123456789abcdef00000001"),
+                        "profile": { "type": "string", "description": "SI profile this worker runs as.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "home_dir": { "type": ["string", "null"], "description": "Home directory used by the worker process.", "example": "/home/si" },
+                        "codex_home": { "type": "string", "description": "Codex home directory used by this worker.", "example": "/home/si/.codex" },
+                        "workdir": { "type": ["string", "null"], "description": "Default workspace directory for worker execution.", "example": "/home/si/Development/si" },
+                        "extra_env": { "type": "object", "description": "Non-secret extra environment values configured for the worker.", "additionalProperties": { "type": "string" }, "example": {} },
+                        "status": { "type": "string", "description": "Worker lifecycle status.", "enum": ["starting", "ready", "degraded", "failed", "stopped"], "example": "ready", "readOnly": true },
+                        "capability_version": { "type": ["string", "null"], "description": "Worker capability or package version when reported.", "example": env!("CARGO_PKG_VERSION") },
+                        "last_heartbeat_at": { "type": ["string", "null"], "description": "Most recent heartbeat timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
+                        "effective_account_state": { "type": ["string", "null"], "description": "Observed account/authentication state for this worker.", "example": "authenticated", "readOnly": true }
                     }
                 },
                 "WorkerRuntimeView": {
                     "type": "object",
+                    "description": "Observed runtime process attached to a worker.",
+                    "additionalProperties": false,
                     "required": ["worker_id", "runtime_name", "pid", "started_at", "checked_at"],
                     "properties": {
-                        "worker_id": { "type": "string" },
-                        "runtime_name": { "type": "string" },
-                        "pid": { "type": "integer", "minimum": 0 },
-                        "started_at": { "type": "string", "format": "date-time" },
-                        "checked_at": { "type": "string", "format": "date-time" }
+                        "worker_id": openapi_id_property("Canonical SI worker id for the runtime process.", "si-worker-", "si-worker-0123456789abcdef00000001"),
+                        "runtime_name": { "type": "string", "description": "Runtime adapter name.", "example": "codex", "readOnly": true },
+                        "pid": { "type": "integer", "description": "Operating system process id.", "minimum": 0, "example": 12345, "readOnly": true },
+                        "started_at": { "type": "string", "description": "Runtime process start timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
+                        "checked_at": { "type": "string", "description": "Timestamp when runtime process state was checked.", "format": "date-time", "example": "2026-04-17T00:00:10Z", "readOnly": true }
                     }
                 },
                 "WorkerInspectView": {
                     "type": "object",
+                    "description": "Worker record plus optional live runtime observation.",
+                    "additionalProperties": false,
                     "required": ["worker"],
                     "properties": {
-                        "worker": schema_ref("WorkerRecord"),
+                        "worker": { "description": "Durable worker projection.", "allOf": [schema_ref("WorkerRecord")] },
                         "runtime": {
+                            "description": "Live runtime process details when the worker process can be observed.",
                             "anyOf": [schema_ref("WorkerRuntimeView"), { "type": "null" }]
                         }
                     }
                 },
                 "SessionRecord": {
                     "type": "object",
+                    "description": "Durable worker session projection tracked by Nucleus.",
+                    "additionalProperties": false,
                     "required": ["session_id", "worker_id", "lifecycle_state", "created_at", "updated_at"],
                     "properties": {
-                        "session_id": { "type": "string" },
-                        "worker_id": { "type": "string" },
-                        "profile": { "type": ["string", "null"] },
-                        "app_server_thread_id": { "type": ["string", "null"] },
-                        "workdir": { "type": ["string", "null"] },
-                        "lifecycle_state": { "type": "string", "enum": ["opening", "ready", "busy", "broken", "closed"] },
-                        "summary_state": { "type": ["string", "null"] },
-                        "created_at": { "type": "string", "format": "date-time" },
-                        "updated_at": { "type": "string", "format": "date-time" }
+                        "session_id": openapi_id_property("Canonical SI session id.", "si-session-", "si-session-0123456789abcdef00000001"),
+                        "worker_id": openapi_id_property("Worker currently associated with the session.", "si-worker-", "si-worker-0123456789abcdef00000001"),
+                        "profile": { "type": ["string", "null"], "description": "SI profile associated with the session.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "app_server_thread_id": { "type": ["string", "null"], "description": "Underlying app server thread id for continuity.", "example": "thread_0123456789abcdef", "readOnly": true },
+                        "workdir": { "type": ["string", "null"], "description": "Workspace directory associated with the session.", "example": "/home/si/Development/si" },
+                        "lifecycle_state": { "type": "string", "description": "Current session lifecycle state.", "enum": ["opening", "ready", "busy", "broken", "closed"], "example": "ready", "readOnly": true },
+                        "summary_state": { "type": ["string", "null"], "description": "Short durable summary of reusable session context.", "example": "idle" },
+                        "created_at": { "type": "string", "description": "Session creation timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
+                        "updated_at": { "type": "string", "description": "Last session update timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true }
                     }
                 },
                 "RunRecord": {
                     "type": "object",
+                    "description": "Durable execution attempt for a task.",
+                    "additionalProperties": false,
                     "required": ["run_id", "task_id", "session_id", "status"],
                     "properties": {
-                        "run_id": { "type": "string" },
-                        "task_id": { "type": "string" },
-                        "session_id": { "type": "string" },
-                        "status": { "type": "string", "enum": ["queued", "running", "blocked", "completed", "failed", "cancelled"] },
-                        "started_at": { "type": ["string", "null"], "format": "date-time" },
-                        "ended_at": { "type": ["string", "null"], "format": "date-time" },
-                        "parent_run_id": { "type": ["string", "null"] },
-                        "app_server_turn_id": { "type": ["string", "null"] }
+                        "run_id": openapi_id_property("Canonical SI run id.", "si-run-", "si-run-0123456789abcdef00000001"),
+                        "task_id": openapi_id_property("Task executed by this run.", "si-task-", "si-task-0123456789abcdef00000001"),
+                        "session_id": openapi_id_property("Session used by this run.", "si-session-", "si-session-0123456789abcdef00000001"),
+                        "status": { "type": "string", "description": "Current run lifecycle status.", "enum": ["queued", "running", "blocked", "completed", "failed", "cancelled"], "example": "running", "readOnly": true },
+                        "started_at": { "type": ["string", "null"], "description": "Timestamp when execution started.", "format": "date-time", "example": "2026-04-17T00:00:05Z", "readOnly": true },
+                        "ended_at": { "type": ["string", "null"], "description": "Timestamp when execution reached a terminal state.", "format": "date-time", "example": null, "readOnly": true },
+                        "parent_run_id": openapi_nullable_id_property("Parent run id for nested execution, if any.", "si-run-", json!(null)),
+                        "app_server_turn_id": { "type": ["string", "null"], "description": "Underlying app server turn id associated with this run.", "example": null, "readOnly": true }
                     }
                 },
                 "TaskCancelResultView": {
                     "type": "object",
+                    "description": "Result returned after requesting cancellation for a task.",
+                    "additionalProperties": false,
                     "required": ["task", "cancellation_requested"],
                     "properties": {
-                        "task": schema_ref("TaskRecord"),
+                        "task": { "description": "Task projection after the cancellation request was handled.", "allOf": [schema_ref("TaskRecord")] },
                         "run": {
+                            "description": "Run affected by the cancellation request, when the task had an active or latest run.",
                             "anyOf": [schema_ref("RunRecord"), { "type": "null" }]
                         },
-                        "cancellation_requested": { "type": "boolean" }
+                        "cancellation_requested": { "type": "boolean", "description": "True when Nucleus issued a new cancellation request; false when the task was already terminal or no action was needed.", "example": true, "readOnly": true }
                     }
                 }
             }
@@ -6484,6 +6665,105 @@ mod tests {
                 "missing request surface for {method} {path}"
             );
         }
+        for (path, method, operation_id) in [
+            ("/status", "get", "getNucleusStatus"),
+            ("/tasks", "get", "listTasks"),
+            ("/tasks", "post", "createTask"),
+            ("/tasks/{task_id}", "get", "inspectTask"),
+            ("/tasks/{task_id}/cancel", "post", "cancelTask"),
+            ("/workers", "get", "listWorkers"),
+            ("/workers/{worker_id}", "get", "inspectWorker"),
+            ("/sessions/{session_id}", "get", "inspectSession"),
+            ("/runs/{run_id}", "get", "inspectRun"),
+            ("/openapi.json", "get", "getOpenApiDocument"),
+        ] {
+            assert_eq!(
+                body["paths"][path][method]["operationId"],
+                json!(operation_id),
+                "missing stable operationId for {method} {path}"
+            );
+        }
+        for (path, method, expected_pattern, expected_example) in [
+            ("/tasks/{task_id}", "get", "^si-task-.+", "si-task-0123456789abcdef00000001"),
+            ("/tasks/{task_id}/cancel", "post", "^si-task-.+", "si-task-0123456789abcdef00000001"),
+            ("/workers/{worker_id}", "get", "^si-worker-.+", "si-worker-0123456789abcdef00000001"),
+            (
+                "/sessions/{session_id}",
+                "get",
+                "^si-session-.+",
+                "si-session-0123456789abcdef00000001",
+            ),
+            ("/runs/{run_id}", "get", "^si-run-.+", "si-run-0123456789abcdef00000001"),
+        ] {
+            let parameter = &body["paths"][path][method]["parameters"][0];
+            assert_eq!(parameter["schema"]["pattern"], json!(expected_pattern));
+            assert_eq!(parameter["schema"]["example"], json!(expected_example));
+            assert!(
+                parameter["description"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+                "missing path parameter description for {method} {path}"
+            );
+        }
+        let create_params = &body["components"]["schemas"]["TaskCreateParams"];
+        assert_eq!(create_params["additionalProperties"], json!(false));
+        assert_eq!(create_params["properties"]["source"]["default"], json!("websocket"));
+        assert_eq!(create_params["properties"]["session_id"]["pattern"], json!("^si-session-.+"));
+        assert!(create_params["properties"]["instructions"]["description"].is_string());
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["example"]
+                ["title"],
+            json!("Audit Nucleus tasks")
+        );
+        assert_eq!(
+            body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["example"]
+                ["task_id"],
+            json!("si-task-0123456789abcdef00000001")
+        );
+        for schema_name in [
+            "RestErrorEnvelope",
+            "NucleusStatusView",
+            "TaskCreateParams",
+            "TaskRecord",
+            "WorkerRecord",
+            "WorkerRuntimeView",
+            "WorkerInspectView",
+            "SessionRecord",
+            "RunRecord",
+            "TaskCancelResultView",
+        ] {
+            let schema = &body["components"]["schemas"][schema_name];
+            assert!(
+                schema["description"].as_str().map(|value| !value.is_empty()).unwrap_or(false),
+                "missing component schema description for {schema_name}"
+            );
+            assert_eq!(
+                schema["additionalProperties"],
+                json!(false),
+                "component schema should be closed for {schema_name}"
+            );
+        }
+        assert_eq!(
+            body["components"]["schemas"]["TaskRecord"]["properties"]["task_id"]["pattern"],
+            json!("^si-task-.+")
+        );
+        assert_eq!(
+            body["components"]["schemas"]["RunRecord"]["properties"]["run_id"]["example"],
+            json!("si-run-0123456789abcdef00000001")
+        );
+        let gpt_actions_openapi = include_str!("../../../../docs/gpt-actions-openapi.yaml");
+        assert!(gpt_actions_openapi.contains(&format!("version: {}", env!("CARGO_PKG_VERSION"))));
+        for required_text in [
+            "operationId: listWorkers",
+            "operationId: inspectWorker",
+            "operationId: inspectSession",
+            "TaskCancelResultView:",
+            "pattern: ^si-task-.+",
+            "additionalProperties: false",
+        ] {
+            assert!(
+                gpt_actions_openapi.contains(required_text),
+                "GPT Actions profile missing {required_text}"
+            );
+        }
         for (path, method) in [("/tasks", "post")] {
             let operation = &body["paths"][path][method];
             assert_eq!(
@@ -6723,7 +7003,8 @@ mod tests {
             json!(["task", "cancellation_requested"])
         );
         assert_eq!(
-            body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["$ref"],
+            body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["allOf"][0]
+                ["$ref"],
             json!("#/components/schemas/WorkerRecord")
         );
     }
