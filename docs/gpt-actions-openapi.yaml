@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SI Nucleus REST API
-  version: 0.57.21
+  version: 0.57.22
   description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
 servers:
   - url: https://nucleus.aureuma.ai
@@ -46,7 +46,7 @@ components:
         version:
           type: string
           description: Running SI Nucleus package version.
-          example: 0.57.21
+          example: 0.57.22
           readOnly: true
         bind_addr:
           type: string
@@ -286,7 +286,7 @@ components:
         capability_version:
           type: [string, "null"]
           description: Worker capability or package version when reported.
-          example: 0.57.21
+          example: 0.57.22
         last_heartbeat_at:
           type: [string, "null"]
           description: Most recent heartbeat timestamp.
@@ -480,21 +480,16 @@ paths:
     get:
       operationId: getOpenApiDocument
       summary: Fetch the OpenAPI document
-      description: Read the OpenAPI-compatible REST description for bounded external integrations.
+      description: Read the public OpenAPI-compatible REST description for bounded external integrations.
+      security: []
       responses:
         "200":
-          description: OpenAPI document.
+          description: Public OpenAPI document.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
   /status:
     get:
       operationId: getNucleusStatus

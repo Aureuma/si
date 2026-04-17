@@ -4884,12 +4884,12 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
                 "get": {
                     "operationId": "getOpenApiDocument",
                     "summary": "Fetch the OpenAPI document",
-                    "description": "Read the OpenAPI-compatible REST description for bounded external integrations.",
-                    "x-si-purpose": "Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
-                    "security": [{ "bearerAuth": [] }],
+                    "description": "Read the public OpenAPI-compatible REST description for bounded external integrations.",
+                    "x-si-purpose": "Use this unauthenticated endpoint to bootstrap GPT Actions or other external tool clients against the bounded REST surface.",
+                    "security": [],
                     "responses": {
                         "200": {
-                            "description": "OpenAPI document.",
+                            "description": "Public OpenAPI document.",
                             "content": openapi_json_content(json!({ "type": "object", "additionalProperties": true }))
                         },
                         "500": {
@@ -5089,19 +5089,8 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
     })
 }
 
-async fn rest_openapi_handler(
-    State(service): State<Arc<NucleusService>>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
-    match service
-        .authorize_request_method("openapi.read", extract_bearer_token(&headers).as_deref())
-    {
-        Ok(()) => (StatusCode::OK, Json(openapi_document(&service.config))).into_response(),
-        Err(error) => rest_gateway_response(
-            GatewayResponse::err(json!(null), infer_error_code(&error), error.to_string(), None),
-            StatusCode::OK,
-        ),
-    }
+async fn rest_openapi_handler(State(service): State<Arc<NucleusService>>) -> impl IntoResponse {
+    (StatusCode::OK, Json(openapi_document(&service.config))).into_response()
 }
 
 async fn rest_status_handler(
@@ -6990,7 +6979,6 @@ mod tests {
             ("/workers/{worker_id}", "get"),
             ("/sessions/{session_id}", "get"),
             ("/runs/{run_id}", "get"),
-            ("/openapi.json", "get"),
         ] {
             assert_eq!(
                 body["paths"][path][method]["security"],
@@ -6998,6 +6986,7 @@ mod tests {
                 "OpenAPI security must require bearer auth for {method} {path}"
             );
         }
+        assert_eq!(body["paths"]["/openapi.json"]["get"]["security"], json!([]));
         assert_eq!(
             body["components"]["schemas"]["TaskCancelResultView"]["required"],
             json!(["task", "cancellation_requested"])
@@ -7155,7 +7144,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rest_openapi_requires_bearer_token_when_auth_is_configured() {
+    async fn rest_openapi_remains_public_when_auth_is_configured() {
         let temp = tempdir().expect("tempdir");
         let app = NucleusService::open(NucleusConfig {
             bind_addr: "0.0.0.0:9898".parse().expect("addr"),
@@ -7169,7 +7158,9 @@ mod tests {
             .oneshot(Request::builder().uri("/openapi.json").body(Body::empty()).expect("request"))
             .await
             .expect("openapi response");
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["openapi"], json!("3.1.0"));
     }
 
     #[tokio::test]
