@@ -215,11 +215,8 @@ fn spawn_live_nucleus_service_with_options(
                 .build()
                 .expect("tokio runtime");
             tokio_runtime.block_on(async move {
-                let config = NucleusConfig {
-                    bind_addr: addr,
-                    state_dir,
-                    auth_token: service_auth_token,
-                };
+                let config =
+                    NucleusConfig { bind_addr: addr, state_dir, auth_token: service_auth_token };
                 let service = match runtime {
                     Some(runtime) => NucleusService::open_with_runtime(config, runtime),
                     None => NucleusService::open(config),
@@ -776,16 +773,7 @@ fn wait_for_cli_task_status_with_token(
             command.env("SI_NUCLEUS_AUTH_TOKEN", token);
         }
         let output = command
-            .args([
-                "nucleus",
-                "task",
-                "inspect",
-                task_id,
-                "--endpoint",
-                ws_url,
-                "--format",
-                "json",
-            ])
+            .args(["nucleus", "task", "inspect", task_id, "--endpoint", ws_url, "--format", "json"])
             .assert()
             .success()
             .get_output()
@@ -1038,11 +1026,7 @@ fn write_fort_session_state_via_cli(codex_home: &Path, profile: &str) {
 
 fn clear_fort_session_state_via_cli(codex_home: &Path) {
     let session_path = codex_home.join("fort").join("session.json");
-    cargo_bin()
-        .args(["fort", "session", "clear", "--path"])
-        .arg(&session_path)
-        .assert()
-        .success();
+    cargo_bin().args(["fort", "session", "clear", "--path"]).arg(&session_path).assert().success();
 }
 
 fn write_invalid_fort_session_state(codex_home: &Path) {
@@ -1921,7 +1905,8 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         .success();
     let _systemd_payload: Value =
         serde_json::from_slice(&systemd_output.get_output().stdout).expect("parse systemd json");
-    let systemd_unit = fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
+    let systemd_unit =
+        fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_AUTH_TOKEN=secret-token\""));
 
     let launchd_dir = temp.path().join("launch-agents");
@@ -1943,7 +1928,8 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         .success();
     let _launchd_payload: Value =
         serde_json::from_slice(&launchd_output.get_output().stdout).expect("parse launchd json");
-    let plist = fs::read_to_string(launchd_dir.join("com.aureuma.si.nucleus.plist")).expect("read launchd plist");
+    let plist = fs::read_to_string(launchd_dir.join("com.aureuma.si.nucleus.plist"))
+        .expect("read launchd plist");
     assert!(plist.contains("<key>SI_NUCLEUS_AUTH_TOKEN</key>"));
     assert!(plist.contains("<string>secret-token</string>"));
 }
@@ -4354,16 +4340,7 @@ fn nucleus_hook_rule_cli_round_trips_on_live_service() {
     assert_eq!(upserted["enabled"], json!(true));
 
     let list_output = cargo_bin()
-        .args([
-            "nucleus",
-            "producer",
-            "hook",
-            "list",
-            "--endpoint",
-            &ws_url,
-            "--format",
-            "json",
-        ])
+        .args(["nucleus", "producer", "hook", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -4415,16 +4392,7 @@ fn nucleus_hook_rule_cli_round_trips_on_live_service() {
     assert_eq!(deleted["deleted"], json!(true));
 
     let list_after_delete_output = cargo_bin()
-        .args([
-            "nucleus",
-            "producer",
-            "hook",
-            "list",
-            "--endpoint",
-            &ws_url,
-            "--format",
-            "json",
-        ])
+        .args(["nucleus", "producer", "hook", "list", "--endpoint", &ws_url, "--format", "json"])
         .assert()
         .success()
         .get_output()
@@ -4582,10 +4550,7 @@ fn nucleus_new_hook_rule_does_not_backfill_old_github_notifications_on_live_serv
         .clone();
     let tasks: Value = serde_json::from_slice(&list_output).expect("parse task list");
     assert!(
-        tasks.as_array()
-            .expect("task list array")
-            .iter()
-            .all(|task| task["source"] != "hook"),
+        tasks.as_array().expect("task list array").iter().all(|task| task["source"] != "hook"),
         "new hook rule should not backfill old github events"
     );
 
@@ -7434,7 +7399,7 @@ fn nucleus_live_rest_operations_require_token_when_auth_is_configured() {
 
     let openapi_response =
         client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
-    assert_eq!(openapi_response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    assert_eq!(openapi_response.status(), reqwest::StatusCode::OK);
 
     let status_response = client.get(format!("{base_url}/status")).send().expect("status response");
     assert_eq!(status_response.status(), reqwest::StatusCode::UNAUTHORIZED);
@@ -7578,11 +7543,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     let client = BlockingClient::new();
 
-    let response = client
-        .get(format!("{base_url}/openapi.json"))
-        .bearer_auth("test-token")
-        .send()
-        .expect("openapi response");
+    let response = client.get(format!("{base_url}/openapi.json")).send().expect("openapi response");
     assert!(response.status().is_success());
     let body: Value = response.json().expect("parse openapi");
 
@@ -7650,7 +7611,6 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         ("/workers/{worker_id}", "get"),
         ("/sessions/{session_id}", "get"),
         ("/runs/{run_id}", "get"),
-        ("/openapi.json", "get"),
     ] {
         assert_eq!(
             body["paths"][path][method]["security"],
@@ -7658,6 +7618,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             "OpenAPI security must require bearer auth for {method} {path}"
         );
     }
+    assert_eq!(body["paths"]["/openapi.json"]["get"]["security"], json!([]));
     assert_eq!(body["paths"]["/tasks"]["post"]["security"][0]["bearerAuth"], json!([]));
     assert_eq!(
         body["paths"]["/tasks/{task_id}/cancel"]["post"]["security"][0]["bearerAuth"],
@@ -7697,11 +7658,15 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     assert_eq!(body["paths"]["/tasks"]["get"]["summary"], json!("List tasks"));
     assert_eq!(
         body["paths"]["/tasks"]["get"]["description"],
-        json!("List durable tasks from the same source of truth used by the websocket gateway and CLI.")
+        json!(
+            "List durable tasks from the same source of truth used by the websocket gateway and CLI."
+        )
     );
     assert_eq!(
         body["paths"]["/tasks"]["get"]["x-si-purpose"],
-        json!("Use this for bounded task inspection and polling from external tools such as GPT Actions.")
+        json!(
+            "Use this for bounded task inspection and polling from external tools such as GPT Actions."
+        )
     );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]
@@ -7721,12 +7686,13 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/tasks"]["post"]["x-si-purpose"],
-        json!("Use this to create bounded external work without bypassing Nucleus task intake rules.")
+        json!(
+            "Use this to create bounded external work without bypassing Nucleus task intake rules."
+        )
     );
     assert_eq!(body["paths"]["/tasks"]["post"]["requestBody"]["required"], json!(true));
     assert_eq!(
-        body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-            ["$ref"],
+        body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
         json!("#/components/schemas/TaskCreateParams")
     );
     assert_eq!(
@@ -7764,10 +7730,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/tasks/{task_id}"]["get"]["parameters"][0]["description"],
         json!("Canonical SI task id returned by task creation or task listing.")
     );
-    assert_eq!(
-        body["paths"]["/tasks/{task_id}"]["get"]["summary"],
-        json!("Inspect one task")
-    );
+    assert_eq!(body["paths"]["/tasks/{task_id}"]["get"]["summary"], json!("Inspect one task"));
     assert_eq!(
         body["paths"]["/tasks/{task_id}"]["get"]["description"],
         json!("Read one durable task projection by task id.")
@@ -7860,7 +7823,9 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/workers"]["get"]["x-si-purpose"],
-        json!("Use this for bounded worker inspection without relying on tmux or direct runtime internals.")
+        json!(
+            "Use this for bounded worker inspection without relying on tmux or direct runtime internals."
+        )
     );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["responses"]["200"]["content"]["application/json"]
@@ -7881,7 +7846,9 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["x-si-purpose"],
-        json!("Use this to inspect worker assignment and runtime attachment through the Nucleus model.")
+        json!(
+            "Use this to inspect worker assignment and runtime attachment through the Nucleus model."
+        )
     );
     assert_eq!(
         body["paths"]["/workers/{worker_id}"]["get"]["parameters"][0]["schema"]["type"],
@@ -7919,7 +7886,9 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["x-si-purpose"],
-        json!("Use this to inspect worker/session binding and reusable thread identity from external tooling.")
+        json!(
+            "Use this to inspect worker/session binding and reusable thread identity from external tooling."
+        )
     );
     assert_eq!(
         body["paths"]["/sessions/{session_id}"]["get"]["parameters"][0]["schema"]["type"],
@@ -7947,17 +7916,16 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["paths"]["/runs/{run_id}"]["get"]["responses"]["200"]["description"],
         json!("Run record.")
     );
-    assert_eq!(
-        body["paths"]["/runs/{run_id}"]["get"]["summary"],
-        json!("Inspect one run")
-    );
+    assert_eq!(body["paths"]["/runs/{run_id}"]["get"]["summary"], json!("Inspect one run"));
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["description"],
         json!("Read one durable run projection by run id.")
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["x-si-purpose"],
-        json!("Use this to inspect bounded run state from external tools without subscribing to websocket events.")
+        json!(
+            "Use this to inspect bounded run state from external tools without subscribing to websocket events."
+        )
     );
     assert_eq!(
         body["paths"]["/runs/{run_id}"]["get"]["parameters"][0]["schema"]["type"],
@@ -7968,8 +7936,8 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("Canonical SI run id returned by task or session inspection.")
     );
     assert_eq!(
-        body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]
-            ["schema"]["$ref"],
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]
+            ["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
@@ -7983,7 +7951,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["description"],
-        json!("OpenAPI document.")
+        json!("Public OpenAPI document.")
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["summary"],
@@ -7991,11 +7959,15 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["description"],
-        json!("Read the OpenAPI-compatible REST description for bounded external integrations.")
+        json!(
+            "Read the public OpenAPI-compatible REST description for bounded external integrations."
+        )
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["x-si-purpose"],
-        json!("Use this to bootstrap GPT Actions or other external tool clients against the bounded REST surface.")
+        json!(
+            "Use this unauthenticated endpoint to bootstrap GPT Actions or other external tool clients against the bounded REST surface."
+        )
     );
     assert_eq!(
         body["paths"]["/tasks"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
@@ -8057,8 +8029,8 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         json!("Request failed.")
     );
     assert_eq!(
-        body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]
-            ["schema"]["$ref"],
+        body["paths"]["/runs/{run_id}"]["get"]["responses"]["500"]["content"]["application/json"]["schema"]
+            ["$ref"],
         json!("#/components/schemas/RestErrorEnvelope")
     );
     assert_eq!(
@@ -8087,10 +8059,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
         body["components"]["schemas"]["TaskCancelResultView"]["required"],
         json!(["task", "cancellation_requested"])
     );
-    assert_eq!(
-        body["components"]["schemas"]["RestErrorEnvelope"]["required"],
-        json!(["error"])
-    );
+    assert_eq!(body["components"]["schemas"]["RestErrorEnvelope"]["required"], json!(["error"]));
     assert_eq!(
         body["components"]["schemas"]["RestErrorEnvelope"]["properties"]["error"]["required"],
         json!(["code", "message"])
@@ -8101,8 +8070,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
             .is_object()
     );
     assert_eq!(
-        body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["allOf"][0]
-            ["$ref"],
+        body["components"]["schemas"]["WorkerInspectView"]["properties"]["worker"]["allOf"][0]["$ref"],
         json!("#/components/schemas/WorkerRecord")
     );
     for (path, method) in [
@@ -8466,10 +8434,7 @@ fn fort_wrapper_forwards_native_command_with_si_settings_defaults() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "--host\nhttps://fort.example.test\ndoctor\n"
-    );
+    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
@@ -8716,10 +8681,7 @@ fn fort_wrapper_ignores_caller_runtime_session_paths_for_doctor() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "--host\nhttps://fort.example.test\ndoctor\n"
-    );
+    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
     assert_eq!(
         fs::read_to_string(&runtime_token_path).expect("read runtime token"),
         "stale-runtime-token\n"
@@ -9324,10 +9286,7 @@ fn fort_wrapper_builds_configured_repo_when_fort_missing_from_path() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "--host\nhttps://fort.example.test\ndoctor\n"
-    );
+    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
@@ -9378,10 +9337,7 @@ fn fort_wrapper_builds_sibling_checkout_from_runtime_workspace_when_settings_rep
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "doctor\n"
-    );
+    assert_eq!(args, "doctor\n");
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
@@ -9428,10 +9384,7 @@ fn fort_wrapper_prefers_existing_sibling_binary_before_cargo_build_fallback() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "doctor\n"
-    );
+    assert_eq!(args, "doctor\n");
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
@@ -9491,10 +9444,7 @@ fn fort_wrapper_builds_configured_repo_from_custom_target_dir() {
         .success();
 
     let args = fs::read_to_string(&args_file).expect("read fort args");
-    assert_eq!(
-        args,
-        "--host\nhttps://fort.example.test\ndoctor\n"
-    );
+    assert_eq!(args, "--host\nhttps://fort.example.test\ndoctor\n");
     let env = fs::read_to_string(&env_file).expect("read fort env");
     assert!(env.contains("FORT_HOST="));
     assert!(env.contains("FORT_BOOTSTRAP_TOKEN_FILE="));
@@ -9743,13 +9693,7 @@ fn build_homebrew_render_core_formula_without_version_uses_workspace_version() {
 
     cargo_bin()
         .current_dir(repo.path())
-        .args([
-            "build",
-            "homebrew",
-            "render-core-formula",
-            "--output",
-            out.to_str().expect("out"),
-        ])
+        .args(["build", "homebrew", "render-core-formula", "--output", out.to_str().expect("out")])
         .env("SI_RUST_HOMEBREW_SOURCE_BASE_URL", url)
         .assert()
         .success();
@@ -12346,10 +12290,38 @@ fn help_output_uses_single_word_operational_subcommands() {
     )
     .expect("utf8 build self help");
     assert!(build_self_help.contains("check"));
+    assert!(build_self_help.contains("bundle"));
     assert!(build_self_help.contains("assets"));
     assert!(build_self_help.contains("validate"));
+    assert!(!build_self_help.contains("releasebundle"));
     assert!(!build_self_help.contains("releaseassets"));
     assert!(!build_self_help.contains("validatereleaseversion"));
+
+    let build_self_bundle_help = String::from_utf8(
+        cargo_bin()
+            .args(["build", "self", "bundle", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 build self bundle help");
+    assert!(build_self_bundle_help.contains("--publish"));
+    assert!(build_self_bundle_help.contains("--skip-notes"));
+    assert!(build_self_bundle_help.contains("--notes-file"));
+
+    let build_self_validate_help = String::from_utf8(
+        cargo_bin()
+            .args(["build", "self", "validate", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 build self validate help");
+    assert!(build_self_validate_help.contains("--publish"));
 
     let build_help = String::from_utf8(
         cargo_bin().args(["build", "--help"]).assert().success().get_output().stdout.clone(),

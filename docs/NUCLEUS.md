@@ -101,7 +101,7 @@ The bounded REST surface is exposed by the same Nucleus service and source of tr
 - `GET /sessions/{session_id}`
 - `GET /runs/{run_id}`
 
-`/openapi.json` is OpenAPI 3.1 and includes summaries, descriptions, schemas, and `x-si-purpose` annotations for bounded external consumers.
+`/openapi.json` is public OpenAPI 3.1 for GPT Actions URL import and includes summaries, descriptions, schemas, examples, and `x-si-purpose` annotations for bounded external consumers. Operational REST endpoints remain bearer-token protected.
 
 ## Security and auth
 
