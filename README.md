@@ -192,10 +192,10 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:
-- `./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight`
+- `./.artifacts/cargo-target/release/si-rs build self bundle --out-dir .artifacts/release-preflight --publish`
 - `./.artifacts/cargo-target/release/si-rs build npm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
-These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
+`si build self bundle` already uses release-profile Rust builds, verifies the finished archives, and writes `release-notes.md` from `CHANGELOG.md` when it can. These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
 
 ## License
 

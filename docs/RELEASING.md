@@ -73,14 +73,13 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
-./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight
-./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
+./.artifacts/cargo-target/release/si-rs build self bundle --out-dir .artifacts/release-preflight --publish
 git add CHANGELOG.md Cargo.toml Cargo.lock
 git commit -m "release: vX.Y.0"
 ```
 - Keep release prep changes in a dedicated commit.
-- The release-assets preflight confirms archive packaging before publishing a GitHub Release.
-- `si build self assets` reads the canonical version from root `Cargo.toml` when `--version` is omitted.
+- `si build self bundle` is the simplest SI-native release-mode preflight: it uses release-profile Rust builds, verifies the archive set, and writes `.artifacts/release-preflight/release-notes.md` from `CHANGELOG.md` when possible.
+- `si build self bundle --publish` enforces the real publish policy: the tag/version must match root `Cargo.toml` and must be a minor release tag `vX.Y.0`.
 - Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
 - Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary.
 
@@ -109,13 +108,13 @@ git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
 GitHub Releases should include a clear, hand-written release note (not just a verbatim copy of `CHANGELOG.md`). Use the changelog and commit history as inputs, then write a concise, user-facing summary of what changed since the last published GitHub Release.
 Because only minor releases are tagged, this range is the full set of patch-bump commits that must be reflected in the release notes.
 Option A: Use the changelog entry as the release body.
-1. Extract the new `vX.Y.0` section into `release-notes.md` (manual or script).
+1. Let `si build self bundle --out-dir .artifacts/release-preflight --publish` write `.artifacts/release-preflight/release-notes.md`, or extract the new `vX.Y.0` section manually if you need custom notes.
 2. Create the release with a title and notes file:
 ```
 si orbit github release create Aureuma/si \
   --tag vX.Y.0 \
   --title "vX.Y.0 - Suggested Name" \
-  --notes-file release-notes.md \
+  --notes-file .artifacts/release-preflight/release-notes.md \
   --draft
 ```
 3. If the tag is not pushed yet, use:
@@ -123,7 +122,7 @@ si orbit github release create Aureuma/si \
 si orbit github release create Aureuma/si \
   --tag vX.Y.0 \
   --title "vX.Y.0 - Suggested Name" \
-  --notes-file release-notes.md \
+  --notes-file .artifacts/release-preflight/release-notes.md \
   --target "$(git rev-parse HEAD)" \
   --draft
 ```
@@ -214,7 +213,7 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 
 Notes:
 - The workflow validates that the workspace `Cargo.toml` version matches the release tag.
-- The workflow uses `si build self assets` as the single build path and `si build self verify` as the local archive verification path before upload.
+- The workflow uses `si build self bundle --publish --skip-notes` as the single build-and-verify path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
 - Use `si build npm publish --dry-run` for local npm publish rehearsal.
