@@ -47,6 +47,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | OCI | `si orbit oci ...` | `si orbit oci auth status`, `si orbit oci doctor` | [OCI](./OCI) |
 | Stripe | `si orbit stripe ...` | `si orbit stripe auth status`, `si orbit stripe doctor` | [Stripe](./STRIPE) |
 | WorkOS | `si orbit workos ...` | `si orbit workos auth status`, `si orbit workos doctor` | [WorkOS](./WORKOS) |
+| ReleaseMind | `si orbit releasemind ...` | `si orbit releasemind doctor Aureuma/si --json`, `si orbit releasemind release prepare Aureuma/si --release-tag vX.Y.0 --wait-for-ready --json` | ReleaseMind API client |
 | Apple App Store Connect | `si orbit apple store ...` | `si orbit apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
 | Provider inventory | `si orbit list` | `si orbit list`, `si orbit list --provider github --json` | [Providers](./PROVIDERS) |
 
@@ -82,6 +83,7 @@ si commands
 si orbit list --json
 si orbit github doctor --json
 si orbit cloudflare doctor --json
+si orbit releasemind doctor Aureuma/si --json
 ```
 
 ### 3. Release maintainer preflight
