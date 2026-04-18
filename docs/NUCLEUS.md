@@ -67,6 +67,7 @@ Relevant env vars:
 
 - `SI_NUCLEUS_STATE_DIR`: override the Nucleus state root
 - `SI_NUCLEUS_BIND_ADDR`: override the local bind address
+- `SI_NUCLEUS_PUBLIC_URL`: override the absolute OpenAPI `servers[0].url` value for GPT Actions import
 - `SI_NUCLEUS_SERVICE_PLATFORM`: force `systemd-user` or `launchd-agent`
 
 ## Gateway discovery
