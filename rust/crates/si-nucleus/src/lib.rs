@@ -4568,11 +4568,49 @@ fn openapi_nullable_id_property(description: &str, prefix: &str, example: Value)
     })
 }
 
-fn openapi_document(_config: &NucleusConfig) -> Value {
+fn openapi_header_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get(name)?
+        .to_str()
+        .ok()?
+        .split(',')
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn openapi_server_url(headers: &HeaderMap) -> String {
+    if let Ok(value) = env::var("SI_NUCLEUS_PUBLIC_URL") {
+        let trimmed = value.trim().trim_end_matches('/');
+        if !trimmed.is_empty() {
+            return trimmed.to_owned();
+        }
+    }
+
+    let Some(host) = openapi_header_value(headers, "x-forwarded-host")
+        .or_else(|| openapi_header_value(headers, "host"))
+    else {
+        return "/".to_owned();
+    };
+    let proto = openapi_header_value(headers, "x-forwarded-proto").unwrap_or_else(|| {
+        if host.starts_with("127.0.0.1")
+            || host.starts_with("localhost")
+            || host.starts_with("[::1]")
+        {
+            "http"
+        } else {
+            "https"
+        }
+    });
+    format!("{}://{}", proto.trim_end_matches(':'), host)
+}
+
+fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
     let task_example = task_record_example();
     let run_example = run_record_example();
     let worker_example = worker_record_example();
     let session_example = session_record_example();
+    let server_url = openapi_server_url(headers);
 
     json!({
         "openapi": "3.1.0",
@@ -4582,7 +4620,7 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
             "description": "Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model."
         },
         "servers": [
-            { "url": "/" }
+            { "url": server_url }
         ],
         "security": [{ "bearerAuth": [] }],
         "paths": {
@@ -5089,8 +5127,11 @@ fn openapi_document(_config: &NucleusConfig) -> Value {
     })
 }
 
-async fn rest_openapi_handler(State(service): State<Arc<NucleusService>>) -> impl IntoResponse {
-    (StatusCode::OK, Json(openapi_document(&service.config))).into_response()
+async fn rest_openapi_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    (StatusCode::OK, Json(openapi_document(&service.config, &headers))).into_response()
 }
 
 async fn rest_status_handler(
@@ -6591,6 +6632,7 @@ mod tests {
         .router();
 
         let response = app
+            .clone()
             .oneshot(Request::builder().uri("/openapi.json").body(Body::empty()).expect("request"))
             .await
             .expect("openapi response");
@@ -6606,6 +6648,23 @@ mod tests {
             )
         );
         assert_eq!(body["servers"][0]["url"], json!("/"));
+
+        let forwarded_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/openapi.json")
+                    .header("host", "nucleus.aureuma.ai")
+                    .header("x-forwarded-proto", "https")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("forwarded openapi response");
+        assert_eq!(forwarded_response.status(), StatusCode::OK);
+        let forwarded_body = response_json(forwarded_response).await;
+        assert_eq!(forwarded_body["servers"][0]["url"], json!("https://nucleus.aureuma.ai"));
+
         assert_eq!(body["components"]["securitySchemes"]["bearerAuth"]["scheme"], json!("bearer"));
         assert_eq!(
             body["components"]["securitySchemes"]["bearerAuth"]["bearerFormat"],
