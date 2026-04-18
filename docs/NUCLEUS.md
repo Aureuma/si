@@ -116,6 +116,25 @@ For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/g
 - Keep the generated runtime document and `docs/gpt-actions-openapi.yaml` in sync with the package patch version.
 - Run the Nucleus OpenAPI tests before committing schema changes so importer compatibility failures are caught locally.
 
+## Public route ownership
+
+The public `https://nucleus.aureuma.ai` route is currently exposed by Viva shared Traefik, but the runtime is owned by this `si` repository.
+
+Current same-host route targets:
+
+- `https://nucleus.aureuma.ai` forwards to the `si-nucleus` user service on port `4747`.
+- `https://nucleus.aureuma.ai/gpt-actions-openapi.yaml` and `https://nucleus.aureuma.ai/privacy` forward to the static docs server on port `8092`, rooted at `docs/`.
+
+This is intentionally not modeled as a Viva Docker container yet. Nucleus owns durable local state under `~/.si/nucleus/`, uses the `si nucleus service ...` OS-native lifecycle, and writes gateway metadata consumed by local CLI discovery. Moving it into Docker requires a separate migration plan for state, auth token delivery, public bind policy, and gateway discovery.
+
+Route ownership rules while it remains external:
+
+- Viva owns only the Traefik route entry.
+- SI owns the `si-nucleus` process, docs server, auth policy, OpenAPI document, and service lifecycle.
+- Set `SI_NUCLEUS_AUTH_TOKEN` whenever the gateway binds beyond loopback.
+- Set `SI_NUCLEUS_PUBLIC_URL=https://nucleus.aureuma.ai` for public OpenAPI generation.
+- Keep Viva route ownership docs in sync when ports, paths, or lifecycle change.
+
 ## Security and auth
 
 Default behavior:
