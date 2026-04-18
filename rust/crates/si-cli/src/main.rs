@@ -325,6 +325,12 @@ enum Command {
         #[command(subcommand)]
         command: GitHubCommand,
     },
+    #[command(name = "releasemind")]
+    #[command(hide = true)]
+    ReleaseMind {
+        #[command(subcommand)]
+        command: ReleaseMindCommand,
+    },
     Codex {
         #[command(subcommand)]
         command: Box<CodexCommand>,
@@ -1148,6 +1154,11 @@ enum OrbitCommand {
     GitHub {
         #[command(subcommand)]
         command: GitHubCommand,
+    },
+    #[command(name = "releasemind")]
+    ReleaseMind {
+        #[command(subcommand)]
+        command: ReleaseMindCommand,
     },
 }
 
@@ -12524,11 +12535,55 @@ enum OciNetworkCommand {
 #[derive(Debug, Subcommand)]
 enum OciNetworkVCNCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         vcn_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -12569,11 +12624,57 @@ enum OciNetworkVCNCommand {
 #[derive(Debug, Subcommand)]
 enum OciNetworkInternetGatewayCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         gateway_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -12614,11 +12715,57 @@ enum OciNetworkInternetGatewayCommand {
 #[derive(Debug, Subcommand)]
 enum OciNetworkRouteTableCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         route_table_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -12659,11 +12806,57 @@ enum OciNetworkRouteTableCommand {
 #[derive(Debug, Subcommand)]
 enum OciNetworkSecurityListCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         security_list_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -12704,11 +12897,57 @@ enum OciNetworkSecurityListCommand {
 #[derive(Debug, Subcommand)]
 enum OciNetworkSubnetCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] vcn_id: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         subnet_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -12833,11 +13072,55 @@ enum OciComputeImageCommand {
 #[derive(Debug, Subcommand)]
 enum OciComputeInstanceCommand {
     List {
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] compartment: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Get {
         instance_id: String,
-        #[arg(long)] account: Option<String>, #[arg(long)] profile: Option<String>, #[arg(long)] config_file: Option<String>, #[arg(long)] region: Option<String>, #[arg(long)] base_url: Option<String>, #[arg(long)] auth: Option<String>, #[arg(long)] home: Option<PathBuf>, #[arg(long)] settings_file: Option<PathBuf>, #[arg(long)] json: bool, #[arg(long)] raw: bool, #[arg(long, default_value = "text")] format: OutputFormat,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Create {
         #[arg(long)]
@@ -13830,6 +14113,120 @@ enum GitHubCommand {
     Secret {
         #[command(subcommand)]
         command: GitHubSecretCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindCommand {
+    Auth {
+        #[command(subcommand)]
+        command: ReleaseMindAuthCommand,
+    },
+    Doctor {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    Repo {
+        #[command(subcommand)]
+        command: ReleaseMindRepoCommand,
+    },
+    Release {
+        #[command(subcommand)]
+        command: ReleaseMindReleaseCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindAuthCommand {
+    Status {
+        #[arg(help = "Optional owner/repo reference to verify against, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindRepoCommand {
+    Resolve {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindReleaseCommand {
+    Prepare {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        release_tag: Option<String>,
+        #[arg(long)]
+        base_tag: Option<String>,
+        #[arg(long)]
+        task: Option<String>,
+        #[arg(long)]
+        audience: Option<String>,
+        #[arg(long)]
+        tone: Option<String>,
+        #[arg(long)]
+        custom_prompt: Option<String>,
+        #[arg(long = "pull-request")]
+        pull_request_numbers: Vec<i64>,
+        #[arg(long)]
+        changelog_path: Option<String>,
+        #[arg(long)]
+        auto_open_github_draft: bool,
+        #[arg(long)]
+        wait_for_ready: bool,
+        #[arg(long)]
+        timeout_seconds: Option<i64>,
+        #[arg(long)]
+        json: bool,
+    },
+    Status {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(help = "ReleaseMind post id.")]
+        post_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    Publish {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(help = "ReleaseMind post id.")]
+        post_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -16597,7 +16994,12 @@ fn render_nucleus_systemd_unit(
         .join(" ");
     let auth_env = auth_token
         .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("Environment={}\n", systemd_quote_arg(&format!("SI_NUCLEUS_AUTH_TOKEN={value}"))))
+        .map(|value| {
+            format!(
+                "Environment={}\n",
+                systemd_quote_arg(&format!("SI_NUCLEUS_AUTH_TOKEN={value}"))
+            )
+        })
         .unwrap_or_default();
     format!(
         "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\n{auth_env}ExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
@@ -16692,7 +17094,8 @@ fn run_nucleus_service_install(
     let platform = resolve_nucleus_service_platform()?;
     let state_dir = state_dir.unwrap_or_else(default_nucleus_state_dir);
     let bind_addr = bind_addr.unwrap_or_else(|| default_nucleus_bind_addr().to_owned());
-    let auth_token = env::var("SI_NUCLEUS_AUTH_TOKEN").ok().filter(|value| !value.trim().is_empty());
+    let auth_token =
+        env::var("SI_NUCLEUS_AUTH_TOKEN").ok().filter(|value| !value.trim().is_empty());
     let definition_path = nucleus_service_definition_path(platform, service_dir);
     let si_binary = env::current_exe().context("resolve current si executable")?;
     let definition = match platform {
@@ -20312,6 +20715,7 @@ fn normalize_root_command(command: Command) -> Command {
             OrbitCommand::Stripe { command } => Command::Stripe { command },
             OrbitCommand::WorkOS { command } => Command::WorkOS { command },
             OrbitCommand::GitHub { command } => Command::GitHub { command },
+            OrbitCommand::ReleaseMind { command } => Command::ReleaseMind { command },
         },
         other => other,
     }
@@ -30924,13 +31328,65 @@ fn main() -> Result<()> {
                     }
                 },
                 OciIdentityCommand::Compartment { command } => match command {
-                    OciIdentityCompartmentCommand::List { account, profile, config_file, region, base_url, auth, parent, access_level, home, settings_file, json, raw, format } => {
+                    OciIdentityCompartmentCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        parent,
+                        access_level,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_identity_compartment_list(account, profile, config_file, region, base_url, auth, parent, access_level, home, settings_file, format, raw)?
+                        run_oci_identity_compartment_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            parent,
+                            access_level,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciIdentityCompartmentCommand::Get { compartment_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciIdentityCompartmentCommand::Get {
+                        compartment_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_identity_compartment_get(compartment_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_identity_compartment_get(
+                            compartment_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciIdentityCompartmentCommand::Create {
                         account,
@@ -30969,13 +31425,63 @@ fn main() -> Result<()> {
             },
             OciCommand::Network { command } => match command {
                 OciNetworkCommand::Vcn { command } => match command {
-                    OciNetworkVCNCommand::List { account, profile, config_file, region, base_url, auth, compartment, home, settings_file, json, raw, format } => {
+                    OciNetworkVCNCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_vcn_list(account, profile, config_file, region, base_url, auth, compartment, home, settings_file, format, raw)?
+                        run_oci_network_vcn_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciNetworkVCNCommand::Get { vcn_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciNetworkVCNCommand::Get {
+                        vcn_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_vcn_get(vcn_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_network_vcn_get(
+                            vcn_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciNetworkVCNCommand::Create {
                         account,
@@ -31016,13 +31522,65 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::InternetGateway { command } => match command {
-                    OciNetworkInternetGatewayCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                    OciNetworkInternetGatewayCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_internet_gateway_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                        run_oci_network_internet_gateway_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciNetworkInternetGatewayCommand::Get { gateway_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciNetworkInternetGatewayCommand::Get {
+                        gateway_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_internet_gateway_get(gateway_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_network_internet_gateway_get(
+                            gateway_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciNetworkInternetGatewayCommand::Create {
                         account,
@@ -31063,13 +31621,65 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::RouteTable { command } => match command {
-                    OciNetworkRouteTableCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                    OciNetworkRouteTableCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_route_table_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                        run_oci_network_route_table_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciNetworkRouteTableCommand::Get { route_table_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciNetworkRouteTableCommand::Get {
+                        route_table_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_route_table_get(route_table_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_network_route_table_get(
+                            route_table_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciNetworkRouteTableCommand::Create {
                         account,
@@ -31110,13 +31720,65 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::SecurityList { command } => match command {
-                    OciNetworkSecurityListCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                    OciNetworkSecurityListCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_security_list_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                        run_oci_network_security_list_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciNetworkSecurityListCommand::Get { security_list_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciNetworkSecurityListCommand::Get {
+                        security_list_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_security_list_get(security_list_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_network_security_list_get(
+                            security_list_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciNetworkSecurityListCommand::Create {
                         account,
@@ -31157,13 +31819,65 @@ fn main() -> Result<()> {
                     }
                 },
                 OciNetworkCommand::Subnet { command } => match command {
-                    OciNetworkSubnetCommand::List { account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, json, raw, format } => {
+                    OciNetworkSubnetCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_subnet_list(account, profile, config_file, region, base_url, auth, compartment, vcn_id, home, settings_file, format, raw)?
+                        run_oci_network_subnet_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciNetworkSubnetCommand::Get { subnet_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciNetworkSubnetCommand::Get {
+                        subnet_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_network_subnet_get(subnet_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_network_subnet_get(
+                            subnet_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciNetworkSubnetCommand::Create {
                         account,
@@ -31280,13 +31994,63 @@ fn main() -> Result<()> {
                     }
                 },
                 OciComputeCommand::Instance { command } => match command {
-                    OciComputeInstanceCommand::List { account, profile, config_file, region, base_url, auth, compartment, home, settings_file, json, raw, format } => {
+                    OciComputeInstanceCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_compute_instance_list(account, profile, config_file, region, base_url, auth, compartment, home, settings_file, format, raw)?
+                        run_oci_compute_instance_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
-                    OciComputeInstanceCommand::Get { instance_id, account, profile, config_file, region, base_url, auth, home, settings_file, json, raw, format } => {
+                    OciComputeInstanceCommand::Get {
+                        instance_id,
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
                         let format = if json { OutputFormat::Json } else { format };
-                        run_oci_compute_instance_get(instance_id, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)?
+                        run_oci_compute_instance_get(
+                            instance_id,
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
                     }
                     OciComputeInstanceCommand::Create {
                         account,
@@ -34074,6 +34838,62 @@ fn main() -> Result<()> {
                 },
             },
         },
+        Command::ReleaseMind { command } => match command {
+            ReleaseMindCommand::Auth { command } => match command {
+                ReleaseMindAuthCommand::Status { repo_ref, base_url, token, json } => {
+                    run_releasemind_auth_status(repo_ref, base_url, token, json)?
+                }
+            },
+            ReleaseMindCommand::Doctor { repo_ref, base_url, token, json } => {
+                run_releasemind_doctor(repo_ref, base_url, token, json)?
+            }
+            ReleaseMindCommand::Repo { command } => match command {
+                ReleaseMindRepoCommand::Resolve { repo_ref, base_url, token, json } => {
+                    run_releasemind_repo_resolve(repo_ref, base_url, token, json)?
+                }
+            },
+            ReleaseMindCommand::Release { command } => match command {
+                ReleaseMindReleaseCommand::Prepare {
+                    repo_ref,
+                    base_url,
+                    token,
+                    release_tag,
+                    base_tag,
+                    task,
+                    audience,
+                    tone,
+                    custom_prompt,
+                    pull_request_numbers,
+                    changelog_path,
+                    auto_open_github_draft,
+                    wait_for_ready,
+                    timeout_seconds,
+                    json,
+                } => run_releasemind_release_prepare(
+                    repo_ref,
+                    base_url,
+                    token,
+                    release_tag,
+                    base_tag,
+                    task,
+                    audience,
+                    tone,
+                    custom_prompt,
+                    pull_request_numbers,
+                    changelog_path,
+                    auto_open_github_draft,
+                    wait_for_ready,
+                    timeout_seconds,
+                    json,
+                )?,
+                ReleaseMindReleaseCommand::Status { repo_ref, post_id, base_url, token, json } => {
+                    run_releasemind_release_status(repo_ref, post_id, base_url, token, json)?
+                }
+                ReleaseMindReleaseCommand::Publish { repo_ref, post_id, base_url, token, json } => {
+                    run_releasemind_release_publish(repo_ref, post_id, base_url, token, json)?
+                }
+            },
+        },
         Command::Orbit { .. } => unreachable!("orbit commands are normalized before dispatch"),
         Command::Codex { command } => match *command {
             CodexCommand::Profile { command } => match command {
@@ -35142,6 +35962,465 @@ fn cli_help_styles() -> Styles {
         .valid(AnsiColor::Green.on_default().effects(Effects::BOLD))
         .invalid(AnsiColor::Red.on_default().effects(Effects::BOLD))
         .error(AnsiColor::Red.on_default().effects(Effects::BOLD))
+}
+
+fn run_releasemind_auth_status(
+    repo_ref: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let (base_url, base_url_source) = releasemind_base_url(base_url.as_deref());
+    let (token, token_source) = releasemind_token(token.as_deref())?;
+    let verify = match repo_ref.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        Some(repo_ref) => Some(releasemind_request(
+            Method::GET,
+            &format!("/api/automation/verify?repo_full_name={}", encode_query_value(repo_ref)),
+            None,
+            &base_url,
+            &token,
+        )?),
+        None => None,
+    };
+
+    if json {
+        let payload = json!({
+            "ok": true,
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "token_source": token_source,
+            "repo_ref": repo_ref,
+            "verify": verify.as_ref().map(|(status_code, request_id, body)| json!({
+                "status_code": status_code,
+                "request_id": request_id,
+                "data": body,
+            })),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    println!("releasemind auth configured");
+    print_cli_kv("base_url", base_url);
+    print_cli_kv("base_url_source", base_url_source);
+    print_cli_kv("token_source", token_source);
+    if let Some((_, _, body)) = verify
+        && let Some(principal) = body.get("principal")
+    {
+        print_cli_kv("repo_ref", render_option_text_value(repo_ref.as_deref()));
+        print_cli_kv("token_id", json_string_field(principal, "token_id").unwrap_or("(none)"));
+        print_cli_kv("label", json_string_field(principal, "label").unwrap_or("(none)"));
+        print_cli_kv("repo_scope", json_string_field(principal, "repo_scope").unwrap_or("(none)"));
+    }
+    Ok(())
+}
+
+fn run_releasemind_doctor(
+    repo_ref: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required for doctor")?;
+    let (base_url, base_url_source) = releasemind_base_url(base_url.as_deref());
+    let (token, token_source) = releasemind_token(token.as_deref())?;
+    let verify = releasemind_request(
+        Method::GET,
+        &format!("/api/automation/verify?repo_full_name={}", encode_query_value(&repo_ref)),
+        None,
+        &base_url,
+        &token,
+    )?;
+    let repo = releasemind_request(
+        Method::GET,
+        &format!("/api/automation/repos/resolve?repo_full_name={}", encode_query_value(&repo_ref)),
+        None,
+        &base_url,
+        &token,
+    )?;
+    let billing = releasemind_request(
+        Method::GET,
+        &format!("/api/automation/billing-gate?repo_full_name={}", encode_query_value(&repo_ref)),
+        None,
+        &base_url,
+        &token,
+    )?;
+    let usage = releasemind_request(
+        Method::POST,
+        "/api/automation/usage-check",
+        Some(json!({
+            "metric": "release_publish",
+            "repo_full_name": repo_ref,
+        })),
+        &base_url,
+        &token,
+    )?;
+
+    if json {
+        let payload = json!({
+            "ok": true,
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "token_source": token_source,
+            "repo_ref": repo_ref,
+            "verify": releasemind_response_json(&verify),
+            "repo": releasemind_response_json(&repo),
+            "billing_gate": releasemind_response_json(&billing),
+            "usage_check": releasemind_response_json(&usage),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    println!("releasemind doctor ok");
+    print_cli_kv("repo_ref", &repo_ref);
+    print_cli_kv("base_url", base_url);
+    print_cli_kv("base_url_source", base_url_source);
+    print_cli_kv("token_source", token_source);
+    print_cli_kv(
+        "repo_id",
+        json_string_field(repo.2.get("repo").unwrap_or(&Value::Null), "id").unwrap_or("(none)"),
+    );
+    print_cli_kv(
+        "billing_active",
+        json_bool_field(billing.2.get("billingGate").unwrap_or(&Value::Null), "isActive")
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "(none)".to_owned()),
+    );
+    print_cli_kv(
+        "release_publish_allowed",
+        json_bool_field(usage.2.get("allowance").unwrap_or(&Value::Null), "allowed")
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "(none)".to_owned()),
+    );
+    Ok(())
+}
+
+fn run_releasemind_repo_resolve(
+    repo_ref: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (token, _) = releasemind_token(token.as_deref())?;
+    let response = releasemind_request(
+        Method::GET,
+        &format!("/api/automation/repos/resolve?repo_full_name={}", encode_query_value(&repo_ref)),
+        None,
+        &base_url,
+        &token,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind repo resolved");
+    print_cli_kv("repo_ref", repo_ref);
+    print_cli_kv(
+        "repo_id",
+        json_string_field(response.2.get("repo").unwrap_or(&Value::Null), "id").unwrap_or("(none)"),
+    );
+    print_cli_kv(
+        "repo_url",
+        json_string_field(response.2.get("repo").unwrap_or(&Value::Null), "repo_url")
+            .unwrap_or("(none)"),
+    );
+    print_cli_kv(
+        "default_branch",
+        json_string_field(response.2.get("repo").unwrap_or(&Value::Null), "default_branch")
+            .unwrap_or("(none)"),
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_releasemind_release_prepare(
+    repo_ref: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    release_tag: Option<String>,
+    base_tag: Option<String>,
+    task: Option<String>,
+    audience: Option<String>,
+    tone: Option<String>,
+    custom_prompt: Option<String>,
+    pull_request_numbers: Vec<i64>,
+    changelog_path: Option<String>,
+    auto_open_github_draft: bool,
+    wait_for_ready: bool,
+    timeout_seconds: Option<i64>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (token, _) = releasemind_token(token.as_deref())?;
+    let mut body = serde_json::Map::new();
+    body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
+    if let Some(value) =
+        release_tag.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("release_tag".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        base_tag.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("base_tag".to_owned(), Value::String(value));
+    }
+    if let Some(value) = task.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("task".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        audience.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("audience".to_owned(), Value::String(value));
+    }
+    if let Some(value) = tone.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("tone".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        custom_prompt.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("custom_prompt".to_owned(), Value::String(value));
+    }
+    if !pull_request_numbers.is_empty() {
+        body.insert(
+            "pull_request_numbers".to_owned(),
+            Value::Array(
+                pull_request_numbers.into_iter().map(|value| Value::Number(value.into())).collect(),
+            ),
+        );
+    }
+    if let Some(value) =
+        changelog_path.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("changelog_path".to_owned(), Value::String(value));
+    }
+    if auto_open_github_draft {
+        body.insert("auto_open_github_draft".to_owned(), Value::Bool(true));
+    }
+    if wait_for_ready {
+        body.insert("wait_for_ready".to_owned(), Value::Bool(true));
+    }
+    if let Some(value) = timeout_seconds.filter(|value| *value > 0) {
+        body.insert("timeout_seconds".to_owned(), Value::Number(value.into()));
+    }
+    let response = releasemind_request(
+        Method::POST,
+        "/api/automation/releases/prepare",
+        Some(Value::Object(body)),
+        &base_url,
+        &token,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_release_response("releasemind release prepared", &repo_ref, &response.2);
+    Ok(())
+}
+
+fn run_releasemind_release_status(
+    repo_ref: Option<String>,
+    post_id: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let post_id = releasemind_post_id_required(post_id)?;
+    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (token, _) = releasemind_token(token.as_deref())?;
+    let response = releasemind_request(
+        Method::GET,
+        &format!(
+            "/api/automation/releases/status?repo_full_name={}&post_id={}",
+            encode_query_value(&repo_ref),
+            encode_query_value(&post_id)
+        ),
+        None,
+        &base_url,
+        &token,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_release_response("releasemind release status", &repo_ref, &response.2);
+    Ok(())
+}
+
+fn run_releasemind_release_publish(
+    repo_ref: Option<String>,
+    post_id: Option<String>,
+    base_url: Option<String>,
+    token: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let post_id = releasemind_post_id_required(post_id)?;
+    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (token, _) = releasemind_token(token.as_deref())?;
+    let response = releasemind_request(
+        Method::POST,
+        "/api/automation/releases/publish",
+        Some(json!({
+            "repo_full_name": repo_ref,
+            "post_id": post_id,
+        })),
+        &base_url,
+        &token,
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_release_response("releasemind release published", &repo_ref, &response.2);
+    Ok(())
+}
+
+fn releasemind_base_url(override_base: Option<&str>) -> (String, &'static str) {
+    if let Some(value) = override_base.map(str::trim).filter(|value| !value.is_empty()) {
+        return (value.trim_end_matches('/').to_owned(), "flag:--base-url");
+    }
+    if let Ok(value) = env::var("RELEASEMIND_API_BASE_URL")
+        && !value.trim().is_empty()
+    {
+        return (value.trim().trim_end_matches('/').to_owned(), "env:RELEASEMIND_API_BASE_URL");
+    }
+    ("https://api.releasemind.ai".to_owned(), "default")
+}
+
+fn releasemind_token(override_token: Option<&str>) -> Result<(String, &'static str)> {
+    if let Some(value) = override_token.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok((value.to_owned(), "flag:--token"));
+    }
+    if let Ok(value) = env::var("RELEASEMIND_AUTOMATION_TOKEN")
+        && !value.trim().is_empty()
+    {
+        return Ok((value.trim().to_owned(), "env:RELEASEMIND_AUTOMATION_TOKEN"));
+    }
+    Err(anyhow!(
+        "missing ReleaseMind automation token (set RELEASEMIND_AUTOMATION_TOKEN or pass --token)"
+    ))
+}
+
+fn releasemind_request(
+    method: Method,
+    path: &str,
+    body: Option<Value>,
+    base_url: &str,
+    token: &str,
+) -> Result<(u16, Option<String>, Value)> {
+    let client = BlockingHttpClient::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("build ReleaseMind HTTP client")?;
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let mut request =
+        client.request(method, &url).bearer_auth(token.trim()).header("accept", "application/json");
+    if let Some(body) = body {
+        request = request.header("content-type", "application/json").json(&body);
+    }
+    let response = request.send().context("send ReleaseMind API request")?;
+    let status = response.status();
+    let request_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let body = response.text().context("read ReleaseMind API response body")?;
+    let payload =
+        serde_json::from_str::<Value>(&body).unwrap_or_else(|_| Value::String(body.clone()));
+    if !status.is_success() {
+        let message = releasemind_error_message(&payload).unwrap_or_else(|| {
+            if body.trim().is_empty() {
+                format!("ReleaseMind API request failed with status {}", status.as_u16())
+            } else {
+                body
+            }
+        });
+        anyhow::bail!("{message}");
+    }
+    Ok((status.as_u16(), request_id, payload))
+}
+
+fn releasemind_response_json(response: &(u16, Option<String>, Value)) -> Value {
+    json!({
+        "status_code": response.0,
+        "request_id": response.1,
+        "data": response.2,
+    })
+}
+
+fn releasemind_error_message(payload: &Value) -> Option<String> {
+    payload
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .or_else(|| payload.get("error").and_then(Value::as_str).map(str::to_owned))
+}
+
+fn releasemind_repo_ref_required(repo_ref: Option<String>, message: &str) -> Result<String> {
+    repo_ref
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!(message.to_owned()))
+}
+
+fn releasemind_post_id_required(post_id: Option<String>) -> Result<String> {
+    post_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("post id is required"))
+}
+
+fn json_string_field<'a>(value: &'a Value, field: &str) -> Option<&'a str> {
+    value.get(field).and_then(Value::as_str).filter(|item| !item.trim().is_empty())
+}
+
+fn json_bool_field(value: &Value, field: &str) -> Option<bool> {
+    value.get(field).and_then(Value::as_bool)
+}
+
+fn print_releasemind_release_response(label: &str, repo_ref: &str, payload: &Value) {
+    println!("{label}");
+    print_cli_kv("repo_ref", repo_ref);
+    print_cli_kv("post_id", json_string_field(payload, "post_id").unwrap_or("(none)"));
+    print_cli_kv("status", json_string_field(payload, "status").unwrap_or("(none)"));
+    print_cli_kv("release_tag", json_string_field(payload, "release_tag").unwrap_or("(none)"));
+    print_cli_kv("release_url", json_string_field(payload, "release_url").unwrap_or("(none)"));
+    if let Some(message) = json_string_field(payload, "message") {
+        print_cli_kv("message", message);
+    }
+}
+
+fn encode_query_value(value: &str) -> String {
+    fn is_unreserved(byte: u8) -> bool {
+        matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~')
+    }
+
+    let mut encoded = String::new();
+    for byte in value.as_bytes() {
+        if is_unreserved(*byte) {
+            encoded.push(*byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push_str(&format!("{:02X}", byte));
+        }
+    }
+    encoded
 }
 
 fn run_image_command(provider: ImageProvider, command: ImageProviderCommand) -> Result<()> {
@@ -37888,8 +39167,7 @@ fn remove_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id =
-        resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "remove")?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "remove")?;
     let mut document = load_settings_document(&settings_path)?;
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
@@ -40480,7 +41758,9 @@ fn run_aws_iam_user_attached_policy_list(
         session_token,
         home,
         settings_file,
-        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "ListAttachedUserPolicies", &params),
+        |runtime| {
+            execute_aws_query(&runtime, "iam", "2010-05-08", "ListAttachedUserPolicies", &params)
+        },
     )?;
     print_aws_api_response(&response, format, raw)
 }
@@ -54627,9 +55907,17 @@ fn run_oci_list_core_resource(
     raw: bool,
 ) -> Result<()> {
     execute_oci_api_command(
-        account, profile, config_file, region, base_url, auth, home, settings_file,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
         OCIAPIRequest { path: path.to_owned(), params, ..OCIAPIRequest::default() },
-        format, raw,
+        format,
+        raw,
     )
 }
 
@@ -54647,7 +55935,20 @@ fn run_oci_get_core_resource(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    run_oci_list_core_resource(path, std::collections::BTreeMap::new(), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    run_oci_list_core_resource(
+        path,
+        std::collections::BTreeMap::new(),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54666,9 +55967,22 @@ fn run_oci_list_identity_resource(
     raw: bool,
 ) -> Result<()> {
     execute_oci_api_command(
-        account, profile, config_file, region, base_url.clone(), auth, home, settings_file,
-        OCIAPIRequest { path, params, service: OCIAPIService::Identity, ..OCIAPIRequest::default() },
-        format, raw,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url.clone(),
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            path,
+            params,
+            service: OCIAPIService::Identity,
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
     )
 }
 
@@ -54686,7 +56000,20 @@ fn run_oci_get_identity_resource(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    run_oci_list_identity_resource(path, std::collections::BTreeMap::new(), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    run_oci_list_identity_resource(
+        path,
+        std::collections::BTreeMap::new(),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54743,20 +56070,72 @@ fn run_oci_identity_availability_domains_list(
 
 #[allow(clippy::too_many_arguments)]
 fn run_oci_identity_compartment_list(
-    account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, parent: Option<String>, access_level: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    parent: Option<String>,
+    access_level: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
 ) -> Result<()> {
     let mut params = std::collections::BTreeMap::new();
-    if let Some(parent) = parent.filter(|v| !v.trim().is_empty()) { params.insert("compartmentId".to_owned(), parent); }
-    if let Some(access_level) = access_level.filter(|v| !v.trim().is_empty()) { params.insert("accessLevel".to_owned(), access_level); }
-    run_oci_list_identity_resource(maybe_absolute_oci_identity_path(&base_url, "/20160918/compartments"), params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    if let Some(parent) = parent.filter(|v| !v.trim().is_empty()) {
+        params.insert("compartmentId".to_owned(), parent);
+    }
+    if let Some(access_level) = access_level.filter(|v| !v.trim().is_empty()) {
+        params.insert("accessLevel".to_owned(), access_level);
+    }
+    run_oci_list_identity_resource(
+        maybe_absolute_oci_identity_path(&base_url, "/20160918/compartments"),
+        params,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
 fn run_oci_identity_compartment_get(
     compartment_id: String,
-    account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
 ) -> Result<()> {
-    run_oci_get_identity_resource(maybe_absolute_oci_identity_path(&base_url, &format!("/20160918/compartments/{}", compartment_id.trim())), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    run_oci_get_identity_resource(
+        maybe_absolute_oci_identity_path(
+            &base_url,
+            &format!("/20160918/compartments/{}", compartment_id.trim()),
+        ),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54803,57 +56182,314 @@ fn run_oci_identity_compartment_create(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_vcn_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_network_vcn_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
-    run_oci_list_core_resource("/20160918/vcns", std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    run_oci_list_core_resource(
+        "/20160918/vcns",
+        std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_vcn_get(vcn_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/vcns/{}", vcn_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_network_vcn_get(
+    vcn_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/vcns/{}", vcn_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_internet_gateway_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_network_internet_gateway_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
     let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
-    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
-    run_oci_list_core_resource("/20160918/internetGateways", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) {
+        params.insert("vcnId".to_owned(), vcn_id);
+    }
+    run_oci_list_core_resource(
+        "/20160918/internetGateways",
+        params,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_internet_gateway_get(gateway_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/internetGateways/{}", gateway_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_network_internet_gateway_get(
+    gateway_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/internetGateways/{}", gateway_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_route_table_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_network_route_table_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
     let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
-    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
-    run_oci_list_core_resource("/20160918/routeTables", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) {
+        params.insert("vcnId".to_owned(), vcn_id);
+    }
+    run_oci_list_core_resource(
+        "/20160918/routeTables",
+        params,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_route_table_get(route_table_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/routeTables/{}", route_table_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_network_route_table_get(
+    route_table_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/routeTables/{}", route_table_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_security_list_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_network_security_list_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
     let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
-    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
-    run_oci_list_core_resource("/20160918/securityLists", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) {
+        params.insert("vcnId".to_owned(), vcn_id);
+    }
+    run_oci_list_core_resource(
+        "/20160918/securityLists",
+        params,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_security_list_get(security_list_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/securityLists/{}", security_list_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_network_security_list_get(
+    security_list_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/securityLists/{}", security_list_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_subnet_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, vcn_id: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_network_subnet_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
     let mut params = std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]);
-    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) { params.insert("vcnId".to_owned(), vcn_id); }
-    run_oci_list_core_resource("/20160918/subnets", params, account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    if let Some(vcn_id) = vcn_id.filter(|v| !v.trim().is_empty()) {
+        params.insert("vcnId".to_owned(), vcn_id);
+    }
+    run_oci_list_core_resource(
+        "/20160918/subnets",
+        params,
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_network_subnet_get(subnet_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/subnets/{}", subnet_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_network_subnet_get(
+    subnet_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/subnets/{}", subnet_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -55206,13 +56842,62 @@ fn run_oci_compute_image_latest_ubuntu(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_oci_compute_instance_list(account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, compartment: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
+fn run_oci_compute_instance_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
     let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
-    run_oci_list_core_resource("/20160918/instances", std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+    run_oci_list_core_resource(
+        "/20160918/instances",
+        std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment)]),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 #[allow(clippy::too_many_arguments)]
-fn run_oci_compute_instance_get(instance_id: String, account: Option<String>, profile: Option<String>, config_file: Option<String>, region: Option<String>, base_url: Option<String>, auth: Option<String>, home: Option<PathBuf>, settings_file: Option<PathBuf>, format: OutputFormat, raw: bool) -> Result<()> {
-    run_oci_get_core_resource(&format!("/20160918/instances/{}", instance_id.trim()), account, profile, config_file, region, base_url, auth, home, settings_file, format, raw)
+fn run_oci_compute_instance_get(
+    instance_id: String,
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    run_oci_get_core_resource(
+        &format!("/20160918/instances/{}", instance_id.trim()),
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

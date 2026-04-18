@@ -13729,6 +13729,189 @@ fn github_release_delete_json_mutates_via_api_with_oauth() {
 }
 
 #[test]
+fn providers_characteristics_includes_releasemind() {
+    let output = cargo_bin()
+        .args(["orbit", "list", "--provider", "releasemind", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let providers = parsed["providers"].as_array().expect("providers array");
+    assert_eq!(providers.len(), 1);
+    assert_eq!(providers[0]["provider"], "releasemind");
+    assert_eq!(providers[0]["base_url"], "https://api.releasemind.ai");
+    assert_eq!(providers[0]["public_probe"]["path"], "/healthz");
+}
+
+#[test]
+fn releasemind_auth_status_verifies_repo_with_env_token() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(
+            request
+                .starts_with("GET /api/automation/verify?repo_full_name=Aureuma%2Fsi HTTP/1.1\r\n")
+        );
+        assert!(request.contains("authorization: Bearer rmatk.test.secret\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_verify")],
+            r#"{"ok":true,"principal":{"token_id":"tok-1","user_id":"user-1","label":"SI CLI","repo_scope":"aureuma/si"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
+        .args([
+            "orbit",
+            "releasemind",
+            "auth",
+            "status",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["token_source"], "env:RELEASEMIND_AUTOMATION_TOKEN");
+    assert_eq!(parsed["verify"]["request_id"], "req_rm_verify");
+    assert_eq!(parsed["verify"]["data"]["principal"]["label"], "SI CLI");
+    server.join();
+}
+
+#[test]
+fn releasemind_doctor_checks_repo_billing_and_usage() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server_with_body(4, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with(
+                    "GET /api/automation/verify?repo_full_name=Aureuma%2Fsi HTTP/1.1\r\n"
+                ));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_verify")],
+                    r#"{"ok":true,"principal":{"token_id":"tok-1"}}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with(
+                    "GET /api/automation/repos/resolve?repo_full_name=Aureuma%2Fsi HTTP/1.1\r\n"
+                ));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_repo")],
+                    r#"{"ok":true,"repo":{"id":"repo-1","repo_url":"https://github.com/Aureuma/si","default_branch":"main"}}"#,
+                )
+            }
+            2 => {
+                assert!(request.starts_with(
+                    "GET /api/automation/billing-gate?repo_full_name=Aureuma%2Fsi HTTP/1.1\r\n"
+                ));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_billing")],
+                    r#"{"ok":true,"billingGate":{"isActive":true,"billingConflict":false}}"#,
+                )
+            }
+            3 => {
+                assert!(request.starts_with("POST /api/automation/usage-check HTTP/1.1\r\n"));
+                assert!(request.contains("\"metric\":\"release_publish\""));
+                assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_usage")],
+                    r#"{"ok":true,"allowance":{"allowed":true,"remaining":5}}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
+        .args([
+            "orbit",
+            "releasemind",
+            "doctor",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["repo"]["data"]["repo"]["id"], "repo-1");
+    assert_eq!(parsed["billing_gate"]["data"]["billingGate"]["isActive"], true);
+    assert_eq!(parsed["usage_check"]["data"]["allowance"]["allowed"], true);
+    server.join();
+}
+
+#[test]
+fn releasemind_release_prepare_posts_api_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/automation/releases/prepare HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmatk.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        assert!(request.contains("\"release_tag\":\"v1.2.3\""));
+        assert!(request.contains("\"wait_for_ready\":true"));
+        assert!(request.contains("\"pull_request_numbers\":[12,34]"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_prepare")],
+            r#"{"ok":true,"post_id":"post-1","status":"ready","release_tag":"v1.2.3"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
+        .args([
+            "orbit",
+            "releasemind",
+            "release",
+            "prepare",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--release-tag",
+            "v1.2.3",
+            "--wait-for-ready",
+            "--pull-request",
+            "12",
+            "--pull-request",
+            "34",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_prepare");
+    assert_eq!(parsed["data"]["post_id"], "post-1");
+    assert_eq!(parsed["data"]["release_tag"], "v1.2.3");
+    server.join();
+}
+
+#[test]
 fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
     let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));

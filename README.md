@@ -197,6 +197,20 @@ Local preflight command:
 
 These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
 
+ReleaseMind automation stays in the ReleaseMind repo and API. SI consumes it as
+an orbit client:
+
+```bash
+si orbit releasemind doctor Aureuma/si --json
+si orbit releasemind release prepare Aureuma/si --release-tag vX.Y.0 --wait-for-ready --json
+si orbit releasemind release status Aureuma/si post_123 --json
+si orbit releasemind release publish Aureuma/si post_123 --json
+```
+
+Use ReleaseMind dashboard auth, GitHub linking, repo onboarding, and automation
+token minting first. Then inject `RELEASEMIND_API_BASE_URL` and
+`RELEASEMIND_AUTOMATION_TOKEN` with `si fort`.
+
 ## License
 
 This repository is licensed under GNU Affero General Public License v3.0 (AGPL-3.0).

@@ -7,6 +7,7 @@ use serde::Serialize;
 pub enum ProviderId {
     Cloudflare,
     GitHub,
+    ReleaseMind,
     GooglePlaces,
     GooglePlay,
     AppleAppStore,
@@ -29,6 +30,7 @@ impl ProviderId {
         match self {
             Self::Cloudflare => "cloudflare",
             Self::GitHub => "github",
+            Self::ReleaseMind => "releasemind",
             Self::GooglePlaces => "google_places",
             Self::GooglePlay => "google_play",
             Self::AppleAppStore => "apple_appstore",
@@ -151,6 +153,19 @@ const ENTRIES: &[ProviderCatalogEntry] = &[
             Some(PublicProbe { method: "GET", path: "/zen" }),
         ),
         caps(true, false, false, true),
+    ),
+    entry(
+        ProviderId::ReleaseMind,
+        spec(
+            "https://api.releasemind.ai",
+            None,
+            Some("v1"),
+            Some("bearer"),
+            1.0,
+            2,
+            Some(PublicProbe { method: "GET", path: "/healthz" }),
+        ),
+        caps(false, false, false, false),
     ),
     entry(
         ProviderId::GooglePlaces,
@@ -374,6 +389,7 @@ pub fn parse_id(raw: &str) -> Option<ProviderId> {
     match normalized.as_str() {
         "cloudflare" => Some(ProviderId::Cloudflare),
         "github" => Some(ProviderId::GitHub),
+        "releasemind" | "release_mind" => Some(ProviderId::ReleaseMind),
         "google_places" | "googleplaces" => Some(ProviderId::GooglePlaces),
         "google_play" | "googleplay" | "play" => Some(ProviderId::GooglePlay),
         "apple" | "appstore" | "app_store" | "apple_appstore" | "appstoreconnect"
@@ -403,12 +419,13 @@ mod tests {
 
     #[test]
     fn default_catalog_has_expected_count() {
-        assert_eq!(default_ids().len(), 17);
+        assert_eq!(default_ids().len(), 18);
     }
 
     #[test]
     fn parses_aliases() {
         assert_eq!(parse_id("twitter"), Some(ProviderId::SocialX));
+        assert_eq!(parse_id("releasemind"), Some(ProviderId::ReleaseMind));
         assert_eq!(parse_id("google-play"), Some(ProviderId::GooglePlay));
         assert_eq!(parse_id("app_store_connect"), Some(ProviderId::AppleAppStore));
         assert_eq!(parse_id("app-store-connect"), Some(ProviderId::AppleAppStore));
@@ -450,5 +467,15 @@ mod tests {
 
         assert_eq!(probe.method, "GET");
         assert_eq!(probe.path, "/zen");
+    }
+
+    #[test]
+    fn releasemind_snapshot_matches_expected_values() {
+        let releasemind = find(ProviderId::ReleaseMind).expect("releasemind catalog entry");
+        assert_eq!(releasemind.spec.base_url, "https://api.releasemind.ai");
+        assert_eq!(releasemind.spec.api_version, Some("v1"));
+        assert_eq!(releasemind.spec.auth_style, Some("bearer"));
+        assert_eq!(releasemind.spec.public_probe.expect("probe").path, "/healthz");
+        assert!(!releasemind.capabilities.supports_raw);
     }
 }
