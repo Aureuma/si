@@ -104,6 +104,18 @@ The bounded REST surface is exposed by the same Nucleus service and source of tr
 
 `/openapi.json` is public OpenAPI 3.1 for GPT Actions URL import and includes summaries, descriptions, schemas, examples, and `x-si-purpose` annotations for bounded external consumers. Operational REST endpoints remain bearer-token protected.
 
+## GPT Actions OpenAPI rules
+
+For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/gpt-actions-openapi.yaml`:
+
+- `servers[0].url` must be an absolute HTTPS URL for public imports. Use `SI_NUCLEUS_PUBLIC_URL` in deployed environments.
+- Every operation must have a stable `operationId`, `summary`, `description`, success response schema, and `x-si-purpose`.
+- Every JSON request or response body must define a concrete schema. Do not use generic object schemas such as `type: object` with only `additionalProperties`.
+- Every object schema must include a `properties` key. Map-like objects may use `properties: {}` plus `additionalProperties`, but the `properties` key must still be present for GPT Actions compatibility.
+- Public bootstrap endpoints such as `GET /openapi.json` must set operation `security: []`; operational endpoints must explicitly require `bearerAuth`.
+- Keep the generated runtime document and `docs/gpt-actions-openapi.yaml` in sync with the package patch version.
+- Run the Nucleus OpenAPI tests before committing schema changes so importer compatibility failures are caught locally.
+
 ## Security and auth
 
 Default behavior:
