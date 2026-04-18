@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SI Nucleus REST API
-  version: 0.57.26
+  version: 0.57.27
   description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
 servers:
   - url: https://nucleus.aureuma.ai
@@ -15,6 +15,63 @@ components:
       bearerFormat: opaque token
       description: Opaque bearer token provided by SI Fort for Nucleus REST access.
   schemas:
+    OpenApiDocumentView:
+      type: object
+      description: Public OpenAPI document returned by this endpoint.
+      additionalProperties: true
+      required: [openapi, info, servers, paths]
+      properties:
+        openapi:
+          type: string
+          description: OpenAPI specification version.
+          example: 3.1.0
+        info:
+          type: object
+          description: API metadata.
+          additionalProperties: true
+          required: [title, version]
+          properties:
+            title:
+              type: string
+              description: API title.
+              example: SI Nucleus REST API
+            version:
+              type: string
+              description: API package version.
+              example: 0.57.27
+            description:
+              type: string
+              description: API description.
+        servers:
+          type: array
+          description: Absolute server URLs clients can call.
+          items:
+            type: object
+            additionalProperties: true
+            required: [url]
+            properties:
+              url:
+                type: string
+                description: Absolute API base URL.
+                format: uri
+                example: https://nucleus.aureuma.ai
+        paths:
+          type: object
+          description: OpenAPI path item map.
+          additionalProperties: true
+          properties: {}
+        components:
+          type: object
+          description: OpenAPI reusable components.
+          additionalProperties: true
+          properties: {}
+        security:
+          type: array
+          description: Default security requirements.
+          items:
+            type: object
+            additionalProperties: true
+            properties: {}
     RestErrorEnvelope:
       type: object
       description: Standard REST error envelope returned when a Nucleus request fails.
@@ -46,7 +103,7 @@ components:
         version:
           type: string
           description: Running SI Nucleus package version.
-          example: 0.57.26
+          example: 0.57.27
           readOnly: true
         bind_addr:
           type: string
@@ -274,6 +331,7 @@ components:
         extra_env:
           type: object
           description: Non-secret extra environment values configured for the worker.
+          properties: {}
           additionalProperties:
             type: string
           example: {}
@@ -286,7 +344,7 @@ components:
         capability_version:
           type: [string, "null"]
           description: Worker capability or package version when reported.
-          example: 0.57.26
+          example: 0.57.27
         last_heartbeat_at:
           type: [string, "null"]
           description: Most recent heartbeat timestamp.
@@ -488,8 +546,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/OpenApiDocumentView"
   /status:
     get:
       operationId: getNucleusStatus

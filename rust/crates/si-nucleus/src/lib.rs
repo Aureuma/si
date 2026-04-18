@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -4568,6 +4570,82 @@ fn openapi_nullable_id_property(description: &str, prefix: &str, example: Value)
     })
 }
 
+fn openapi_document_schema() -> Value {
+    json!({
+        "type": "object",
+        "description": "Public OpenAPI document returned by this endpoint.",
+        "additionalProperties": true,
+        "required": ["openapi", "info", "servers", "paths"],
+        "properties": {
+            "openapi": {
+                "type": "string",
+                "description": "OpenAPI specification version.",
+                "example": "3.1.0"
+            },
+            "info": {
+                "type": "object",
+                "description": "API metadata.",
+                "additionalProperties": true,
+                "required": ["title", "version"],
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "API title.",
+                        "example": "SI Nucleus REST API"
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "API package version.",
+                        "example": env!("CARGO_PKG_VERSION")
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "API description."
+                    }
+                }
+            },
+            "servers": {
+                "type": "array",
+                "description": "Absolute server URLs clients can call.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "required": ["url"],
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "Absolute API base URL.",
+                            "format": "uri",
+                            "example": "https://nucleus.aureuma.ai"
+                        }
+                    }
+                }
+            },
+            "paths": {
+                "type": "object",
+                "description": "OpenAPI path item map.",
+                "additionalProperties": true,
+                "properties": {}
+            },
+            "components": {
+                "type": "object",
+                "description": "OpenAPI reusable components.",
+                "additionalProperties": true,
+                "properties": {}
+            },
+            "security": {
+                "type": "array",
+                "description": "Default security requirements.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {}
+                }
+            }
+        }
+    })
+}
+
 fn openapi_header_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers
         .get(name)?
@@ -4928,7 +5006,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                     "responses": {
                         "200": {
                             "description": "Public OpenAPI document.",
-                            "content": openapi_json_content(json!({ "type": "object", "additionalProperties": true }))
+                            "content": openapi_json_content(schema_ref("OpenApiDocumentView"))
                         },
                         "500": {
                             "description": "Request failed.",
@@ -4948,6 +5026,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                 }
             },
             "schemas": {
+                "OpenApiDocumentView": openapi_document_schema(),
                 "RestErrorEnvelope": {
                     "type": "object",
                     "description": "Standard REST error envelope returned when a Nucleus request fails.",
@@ -5042,7 +5121,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                         "home_dir": { "type": ["string", "null"], "description": "Home directory used by the worker process.", "example": "/home/si" },
                         "codex_home": { "type": "string", "description": "Codex home directory used by this worker.", "example": "/home/si/.codex" },
                         "workdir": { "type": ["string", "null"], "description": "Default workspace directory for worker execution.", "example": "/home/si/Development/si" },
-                        "extra_env": { "type": "object", "description": "Non-secret extra environment values configured for the worker.", "additionalProperties": { "type": "string" }, "example": {} },
+                        "extra_env": { "type": "object", "description": "Non-secret extra environment values configured for the worker.", "properties": {}, "additionalProperties": { "type": "string" }, "example": {} },
                         "status": { "type": "string", "description": "Worker lifecycle status.", "enum": ["starting", "ready", "degraded", "failed", "stopped"], "example": "ready", "readOnly": true },
                         "capability_version": { "type": ["string", "null"], "description": "Worker capability or package version when reported.", "example": env!("CARGO_PKG_VERSION") },
                         "last_heartbeat_at": { "type": ["string", "null"], "description": "Most recent heartbeat timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
@@ -5606,7 +5685,7 @@ mod tests {
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
     use chrono::{Duration as ChronoDuration, Utc};
-    use serde_json::json;
+    use serde_json::{Value, json};
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
         EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
@@ -5983,6 +6062,37 @@ mod tests {
     async fn response_json(response: axum::response::Response) -> serde_json::Value {
         let body = to_bytes(response.into_body(), usize::MAX).await.expect("read body");
         serde_json::from_slice(&body).expect("parse json body")
+    }
+
+    fn assert_object_schemas_have_properties(value: &Value, path: &str) {
+        match value {
+            Value::Object(map) => {
+                let type_is_object = match map.get("type") {
+                    Some(Value::String(value)) => value == "object",
+                    Some(Value::Array(values)) => values.iter().any(|value| value == "object"),
+                    _ => false,
+                };
+                let uses_schema_composition =
+                    ["$ref", "allOf", "anyOf", "oneOf"].iter().any(|key| map.contains_key(*key));
+                if type_is_object && !uses_schema_composition {
+                    assert!(
+                        map.contains_key("properties"),
+                        "object schema missing properties at {path}"
+                    );
+                }
+                for (key, child) in map {
+                    let child_path =
+                        if path.is_empty() { key.to_owned() } else { format!("{path}.{key}") };
+                    assert_object_schemas_have_properties(child, &child_path);
+                }
+            }
+            Value::Array(values) => {
+                for (index, child) in values.iter().enumerate() {
+                    assert_object_schemas_have_properties(child, &format!("{path}[{index}]"));
+                }
+            }
+            _ => {}
+        }
     }
 
     #[test]
@@ -6766,6 +6876,17 @@ mod tests {
                 ["task_id"],
             json!("si-task-0123456789abcdef00000001")
         );
+        assert!(
+            body["components"]["schemas"]["OpenApiDocumentView"]["description"]
+                .as_str()
+                .map(|value| !value.is_empty())
+                .unwrap_or(false),
+            "missing component schema description for OpenApiDocumentView"
+        );
+        assert_eq!(
+            body["components"]["schemas"]["OpenApiDocumentView"]["additionalProperties"],
+            json!(true)
+        );
         for schema_name in [
             "RestErrorEnvelope",
             "NucleusStatusView",
@@ -7025,9 +7146,16 @@ mod tests {
         );
         assert_eq!(
             body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]
-                ["schema"]["type"],
-            json!("object")
+                ["schema"]["$ref"],
+            json!("#/components/schemas/OpenApiDocumentView")
         );
+        assert!(
+            body["components"]["schemas"]["OpenApiDocumentView"]["properties"]["paths"]
+                ["properties"]
+                .is_object()
+        );
+        assert_object_schemas_have_properties(&body["components"]["schemas"], "components.schemas");
+        assert_object_schemas_have_properties(&body["paths"], "paths");
         for (path, method) in [
             ("/status", "get"),
             ("/tasks", "get"),
