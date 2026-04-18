@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SI Nucleus REST API
-  version: 0.57.22
+  version: 0.57.23
   description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
 servers:
   - url: https://nucleus.aureuma.ai
@@ -46,7 +46,7 @@ components:
         version:
           type: string
           description: Running SI Nucleus package version.
-          example: 0.57.22
+          example: 0.57.23
           readOnly: true
         bind_addr:
           type: string
@@ -286,7 +286,7 @@ components:
         capability_version:
           type: [string, "null"]
           description: Worker capability or package version when reported.
-          example: 0.57.22
+          example: 0.57.23
         last_heartbeat_at:
           type: [string, "null"]
           description: Most recent heartbeat timestamp.

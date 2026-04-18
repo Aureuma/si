@@ -53,27 +53,20 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
 
-      - name: Validate release tag and CLI version
+      - name: Validate publishable release tag and CLI version
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${tag}"
+          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${tag}" --publish
 
-      - name: Build all release archives and checksums
+      - name: Build and verify the release bundle
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self assets --version "${tag}" --out-dir dist
+          cargo run --quiet --locked --release -p si-rs-cli -- build self bundle --version "${tag}" --out-dir dist --publish --skip-notes
           ls -lah dist
-
-      - name: Verify locally built release archives
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self verify --version "${tag}" --out-dir dist
 
       - name: Upload assets to GitHub Release
         shell: bash

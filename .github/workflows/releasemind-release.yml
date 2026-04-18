@@ -100,5 +100,5 @@ jobs:
           pull_request_numbers: ${{ steps.resolve.outputs.pull_request_numbers }}
           changelog_path: CHANGELOG.md
           publish: ${{ steps.resolve.outputs.publish }}
-          preflight_command: cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
+          preflight_command: cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}" --publish
           post_publish_command: ./.github/scripts/wait-cli-release-assets.sh "${{ steps.resolve.outputs.tag }}" "${{ github.repository }}"
