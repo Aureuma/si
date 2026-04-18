@@ -878,22 +878,6 @@ struct BuildSelfRunArgs {
 }
 
 #[derive(Debug, Args)]
-struct BuildSelfBundleArgs {
-    #[arg(long)]
-    repo: Option<PathBuf>,
-    #[arg(long)]
-    version: Option<String>,
-    #[arg(long = "out-dir")]
-    out_dir: Option<PathBuf>,
-    #[arg(long = "notes-file")]
-    notes_file: Option<PathBuf>,
-    #[arg(long, action = ArgAction::SetTrue)]
-    skip_notes: bool,
-    #[arg(long, action = ArgAction::SetTrue)]
-    publish: bool,
-}
-
-#[derive(Debug, Args)]
 struct BuildSelfArgs {
     #[command(subcommand)]
     command: Option<BuildSelfCommand>,
@@ -911,15 +895,6 @@ enum BuildSelfCommand {
     Upgrade(BuildSelfUpgradeArgs),
     #[command(name = "run")]
     Run(BuildSelfRunArgs),
-    #[command(
-        name = "bundle",
-        alias = "releasebundle",
-        alias = "release-bundle",
-        alias = "preflight",
-        alias = "releasepreflight",
-        alias = "release-preflight"
-    )]
-    Bundle(BuildSelfBundleArgs),
     #[command(name = "asset", alias = "releaseasset", alias = "release-asset")]
     ReleaseAsset {
         #[arg(long)]
@@ -957,8 +932,6 @@ enum BuildSelfCommand {
     ValidateReleaseVersion {
         #[arg(long)]
         tag: String,
-        #[arg(long, action = ArgAction::SetTrue)]
-        publish: bool,
     },
     #[command(name = "verify", alias = "verifyreleaseassets", alias = "verify-release-assets")]
     VerifyReleaseAssets {
@@ -18118,12 +18091,8 @@ fn run_build_self_release_assets(
     let repo_root = resolve_release_repo_root(repo)?;
     let resolved_version = resolve_release_version(&repo_root, version)?;
     let resolved_out_dir = resolve_release_output_dir(out_dir, &repo_root)?;
-    build_self_release_assets(&repo_root, &resolved_version, &resolved_out_dir)
-}
-
-fn build_self_release_assets(repo_root: &Path, version: &str, out_dir: &Path) -> Result<()> {
-    fs::create_dir_all(out_dir)
-        .with_context(|| format!("create release output dir {}", out_dir.display()))?;
+    fs::create_dir_all(&resolved_out_dir)
+        .with_context(|| format!("create release output dir {}", resolved_out_dir.display()))?;
 
     let targets = [
         ("linux", "amd64", None),
@@ -18136,7 +18105,14 @@ fn build_self_release_assets(repo_root: &Path, version: &str, out_dir: &Path) ->
     let mut archive_names = Vec::new();
     for (goos, goarch, goarm) in targets {
         println!("building release archive for {goos}/{goarch}");
-        let archive_path = build_release_asset(repo_root, out_dir, version, goos, goarch, goarm)?;
+        let archive_path = build_release_asset(
+            &repo_root,
+            &resolved_out_dir,
+            &resolved_version,
+            goos,
+            goarch,
+            goarm,
+        )?;
         let archive_name = archive_path
             .file_name()
             .and_then(|value| value.to_str())
@@ -18144,97 +18120,21 @@ fn build_self_release_assets(repo_root: &Path, version: &str, out_dir: &Path) ->
         archive_names.push(archive_name.to_owned());
     }
 
-    let checksums_path = out_dir.join("checksums.txt");
+    let checksums_path = resolved_out_dir.join("checksums.txt");
     let mut checksums = File::create(&checksums_path)
         .with_context(|| format!("create {}", checksums_path.display()))?;
     for name in &archive_names {
-        let digest = sha256_file(&out_dir.join(name))?;
+        let digest = sha256_file(&resolved_out_dir.join(name))?;
         writeln!(checksums, "{digest}  {name}")
             .with_context(|| format!("write {}", checksums_path.display()))?;
     }
 
     println!("created release archives:");
     for name in &archive_names {
-        println!("  - {}", out_dir.join(name).display());
+        println!("  - {}", resolved_out_dir.join(name).display());
     }
     println!("created checksums:");
     println!("  - {}", checksums_path.display());
-    Ok(())
-}
-
-fn changelog_section(markdown: &str, heading_prefix: &str) -> Option<String> {
-    let mut capture = false;
-    let mut lines = Vec::new();
-    for line in markdown.lines() {
-        if !capture {
-            if line.starts_with(heading_prefix) {
-                capture = true;
-                lines.push(line);
-            }
-            continue;
-        }
-        if line.starts_with("## [") && !line.starts_with(heading_prefix) {
-            break;
-        }
-        lines.push(line);
-    }
-    if lines.is_empty() {
-        None
-    } else {
-        Some(format!("{}\n", lines.join("\n").trim_end()))
-    }
-}
-
-fn resolve_release_notes_markdown(
-    repo_root: &Path,
-    version: &str,
-) -> Result<Option<(String, &'static str)>> {
-    let changelog_path = repo_root.join("CHANGELOG.md");
-    let changelog = fs::read_to_string(&changelog_path)
-        .with_context(|| format!("read {}", changelog_path.display()))?;
-    if let Some(section) = changelog_section(&changelog, &format!("## [{version}]")) {
-        return Ok(Some((section, "CHANGELOG release entry")));
-    }
-    if let Some(section) = changelog_section(&changelog, "## [Unreleased]") {
-        return Ok(Some((section, "CHANGELOG Unreleased section")));
-    }
-    Ok(None)
-}
-
-fn run_build_self_release_bundle(
-    repo: Option<PathBuf>,
-    version: Option<String>,
-    out_dir: Option<PathBuf>,
-    notes_file: Option<PathBuf>,
-    skip_notes: bool,
-    publish: bool,
-) -> Result<()> {
-    let repo_root = resolve_release_repo_root(repo)?;
-    let resolved_version = resolve_release_version(&repo_root, version)?;
-    if publish {
-        validate_release_tag_against_workspace(&repo_root, &resolved_version, true)?;
-    }
-    let resolved_out_dir = resolve_release_output_dir(out_dir, &repo_root)?;
-    build_self_release_assets(&repo_root, &resolved_version, &resolved_out_dir)?;
-    run_build_self_verify_release_assets(resolved_version.clone(), resolved_out_dir.clone())?;
-    if !skip_notes {
-        match resolve_release_notes_markdown(&repo_root, &resolved_version)? {
-            Some((notes, source)) => {
-                let notes_path =
-                    notes_file.unwrap_or_else(|| resolved_out_dir.join("release-notes.md"));
-                fs::write(&notes_path, notes)
-                    .with_context(|| format!("write {}", notes_path.display()))?;
-                println!("created release notes from {source}: {}", notes_path.display());
-            }
-            None => {
-                println!(
-                    "no matching release-notes source found in {}; skipped release-notes.md",
-                    repo_root.join("CHANGELOG.md").display()
-                );
-            }
-        }
-    }
-    println!("release bundle ready: {}", resolved_out_dir.display());
     Ok(())
 }
 
@@ -20100,44 +20000,18 @@ fn validate_release_tag_format(tag: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_publishable_release_tag(tag: &str) -> Result<()> {
-    let pattern =
-        Regex::new(r"^v([0-9]+)\.([0-9]+)\.(0)$").context("compile publishable release tag regex")?;
-    if pattern.is_match(tag.trim()) {
-        return Ok(());
-    }
-    Err(anyhow!(
-        "published SI GitHub releases must use minor release tags in the form vX.Y.0, got: {}",
-        tag.trim()
-    ))
-}
-
-fn validate_release_tag_against_workspace(repo_root: &Path, tag: &str, publish: bool) -> Result<()> {
+fn run_validate_release_version(tag: String) -> Result<()> {
     let tag = tag.trim().to_owned();
     if tag.is_empty() {
         return Err(anyhow!("--tag is required"));
     }
     validate_release_tag_format(&tag)?;
-    let actual = read_si_version(repo_root)?;
+    let cwd = std::env::current_dir().context("read current dir")?;
+    let actual = read_si_version(&cwd)?;
     if actual != tag {
         return Err(anyhow!("workspace Cargo.toml has {}, but release tag is {}", actual, tag));
     }
-    if publish {
-        validate_publishable_release_tag(&tag)?;
-    }
-    Ok(())
-}
-
-fn run_validate_release_version(tag: String, publish: bool) -> Result<()> {
-    let cwd = std::env::current_dir().context("read current dir")?;
-    validate_release_tag_against_workspace(&cwd, &tag, publish)?;
-    if publish {
-        println!(
-            "release tag is aligned with workspace Cargo.toml and publishable under SI policy ({tag})"
-        );
-    } else {
     println!("release tag and workspace Cargo.toml are aligned ({tag})");
-    }
     Ok(())
 }
 
@@ -20525,16 +20399,6 @@ fn main() -> Result<()> {
                 Some(BuildSelfCommand::Run(BuildSelfRunArgs { repo, cargo, args })) => {
                     run_build_self_run(repo, cargo, args)?
                 }
-                Some(BuildSelfCommand::Bundle(BuildSelfBundleArgs {
-                    repo,
-                    version,
-                    out_dir,
-                    notes_file,
-                    skip_notes,
-                    publish,
-                })) => run_build_self_release_bundle(
-                    repo, version, out_dir, notes_file, skip_notes, publish,
-                )?,
                 Some(BuildSelfCommand::ReleaseAsset {
                     repo_root,
                     version,
@@ -20548,8 +20412,8 @@ fn main() -> Result<()> {
                 Some(BuildSelfCommand::ReleaseAssets { repo, version, out_dir }) => {
                     run_build_self_release_assets(repo, version, out_dir)?
                 }
-                Some(BuildSelfCommand::ValidateReleaseVersion { tag, publish }) => {
-                    run_validate_release_version(tag, publish)?
+                Some(BuildSelfCommand::ValidateReleaseVersion { tag }) => {
+                    run_validate_release_version(tag)?
                 }
                 Some(BuildSelfCommand::VerifyReleaseAssets { version, out_dir }) => {
                     run_build_self_verify_release_assets(version, out_dir)?
@@ -34593,7 +34457,6 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["build", "self", "check"] => Some("Check the SI CLI without linking."),
         ["build", "self", "upgrade"] => Some("Install the freshly built SI CLI."),
         ["build", "self", "run"] => Some("Build and run the SI CLI."),
-        ["build", "self", "bundle"] => Some("Build and verify the GitHub release bundle."),
         ["build", "self", "asset"] => Some("Build one release asset."),
         ["build", "self", "assets"] => Some("Build all release assets."),
         ["build", "self", "validate"] => Some("Validate a release version tag."),
@@ -67671,39 +67534,5 @@ mod tests {
 
         status.weekly_left_pct = None;
         assert!(!codex_warmup_weekly_quota_reached(&status));
-    }
-
-    #[test]
-    fn publishable_release_tag_requires_minor_release_shape() {
-        assert!(validate_publishable_release_tag("v0.58.0").is_ok());
-        assert!(validate_publishable_release_tag("v0.58.1").is_err());
-        assert!(validate_publishable_release_tag("v0.58.0-rc1").is_err());
-    }
-
-    #[test]
-    fn changelog_section_prefers_version_entry_before_unreleased_fallback() {
-        let markdown = "\
-## [Unreleased]
-### Fixed
-- Pending item.
-
-## [v0.58.0] - 2026-04-17
-### Added
-- Published item.
-
-## [v0.57.0] - 2026-04-08
-### Changed
-- Older item.
-";
-
-        let version_section =
-            changelog_section(markdown, "## [v0.58.0]").expect("version section present");
-        assert!(version_section.contains("Published item."));
-        assert!(!version_section.contains("Pending item."));
-
-        let unreleased =
-            changelog_section(markdown, "## [Unreleased]").expect("unreleased section present");
-        assert!(unreleased.contains("Pending item."));
-        assert!(!unreleased.contains("Published item."));
     }
 }

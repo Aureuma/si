@@ -12,8 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Added `si build self bundle` as the simplest SI-native GitHub release preflight so release-profile archive builds, local verification, and `release-notes.md` generation happen in one command.
-- Changed GitHub-release validation and release-asset workflows to enforce the documented SI publish policy that only minor release tags in the form `vX.Y.0` are publishable.
+- Reverted the SI-local release-bundle helper path so ReleaseMind integration can land through a dedicated orbit client instead of new SI-owned release logic.
 
 ### Fixed
 - Updated the Nucleus architecture ticket to use accepted-state wording now that all tracked phases are closed.

@@ -56,7 +56,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | --- | --- | --- |
 | `si build self` | Build or upgrade `si` binary | `si build self` |
 | `si build self check` | Fast typecheck for the SI CLI | `si build self check --timings` |
-| `si build self bundle` | Build, verify, and stage the GitHub release bundle locally | `si build self bundle --out-dir .artifacts/release-preflight --publish` |
 | `si build self assets` | Build all release archives + `checksums.txt` locally | `si build self assets --out-dir .artifacts/release-preflight` |
 | `si commands` | Show visible public root commands | `si commands` |
 | `si settings` | Inspect resolved settings | `si settings` |
@@ -88,12 +87,11 @@ si orbit cloudflare doctor --json
 ### 3. Release maintainer preflight
 
 ```bash
-si build self bundle --out-dir .artifacts/release-preflight --publish
-si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --notes-file .artifacts/release-preflight/release-notes.md --target "$(git rev-parse HEAD)" --draft
+si build self assets --out-dir .artifacts/release-preflight
+si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 ```
 
-- `si build self bundle` derives the version from root `Cargo.toml [workspace.package].version` when `--version` is omitted.
-- `si build self bundle --publish` enforces the publishable GitHub-release policy and writes `release-notes.md` from `CHANGELOG.md` when it can.
+- `si build self assets` derives the version from root `Cargo.toml [workspace.package].version` when `--version` is omitted.
 - For SI releases, that one workspace version is also the tag/version source of truth.
 - Use `--target <sha>` when creating a release for a tag that does not already exist on the remote.
 - SI creates the tag ref first in that case; if `--target` is omitted, release creation fails clearly.

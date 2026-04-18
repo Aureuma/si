@@ -107,14 +107,12 @@ si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
 ### Release preflight
 
 ```bash
-si build self bundle --out-dir .artifacts/release-preflight --publish
-si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --notes-file .artifacts/release-preflight/release-notes.md --target "$(git rev-parse HEAD)" --draft
+si build self assets --out-dir .artifacts/release-preflight
+si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 ```
 
-- `si build self bundle` defaults to the canonical SI workspace version from root `Cargo.toml`.
-- `si build self bundle` already uses release-profile builds, verifies the archive set, and writes `release-notes.md` when `CHANGELOG.md` has either the matching release entry or an `Unreleased` section.
+- `si build self assets` defaults to the canonical SI workspace version from root `Cargo.toml`.
 - For SI itself, release tags come from that same repo-wide version and only minor releases are tagged/published.
-- Add `--publish` when you want SI to enforce the actual GitHub-release policy: the tag must match the workspace version and must be `vX.Y.0`.
 - `si orbit github release create` now verifies the remote tag first.
 - When the tag is missing, pass `--target <sha>` and SI will create the git tag ref before creating the release.
 - For draft releases, GitHub may still return an `untagged-...` HTML URL until publish; verify with `tag_name` and `git ls-remote --tags`.
