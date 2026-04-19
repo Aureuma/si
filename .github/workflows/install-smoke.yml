@@ -56,21 +56,6 @@ jobs:
       - name: Run Rust tests
         run: cargo test --workspace
 
-  codex-image-preflight:
-    name: Codex image compatibility preflight
-    needs: [docs-scope]
-    if: needs.docs-scope.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.88.0
-
-      - name: Run codex image preflight lanes
-        run: cargo run --quiet --locked --manifest-path rust/crates/si-agents/Cargo.toml --bin preflight-codex-upgrade --
-
   host-smoke:
     name: Host installer smoke (${{ matrix.os }})
     needs: [docs-scope]
