@@ -19,28 +19,25 @@ function resolveTarget() {
 
   if (platform === 'darwin') {
     if (arch === 'x64') {
-      return { goos: 'darwin', label: 'amd64' };
+      return { osLabel: 'darwin', archLabel: 'amd64' };
     }
     if (arch === 'arm64') {
-      return { goos: 'darwin', label: 'arm64' };
+      return { osLabel: 'darwin', archLabel: 'arm64' };
     }
   }
 
   if (platform === 'linux') {
     if (arch === 'x64') {
-      return { goos: 'linux', label: 'amd64' };
+      return { osLabel: 'linux', archLabel: 'amd64' };
     }
     if (arch === 'arm64') {
-      return { goos: 'linux', label: 'arm64' };
-    }
-    if (arch === 'arm') {
-      return { goos: 'linux', label: 'armv7' };
+      return { osLabel: 'linux', archLabel: 'arm64' };
     }
   }
 
   throw new Error(
     `unsupported platform/arch for SI npm package: ${platform}/${arch}. ` +
-      'Supported: darwin (x64, arm64), linux (x64, arm64, arm).'
+      'Supported: darwin (x64, arm64), linux (x64, arm64).'
   );
 }
 
@@ -108,6 +105,9 @@ function runTarExtract(archivePath, outDir) {
   });
 
   if (result.error) {
+    if (result.error.code === 'ENOENT') {
+      throw new Error('missing required command: tar (needed to extract SI release archives)');
+    }
     throw result.error;
   }
   if (result.status !== 0) {
@@ -120,7 +120,7 @@ function buildAssetContext() {
   const target = resolveTarget();
   const version = pkg.version;
   const tag = ensureTagVersion(version);
-  const artifactName = `si_${version}_${target.goos}_${target.label}.tar.gz`;
+  const artifactName = `si_${version}_${target.osLabel}_${target.archLabel}.tar.gz`;
 
   const localDir = process.env.SI_NPM_LOCAL_ARCHIVE_DIR;
   if (localDir) {
@@ -170,7 +170,7 @@ async function fetchArchiveToFile(ctx, outPath) {
 
 async function ensureBinaryAsync() {
   const ctx = buildAssetContext();
-  const cacheDir = path.join(CACHE_ROOT, ctx.version, `${ctx.target.goos}-${ctx.target.label}`);
+  const cacheDir = path.join(CACHE_ROOT, ctx.version, `${ctx.target.osLabel}-${ctx.target.archLabel}`);
   const binaryPath = path.join(cacheDir, 'si');
 
   if (fs.existsSync(binaryPath)) {
@@ -202,7 +202,7 @@ async function ensureBinaryAsync() {
 
     const extractedBinary = path.join(
       tmpDir,
-      `si_${ctx.version}_${ctx.target.goos}_${ctx.target.label}`,
+      `si_${ctx.version}_${ctx.target.osLabel}_${ctx.target.archLabel}`,
       'si'
     );
 

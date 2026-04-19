@@ -188,14 +188,12 @@ builds and uploads CLI archives automatically, then:
 Supported targets:
 - `linux/amd64`
 - `linux/arm64`
-- `linux/armv7`
 - `darwin/amd64`
 - `darwin/arm64`
 
 Expected assets:
 - `si_<version>_linux_amd64.tar.gz`
 - `si_<version>_linux_arm64.tar.gz`
-- `si_<version>_linux_armv7.tar.gz`
 - `si_<version>_darwin_amd64.tar.gz`
 - `si_<version>_darwin_arm64.tar.gz`
 - `checksums.txt`

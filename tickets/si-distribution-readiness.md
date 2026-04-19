@@ -142,7 +142,7 @@ selection and target triples make the binary provenance explicit.
 
 ### 5. Update npm and Homebrew Consumers
 
-Status: pending.
+Status: completed.
 
 Steps:
 
@@ -160,7 +160,7 @@ builds and verifies.
 
 ### 6. Harden Nucleus Service Portability
 
-Status: pending.
+Status: completed.
 
 Steps:
 

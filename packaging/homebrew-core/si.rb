@@ -1,3 +1,4 @@
+# Legacy Homebrew core submission draft. Release automation updates Aureuma/homebrew-si from verified binary archives.
 class Si < Formula
   desc "AI-first CLI for orchestrating coding agents and provider operations"
   homepage "https://github.com/Aureuma/si"

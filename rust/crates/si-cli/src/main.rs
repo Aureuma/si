@@ -16991,24 +16991,21 @@ fn render_nucleus_systemd_unit(
     si_binary: &Path,
     state_dir: &Path,
     bind_addr: &str,
-    auth_token: Option<&str>,
+    env_vars: &BTreeMap<String, String>,
 ) -> String {
     let exec_start = nucleus_service_program_args(si_binary, state_dir, bind_addr)
         .into_iter()
         .map(|arg| systemd_quote_arg(&arg))
         .collect::<Vec<_>>()
         .join(" ");
-    let auth_env = auth_token
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            format!(
-                "Environment={}\n",
-                systemd_quote_arg(&format!("SI_NUCLEUS_AUTH_TOKEN={value}"))
-            )
+    let environment = env_vars
+        .iter()
+        .map(|(key, value)| {
+            format!("Environment={}\n", systemd_quote_arg(&format!("{key}={value}")))
         })
-        .unwrap_or_default();
+        .collect::<String>();
     format!(
-        "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\n{auth_env}ExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
+        "[Unit]\nDescription=SI Nucleus\nAfter=default.target\n\n[Service]\nType=simple\n{environment}ExecStart={exec_start}\nRestart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n"
     )
 }
 
@@ -17016,27 +17013,60 @@ fn render_nucleus_launchd_plist(
     si_binary: &Path,
     state_dir: &Path,
     bind_addr: &str,
-    auth_token: Option<&str>,
+    env_vars: &BTreeMap<String, String>,
 ) -> String {
     let program_arguments = nucleus_service_program_args(si_binary, state_dir, bind_addr)
         .into_iter()
         .map(|arg| format!("    <string>{}</string>\n", xml_escape(&arg)))
         .collect::<String>();
-    let environment_variables = auth_token
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            format!(
-                "  <key>EnvironmentVariables</key>\n  <dict>\n    <key>SI_NUCLEUS_AUTH_TOKEN</key>\n    <string>{}</string>\n  </dict>\n",
-                xml_escape(value)
-            )
-        })
-        .unwrap_or_default();
+    let environment_variables = if env_vars.is_empty() {
+        String::new()
+    } else {
+        let entries = env_vars
+            .iter()
+            .map(|(key, value)| {
+                format!(
+                    "    <key>{}</key>\n    <string>{}</string>\n",
+                    xml_escape(key),
+                    xml_escape(value)
+                )
+            })
+            .collect::<String>();
+        format!("  <key>EnvironmentVariables</key>\n  <dict>\n{entries}  </dict>\n")
+    };
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>{}</string>\n  <key>ProgramArguments</key>\n  <array>\n{}  </array>\n{}  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n</dict>\n</plist>\n",
         nucleus_service_name(NucleusServicePlatform::LaunchdAgent),
         program_arguments,
         environment_variables
     )
+}
+
+fn default_nucleus_service_path() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    } else {
+        "/usr/local/bin:/usr/bin:/bin"
+    }
+}
+
+fn nucleus_service_environment() -> BTreeMap<String, String> {
+    let mut env_vars = BTreeMap::new();
+    let path = env::var("PATH")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| default_nucleus_service_path().to_owned());
+    env_vars.insert("PATH".to_owned(), path);
+    for key in ["SI_NUCLEUS_AUTH_TOKEN", "SI_NUCLEUS_PUBLIC_URL"] {
+        if let Ok(value) = env::var(key) {
+            let value = value.trim().to_owned();
+            if !value.is_empty() {
+                env_vars.insert(key.to_owned(), value);
+            }
+        }
+    }
+    env_vars
 }
 
 fn launchd_domain_target() -> String {
@@ -17100,16 +17130,15 @@ fn run_nucleus_service_install(
     let platform = resolve_nucleus_service_platform()?;
     let state_dir = state_dir.unwrap_or_else(default_nucleus_state_dir);
     let bind_addr = bind_addr.unwrap_or_else(|| default_nucleus_bind_addr().to_owned());
-    let auth_token =
-        env::var("SI_NUCLEUS_AUTH_TOKEN").ok().filter(|value| !value.trim().is_empty());
+    let service_env = nucleus_service_environment();
     let definition_path = nucleus_service_definition_path(platform, service_dir);
     let si_binary = env::current_exe().context("resolve current si executable")?;
     let definition = match platform {
         NucleusServicePlatform::SystemdUser => {
-            render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr, auth_token.as_deref())
+            render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr, &service_env)
         }
         NucleusServicePlatform::LaunchdAgent => {
-            render_nucleus_launchd_plist(&si_binary, &state_dir, &bind_addr, auth_token.as_deref())
+            render_nucleus_launchd_plist(&si_binary, &state_dir, &bind_addr, &service_env)
         }
     };
     let parent = definition_path

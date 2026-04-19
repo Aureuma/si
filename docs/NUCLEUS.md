@@ -70,6 +70,12 @@ Relevant env vars:
 - `SI_NUCLEUS_PUBLIC_URL`: override the absolute OpenAPI `servers[0].url` value for GPT Actions import
 - `SI_NUCLEUS_SERVICE_PLATFORM`: force `systemd-user` or `launchd-agent`
 
+Service install records the current `PATH`, `SI_NUCLEUS_AUTH_TOKEN`, and
+`SI_NUCLEUS_PUBLIC_URL` values in the generated user service so launchd/systemd
+can run Nucleus without inheriting an interactive shell. Re-run
+`si nucleus service install` after changing those values or after installing SI
+through a different binary path.
+
 ## Gateway discovery
 
 CLI discovery order for the local WebSocket endpoint:
