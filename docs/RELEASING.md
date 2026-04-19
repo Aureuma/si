@@ -212,7 +212,8 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 
 Notes:
 - The workflow validates that the workspace `Cargo.toml` version matches the release tag.
-- The workflow uses `si build self assets` as the single build path and `si build self verify` as the local archive verification path before upload.
+- Release assets are built by explicit GitHub Actions target jobs for Linux AMD64, Linux ARM64, macOS AMD64, and macOS ARM64.
+- `si build self verify` checks checksums, archive contents, and binary format before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
 - Use `si build npm publish --dry-run` for local npm publish rehearsal.

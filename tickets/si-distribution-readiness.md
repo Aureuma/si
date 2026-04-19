@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress.
+Completed.
 
 This ticket tracks the work needed to make SI distributable on fresh Linux and
 macOS machines through GitHub Releases, npm, Homebrew, and source install paths.
@@ -204,7 +204,7 @@ its worker dependencies or shell-independent service environment are missing.
 
 ### 8. Update Docs and Tests
 
-Status: pending.
+Status: completed.
 
 Steps:
 
@@ -231,3 +231,9 @@ describe the same contract.
 - A fresh-machine doctor command exists.
 - Relevant docs and tests are updated.
 - All implementation commits include patch version bumps.
+
+## Completion Notes
+
+Completed in patch commits `6a58425e` through `1e3a2eea`, with this final
+documentation/status commit recording the completed state. The final supported
+binary matrix is Linux AMD64, Linux ARM64, macOS AMD64, and macOS ARM64.
