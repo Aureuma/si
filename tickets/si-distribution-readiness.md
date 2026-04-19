@@ -100,7 +100,7 @@ not select Rust compilation targets and made the previous workflow misleading.
 
 ### 3. Make Asset Verification Inspect Binaries
 
-Status: pending.
+Status: completed.
 
 Steps:
 

@@ -20458,11 +20458,7 @@ fn run_validate_release_version(tag: String) -> Result<()> {
     Ok(())
 }
 
-fn expected_release_asset_names(version: &str) -> Vec<String> {
-    SUPPORTED_RELEASE_TARGETS.iter().map(|target| release_asset_name(version, *target)).collect()
-}
-
-fn verify_release_archive_contents(path: &Path) -> Result<()> {
+fn verify_release_archive_contents(path: &Path, target: ReleaseTarget) -> Result<()> {
     let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
     let decoder = flate2::read::GzDecoder::new(file);
     let mut archive = tar::Archive::new(decoder);
@@ -20495,6 +20491,70 @@ fn verify_release_archive_contents(path: &Path) -> Result<()> {
     if !has_license {
         return Err(anyhow!("archive missing LICENSE: {}", path.display()));
     }
+
+    let temp = tempfile::tempdir().context("create release verification temp dir")?;
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let decoder = flate2::read::GzDecoder::new(file);
+    tar::Archive::new(decoder)
+        .unpack(temp.path())
+        .with_context(|| format!("extract {} for binary verification", path.display()))?;
+    let binary = find_release_binary(temp.path())
+        .ok_or_else(|| anyhow!("archive missing extracted si binary: {}", path.display()))?;
+    verify_release_binary_format(&binary, target)
+        .with_context(|| format!("verify binary format for {}", path.display()))?;
+    Ok(())
+}
+
+fn find_release_binary(root: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_release_binary(&path) {
+                return Some(found);
+            }
+            continue;
+        }
+        if path.file_name().and_then(|value| value.to_str()) == Some("si") {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn verify_release_binary_format(binary: &Path, target: ReleaseTarget) -> Result<()> {
+    let output = StdCommand::new("file")
+        .arg(binary)
+        .output()
+        .context("run file for release binary verification")?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "file failed for {}: {}",
+            binary.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+    let matches = match target.id {
+        "linux-amd64" => {
+            stdout.contains("elf") && (stdout.contains("x86-64") || stdout.contains("x86_64"))
+        }
+        "linux-arm64" => {
+            stdout.contains("elf") && (stdout.contains("aarch64") || stdout.contains("arm64"))
+        }
+        "darwin-amd64" => stdout.contains("mach-o") && stdout.contains("x86_64"),
+        "darwin-arm64" => stdout.contains("mach-o") && stdout.contains("arm64"),
+        _ => false,
+    };
+    if !matches {
+        return Err(anyhow!(
+            "release binary format mismatch for {}: target {} expected {}, got {}",
+            binary.display(),
+            target.id,
+            target.rust_triple,
+            stdout.trim()
+        ));
+    }
     Ok(())
 }
 
@@ -20505,7 +20565,8 @@ fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Re
     }
     let checksums_path = out_dir.join("checksums.txt");
     let checksums = parse_checksums_file(&checksums_path)?;
-    for asset_name in expected_release_asset_names(&version) {
+    for target in SUPPORTED_RELEASE_TARGETS {
+        let asset_name = release_asset_name(&version, *target);
         let asset_path = out_dir.join(&asset_name);
         if !asset_path.exists() {
             return Err(anyhow!("missing release asset: {}", asset_path.display()));
@@ -20519,7 +20580,7 @@ fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Re
                 "checksum mismatch for {asset_name}: expected {expected_sha}, got {actual_sha}"
             ));
         }
-        verify_release_archive_contents(&asset_path)?;
+        verify_release_archive_contents(&asset_path, *target)?;
     }
     println!("verified release assets in {}", out_dir.display());
     Ok(())

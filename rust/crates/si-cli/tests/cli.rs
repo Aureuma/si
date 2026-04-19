@@ -9861,6 +9861,11 @@ fn build_self_verify_release_assets_checks_archives() {
         &cargo_path,
         "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
     );
+    let file_path = bin_dir.path().join("file");
+    write_executable_shell_script(
+        &file_path,
+        "#!/bin/sh\ncase \"$1\" in\n  *linux_amd64*) echo \"$1: ELF 64-bit LSB executable, x86-64\" ;;\n  *linux_arm64*) echo \"$1: ELF 64-bit LSB executable, ARM aarch64\" ;;\n  *darwin_amd64*) echo \"$1: Mach-O 64-bit executable x86_64\" ;;\n  *darwin_arm64*) echo \"$1: Mach-O 64-bit executable arm64\" ;;\n  *) echo \"$1: unknown\" ;;\nesac\n",
+    );
     let out_dir = repo.path().join("out");
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
