@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SI Nucleus REST API
-  version: 0.57.27
+  version: 0.57.31
   description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
 servers:
   - url: https://nucleus.aureuma.ai
@@ -38,7 +38,7 @@ components:
             version:
               type: string
               description: API package version.
-              example: 0.57.27
+              example: 0.57.31
             description:
               type: string
               description: API description.
@@ -103,7 +103,7 @@ components:
         version:
           type: string
           description: Running SI Nucleus package version.
-          example: 0.57.27
+          example: 0.57.31
           readOnly: true
         bind_addr:
           type: string
@@ -174,10 +174,10 @@ components:
           example: websocket
         profile:
           type: [string, "null"]
-          description: Optional SI worker profile to prefer for execution.
+          description: "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers."
           pattern: ^[a-z][a-z0-9-]*$
           default: null
-          example: default
+          example: darmstada
         session_id:
           type: [string, "null"]
           description: Optional existing SI session id to reuse for continuity.
@@ -232,7 +232,7 @@ components:
           type: [string, "null"]
           description: Preferred SI worker profile for this task.
           pattern: ^[a-z][a-z0-9-]*$
-          example: default
+          example: darmstada
         session_id:
           type: [string, "null"]
           description: Session currently associated with this task, if any.
@@ -315,7 +315,7 @@ components:
           type: string
           description: SI profile this worker runs as.
           pattern: ^[a-z][a-z0-9-]*$
-          example: default
+          example: darmstada
         home_dir:
           type: [string, "null"]
           description: Home directory used by the worker process.
@@ -344,7 +344,7 @@ components:
         capability_version:
           type: [string, "null"]
           description: Worker capability or package version when reported.
-          example: 0.57.27
+          example: 0.57.31
         last_heartbeat_at:
           type: [string, "null"]
           description: Most recent heartbeat timestamp.
@@ -428,7 +428,7 @@ components:
           type: [string, "null"]
           description: SI profile associated with the session.
           pattern: ^[a-z][a-z0-9-]*$
-          example: default
+          example: darmstada
         app_server_thread_id:
           type: [string, "null"]
           description: Underlying app server thread id for continuity.
@@ -592,7 +592,7 @@ paths:
       x-openai-isConsequential: true
       requestBody:
         required: true
-        description: Task intake request. Provide a concise title and complete operator instructions; omit optional fields unless needed.
+        description: Task intake request. Provide a concise title and complete operator instructions; optionally provide a preferred profile, but Nucleus can assign or fall back to another available profile when no session is pinned.
         content:
           application/json:
             schema:
@@ -601,7 +601,7 @@ paths:
               title: Audit Nucleus tasks
               instructions: Inspect queued and running tasks and report any items that are stuck.
               source: websocket
-              profile: default
+              profile: darmstada
               session_id: null
               max_retries: 0
               timeout_seconds: 900

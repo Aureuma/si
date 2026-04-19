@@ -104,6 +104,22 @@ The bounded REST surface is exposed by the same Nucleus service and source of tr
 
 `/openapi.json` is public OpenAPI 3.1 for GPT Actions URL import and includes summaries, descriptions, schemas, examples, and `x-si-purpose` annotations for bounded external consumers. Operational REST endpoints remain bearer-token protected.
 
+## Task Profile Assignment
+
+Nucleus assigns every dispatched task to one worker profile. Task creation may include a preferred `profile`, but the dispatcher can select a fallback when the task is not pinned to an existing session.
+
+Priority order:
+
+1. the task's requested `profile`, when present
+2. profiles with ready workers, sorted deterministically by profile and worker id
+3. configured profile records
+4. profiles attached to reusable sessions
+5. profiles with non-ready workers, used only as a last candidate
+
+If a candidate is unavailable because its worker cannot start, Fort authentication is unavailable, or the profile is otherwise not usable, Nucleus tries the next candidate. Tasks pinned to a `session_id` do not cross profile boundaries; a session mismatch remains blocked as `session_broken`.
+
+When Nucleus selects a candidate, it writes that profile back to the task record so later inspection shows which profile actually owns execution.
+
 ## GPT Actions OpenAPI rules
 
 For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/gpt-actions-openapi.yaml`:

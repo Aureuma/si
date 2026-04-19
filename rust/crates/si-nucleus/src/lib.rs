@@ -37,7 +37,7 @@ use si_nucleus_core::{
     BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
     EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
     SessionLifecycleState, SessionRecord, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId,
-    WorkerRecord,
+    WorkerRecord, WorkerStatus,
 };
 use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
@@ -1623,6 +1623,41 @@ impl NucleusStore {
         Ok(Some(event))
     }
 
+    fn assign_task_profile(
+        &self,
+        task_id: &TaskId,
+        profile: &ProfileName,
+        message: &str,
+    ) -> Result<Option<CanonicalEvent>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let Some(mut task) = self.read_task_locked(task_id)? else {
+            return Ok(None);
+        };
+        if task.profile.as_ref() == Some(profile) {
+            return Ok(None);
+        }
+        task.profile = Some(profile.clone());
+        task.updated_at = Utc::now();
+        write_json_atomic(&self.paths.task_path(task_id), &task)?;
+        let event = self.append_event_locked(
+            CanonicalEventType::TaskUpdated,
+            CanonicalEventSource::Nucleus,
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: None,
+                session_id: task.session_id.clone(),
+                run_id: task.latest_run_id.clone(),
+                profile: Some(profile.clone()),
+                payload: json!({
+                    "status": task.status,
+                    "blocked_reason": task.blocked_reason,
+                    "message": message,
+                }),
+            },
+        )?;
+        Ok(Some(event))
+    }
+
     fn cancel_task_without_run(
         &self,
         task_id: &TaskId,
@@ -1671,6 +1706,9 @@ impl NucleusStore {
         };
         if task.status != TaskStatus::Blocked {
             return Ok(None);
+        }
+        if let Some(profile) = profile.clone() {
+            task.profile = Some(profile);
         }
         task.transition_to(TaskStatus::Queued, None).map_err(anyhow::Error::new)?;
         write_json_atomic(&self.paths.task_path(task_id), &task)?;
@@ -1726,43 +1764,102 @@ fn blocked_reason_from_payload(payload: &Value) -> Option<BlockedReason> {
     payload.get("blocked_reason").cloned().and_then(|value| serde_json::from_value(value).ok())
 }
 
-fn derive_task_profile(
+fn pinned_task_profile(
+    task: &TaskRecord,
+    sessions: &HashMap<SessionId, SessionRecord>,
+    workers: &HashMap<WorkerId, WorkerRecord>,
+) -> Option<ProfileName> {
+    task.profile.clone().or_else(|| {
+        task.session_id.as_ref().and_then(|session_id| sessions.get(session_id)).and_then(
+            |session| {
+                session.profile.clone().or_else(|| {
+                    workers.get(&session.worker_id).map(|worker| worker.profile.clone())
+                })
+            },
+        )
+    })
+}
+
+fn push_unique_profile(candidates: &mut Vec<ProfileName>, profile: ProfileName) {
+    if !candidates.iter().any(|candidate| candidate == &profile) {
+        candidates.push(profile);
+    }
+}
+
+fn sorted_worker_profiles_by_status(
+    workers: &HashMap<WorkerId, WorkerRecord>,
+    status: WorkerStatus,
+) -> Vec<ProfileName> {
+    let mut entries = workers
+        .values()
+        .filter(|worker| worker.status == status)
+        .map(|worker| (worker.profile.clone(), worker.worker_id.clone()))
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| left.0.cmp(&right.0).then_with(|| left.1.cmp(&right.1)));
+    entries.into_iter().map(|(profile, _)| profile).collect()
+}
+
+fn task_profile_candidates(
     task: &TaskRecord,
     sessions: &HashMap<SessionId, SessionRecord>,
     workers: &HashMap<WorkerId, WorkerRecord>,
     available_profiles: &[ProfileRecord],
-) -> Option<ProfileName> {
-    task.profile.clone().or_else(|| {
-        task.session_id
-            .as_ref()
-            .and_then(|session_id| sessions.get(session_id))
-            .and_then(|session| {
-                session.profile.clone().or_else(|| {
-                    workers.get(&session.worker_id).map(|worker| worker.profile.clone())
-                })
-            })
-            .or_else(|| choose_single_profile_candidate(sessions, workers, available_profiles))
-    })
-}
+) -> Vec<ProfileName> {
+    let mut candidates = Vec::<ProfileName>::new();
 
-fn choose_single_profile_candidate(
-    sessions: &HashMap<SessionId, SessionRecord>,
-    workers: &HashMap<WorkerId, WorkerRecord>,
-    available_profiles: &[ProfileRecord],
-) -> Option<ProfileName> {
-    let mut candidates = BTreeSet::<ProfileName>::new();
-    for worker in workers.values() {
-        candidates.insert(worker.profile.clone());
+    if let Some(profile) = task.profile.clone() {
+        push_unique_profile(&mut candidates, profile);
     }
-    for session in sessions.values() {
-        if let Some(profile) = session.profile.as_ref() {
-            candidates.insert(profile.clone());
+
+    if let Some(session_id) = task.session_id.as_ref() {
+        if let Some(session) = sessions.get(session_id) {
+            if let Some(profile) = session.profile.clone() {
+                push_unique_profile(&mut candidates, profile);
+            } else if let Some(worker) = workers.get(&session.worker_id) {
+                push_unique_profile(&mut candidates, worker.profile.clone());
+            }
+        }
+        return candidates;
+    }
+
+    for profile in sorted_worker_profiles_by_status(workers, WorkerStatus::Ready) {
+        push_unique_profile(&mut candidates, profile);
+    }
+    for profile in sorted_worker_profiles_by_status(workers, WorkerStatus::Degraded) {
+        push_unique_profile(&mut candidates, profile);
+    }
+
+    let mut profile_records =
+        available_profiles.iter().map(|profile| profile.profile.clone()).collect::<Vec<_>>();
+    profile_records.sort();
+    for profile in profile_records {
+        push_unique_profile(&mut candidates, profile);
+    }
+
+    let mut session_profiles =
+        sessions.values().filter_map(|session| session.profile.clone()).collect::<Vec<_>>();
+    session_profiles.sort();
+    for profile in session_profiles {
+        push_unique_profile(&mut candidates, profile);
+    }
+
+    for status in [WorkerStatus::Starting, WorkerStatus::Failed, WorkerStatus::Stopped] {
+        for profile in sorted_worker_profiles_by_status(workers, status) {
+            push_unique_profile(&mut candidates, profile);
         }
     }
-    for profile in available_profiles {
-        candidates.insert(profile.profile.clone());
-    }
-    if candidates.len() == 1 { candidates.into_iter().next() } else { None }
+
+    candidates
+}
+
+fn can_try_next_profile(reason: BlockedReason) -> bool {
+    matches!(
+        reason,
+        BlockedReason::ProfileUnavailable
+            | BlockedReason::WorkerUnavailable
+            | BlockedReason::AuthRequired
+            | BlockedReason::FortUnavailable
+    )
 }
 
 fn cron_due_key(rule_name: &str, due_at: DateTime<Utc>) -> String {
@@ -2897,23 +2994,59 @@ impl NucleusService {
                     continue;
                 }
             }
-            let Some(profile) = derive_task_profile(&task, &sessions, &workers, &profiles) else {
+            let candidates = task_profile_candidates(&task, &sessions, &workers, &profiles);
+            if candidates.is_empty() {
                 if let Some(event) = self.store.mark_task_blocked(
                     &task.task_id,
                     None,
                     task.session_id.clone(),
                     None,
                     BlockedReason::ProfileUnavailable,
-                    "task has no profile and Nucleus cannot infer exactly one profile",
+                    "task has no assignable profile candidates",
                 )? {
                     let _ = self.events.send(event);
                 }
                 continue;
-            };
-            if !selected_profiles.insert(profile.clone()) {
+            }
+
+            let can_fallback = task.session_id.is_none() && candidates.len() > 1;
+            let mut attempted_any = false;
+            for (index, profile) in candidates.iter().enumerate() {
+                if selected_profiles.contains(profile) {
+                    continue;
+                }
+                attempted_any = true;
+                let current_task = self
+                    .store
+                    .inspect_task(&task.task_id)?
+                    .ok_or_else(|| anyhow!("task missing during dispatch"))?;
+                if current_task.status == TaskStatus::Blocked {
+                    if let Some(event) = self.store.requeue_blocked_task(
+                        &current_task.task_id,
+                        Some(profile.clone()),
+                        "task re-queued for next profile candidate",
+                    )? {
+                        let _ = self.events.send(event);
+                    }
+                }
+                match self.try_dispatch_task(runtime.as_ref(), current_task, profile.clone())? {
+                    DispatchAttemptOutcome::Started => {
+                        selected_profiles.insert(profile.clone());
+                        break;
+                    }
+                    DispatchAttemptOutcome::Blocked(reason)
+                        if can_fallback
+                            && can_try_next_profile(reason)
+                            && index + 1 < candidates.len() =>
+                    {
+                        continue;
+                    }
+                    DispatchAttemptOutcome::Blocked(_) => break,
+                }
+            }
+            if !attempted_any {
                 continue;
             }
-            self.try_dispatch_task(runtime.as_ref(), task, profile)?;
         }
         Ok(())
     }
@@ -2932,13 +3065,15 @@ impl NucleusService {
             {
                 continue;
             }
-            let Some(profile) = derive_task_profile(task, sessions, workers, profiles) else {
+            let Some(profile) =
+                task_profile_candidates(task, sessions, workers, profiles).into_iter().next()
+            else {
                 continue;
             };
             if let Some(event) = self.store.requeue_blocked_task(
                 &task.task_id,
                 Some(profile),
-                "task re-queued after Nucleus resolved a profile",
+                "task re-queued after Nucleus selected a profile candidate",
             )? {
                 let _ = self.events.send(event);
                 requeued_any = true;
@@ -2952,16 +3087,33 @@ impl NucleusService {
         runtime: &dyn NucleusRuntime,
         task: TaskRecord,
         profile: ProfileName,
-    ) -> Result<()> {
+    ) -> Result<DispatchAttemptOutcome> {
+        if let Some(event) = self.store.assign_task_profile(
+            &task.task_id,
+            &profile,
+            "task assigned to profile candidate",
+        )? {
+            let _ = self.events.send(event);
+        }
         let Some(session) = self.ensure_dispatch_session(runtime, &task, &profile)? else {
-            return Ok(());
+            let blocked_reason = self
+                .store
+                .inspect_task(&task.task_id)?
+                .and_then(|task| task.blocked_reason)
+                .unwrap_or(BlockedReason::WorkerUnavailable);
+            return Ok(DispatchAttemptOutcome::Blocked(blocked_reason));
         };
         let worker = self
             .store
             .inspect_worker(&session.worker_id)?
             .ok_or_else(|| anyhow!("worker not found"))?;
         if self.enforce_fort_capability(&task, &session, &worker, &profile, None)?.is_some() {
-            return Ok(());
+            let blocked_reason = self
+                .store
+                .inspect_task(&task.task_id)?
+                .and_then(|task| task.blocked_reason)
+                .unwrap_or(BlockedReason::AuthRequired);
+            return Ok(DispatchAttemptOutcome::Blocked(blocked_reason));
         }
         let run = self.store.claim_run_for_task(RunRecord::new(
             RunId::generate(),
@@ -2981,7 +3133,7 @@ impl NucleusService {
             input: vec![RunInputItem::Text { text: task.instructions }],
         };
         self.spawn_run_execution(runtime, run_spec);
-        Ok(())
+        Ok(DispatchAttemptOutcome::Started)
     }
 
     fn enforce_fort_capability(
@@ -3437,8 +3589,6 @@ impl NucleusService {
             .into_iter()
             .map(|worker| (worker.worker_id.clone(), worker))
             .collect::<HashMap<_, _>>();
-        let profiles = self.store.list_profile_records()?;
-
         let mut requeued = Vec::new();
         for task in tasks {
             if task.status != TaskStatus::Blocked {
@@ -3469,8 +3619,7 @@ impl NucleusService {
                     continue;
                 }
             }
-            let Some(task_profile) = derive_task_profile(&task, &sessions, &workers, &profiles)
-            else {
+            let Some(task_profile) = pinned_task_profile(&task, &sessions, &workers) else {
                 continue;
             };
             if &task_profile != profile {
@@ -4268,6 +4417,12 @@ struct EnsuredWorker {
     runtime: Option<WorkerRuntimeView>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DispatchAttemptOutcome {
+    Started,
+    Blocked(BlockedReason),
+}
+
 struct BlockedRunReconciliation {
     worker_id: Option<WorkerId>,
     session_id: Option<SessionId>,
@@ -4492,7 +4647,7 @@ fn task_record_example() -> Value {
         "title": "Audit Nucleus tasks",
         "instructions": "Inspect queued and running tasks and report any items that are stuck.",
         "status": "queued",
-        "profile": "default",
+        "profile": "darmstada",
         "session_id": null,
         "latest_run_id": null,
         "checkpoint_summary": null,
@@ -4525,7 +4680,7 @@ fn run_record_example() -> Value {
 fn worker_record_example() -> Value {
     json!({
         "worker_id": "si-worker-0123456789abcdef00000001",
-        "profile": "default",
+        "profile": "darmstada",
         "home_dir": "/home/si",
         "codex_home": "/home/si/.codex",
         "workdir": "/home/si/Development/si",
@@ -4541,7 +4696,7 @@ fn session_record_example() -> Value {
     json!({
         "session_id": "si-session-0123456789abcdef00000001",
         "worker_id": "si-worker-0123456789abcdef00000001",
-        "profile": "default",
+        "profile": "darmstada",
         "app_server_thread_id": "thread_0123456789abcdef",
         "workdir": "/home/si/Development/si",
         "lifecycle_state": "ready",
@@ -4761,7 +4916,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                     "security": [{ "bearerAuth": [] }],
                     "requestBody": {
                         "required": true,
-                        "description": "Task intake request. Provide a concise title and complete operator instructions; omit optional fields unless you need a specific profile, session, retry limit, or timeout.",
+                        "description": "Task intake request. Provide a concise title and complete operator instructions; optionally provide a preferred profile, but Nucleus can assign or fall back to another available profile when no session is pinned.",
                         "content": {
                             "application/json": {
                                 "schema": schema_ref("TaskCreateParams"),
@@ -4769,7 +4924,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                                     "title": "Audit Nucleus tasks",
                                     "instructions": "Inspect queued and running tasks and report any items that are stuck.",
                                     "source": "websocket",
-                                    "profile": "default",
+                                    "profile": "darmstada",
                                     "session_id": null,
                                     "max_retries": 0,
                                     "timeout_seconds": 900
@@ -5072,7 +5227,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                         "title": { "type": "string", "description": "Short operator-facing summary of the work to perform.", "minLength": 1, "example": "Audit Nucleus tasks" },
                         "instructions": { "type": "string", "description": "Complete task instructions for the assigned worker.", "minLength": 1, "example": "Inspect queued and running tasks and report any items that are stuck." },
                         "source": { "type": "string", "description": "Source category for the task intake request. External GPT Actions should normally use websocket.", "enum": ["cli", "websocket", "cron", "hook", "system"], "default": "websocket", "example": "websocket" },
-                        "profile": { "type": ["string", "null"], "description": "Optional SI worker profile to prefer for execution.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "default" },
+                        "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "darmstada" },
                         "session_id": { "type": ["string", "null"], "description": "Optional existing SI session id to reuse for continuity.", "pattern": "^si-session-.+", "default": null, "example": "si-session-0123456789abcdef00000001" },
                         "max_retries": { "type": ["integer", "null"], "description": "Optional maximum retry attempts after failed execution.", "minimum": 0, "default": null, "example": 0 },
                         "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task.", "minimum": 0, "default": null, "example": 900 }
@@ -5089,7 +5244,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                         "title": { "type": "string", "description": "Short operator-facing summary of the task.", "example": "Audit Nucleus tasks" },
                         "instructions": { "type": "string", "description": "Full worker instructions captured at intake.", "example": "Inspect queued and running tasks and report any items that are stuck." },
                         "status": { "type": "string", "description": "Current task lifecycle status.", "enum": ["queued", "running", "blocked", "done", "failed", "cancelled"], "example": "queued", "readOnly": true },
-                        "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile for this task.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile for this task.", "pattern": "^[a-z][a-z0-9-]*$", "example": "darmstada" },
                         "session_id": openapi_nullable_id_property("Session currently associated with this task, if any.", "si-session-", json!("si-session-0123456789abcdef00000001")),
                         "latest_run_id": openapi_nullable_id_property("Most recent run created for this task.", "si-run-", json!("si-run-0123456789abcdef00000001")),
                         "checkpoint_summary": { "type": ["string", "null"], "description": "Latest durable progress summary reported by the worker.", "example": "Checked all queued tasks." },
@@ -5117,7 +5272,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                     "required": ["worker_id", "profile", "codex_home", "status"],
                     "properties": {
                         "worker_id": openapi_id_property("Canonical SI worker id.", "si-worker-", "si-worker-0123456789abcdef00000001"),
-                        "profile": { "type": "string", "description": "SI profile this worker runs as.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "profile": { "type": "string", "description": "SI profile this worker runs as.", "pattern": "^[a-z][a-z0-9-]*$", "example": "darmstada" },
                         "home_dir": { "type": ["string", "null"], "description": "Home directory used by the worker process.", "example": "/home/si" },
                         "codex_home": { "type": "string", "description": "Codex home directory used by this worker.", "example": "/home/si/.codex" },
                         "workdir": { "type": ["string", "null"], "description": "Default workspace directory for worker execution.", "example": "/home/si/Development/si" },
@@ -5162,7 +5317,7 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
                     "properties": {
                         "session_id": openapi_id_property("Canonical SI session id.", "si-session-", "si-session-0123456789abcdef00000001"),
                         "worker_id": openapi_id_property("Worker currently associated with the session.", "si-worker-", "si-worker-0123456789abcdef00000001"),
-                        "profile": { "type": ["string", "null"], "description": "SI profile associated with the session.", "pattern": "^[a-z][a-z0-9-]*$", "example": "default" },
+                        "profile": { "type": ["string", "null"], "description": "SI profile associated with the session.", "pattern": "^[a-z][a-z0-9-]*$", "example": "darmstada" },
                         "app_server_thread_id": { "type": ["string", "null"], "description": "Underlying app server thread id for continuity.", "example": "thread_0123456789abcdef", "readOnly": true },
                         "workdir": { "type": ["string", "null"], "description": "Workspace directory associated with the session.", "example": "/home/si/Development/si" },
                         "lifecycle_state": { "type": "string", "description": "Current session lifecycle state.", "enum": ["opening", "ready", "busy", "broken", "closed"], "example": "ready", "readOnly": true },
@@ -8781,7 +8936,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_restart_does_not_requeue_other_profile_tasks() {
+    async fn worker_restart_keeps_preferred_profile_fallback_assignment() {
         let temp = tempdir().expect("tempdir");
         let runtime = FakeRuntime::default();
         let service = NucleusService::open_with_runtime(
@@ -8842,13 +8997,15 @@ mod tests {
         runtime.fail_next_starts(1);
         service.reconcile_and_dispatch_once().expect("dispatch britain blocked task");
 
-        let blocked = service
+        wait_for_task_status(&service, britain_task_id.as_str(), TaskStatus::Done);
+        let fallback_task = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(blocked.status, TaskStatus::Blocked);
-        assert_eq!(blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert_eq!(fallback_task.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert_eq!(fallback_task.blocked_reason, None);
+        assert!(fallback_task.latest_run_id.is_some());
 
         let restarted = service
             .dispatch_request(GatewayRequest {
@@ -8859,14 +9016,13 @@ mod tests {
             .await;
         assert!(restarted.ok);
 
-        let still_blocked = service
+        let still_done = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(still_blocked.status, TaskStatus::Blocked);
-        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
-        assert!(still_blocked.latest_run_id.is_none());
+        assert_eq!(still_done.status, TaskStatus::Done);
+        assert_eq!(still_done.profile.as_ref().map(ProfileName::as_str), Some("america"));
     }
 
     #[tokio::test]
@@ -9195,7 +9351,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_repair_auth_does_not_requeue_other_profile_tasks() {
+    async fn worker_repair_auth_requeues_fallback_profile_assignment() {
         let temp = tempdir().expect("tempdir");
         let america_codex_home = temp.path().join("home/.si/codex/profiles/america");
         let britain_codex_home = temp.path().join("home/.si/codex/profiles/britain");
@@ -9270,13 +9426,13 @@ mod tests {
 
         service.reconcile_and_dispatch_once().expect("dispatch britain auth-blocked task");
 
-        let blocked = service
+        let routed = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(blocked.status, TaskStatus::Blocked);
-        assert_eq!(blocked.blocked_reason, Some(BlockedReason::AuthRequired));
+        assert_eq!(routed.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert!(matches!(routed.status, TaskStatus::Blocked | TaskStatus::Queued));
 
         write_fort_session_state(
             &america_codex_home,
@@ -9300,15 +9456,18 @@ mod tests {
             })
             .await;
         assert!(repaired.ok);
+        service.reconcile_and_dispatch_once().expect("dispatch repaired fallback task");
 
-        let still_blocked = service
+        wait_for_task_status(&service, britain_task_id.as_str(), TaskStatus::Done);
+        let completed = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(still_blocked.status, TaskStatus::Blocked);
-        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::AuthRequired));
-        assert!(still_blocked.latest_run_id.is_none());
+        assert_eq!(completed.status, TaskStatus::Done);
+        assert_eq!(completed.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert_eq!(completed.blocked_reason, None);
+        assert!(completed.latest_run_id.is_some());
     }
 
     #[tokio::test]
@@ -10341,6 +10500,119 @@ mod tests {
             session.result.as_ref().expect("session result")["worker"]["worker_id"],
             json!("si-worker-a")
         );
+    }
+
+    #[tokio::test]
+    async fn dispatcher_assigns_unprofiled_task_to_first_ready_profile() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        for profile in ["zulu", "america"] {
+            let session = service
+                .dispatch_request(GatewayRequest {
+                    id: json!(format!("session-{profile}")),
+                    method: "session.create".to_owned(),
+                    params: json!({
+                        "profile": profile,
+                        "home_dir": temp.path().join("home"),
+                        "codex_home": temp.path().join(format!("home/.si/codex/profiles/{profile}")),
+                        "workdir": temp.path(),
+                    }),
+                })
+                .await;
+            assert!(session.ok, "create session for {profile}");
+        }
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-auto-profile"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Auto profile task",
+                    "instructions": "Use the first ready profile deterministically",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert!(task.latest_run_id.is_some());
+    }
+
+    #[tokio::test]
+    async fn dispatcher_falls_back_when_preferred_profile_worker_is_unavailable() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-america-fallback"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        runtime.fail_next_starts(1);
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fallback-profile"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Fallback profile task",
+                    "instructions": "Use another profile if the preferred profile cannot start",
+                    "profile": "zulu",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert_eq!(task.blocked_reason, None);
+        assert!(task.latest_run_id.is_some());
     }
 
     #[tokio::test]
