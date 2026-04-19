@@ -913,12 +913,12 @@ enum BuildSelfCommand {
         repo_root: Option<PathBuf>,
         #[arg(long)]
         version: String,
-        #[arg(long)]
-        goos: String,
-        #[arg(long)]
-        goarch: String,
-        #[arg(long)]
-        goarm: Option<String>,
+        #[arg(
+            long = "target",
+            value_name = "TARGET",
+            help = "Release target id: linux-amd64, linux-arm64, darwin-amd64, or darwin-arm64."
+        )]
+        target: String,
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
     },
@@ -18492,6 +18492,60 @@ struct AppConfig {
     model_reasoning_effort: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct ReleaseTarget {
+    id: &'static str,
+    os_label: &'static str,
+    arch_label: &'static str,
+    rust_triple: &'static str,
+}
+
+const SUPPORTED_RELEASE_TARGETS: &[ReleaseTarget] = &[
+    ReleaseTarget {
+        id: "linux-amd64",
+        os_label: "linux",
+        arch_label: "amd64",
+        rust_triple: "x86_64-unknown-linux-gnu",
+    },
+    ReleaseTarget {
+        id: "linux-arm64",
+        os_label: "linux",
+        arch_label: "arm64",
+        rust_triple: "aarch64-unknown-linux-gnu",
+    },
+    ReleaseTarget {
+        id: "darwin-amd64",
+        os_label: "darwin",
+        arch_label: "amd64",
+        rust_triple: "x86_64-apple-darwin",
+    },
+    ReleaseTarget {
+        id: "darwin-arm64",
+        os_label: "darwin",
+        arch_label: "arm64",
+        rust_triple: "aarch64-apple-darwin",
+    },
+];
+
+fn release_target_by_id(raw: &str) -> Result<ReleaseTarget> {
+    let normalized = raw.trim().replace(['_', '/'], "-").to_ascii_lowercase();
+    SUPPORTED_RELEASE_TARGETS.iter().copied().find(|target| target.id == normalized).ok_or_else(
+        || {
+            let expected = SUPPORTED_RELEASE_TARGETS
+                .iter()
+                .map(|target| target.id)
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow!("unsupported release target {raw:?}; expected one of: {expected}")
+        },
+    )
+}
+
+fn release_asset_name(version: &str, target: ReleaseTarget) -> String {
+    let version_no_v = version.trim_start_matches('v');
+    format!("si_{version_no_v}_{}_{}.tar.gz", target.os_label, target.arch_label)
+}
+
 fn run_build_self_release_assets(
     repo: Option<PathBuf>,
     version: Option<String>,
@@ -18503,25 +18557,11 @@ fn run_build_self_release_assets(
     fs::create_dir_all(&resolved_out_dir)
         .with_context(|| format!("create release output dir {}", resolved_out_dir.display()))?;
 
-    let targets = [
-        ("linux", "amd64", None),
-        ("linux", "arm64", None),
-        ("linux", "arm", Some("7")),
-        ("darwin", "amd64", None),
-        ("darwin", "arm64", None),
-    ];
-
     let mut archive_names = Vec::new();
-    for (goos, goarch, goarm) in targets {
-        println!("building release archive for {goos}/{goarch}");
-        let archive_path = build_release_asset(
-            &repo_root,
-            &resolved_out_dir,
-            &resolved_version,
-            goos,
-            goarch,
-            goarm,
-        )?;
+    for target in SUPPORTED_RELEASE_TARGETS {
+        println!("building release archive for {} ({})", target.id, target.rust_triple);
+        let archive_path =
+            build_release_asset(&repo_root, &resolved_out_dir, &resolved_version, *target)?;
         let archive_name = archive_path
             .file_name()
             .and_then(|value| value.to_str())
@@ -18550,23 +18590,15 @@ fn run_build_self_release_assets(
 fn run_build_self_release_asset(
     repo_root: Option<PathBuf>,
     version: String,
-    goos: String,
-    goarch: String,
-    goarm: Option<String>,
+    target: String,
     out_dir: Option<PathBuf>,
 ) -> Result<()> {
     let repo_root = resolve_release_repo_root(repo_root)?;
     let version = resolve_release_version(&repo_root, Some(version))?;
     let out_dir = resolve_release_output_dir(out_dir, &repo_root)?;
     fs::create_dir_all(&out_dir).with_context(|| format!("create {}", out_dir.display()))?;
-    let archive = build_release_asset(
-        &repo_root,
-        &out_dir,
-        &version,
-        goos.trim(),
-        goarch.trim(),
-        goarm.as_deref().map(str::trim).filter(|value| !value.is_empty()),
-    )?;
+    let target = release_target_by_id(&target)?;
+    let archive = build_release_asset(&repo_root, &out_dir, &version, target)?;
     println!("created {}", archive.display());
     Ok(())
 }
@@ -18921,9 +18953,7 @@ fn build_release_asset(
     repo_root: &Path,
     out_dir: &Path,
     version: &str,
-    goos: &str,
-    goarch: &str,
-    goarm: Option<&str>,
+    target: ReleaseTarget,
 ) -> Result<PathBuf> {
     for required in ["README.md", "LICENSE"] {
         let path = repo_root.join(required);
@@ -18934,9 +18964,7 @@ fn build_release_asset(
 
     let temp = tempfile::tempdir().context("create release temp dir")?;
     let version_no_v = version.trim_start_matches('v');
-    let arch_label =
-        if goarch == "arm" { format!("armv{}", goarm.unwrap_or("7")) } else { goarch.to_owned() };
-    let artifact_stem = format!("si_{version_no_v}_{goos}_{arch_label}");
+    let artifact_stem = format!("si_{version_no_v}_{}_{}", target.os_label, target.arch_label);
     let staging_dir = temp.path().join(&artifact_stem);
     fs::create_dir_all(&staging_dir)
         .with_context(|| format!("create {}", staging_dir.display()))?;
@@ -18946,24 +18974,23 @@ fn build_release_asset(
     let mut cargo_command = StdCommand::new("cargo");
     configure_self_cargo_command(&mut cargo_command, repo_root, &cargo_target_dir);
     cargo_command
-        .env("GOOS", goos)
-        .env("GOARCH", goarch)
         .arg("build")
         .arg("--release")
         .arg("--locked")
+        .arg("--target")
+        .arg(target.rust_triple)
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
         .arg("si-rs");
-    if let Some(goarm) = goarm {
-        cargo_command.env("GOARM", goarm);
-    }
     let output = cargo_command.output().context("run cargo build for release asset")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         return Err(anyhow!(
-            "cargo build failed for {goos}/{goarch}: {}{}{}",
+            "cargo build failed for {} ({}): {}{}{}",
+            target.id,
+            target.rust_triple,
             output.status,
             if stdout.trim().is_empty() { "" } else { "\nstdout:\n" },
             if stdout.trim().is_empty() {
@@ -18973,8 +19000,10 @@ fn build_release_asset(
             },
         ));
     }
-    let built_binary =
-        cargo_target_dir.join("release").join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
+    let built_binary = cargo_target_dir
+        .join(target.rust_triple)
+        .join("release")
+        .join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
     fs::copy(&built_binary, &output_path).with_context(|| {
         format!("copy built release binary {} to {}", built_binary.display(), output_path.display())
     })?;
@@ -20430,14 +20459,7 @@ fn run_validate_release_version(tag: String) -> Result<()> {
 }
 
 fn expected_release_asset_names(version: &str) -> Vec<String> {
-    let version_no_v = version.trim().trim_start_matches('v');
-    vec![
-        format!("si_{version_no_v}_linux_amd64.tar.gz"),
-        format!("si_{version_no_v}_linux_arm64.tar.gz"),
-        format!("si_{version_no_v}_linux_armv7.tar.gz"),
-        format!("si_{version_no_v}_darwin_amd64.tar.gz"),
-        format!("si_{version_no_v}_darwin_arm64.tar.gz"),
-    ]
+    SUPPORTED_RELEASE_TARGETS.iter().map(|target| release_asset_name(version, *target)).collect()
 }
 
 fn verify_release_archive_contents(path: &Path) -> Result<()> {
@@ -20811,15 +20833,8 @@ fn main() -> Result<()> {
                 Some(BuildSelfCommand::Run(BuildSelfRunArgs { repo, cargo, args })) => {
                     run_build_self_run(repo, cargo, args)?
                 }
-                Some(BuildSelfCommand::ReleaseAsset {
-                    repo_root,
-                    version,
-                    goos,
-                    goarch,
-                    goarm,
-                    out_dir,
-                }) => {
-                    run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?
+                Some(BuildSelfCommand::ReleaseAsset { repo_root, version, target, out_dir }) => {
+                    run_build_self_release_asset(repo_root, version, target, out_dir)?
                 }
                 Some(BuildSelfCommand::ReleaseAssets { repo, version, out_dir }) => {
                     run_build_self_release_assets(repo, version, out_dir)?
