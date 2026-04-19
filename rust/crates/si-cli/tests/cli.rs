@@ -1120,7 +1120,7 @@ fn surf_wrapper_marks_child_process_as_wrapped() {
     write_executable_shell_script(
         &surf_path,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_SURF_WRAPPED=%s\\n' \"${{SI_SURF_WRAPPED:-}}\" > {}\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_SURF_WRAPPED=%s\\nSURF_VNC_PASSWORD=%s\\n' \"${{SI_SURF_WRAPPED:-}}\" \"${{SURF_VNC_PASSWORD:-}}\" > {}\n",
             shell_escape_for_test(&args_file),
             shell_escape_for_test(&env_file),
         ),
@@ -1142,7 +1142,85 @@ fn surf_wrapper_marks_child_process_as_wrapped() {
     let args = fs::read_to_string(&args_file).expect("read surf args");
     assert_eq!(args, "status\n--json\n");
     let env = fs::read_to_string(&env_file).expect("read surf env");
-    assert_eq!(env, "SI_SURF_WRAPPED=1\n");
+    assert_eq!(env, "SI_SURF_WRAPPED=1\nSURF_VNC_PASSWORD=\n");
+}
+
+#[test]
+fn surf_wrapper_fetches_vnc_password_from_fort_for_start() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+    let profile_home = home.path().join(".si/codex/profiles/profile-surf");
+    write_reusable_codex_fort_session(&profile_home, "profile-surf");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("surf-args.txt");
+    let env_file = bin_dir.path().join("surf-env.txt");
+    let fort_args_file = bin_dir.path().join("fort-args.txt");
+    let surf_path = bin_dir.path().join("surf");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &surf_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nprintf 'SI_SURF_WRAPPED=%s\\nSURF_VNC_PASSWORD=%s\\n' \"${{SI_SURF_WRAPPED:-}}\" \"${{SURF_VNC_PASSWORD:-}}\" > {}\n",
+            shell_escape_for_test(&args_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+    write_executable_shell_script(
+        &fort_path,
+        &format!(
+            r#"#!/bin/sh
+set -eu
+printf '%s\n' "$@" > {}
+if [ "$1" = "--host" ] && [ "$2" = "https://fort.example.test" ] && [ "$3" = "--json" ] && [ "$4" = "auth" ] && [ "$5" = "session" ] && [ "$6" = "refresh" ]; then
+  refresh_out="${{10}}"
+  printf '%s\n' 'rotated-refresh-token' > "$refresh_out"
+  printf '%s\n' '{{"access_token":"rotated-access-token","refresh_token_file":"'"$refresh_out"'"}}'
+  exit 0
+fi
+if [ "$1" = "--host" ] && [ "$2" = "https://fort.example.test" ] && [ "$3" = "--token-file" ] && [ "$5" = "get" ] && [ "$6" = "--repo" ] && [ "$7" = "surf" ] && [ "$8" = "--env" ] && [ "$9" = "dev" ] && [ "${{10}}" = "--key" ] && [ "${{11}}" = "SURF_VNC_PASSWORD" ]; then
+  test "$(cat "$4")" = 'rotated-access-token'
+  printf '%s\n' 'stable-surf-password'
+  exit 0
+fi
+printf 'unexpected fort invocation\n' >&2
+exit 1
+"#,
+            shell_escape_for_test(&fort_args_file),
+        ),
+    );
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        format!(
+            "schema_version = 1\n[fort]\nbin = {:?}\nhost = \"https://fort.example.test\"\n[surf]\nvnc_password_fort_key = \"SURF_VNC_PASSWORD\"\nvnc_password_fort_repo = \"surf\"\nvnc_password_fort_env = \"dev\"\n",
+            fort_path,
+        ),
+    )
+    .expect("write settings");
+
+    cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--bin",
+            surf_path.to_str().expect("surf path"),
+            "start",
+            "--json",
+        ])
+        .env("CODEX_HOME", &profile_home)
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read surf args");
+    assert_eq!(args, "start\n--json\n");
+    let env = fs::read_to_string(&env_file).expect("read surf env");
+    assert_eq!(env, "SI_SURF_WRAPPED=1\nSURF_VNC_PASSWORD=stable-surf-password\n");
+    let fort_args = fs::read_to_string(&fort_args_file).expect("read fort args");
+    assert!(
+        fort_args
+            .contains("get\n--repo\nsurf\n--env\ndev\n--key\nSURF_VNC_PASSWORD\n--format\nraw\n")
+    );
 }
 
 #[test]

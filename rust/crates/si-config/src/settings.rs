@@ -136,6 +136,7 @@ impl Settings {
                 self.paths = payload.paths;
                 self.codex = payload.codex;
                 self.fort = payload.fort;
+                self.surf = payload.surf;
                 self.stripe = payload.stripe;
                 self.aws = payload.aws;
                 self.gcp = payload.gcp;
@@ -204,6 +205,8 @@ struct CoreSettingsModule {
     pub codex: CodexSettings,
     #[serde(default)]
     pub fort: FortSettings,
+    #[serde(default)]
+    pub surf: SurfSettings,
     #[serde(default)]
     pub stripe: StripeSettings,
     #[serde(default)]
@@ -1103,6 +1106,12 @@ pub struct SurfSettings {
     #[serde(default)]
     pub state_dir: String,
     #[serde(default)]
+    pub vnc_password_fort_key: String,
+    #[serde(default)]
+    pub vnc_password_fort_repo: String,
+    #[serde(default)]
+    pub vnc_password_fort_env: String,
+    #[serde(default)]
     pub tunnel: SurfTunnelSettings,
 }
 
@@ -1112,6 +1121,15 @@ impl SurfSettings {
         trim_string(&mut self.bin);
         trim_string(&mut self.settings_file);
         trim_string(&mut self.state_dir);
+        trim_string(&mut self.vnc_password_fort_key);
+        trim_string(&mut self.vnc_password_fort_repo);
+        if !self.vnc_password_fort_key.is_empty() && self.vnc_password_fort_repo.is_empty() {
+            self.vnc_password_fort_repo = "surf".to_owned();
+        }
+        self.vnc_password_fort_env = self.vnc_password_fort_env.trim().to_lowercase();
+        if !self.vnc_password_fort_key.is_empty() && self.vnc_password_fort_env.is_empty() {
+            self.vnc_password_fort_env = "dev".to_owned();
+        }
         trim_string(&mut self.tunnel.name);
         trim_string(&mut self.tunnel.vault_key);
         self.tunnel.mode = normalize_choice(&self.tunnel.mode, &["quick", "token"]);
@@ -1679,6 +1697,9 @@ bin = "/work/surf/bin/surf"
 build = true
 settings_file = "/home/user/.si/surf/settings.toml"
 state_dir = "/home/user/.surf-state"
+vnc_password_fort_key = "SURF_VNC_PASSWORD"
+vnc_password_fort_repo = "surf"
+vnc_password_fort_env = "dev"
 
 [surf.tunnel]
 name = "surf-cloudflared"
@@ -1693,6 +1714,9 @@ vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
         assert_eq!(settings.surf.repo, "/work/surf");
         assert_eq!(settings.surf.bin, "/work/surf/bin/surf");
         assert_eq!(settings.surf.build, Some(true));
+        assert_eq!(settings.surf.vnc_password_fort_key, "SURF_VNC_PASSWORD");
+        assert_eq!(settings.surf.vnc_password_fort_repo, "surf");
+        assert_eq!(settings.surf.vnc_password_fort_env, "dev");
         assert_eq!(settings.surf.tunnel.mode, "token");
         assert_eq!(settings.surf.tunnel.vault_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
     }
