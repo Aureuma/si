@@ -162,3 +162,16 @@ cargo test -p si-tools
 ```
 
 Use these suites as the compatibility gate before upgrading Codex-facing flows.
+
+## Fresh-machine doctor
+Run the non-invasive distribution doctor after installing SI on another machine:
+
+```bash
+si doctor
+si doctor --format json
+```
+
+The doctor checks the installed SI binary path and the commands needed by common
+runtime paths, including Codex workers, tmux operator sessions, npm archive
+extraction, and source installs. It does not prompt for auth, write state, or
+make network calls.

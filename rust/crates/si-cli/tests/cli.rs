@@ -1342,6 +1342,21 @@ fn viva_wrapper_config_round_trip() {
 }
 
 #[test]
+fn distribution_doctor_outputs_json() {
+    let output = cargo_bin()
+        .args(["doctor", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse doctor json");
+    assert!(payload.get("version").and_then(Value::as_str).is_some());
+    assert!(payload.get("binary").and_then(Value::as_str).is_some());
+    assert!(payload.get("checks").and_then(Value::as_array).is_some());
+}
+
+#[test]
 fn build_self_release_assets_writes_archives_and_checksums() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
@@ -12842,6 +12857,7 @@ fn help_json_lists_known_root_commands() {
 
     assert!(commands.iter().any(|entry| entry["name"] == "build"));
     assert!(commands.iter().any(|entry| entry["name"] == "commands"));
+    assert!(commands.iter().any(|entry| entry["name"] == "doctor"));
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
     assert!(commands.iter().any(|entry| entry["name"] == "orbit"));
     assert!(commands.iter().any(|entry| entry["name"] == "codex"));
@@ -12877,8 +12893,8 @@ fn help_json_root_command_order_matches_public_cli_order() {
     assert_eq!(
         names,
         vec![
-            "version", "help", "build", "commands", "settings", "orbit", "image", "codex",
-            "nucleus", "surf", "viva", "fort", "vault"
+            "version", "help", "build", "commands", "doctor", "settings", "orbit", "image",
+            "codex", "nucleus", "surf", "viva", "fort", "vault"
         ]
     );
 }
@@ -12938,6 +12954,7 @@ fn commands_root_defaults_to_list_output() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     let commands = parsed["commands"].as_array().expect("commands array should be present");
     assert!(commands.iter().any(|entry| entry["name"] == "commands"));
+    assert!(commands.iter().any(|entry| entry["name"] == "doctor"));
     assert!(commands.iter().any(|entry| entry["name"] == "settings"));
     assert!(commands.iter().any(|entry| entry["name"] == "nucleus"));
 }
