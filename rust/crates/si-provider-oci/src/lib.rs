@@ -659,7 +659,7 @@ fn parse_config_profile(
         return Err("oci config file path is required".to_owned());
     }
     let raw = fs::read_to_string(config_file)
-        .map_err(|err| format!("read oci config {:?}: {err}", config_file))?;
+        .map_err(|err| format!("read oci config {config_file:?}: {err}"))?;
     let profile = if profile.trim().is_empty() { "DEFAULT" } else { profile.trim() };
     let mut profiles: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut current = String::new();
@@ -686,7 +686,7 @@ fn parse_config_profile(
     }
     profiles
         .remove(profile)
-        .ok_or_else(|| format!("oci profile {:?} not found in {:?}", profile, config_file))
+        .ok_or_else(|| format!("oci profile {profile:?} not found in {config_file:?}"))
 }
 
 fn resolve_env_reference(
@@ -771,8 +771,8 @@ fn load_rsa_private_key(path: &str, passphrase: &str) -> Result<RsaPrivateKey, S
     if path.trim().is_empty() {
         return Err("oci private key path is required".to_owned());
     }
-    let raw = fs::read_to_string(path)
-        .map_err(|err| format!("read oci private key {:?}: {err}", path))?;
+    let raw =
+        fs::read_to_string(path).map_err(|err| format!("read oci private key {path:?}: {err}"))?;
     let pem = extract_private_key_pem(&raw);
     if passphrase.trim().is_empty() {
         if private_key_needs_passphrase(&pem) {
@@ -810,15 +810,13 @@ fn extract_private_key_pem(raw: &str) -> String {
     let mut collecting = false;
     for line in raw.lines() {
         let trimmed = line.trim();
-        if !collecting && BEGIN_MARKERS.iter().any(|marker| *marker == trimmed) {
+        if !collecting && BEGIN_MARKERS.contains(&trimmed) {
             collecting = true;
         }
         if collecting {
             lines.push(trimmed.to_owned());
-            if END_MARKERS.iter().any(|marker| *marker == trimmed) {
-                return format!("{}
-", lines.join("
-"));
+            if END_MARKERS.contains(&trimmed) {
+                return format!("{}\n", lines.join("\n"));
             }
         }
     }
@@ -839,7 +837,7 @@ fn resolve_url(
 ) -> Result<String, String> {
     let path = path.trim();
     if path.starts_with("http://") || path.starts_with("https://") {
-        let mut url = Url::parse(path).map_err(|err| format!("parse oci url {:?}: {err}", path))?;
+        let mut url = Url::parse(path).map_err(|err| format!("parse oci url {path:?}: {err}"))?;
         if !params.is_empty() {
             let mut pairs = url.query_pairs_mut();
             for (key, value) in params {
@@ -853,7 +851,7 @@ fn resolve_url(
         return Ok(url.to_string());
     }
     let mut url =
-        Url::parse(base_url).map_err(|err| format!("parse oci base url {:?}: {err}", base_url))?;
+        Url::parse(base_url).map_err(|err| format!("parse oci base url {base_url:?}: {err}"))?;
     if !path.starts_with('/') {
         url.set_path(&format!("/{path}"));
     } else {

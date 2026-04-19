@@ -382,6 +382,7 @@ impl NucleusInstanceLock {
         let path = paths.run_dir.join("nucleus.lock");
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&path)
@@ -1961,8 +1962,7 @@ fn classify_fort_requirement(
     });
     if !session_path.exists() {
         let message = format!(
-            "Fort authentication is required for profile {}: session state is missing",
-            profile
+            "Fort authentication is required for profile {profile}: session state is missing"
         );
         return Ok(Some((
             FortCapabilityState::AuthRequired,
@@ -1981,8 +1981,7 @@ fn classify_fort_requirement(
         Ok(state) => state,
         Err(SessionStateFileError::Stat(error)) if error.kind() == std::io::ErrorKind::NotFound => {
             let message = format!(
-                "Fort authentication is required for profile {}: session state is missing",
-                profile
+                "Fort authentication is required for profile {profile}: session state is missing"
             );
             return Ok(Some((
                 FortCapabilityState::AuthRequired,
@@ -1997,7 +1996,7 @@ fn classify_fort_requirement(
             )));
         }
         Err(error) => {
-            let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+            let message = format!("Fort is unavailable for profile {profile}: {error}");
             return Ok(Some((
                 FortCapabilityState::Unavailable,
                 message,
@@ -2021,7 +2020,7 @@ fn classify_fort_requirement(
         &access_token_path.display().to_string(),
         &refresh_token_path.display().to_string(),
     ) {
-        let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+        let message = format!("Fort is unavailable for profile {profile}: {error}");
         return Ok(Some((
             FortCapabilityState::Unavailable,
             message,
@@ -2040,7 +2039,7 @@ fn classify_fort_requirement(
     let session_state = match classify_persisted_session_state(&persisted, now_unix) {
         Ok(state) => state,
         Err(error) => {
-            let message = format!("Fort is unavailable for profile {}: {}", profile, error);
+            let message = format!("Fort is unavailable for profile {profile}: {error}");
             return Ok(Some((
                 FortCapabilityState::Unavailable,
                 message,
@@ -2058,24 +2057,20 @@ fn classify_fort_requirement(
 
     let (state, message) = match &session_state {
         SessionState::Resumable(_) | SessionState::Refreshing(_) => {
-            (FortCapabilityState::Ready, format!("Fort is ready for profile {}", profile))
+            (FortCapabilityState::Ready, format!("Fort is ready for profile {profile}"))
         }
         SessionState::BootstrapRequired | SessionState::Revoked { .. } | SessionState::Closed => (
             FortCapabilityState::AuthRequired,
-            format!("Fort authentication is required for profile {}", profile),
+            format!("Fort authentication is required for profile {profile}"),
         ),
         SessionState::TeardownPending(_) => (
             FortCapabilityState::Unavailable,
-            format!(
-                "Fort is unavailable for profile {}: session teardown is still pending",
-                profile
-            ),
+            format!("Fort is unavailable for profile {profile}: session teardown is still pending"),
         ),
     };
     if state == FortCapabilityState::Ready && !refresh_token_path.is_file() {
         let message = format!(
-            "Fort authentication is required for profile {}: refresh token is missing",
-            profile
+            "Fort authentication is required for profile {profile}: refresh token is missing"
         );
         return Ok(Some((
             FortCapabilityState::AuthRequired,
@@ -2482,7 +2477,7 @@ fn persist_gateway_metadata(paths: &NucleusPaths, bind_addr: SocketAddr) -> Resu
     let metadata = GatewayMetadata {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         bind_addr: bind_addr.to_string(),
-        ws_url: format!("ws://{}{}", bind_addr, WS_PATH),
+        ws_url: format!("ws://{bind_addr}{WS_PATH}"),
     };
     write_json_atomic(&metadata_path, &metadata)
 }
@@ -2572,7 +2567,7 @@ impl NucleusService {
     pub async fn serve(self) -> Result<()> {
         let bind_addr = self.config.bind_addr;
         let listener =
-            TcpListener::bind(bind_addr).await.with_context(|| format!("bind {}", bind_addr))?;
+            TcpListener::bind(bind_addr).await.with_context(|| format!("bind {bind_addr}"))?;
         let bound_addr = listener.local_addr().context("read bound si-nucleus address")?;
         persist_gateway_metadata(self.store.paths(), bound_addr)?;
         self.initialize_runtime_loops()?;
@@ -5601,9 +5596,7 @@ fn infer_error_code(error: &anyhow::Error) -> &'static str {
     let message = error.to_string();
     if message.contains("unauthorized") {
         "unauthorized"
-    } else if message.contains("must match") {
-        "invalid_params"
-    } else if message.contains("parse ") {
+    } else if message.contains("must match") || message.contains("parse ") {
         "invalid_params"
     } else if message.contains("unavailable") {
         "unavailable"
@@ -7088,7 +7081,8 @@ mod tests {
                 "GPT Actions profile missing {required_text}"
             );
         }
-        for (path, method) in [("/tasks", "post")] {
+        {
+            let (path, method) = ("/tasks", "post");
             let operation = &body["paths"][path][method];
             assert_eq!(
                 operation["requestBody"]["required"],

@@ -1081,12 +1081,12 @@ fn resolve_url_owned(
 
 fn resolve_url(base_url: &str, path: &str, params: &[(&str, String)]) -> Result<String, String> {
     let mut url = if path.starts_with("http://") || path.starts_with("https://") {
-        Url::parse(path).map_err(|err| format!("parse openai url {:?}: {err}", path))?
+        Url::parse(path).map_err(|err| format!("parse openai url {path:?}: {err}"))?
     } else {
         let base = Url::parse(base_url)
-            .map_err(|err| format!("parse openai base url {:?}: {err}", base_url))?;
+            .map_err(|err| format!("parse openai base url {base_url:?}: {err}"))?;
         let trimmed = if path.starts_with('/') { path.to_owned() } else { format!("/{path}") };
-        base.join(&trimmed).map_err(|err| format!("resolve openai path {:?}: {err}", path))?
+        base.join(&trimmed).map_err(|err| format!("resolve openai path {path:?}: {err}"))?
     };
     if params.iter().any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty()) {
         let mut pairs = url.query_pairs_mut();

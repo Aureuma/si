@@ -16710,7 +16710,7 @@ fn run_nucleus_gateway_request(
         websocket_request.headers_mut().insert(AUTHORIZATION, header);
     }
     let (mut socket, _) = ws_connect(websocket_request)
-        .with_context(|| format!("connect nucleus websocket {}", endpoint))?;
+        .with_context(|| format!("connect nucleus websocket {endpoint}"))?;
     socket
         .send(WsMessage::Text(serde_json::to_string(&request)?.into()))
         .context("send nucleus websocket request")?;
@@ -17306,7 +17306,7 @@ fn run_nucleus_service_run(
         .status()
         .with_context(|| format!("run nucleus service binary {}", nucleus_bin.display()))?;
     if !status.success() {
-        anyhow::bail!("nucleus service binary exited with {}", status);
+        anyhow::bail!("nucleus service binary exited with {status}");
     }
     Ok(())
 }
@@ -17556,7 +17556,7 @@ fn run_nucleus_events_subscribe(
         websocket_request.headers_mut().insert(AUTHORIZATION, header);
     }
     let (mut socket, _) = ws_connect(websocket_request)
-        .with_context(|| format!("connect nucleus websocket {}", endpoint))?;
+        .with_context(|| format!("connect nucleus websocket {endpoint}"))?;
     socket
         .send(WsMessage::Text(serde_json::to_string(&request)?.into()))
         .context("send nucleus websocket request")?;
@@ -18735,7 +18735,7 @@ fn build_self_binary(
         .status()
         .context("run cargo build for self build")?;
     if !status.success() {
-        return Err(anyhow!("build failed: {}", status));
+        return Err(anyhow!("build failed: {status}"));
     }
     let built_binary = cargo_target_dir.path.join("release").join(if cfg!(windows) {
         "si-rs.exe"
@@ -18832,7 +18832,7 @@ fn run_build_self_check(
         .status()
         .context("run cargo check for self build")?;
     if !status.success() {
-        return Err(anyhow!("cargo check failed: {}", status));
+        return Err(anyhow!("cargo check failed: {status}"));
     }
     println!("checked si binary manifest: rust/crates/si-cli/Cargo.toml");
     Ok(())
@@ -18861,7 +18861,7 @@ fn run_build_self_run(
     }
     let status = command.status().context("run cargo run for self run")?;
     if !status.success() {
-        return Err(anyhow!("cargo run failed: {}", status));
+        return Err(anyhow!("cargo run failed: {status}"));
     }
     Ok(())
 }
@@ -19073,7 +19073,7 @@ fn run_publish_npm_package(
     let package = build_npm_package(&repo_root, &version, &out_dir)?;
     let token = std::env::var(&token_env).unwrap_or_default();
     if token.trim().is_empty() {
-        return Err(anyhow!("token environment variable {} is required", token_env));
+        return Err(anyhow!("token environment variable {token_env} is required"));
     }
 
     let npmrc = tempfile::NamedTempFile::new().context("create npmrc temp file")?;
@@ -19166,7 +19166,7 @@ fn ensure_command_exists(command: &str) -> Result<()> {
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             Err(anyhow!("missing required command: {command}"))
         }
-        Err(err) => Err(err).with_context(|| format!("check command {}", command)),
+        Err(err) => Err(err).with_context(|| format!("check command {command}")),
     }
 }
 
@@ -19363,7 +19363,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         .arg("si-rs");
     let status = command.status().context("run cargo build for installer")?;
     if !status.success() {
-        return Err(anyhow!("build failed: {}", status));
+        return Err(anyhow!("build failed: {status}"));
     }
     let built_binary = cargo_target_dir.path().join("release").join(if cfg!(windows) {
         "si-rs.exe"
@@ -19411,7 +19411,7 @@ fn validate_installer_config(cfg: &InstallerRunConfig) -> Result<()> {
     match cfg.toolchain_mode.trim() {
         "auto" | "system" => {}
         value => {
-            return Err(anyhow!("invalid --toolchain-mode {} (expected auto or system)", value));
+            return Err(anyhow!("invalid --toolchain-mode {value} (expected auto or system)"));
         }
     }
     if (cfg.os_override.is_some() || cfg.arch_override.is_some()) && !cfg.dry_run {
@@ -19420,13 +19420,13 @@ fn validate_installer_config(cfg: &InstallerRunConfig) -> Result<()> {
     if let Some(value) = cfg.os_override.as_deref() {
         match value.trim() {
             "linux" | "darwin" => {}
-            other => return Err(anyhow!("invalid --os {} (expected linux or darwin)", other)),
+            other => return Err(anyhow!("invalid --os {other} (expected linux or darwin)")),
         }
     }
     if let Some(value) = cfg.arch_override.as_deref() {
         match value.trim() {
             "amd64" | "x86_64" | "arm64" | "aarch64" => {}
-            other => return Err(anyhow!("invalid --arch {} (expected amd64 or arm64)", other)),
+            other => return Err(anyhow!("invalid --arch {other} (expected amd64 or arm64)")),
         }
     }
     Ok(())
@@ -19483,7 +19483,7 @@ fn resolve_installer_source_dir(
             .status()
             .context("run git clone")?;
         if !status.success() {
-            return Err(anyhow!("git clone failed: {}", status));
+            return Err(anyhow!("git clone failed: {status}"));
         }
         if !cfg.ref_name.trim().is_empty() {
             let status = StdCommand::new("git")
@@ -19494,7 +19494,7 @@ fn resolve_installer_source_dir(
                 .status()
                 .context("run git checkout")?;
             if !status.success() {
-                return Err(anyhow!("git checkout failed: {}", status));
+                return Err(anyhow!("git checkout failed: {status}"));
             }
         }
         validate_installer_source_dir(temp.path())?;
@@ -19608,7 +19608,7 @@ fn render_installer_settings(path: &Path, browser: &str) -> Result<(String, Opti
             Ok((render_installer_settings_doc(&current, browser), Some(existing)))
         }
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            Ok((format!("[codex.login]\ndefault_browser = \"{}\"\n", browser), None))
+            Ok((format!("[codex.login]\ndefault_browser = \"{browser}\"\n"), None))
         }
         Err(err) => Err(err).with_context(|| format!("read {}", path.display())),
     }
@@ -19626,7 +19626,7 @@ fn render_installer_settings_doc(current: &str, browser: &str) -> String {
         Regex::new(r"^[[:space:]]*\[codex\.login\][[:space:]]*$").expect("valid login regex");
     let default_browser_line =
         Regex::new(r"^[[:space:]]*default_browser[[:space:]]*=").expect("valid browser regex");
-    let replacement = format!("default_browser = \"{}\"", browser);
+    let replacement = format!("default_browser = \"{browser}\"");
     let mut out = Vec::with_capacity(lines.len() + 4);
     let mut in_login = false;
     let mut saw_login = false;
@@ -20027,31 +20027,7 @@ fn run_installer_smoke_homebrew() -> Result<()> {
         if provided.join("checksums.txt").exists() {
             std::fs::copy(provided.join("checksums.txt"), assets_dir.join("checksums.txt"))
                 .context("copy prebuilt checksums")?;
-        } else {
-            if let Some(assets_builder) = &assets_builder {
-                run_path_command_checked(
-                    &root,
-                    assets_builder,
-                    &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-                )?;
-            } else {
-                run_path_command_checked(
-                    &root,
-                    &self_bin,
-                    &[
-                        "build",
-                        "self",
-                        "assets",
-                        "--version",
-                        &version,
-                        "--out-dir",
-                        assets_dir.to_str().unwrap_or_default(),
-                    ],
-                )?;
-            }
-        }
-    } else {
-        if let Some(assets_builder) = &assets_builder {
+        } else if let Some(assets_builder) = &assets_builder {
             run_path_command_checked(
                 &root,
                 assets_builder,
@@ -20072,6 +20048,26 @@ fn run_installer_smoke_homebrew() -> Result<()> {
                 ],
             )?;
         }
+    } else if let Some(assets_builder) = &assets_builder {
+        run_path_command_checked(
+            &root,
+            assets_builder,
+            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+        )?;
+    } else {
+        run_path_command_checked(
+            &root,
+            &self_bin,
+            &[
+                "build",
+                "self",
+                "assets",
+                "--version",
+                &version,
+                "--out-dir",
+                assets_dir.to_str().unwrap_or_default(),
+            ],
+        )?;
     }
 
     let checksums_path = assets_dir.join("checksums.txt");
@@ -20110,7 +20106,7 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     }
     let install_status = install.status().context("run brew install")?;
     if !install_status.success() {
-        return Err(anyhow!("brew install failed: {}", install_status));
+        return Err(anyhow!("brew install failed: {install_status}"));
     }
 
     let mut prefix_cmd = StdCommand::new("brew");
@@ -20140,7 +20136,7 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     }
     let uninstall_status = uninstall.status().context("run brew uninstall")?;
     if !uninstall_status.success() {
-        return Err(anyhow!("brew uninstall failed: {}", uninstall_status));
+        return Err(anyhow!("brew uninstall failed: {uninstall_status}"));
     }
 
     println!("homebrew install smoke passed");
@@ -20247,7 +20243,7 @@ fn run_publish_npm_from_vault(
         return Err(anyhow!("vault list failed"));
     }
     if !vault_key_exists(&String::from_utf8_lossy(&output.stdout), &token_env) {
-        return Err(anyhow!("vault key {} not found", token_env));
+        return Err(anyhow!("vault key {token_env} not found"));
     }
 
     let current_exe = std::env::current_exe().context("resolve current executable")?;
@@ -20427,7 +20423,7 @@ fn run_validate_release_version(tag: String) -> Result<()> {
     let cwd = std::env::current_dir().context("read current dir")?;
     let actual = read_si_version(&cwd)?;
     if actual != tag {
-        return Err(anyhow!("workspace Cargo.toml has {}, but release tag is {}", actual, tag));
+        return Err(anyhow!("workspace Cargo.toml has {actual}, but release tag is {tag}"));
     }
     println!("release tag and workspace Cargo.toml are aligned ({tag})");
     Ok(())
@@ -20494,14 +20490,11 @@ fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Re
         }
         let expected_sha = checksums
             .get(&asset_name)
-            .ok_or_else(|| anyhow!("checksum missing for {}", asset_name))?;
+            .ok_or_else(|| anyhow!("checksum missing for {asset_name}"))?;
         let actual_sha = sha256_file(&asset_path)?;
         if actual_sha != *expected_sha {
             return Err(anyhow!(
-                "checksum mismatch for {}: expected {}, got {}",
-                asset_name,
-                expected_sha,
-                actual_sha
+                "checksum mismatch for {asset_name}: expected {expected_sha}, got {actual_sha}"
             ));
         }
         verify_release_archive_contents(&asset_path)?;
@@ -20512,8 +20505,8 @@ fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Re
 
 fn download_file(url: &str, output: &Path) -> Result<()> {
     let response =
-        BlockingHttpClient::new().get(url).send().with_context(|| format!("download {}", url))?;
-    let response = response.error_for_status().with_context(|| format!("download {}", url))?;
+        BlockingHttpClient::new().get(url).send().with_context(|| format!("download {url}"))?;
+    let response = response.error_for_status().with_context(|| format!("download {url}"))?;
     let bytes = response.bytes().context("read download body")?;
     fs::write(output, &bytes).with_context(|| format!("write {}", output.display()))?;
     Ok(())
@@ -20537,7 +20530,7 @@ fn render_tap_formula_with_base_url(
             .get(name)
             .filter(|value| !value.trim().is_empty())
             .cloned()
-            .ok_or_else(|| anyhow!("checksum not found for {}", name))
+            .ok_or_else(|| anyhow!("checksum not found for {name}"))
     };
     let asset_darwin_arm64 = format!("si_{version_no_v}_darwin_arm64.tar.gz");
     let asset_darwin_amd64 = format!("si_{version_no_v}_darwin_amd64.tar.gz");
@@ -20545,7 +20538,7 @@ fn render_tap_formula_with_base_url(
     let asset_linux_amd64 = format!("si_{version_no_v}_linux_amd64.tar.gz");
     let base_url = base_url_override
         .map(|value| value.trim_end_matches('/').to_owned())
-        .unwrap_or_else(|| format!("https://github.com/{}/releases/download/{}", repo, version));
+        .unwrap_or_else(|| format!("https://github.com/{repo}/releases/download/{version}"));
     let content = format!(
         "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
         lookup(&asset_darwin_arm64)?,
@@ -20582,7 +20575,7 @@ fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) 
         .current_dir(dir)
         .args(args)
         .output()
-        .with_context(|| format!("run {}", name))?;
+        .with_context(|| format!("run {name}"))?;
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -35941,7 +35934,7 @@ fn codex_profile_list_spinner_frame(frame_idx: usize, done: usize, total: usize)
     let rail = rail.into_iter().collect::<String>();
     format!(
         "{} {} {}",
-        stderr_text(&format!("si radar [{}]", rail), CliTone::Command),
+        stderr_text(&format!("si radar [{rail}]"), CliTone::Command),
         stderr_text(&format!("{done}/{total}"), CliTone::Info),
         stderr_text("sampling codex profiles", CliTone::Muted),
     )
@@ -36450,7 +36443,7 @@ fn encode_query_value(value: &str) -> String {
             encoded.push(*byte as char);
         } else {
             encoded.push('%');
-            encoded.push_str(&format!("{:02X}", byte));
+            encoded.push_str(&format!("{byte:02X}"));
         }
     }
     encoded
@@ -37895,11 +37888,10 @@ fn resolve_required_fort_auth(
 
 fn fort_command_requires_runtime_auth(args: &[String]) -> bool {
     let tokens = fort_command_tokens(args);
-    match tokens.as_slice() {
-        ["get" | "set" | "list" | "batch-get" | "run", ..] => true,
-        ["auth", "whoami", ..] => true,
-        _ => false,
-    }
+    matches!(
+        tokens.as_slice(),
+        ["get" | "set" | "list" | "batch-get" | "run", ..] | ["auth", "whoami", ..]
+    )
 }
 
 fn fort_command_prefers_runtime_auth(args: &[String]) -> bool {
@@ -37912,12 +37904,12 @@ fn fort_command_prefers_runtime_auth(args: &[String]) -> bool {
 
 fn fort_command_allows_bootstrap_auth(args: &[String]) -> bool {
     let tokens = fort_command_tokens(args);
-    match tokens.as_slice() {
-        ["agent", ..] => true,
-        ["auth", "issue" | "login" | "list" | "revoke", ..] => true,
-        ["auth", "session", "open", ..] => true,
-        _ => false,
-    }
+    matches!(
+        tokens.as_slice(),
+        ["agent", ..]
+            | ["auth", "issue" | "login" | "list" | "revoke", ..]
+            | ["auth", "session", "open", ..]
+    )
 }
 
 fn resolve_fort_bootstrap_auth(home: &Path) -> Option<FortTokenFileAuth> {
@@ -38943,7 +38935,7 @@ fn prompt_for_codex_profile(purpose: &str, profiles: &[CodexProfileView]) -> Res
     if candidates.len() == 1 {
         return Ok(profiles[candidates[0]].profile.clone());
     }
-    anyhow::bail!("could not resolve codex profile from {:?}", trimmed)
+    anyhow::bail!("could not resolve codex profile from {trimmed:?}")
 }
 
 fn codex_profile_resolution_error(query: &str, profiles: &[CodexProfileView]) -> anyhow::Error {
@@ -38998,7 +38990,7 @@ fn resolve_codex_profile(
         return match candidates.as_slice() {
             [index] => Ok(profiles[*index].profile.clone()),
             [] => Err(codex_profile_resolution_error(query, &profiles)),
-            _ => Err(anyhow!("codex profile {:?} matched multiple configured profiles", query)),
+            _ => Err(anyhow!("codex profile {query:?} matched multiple configured profiles")),
         };
     }
 
@@ -39294,7 +39286,7 @@ fn show_codex_profile(
         .entries
         .get(profile_id.as_str())
         .cloned()
-        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+        .ok_or_else(|| anyhow!("missing codex profile entry for {profile_id}"))?;
     let view = codex_profile_view(
         &paths,
         resolve_codex_active_profile_id(&settings).as_deref(),
@@ -39416,7 +39408,7 @@ fn login_codex_profile(
         .entries
         .get(profile_id.as_str())
         .cloned()
-        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+        .ok_or_else(|| anyhow!("missing codex profile entry for {profile_id}"))?;
     let resolved_auth_path = entry
         .auth_path
         .clone()
@@ -39438,7 +39430,7 @@ fn login_codex_profile(
     command.env("HOME", &home).env("CODEX_HOME", &codex_home).arg("login").arg("--device-auth");
     let status = command.status().with_context(|| format!("run {} login", codex_bin.display()))?;
     if !status.success() {
-        anyhow::bail!("codex login failed: {}", status);
+        anyhow::bail!("codex login failed: {status}");
     }
 
     if !host_auth_path.exists() {
@@ -39466,7 +39458,7 @@ fn login_codex_profile(
     }
     #[cfg(unix)]
     fs::set_permissions(&resolved_auth_path, fs::Permissions::from_mode(0o600))
-        .with_context(|| format!("chmod {}", resolved_auth_path))?;
+        .with_context(|| format!("chmod {resolved_auth_path}"))?;
 
     let mut document = load_settings_document(&settings_path)?;
     if !document.contains_key("schema_version") {
@@ -39508,16 +39500,14 @@ fn swap_codex_profile(
         .entries
         .get(profile_id.as_str())
         .cloned()
-        .ok_or_else(|| anyhow!("missing codex profile entry for {}", profile_id))?;
+        .ok_or_else(|| anyhow!("missing codex profile entry for {profile_id}"))?;
     let resolved_auth_path = entry
         .auth_path
         .clone()
         .unwrap_or_else(|| default_codex_profile_auth_path(&paths, &profile_id));
     if codex_profile_auth_state_label(&resolved_auth_path, entry.email.as_deref()) != "Logged-In" {
         anyhow::bail!(
-            "codex profile {} is not Logged-In; run `si codex profile login {}` first",
-            profile_id,
-            profile_id
+            "codex profile {profile_id} is not Logged-In; run `si codex profile login {profile_id}` first"
         );
     }
 
@@ -40183,10 +40173,10 @@ fn show_apple_appstore_auth_status(
             println!("Source: {}", or_dash(&payload.source));
             println!("Token source: {}", or_dash(&payload.token_source));
             if let Some(expires_at) = &payload.token_expires_at {
-                println!("Token expires: {}", expires_at);
+                println!("Token expires: {expires_at}");
             }
             if let Some(err) = &payload.verify_error {
-                println!("Verify: {}", err);
+                println!("Verify: {err}");
             } else if payload.verify.is_some() {
                 println!("Verify: ok");
             }
@@ -41700,7 +41690,7 @@ fn aws_s3_object_path(bucket: &str, key: &str) -> String {
 }
 
 fn parse_json_value(label: &str, input: &str) -> Result<Value> {
-    serde_json::from_str(input).map_err(|err| anyhow::anyhow!("invalid {} json: {}", label, err))
+    serde_json::from_str(input).map_err(|err| anyhow::anyhow!("invalid {label} json: {err}"))
 }
 
 fn aws_path_escape(value: &str) -> String {
@@ -42253,10 +42243,10 @@ fn run_aws_ec2_instance_mutation(
 ) -> Result<()> {
     let ids = ids.into_iter().filter(|id| !id.trim().is_empty()).collect::<Vec<_>>();
     if ids.is_empty() {
-        anyhow::bail!("aws ec2 instance {} requires at least one --id", action);
+        anyhow::bail!("aws ec2 instance {action} requires at least one --id");
     }
     if !force {
-        anyhow::bail!("aws ec2 instance {} requires --force on the Rust path", action);
+        anyhow::bail!("aws ec2 instance {action} requires --force on the Rust path");
     }
     let mut params = BTreeMap::new();
     for (idx, id) in ids.iter().enumerate() {
@@ -44489,7 +44479,7 @@ fn run_aws_lambda_function_get(
                 &runtime,
                 "lambda",
                 "GET",
-                &format!("/2015-03-31/functions/{}", id),
+                &format!("/2015-03-31/functions/{id}"),
                 &BTreeMap::new(),
                 "",
                 "",
@@ -44536,7 +44526,7 @@ fn run_aws_lambda_function_delete(
                 &runtime,
                 "lambda",
                 "DELETE",
-                &format!("/2015-03-31/functions/{}", id),
+                &format!("/2015-03-31/functions/{id}"),
                 &BTreeMap::new(),
                 "",
                 "",
@@ -44971,7 +44961,7 @@ fn parse_gcp_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     for raw in params {
         let Some((key, value)) = raw.split_once('=') else {
-            anyhow::bail!("invalid key=value argument {:?}", raw);
+            anyhow::bail!("invalid key=value argument {raw:?}");
         };
         let key = key.trim();
         if key.is_empty() {
@@ -45297,7 +45287,7 @@ fn parse_gcp_json_body_params(params: Vec<String>) -> Result<serde_json::Map<Str
     let mut out = serde_json::Map::new();
     for raw in params {
         let Some((key, value)) = raw.split_once('=') else {
-            anyhow::bail!("invalid key=value argument {:?}", raw);
+            anyhow::bail!("invalid key=value argument {raw:?}");
         };
         let key = key.trim();
         if key.is_empty() {
@@ -46961,7 +46951,7 @@ fn load_gcp_vertex_runtime(
     let base_url = Some(
         base_url
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| format!("https://{}-aiplatform.googleapis.com", location)),
+            .unwrap_or_else(|| format!("https://{location}-aiplatform.googleapis.com")),
     );
     let runtime = load_gcp_runtime(
         account,
@@ -47531,7 +47521,7 @@ fn show_google_play_auth_status(
                 if verify_error.trim().is_empty() {
                     println!("Package verify: ok");
                 } else {
-                    println!("Package verify: {}", verify_error);
+                    println!("Package verify: {verify_error}");
                 }
             }
         }
@@ -48231,7 +48221,7 @@ fn run_google_play_app_create(
         &runtime,
         &GooglePlayAPIRequest {
             method: "POST".to_owned(),
-            path: format!("/playcustomapp/v1/accounts/{}/customApps", account_id),
+            path: format!("/playcustomapp/v1/accounts/{account_id}/customApps"),
             json_body: Some(body),
             custom_app_base: true,
             ..GooglePlayAPIRequest::default()
@@ -48282,8 +48272,7 @@ fn run_google_play_listing_get(
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
                 path: format!(
-                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
-                    package_name, edit_id, lang
+                    "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}"
                 ),
                 ..GooglePlayAPIRequest::default()
             },
@@ -48333,8 +48322,7 @@ fn run_google_play_listing_list(
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
                 path: format!(
-                    "/androidpublisher/v3/applications/{}/edits/{}/listings",
-                    package_name, edit_id
+                    "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings"
                 ),
                 ..GooglePlayAPIRequest::default()
             },
@@ -48414,8 +48402,7 @@ fn run_google_play_listing_update(
                 &GooglePlayAPIRequest {
                     method: "PATCH".to_owned(),
                     path: format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
-                        package_name, edit_id, lang
+                        "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}"
                     ),
                     json_body: Some(payload.clone()),
                     ..GooglePlayAPIRequest::default()
@@ -48467,8 +48454,7 @@ fn run_google_play_details_get(
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
                 path: format!(
-                    "/androidpublisher/v3/applications/{}/edits/{}/details",
-                    package_name, edit_id
+                    "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/details"
                 ),
                 ..GooglePlayAPIRequest::default()
             },
@@ -48547,8 +48533,7 @@ fn run_google_play_details_update(
                 &GooglePlayAPIRequest {
                     method: "PATCH".to_owned(),
                     path: format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/details",
-                        package_name, edit_id
+                        "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/details"
                     ),
                     json_body: Some(payload.clone()),
                     ..GooglePlayAPIRequest::default()
@@ -48606,8 +48591,7 @@ fn run_google_play_asset_list(
             &GooglePlayAPIRequest {
                 method: "GET".to_owned(),
                 path: format!(
-                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                    package_name, edit_id, lang, image_type
+                    "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}/{image_type}"
                 ),
                 ..GooglePlayAPIRequest::default()
             },
@@ -48671,8 +48655,7 @@ fn run_google_play_asset_clear(
                 &GooglePlayAPIRequest {
                     method: "DELETE".to_owned(),
                     path: format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                        package_name, edit_id, lang, image_type
+                        "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}/{image_type}"
                     ),
                     ..GooglePlayAPIRequest::default()
                 },
@@ -48734,9 +48717,9 @@ fn run_google_play_asset_upload(
             continue;
         }
         let metadata = std::fs::metadata(file)
-            .map_err(|err| anyhow::anyhow!("invalid --file {:?}: {err}", file))?;
+            .map_err(|err| anyhow::anyhow!("invalid --file {file:?}: {err}"))?;
         if !metadata.is_file() {
-            anyhow::bail!("invalid --file {:?}: not a file", file);
+            anyhow::bail!("invalid --file {file:?}: not a file");
         }
         file_paths.push(file.to_owned());
     }
@@ -48752,8 +48735,7 @@ fn run_google_play_asset_upload(
         true,
         |edit_id| {
             let base_path = format!(
-                "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                package_name, edit_id, lang, image_type
+                "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}/{image_type}"
             );
             if clear_first {
                 execute_play_api_request(
@@ -48886,8 +48868,7 @@ fn run_google_play_release_upload(
                     &GooglePlayAPIRequest {
                         method: "POST".to_owned(),
                         path: format!(
-                            "/upload/androidpublisher/v3/applications/{}/edits/{}/bundles",
-                            package_name, edit_id
+                            "/upload/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/bundles"
                         ),
                         params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
                         media_path: file.clone(),
@@ -48910,8 +48891,7 @@ fn run_google_play_release_upload(
                     &GooglePlayAPIRequest {
                         method: "POST".to_owned(),
                         path: format!(
-                            "/upload/androidpublisher/v3/applications/{}/edits/{}/apks",
-                            package_name, edit_id
+                            "/upload/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/apks"
                         ),
                         params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
                         media_path: file.clone(),
@@ -49038,13 +49018,11 @@ fn run_google_play_release_status(
                 method: "GET".to_owned(),
                 path: if let Some(track) = &track {
                     format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
-                        package_name, edit_id, track
+                        "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/tracks/{track}"
                     )
                 } else {
                     format!(
-                        "/androidpublisher/v3/applications/{}/edits/{}/tracks",
-                        package_name, edit_id
+                        "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/tracks"
                     )
                 },
                 ..GooglePlayAPIRequest::default()
@@ -49411,8 +49389,7 @@ fn run_google_play_apply(
                     &GooglePlayAPIRequest {
                         method: "PATCH".to_owned(),
                         path: format!(
-                            "/androidpublisher/v3/applications/{}/edits/{}/details",
-                            package_name, edit_id
+                            "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/details"
                         ),
                         json_body: Some(details_payload.clone()),
                         ..GooglePlayAPIRequest::default()
@@ -49428,8 +49405,7 @@ fn run_google_play_apply(
                         &GooglePlayAPIRequest {
                             method: "PATCH".to_owned(),
                             path: format!(
-                                "/androidpublisher/v3/applications/{}/edits/{}/listings/{}",
-                                package_name, edit_id, lang
+                                "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}"
                             ),
                             json_body: Some(payload.clone()),
                             ..GooglePlayAPIRequest::default()
@@ -49444,8 +49420,7 @@ fn run_google_play_apply(
                 for (lang, image_types) in image_uploads {
                     for (image_type, files) in image_types {
                         let base_path = format!(
-                            "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
-                            package_name, edit_id, lang, image_type
+                            "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/listings/{lang}/{image_type}"
                         );
                         execute_play_api_request(
                             &runtime,
@@ -49488,8 +49463,7 @@ fn run_google_play_apply(
                         &GooglePlayAPIRequest {
                             method: "POST".to_owned(),
                             path: format!(
-                                "/upload/androidpublisher/v3/applications/{}/edits/{}/bundles",
-                                package_name, edit_id
+                                "/upload/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/bundles"
                             ),
                             params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
                             media_path: file.clone(),
@@ -49512,8 +49486,7 @@ fn run_google_play_apply(
                         &GooglePlayAPIRequest {
                             method: "POST".to_owned(),
                             path: format!(
-                                "/upload/androidpublisher/v3/applications/{}/edits/{}/apks",
-                                package_name, edit_id
+                                "/upload/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/apks"
                             ),
                             params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
                             media_path: file.clone(),
@@ -49556,8 +49529,7 @@ fn run_google_play_apply(
                     &GooglePlayAPIRequest {
                         method: "PUT".to_owned(),
                         path: format!(
-                            "/androidpublisher/v3/applications/{}/edits/{}/tracks/{}",
-                            package_name, edit_id, track
+                            "/androidpublisher/v3/applications/{package_name}/edits/{edit_id}/tracks/{track}"
                         ),
                         json_body: Some(serde_json::json!({
                             "track": track,
@@ -50098,8 +50070,7 @@ fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str)
         Ok(())
     } else {
         anyhow::bail!(
-            "{} requires oauth mode; run with --mode oauth and login via `si orbit google youtube auth login`",
-            operation
+            "{operation} requires oauth mode; run with --mode oauth and login via `si orbit google youtube auth login`"
         )
     }
 }
@@ -52769,11 +52740,11 @@ fn resolve_google_place_resource_path(place: String) -> Result<String> {
         anyhow::bail!("place identifier is required");
     }
     if trimmed.starts_with("v1/places/") {
-        Ok(format!("/{}", trimmed))
+        Ok(format!("/{trimmed}"))
     } else if trimmed.starts_with("places/") {
-        Ok(format!("/v1/{}", trimmed))
+        Ok(format!("/v1/{trimmed}"))
     } else {
-        Ok(format!("/v1/places/{}", trimmed))
+        Ok(format!("/v1/places/{trimmed}"))
     }
 }
 
@@ -52784,14 +52755,14 @@ fn resolve_google_photo_media_path(photo: String) -> Result<String> {
     }
     if trimmed.ends_with("/media") {
         if trimmed.starts_with("v1/") {
-            Ok(format!("/{}", trimmed))
+            Ok(format!("/{trimmed}"))
         } else {
-            Ok(format!("/v1/{}", trimmed))
+            Ok(format!("/v1/{trimmed}"))
         }
     } else if trimmed.starts_with("v1/") {
-        Ok(format!("/{}/media", trimmed))
+        Ok(format!("/{trimmed}/media"))
     } else {
-        Ok(format!("/v1/{}/media", trimmed))
+        Ok(format!("/v1/{trimmed}/media"))
     }
 }
 
@@ -53689,7 +53660,7 @@ fn run_google_places_session_end(
     let entry = store
         .sessions
         .get_mut(&token_key)
-        .ok_or_else(|| anyhow::anyhow!("session token not found: {}", token_key))?;
+        .ok_or_else(|| anyhow::anyhow!("session token not found: {token_key}"))?;
     let now = google_places_now_rfc3339();
     entry.updated_at = now.clone();
     if entry.ended_at.trim().is_empty() {
@@ -53900,7 +53871,7 @@ fn run_google_places_types_list(group: Option<String>, format: OutputFormat) -> 
     } else {
         let values = catalog
             .get(selected.as_str())
-            .ok_or_else(|| anyhow::anyhow!("unknown type group {:?}", selected))?;
+            .ok_or_else(|| anyhow::anyhow!("unknown type group {selected:?}"))?;
         serde_json::json!({ "group": selected, "types": values })
     };
     match format {
@@ -55678,7 +55649,7 @@ fn show_oci_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             if let Some(err) = &verify_error {
-                println!("OCI error: {}", err);
+                println!("OCI error: {err}");
             }
         }
     }
@@ -55995,7 +55966,7 @@ fn print_oci_api_response(payload: &OCIAPIResponse, format: OutputFormat, raw: b
                         .or_else(|| item.get("name"))
                         .map(oci_value_string)
                         .unwrap_or_else(|| "-".to_owned());
-                    println!("  {}  {}", id, display);
+                    println!("  {id}  {display}");
                 }
                 if list.len() > 20 {
                     println!("  ... {} more", list.len() - 20);
@@ -61479,12 +61450,12 @@ fn run_cloudflare_email_settings_toggle(
     settings_file: Option<PathBuf>,
 ) -> Result<()> {
     if !force {
-        anyhow::bail!("email settings {} requires --force", action);
+        anyhow::bail!("email settings {action} requires --force");
     }
     run_cloudflare_custom_request(
         CloudflareAPIRequest {
             method: "POST".to_owned(),
-            path: format!("/zones/{{zone_id}}/email/routing/{}", action),
+            path: format!("/zones/{{zone_id}}/email/routing/{action}"),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },
@@ -62226,7 +62197,7 @@ fn parse_workos_pairs(values: Vec<String>) -> Result<std::collections::BTreeMap<
         let key = parts.next().unwrap_or("").trim();
         let value = parts.next().unwrap_or("").trim();
         if key.is_empty() {
-            anyhow::bail!("expected key=value, got {:?}", trimmed);
+            anyhow::bail!("expected key=value, got {trimmed:?}");
         }
         out.insert(key.to_owned(), value.to_owned());
     }
@@ -62247,7 +62218,7 @@ fn parse_workos_json_value(
         map.insert(key, parsed);
     }
     if map.is_empty() {
-        anyhow::bail!("{}", empty_error);
+        anyhow::bail!("{empty_error}");
     }
     Ok(Value::Object(map))
 }
@@ -64855,7 +64826,7 @@ fn run_github_project_item_add(
             .filter(|value| !value.is_empty())
             .map(str::to_owned);
         if selected_content_id.is_none() {
-            return Err(anyhow::Error::msg(format!("issue not found: {}#{}", repo, issue)));
+            return Err(anyhow::Error::msg(format!("issue not found: {repo}#{issue}")));
         }
     }
     let selected_content_id = selected_content_id.unwrap_or_default();
@@ -64996,7 +64967,7 @@ fn run_github_project_item_set(
     if let Some(date) = date.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
     {
         chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|_| {
-            anyhow::Error::msg(format!("invalid --date value {:?} (expected YYYY-MM-DD)", date))
+            anyhow::Error::msg(format!("invalid --date value {date:?} (expected YYYY-MM-DD)"))
         })?;
         value.insert("date".to_owned(), Value::String(date));
         value_count += 1;
@@ -65692,8 +65663,7 @@ fn run_github_workflow_watch(
     let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
     if !json {
         println!(
-            "GitHub workflow watch: waiting for run {} on {}/{} (interval={}s timeout={}s)",
-            run_id, repo_owner, repo_name, interval_seconds, timeout_seconds
+            "GitHub workflow watch: waiting for run {run_id} on {repo_owner}/{repo_name} (interval={interval_seconds}s timeout={timeout_seconds}s)"
         );
     }
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_seconds);
@@ -65701,8 +65671,7 @@ fn run_github_workflow_watch(
     loop {
         if std::time::Instant::now() > deadline {
             return Err(anyhow::Error::msg(format!(
-                "workflow run {} timed out after {} seconds",
-                run_id, timeout_seconds
+                "workflow run {run_id} timed out after {timeout_seconds} seconds"
             )));
         }
         let response = github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
@@ -67519,8 +67488,7 @@ fn run_github_pr_merge(
     let merge_method = method.trim().to_ascii_lowercase();
     if merge_method != "merge" && merge_method != "squash" && merge_method != "rebase" {
         return Err(anyhow::Error::msg(format!(
-            "invalid --method {:?} (expected merge|squash|rebase)",
-            method
+            "invalid --method {method:?} (expected merge|squash|rebase)"
         )));
     }
     let runtime = load_github_runtime(
@@ -68042,7 +68010,7 @@ fn sync_codex_profile_auth_to_home(
     if !auth_path.is_file() {
         return Ok(());
     }
-    fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
+    fs::create_dir_all(codex_home).with_context(|| format!("create {}", codex_home.display()))?;
     let target_path = codex_home.join("auth.json");
     if auth_path != target_path {
         fs::copy(&auth_path, &target_path).with_context(|| {
@@ -68125,9 +68093,9 @@ fn ensure_codex_worker_session(
             .env("TERM", &tmux_term)
             .args(["new-session", "-d", "-s", &session_name, "-n", &window_name, &launch_command])
             .status()
-            .with_context(|| format!("create tmux session {}", session_name))?;
+            .with_context(|| format!("create tmux session {session_name}"))?;
         if !status.success() {
-            anyhow::bail!("tmux failed to create session {}", session_name);
+            anyhow::bail!("tmux failed to create session {session_name}");
         }
     }
 
@@ -68203,12 +68171,10 @@ fn resolve_codex_worker_for_profile(
         .find(|state| state.profile_id == profile_id)
         .ok_or_else(|| {
             anyhow!(
-                "no codex worker session found for profile {:?}; run `si codex spawn --profile {}` first",
-                profile_id,
-                profile_id
+                "no codex worker session found for profile {profile_id:?}; run `si codex spawn --profile {profile_id}` first"
             )
         })
-        .with_context(|| format!("resolve codex worker for {}", purpose))
+        .with_context(|| format!("resolve codex worker for {purpose}"))
 }
 
 fn remove_codex_worker_state(
@@ -68306,15 +68272,15 @@ fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String>
     let tmux_bin = "tmux";
     let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
     if !tmux_session_exists(tmux_bin, &tmux_term, session_name)? {
-        anyhow::bail!("tmux session {:?} is not running", session_name);
+        anyhow::bail!("tmux session {session_name:?} is not running");
     }
     let line_count = tail.trim().parse::<i32>().unwrap_or(200).max(1);
-    let start = format!("-{}", line_count);
+    let start = format!("-{line_count}");
     let output = StdCommand::new(tmux_bin)
         .env("TERM", &tmux_term)
-        .args(["capture-pane", "-p", "-t", &format!("{}:0.0", session_name), "-S", &start])
+        .args(["capture-pane", "-p", "-t", &format!("{session_name}:0.0"), "-S", &start])
         .output()
-        .with_context(|| format!("capture tmux output for {}", session_name))?;
+        .with_context(|| format!("capture tmux output for {session_name}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("tmux capture-pane failed: {}", stderr.trim());
@@ -68375,7 +68341,7 @@ fn run_codex_shell(
             .status()
             .with_context(|| format!("run {}", command[0]))?;
         if !status.success() {
-            anyhow::bail!("command failed: {}", status);
+            anyhow::bail!("command failed: {status}");
         }
         return Ok(());
     }
@@ -68896,9 +68862,9 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
         .env("TERM", tmux_term)
         .args(&attach_args)
         .status()
-        .with_context(|| format!("attach tmux session {}", session_name))?;
+        .with_context(|| format!("attach tmux session {session_name}"))?;
     if !status.success() {
-        anyhow::bail!("tmux failed to attach to session {}", session_name);
+        anyhow::bail!("tmux failed to attach to session {session_name}");
     }
     Ok(())
 }
@@ -68936,8 +68902,7 @@ fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> R
         .env("TERM", tmux_term)
         .args(["has-session", "-t", session_name])
         .stderr(std::process::Stdio::null());
-    let status =
-        command.status().with_context(|| format!("check tmux session {}", session_name))?;
+    let status = command.status().with_context(|| format!("check tmux session {session_name}"))?;
     Ok(status.success())
 }
 

@@ -56,13 +56,13 @@ fn write_named_codex_profile_settings(
     let settings_dir = home.join(".si");
     fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
     let mut source = String::from("schema_version = 1\n[codex]\n");
-    source.push_str(&format!("profile = {:?}\n\n", active_profile));
+    source.push_str(&format!("profile = {active_profile:?}\n\n"));
     source.push_str("[codex.profiles]\n");
-    source.push_str(&format!("active = {:?}\n\n", active_profile));
+    source.push_str(&format!("active = {active_profile:?}\n\n"));
     for (profile, name, email) in profiles {
         source.push_str(&format!("[codex.profiles.entries.{profile}]\n"));
-        source.push_str(&format!("name = \"{}\"\n", name));
-        source.push_str(&format!("email = \"{}\"\n", email));
+        source.push_str(&format!("name = \"{name}\"\n"));
+        source.push_str(&format!("email = \"{email}\"\n"));
         source.push_str(&format!(
             "auth_path = {:?}\n\n",
             home.join(".si").join("codex").join("profiles").join(profile).join("auth.json")
@@ -167,7 +167,7 @@ fn spawn_single_response_server(status: &str, body: &str) -> String {
         );
         stream.write_all(response.as_bytes()).expect("write test response");
     });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 fn spawn_live_nucleus_service(state_dir: &Path) -> String {
@@ -496,9 +496,10 @@ impl NucleusRuntime for TestRuntime {
         let input_text = spec
             .input
             .iter()
-            .find_map(|item| match item {
-                si_nucleus_runtime::RunInputItem::Text { text } => Some(text.as_str()),
+            .map(|item| match item {
+                si_nucleus_runtime::RunInputItem::Text { text } => text.as_str(),
             })
+            .next()
             .unwrap_or_default();
         if fail_execute || fail_execute_prompts.iter().any(|candidate| candidate == input_text) {
             anyhow::bail!("cli-test-runtime execute_turn failed before run.started");
@@ -1192,8 +1193,7 @@ exit 1
     fs::write(
         home.path().join(".si/settings.toml"),
         format!(
-            "schema_version = 1\n[fort]\nbin = {:?}\nhost = \"https://fort.example.test\"\n[surf]\nvnc_password_fort_key = \"SURF_VNC_PASSWORD\"\nvnc_password_fort_repo = \"surf\"\nvnc_password_fort_env = \"dev\"\n",
-            fort_path,
+            "schema_version = 1\n[fort]\nbin = {fort_path:?}\nhost = \"https://fort.example.test\"\n[surf]\nvnc_password_fort_key = \"SURF_VNC_PASSWORD\"\nvnc_password_fort_repo = \"surf\"\nvnc_password_fort_env = \"dev\"\n",
         ),
     )
     .expect("write settings");
@@ -1243,7 +1243,7 @@ fn google_youtube_support_categories_uses_support_region_flag() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -9709,7 +9709,7 @@ fn build_homebrew_render_core_formula_writes_formula() {
     let out = dir.path().join("Formula/si.rb");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let url = format!("http://{}", addr);
+    let url = format!("http://{addr}");
 
     thread::spawn(move || {
         let (mut stream, _) = listener.accept().expect("accept");
@@ -9755,7 +9755,7 @@ fn build_homebrew_render_core_formula_without_version_uses_workspace_version() {
     let out = repo.path().join("Formula/si.rb");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let url = format!("http://{}", addr);
+    let url = format!("http://{addr}");
 
     thread::spawn(move || {
         let (mut stream, _) = listener.accept().expect("accept");
@@ -10414,7 +10414,7 @@ fn google_youtube_auth_status_json_verifies_api_key() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10474,7 +10474,7 @@ fn google_youtube_search_list_all_aggregates_pages() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10548,7 +10548,7 @@ fn google_youtube_support_languages_json_reads_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10605,7 +10605,7 @@ fn google_youtube_doctor_json_runs_checks() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10669,7 +10669,7 @@ fn google_youtube_channel_list_json_reads_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10725,7 +10725,7 @@ fn google_youtube_video_list_json_reads_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10783,7 +10783,7 @@ fn google_youtube_channel_update_json_writes_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10850,7 +10850,7 @@ fn google_youtube_video_rate_json_posts_rating() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10911,7 +10911,7 @@ fn google_youtube_playlist_create_json_builds_body() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -10983,7 +10983,7 @@ fn google_youtube_playlist_item_add_json_builds_body() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11055,7 +11055,7 @@ fn google_youtube_subscription_create_json_builds_body() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11121,7 +11121,7 @@ fn google_youtube_comment_thread_create_json_builds_body() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11235,7 +11235,7 @@ fn google_youtube_live_broadcast_bind_json_posts_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11305,7 +11305,7 @@ fn google_youtube_live_chat_create_json_builds_body() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11375,7 +11375,7 @@ fn google_youtube_video_upload_json_resumable_uploads_file() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     let upload_path = home.path().join("video.mp4");
     fs::write(&upload_path, b"video-bytes").expect("write video");
     fs::write(
@@ -11405,8 +11405,7 @@ project_id = "yt-core"
         assert!(init_request.contains("POST /youtube/v3/videos?"));
         assert!(init_request.contains("uploadType=resumable"));
         let init_response = format!(
-            "HTTP/1.1 200 OK\r\nConnection: close\r\nLocation: http://{}/upload-session\r\nContent-Length: 0\r\n\r\n",
-            addr
+            "HTTP/1.1 200 OK\r\nConnection: close\r\nLocation: http://{addr}/upload-session\r\nContent-Length: 0\r\n\r\n"
         );
         init_stream.write_all(init_response.as_bytes()).expect("write init response");
 
@@ -11449,7 +11448,7 @@ fn google_youtube_caption_download_json_writes_file() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     let output_path = home.path().join("captions.vtt");
     fs::write(
         &settings_path,
@@ -11513,7 +11512,7 @@ fn google_youtube_thumbnail_set_json_uploads_media() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     let file_path = home.path().join("thumb.jpg");
     fs::write(&file_path, b"jpeg-bytes").expect("write thumb");
     fs::write(
@@ -11577,7 +11576,7 @@ fn google_youtube_playlist_list_json_reads_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -11643,7 +11642,7 @@ fn google_youtube_playlist_item_list_json_reads_api() {
     let settings_path = settings_dir.join("settings.toml");
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     let addr = listener.local_addr().expect("local addr");
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
     fs::write(
         &settings_path,
         format!(
@@ -13698,8 +13697,7 @@ fn github_release_upload_json_mutates_via_api_with_oauth() {
                     "200 OK",
                     &[("x-github-request-id", "req_gh_release_meta")],
                     &format!(
-                        r#"{{"id":102,"tag_name":"v1.2.4","upload_url":"{}/uploads/repos/Aureuma/si/releases/102/assets{{?name,label}}"}}"#,
-                        base_url
+                        r#"{{"id":102,"tag_name":"v1.2.4","upload_url":"{base_url}/uploads/repos/Aureuma/si/releases/102/assets{{?name,label}}"}}"#
                     ),
                 )
             }
@@ -14005,7 +14003,7 @@ fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
                     http_json_response(
                         "200 OK",
                         &[("x-github-request-id", "req_gh_secret_key")],
-                        &format!(r#"{{"key_id":"kid-1","key":"{}"}}"#, key),
+                        &format!(r#"{{"key_id":"kid-1","key":"{key}"}}"#),
                     )
                 }
                 1 => {
@@ -14100,11 +14098,7 @@ fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
                 assert!(request.starts_with(
                     "GET /repos/Aureuma/si/environments/prod/secrets/public-key HTTP/1.1\r\n"
                 ));
-                http_json_response(
-                    "200 OK",
-                    &[],
-                    &format!(r#"{{"key_id":"kid-2","key":"{}"}}"#, key),
-                )
+                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-2","key":"{key}"}}"#))
             }
             1 => {
                 assert!(request.starts_with(
@@ -14190,11 +14184,7 @@ fn github_secret_org_set_json_encrypts_and_mutates_with_oauth() {
                     request
                         .starts_with("GET /orgs/Aureuma/actions/secrets/public-key HTTP/1.1\r\n")
                 );
-                http_json_response(
-                    "200 OK",
-                    &[],
-                    &format!(r#"{{"key_id":"kid-3","key":"{}"}}"#, key),
-                )
+                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-3","key":"{key}"}}"#))
             }
             1 => {
                 assert!(
@@ -21107,8 +21097,7 @@ fn gcp_gemini_image_generate_writes_png_and_reports_json() {
     let server = start_one_shot_http_server(move |request| {
         assert!(request.starts_with("POST /v1beta/models/gemini-2.5-flash-image:generateContent?"));
         let body = format!(
-            "{{\"candidates\":[{{\"content\":{{\"parts\":[{{\"text\":\"note\"}},{{\"inlineData\":{{\"mimeType\":\"image/png\",\"data\":\"{}\"}}}}]}}}}]}}",
-            png_b64
+            "{{\"candidates\":[{{\"content\":{{\"parts\":[{{\"text\":\"note\"}},{{\"inlineData\":{{\"mimeType\":\"image/png\",\"data\":\"{png_b64}\"}}}}]}}}}]}}"
         );
         http_json_response("200 OK", &[], &body)
     });

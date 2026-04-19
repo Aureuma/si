@@ -175,8 +175,7 @@ fn resolve_runtime_context(
     };
     if api_key.trim().is_empty() {
         return Err(format!(
-            "stripe api key not found for env={} (set --api-key, [stripe.accounts.<alias>] key, or SI_STRIPE_API_KEY)",
-            environment
+            "stripe api key not found for env={environment} (set --api-key, [stripe.accounts.<alias>] key, or SI_STRIPE_API_KEY)"
         ));
     }
     Ok(StripeRuntimeContext {
@@ -540,11 +539,11 @@ fn build_request_target(
 
 fn resolve_url(base_url: &str, path: &str) -> Result<Url, String> {
     if path.starts_with("http://") || path.starts_with("https://") {
-        return Url::parse(path).map_err(|err| format!("parse stripe url {:?}: {err}", path));
+        return Url::parse(path).map_err(|err| format!("parse stripe url {path:?}: {err}"));
     }
-    let base = Url::parse(base_url)
-        .map_err(|err| format!("parse stripe base url {:?}: {err}", base_url))?;
-    base.join(path).map_err(|err| format!("resolve stripe path {:?}: {err}", path))
+    let base =
+        Url::parse(base_url).map_err(|err| format!("parse stripe base url {base_url:?}: {err}"))?;
+    base.join(path).map_err(|err| format!("resolve stripe path {path:?}: {err}"))
 }
 
 fn append_query(url: &mut Url, params: &BTreeMap<String, String>) {

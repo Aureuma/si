@@ -481,10 +481,10 @@ fn resolve_api_url(
         return Err("request path is required".to_owned());
     }
     let mut url = if path.starts_with("http://") || path.starts_with("https://") {
-        Url::parse(path).map_err(|err| format!("parse cloudflare url {:?}: {err}", path))?
+        Url::parse(path).map_err(|err| format!("parse cloudflare url {path:?}: {err}"))?
     } else {
         let mut base = Url::parse(base_url)
-            .map_err(|err| format!("parse cloudflare base url {:?}: {err}", base_url))?;
+            .map_err(|err| format!("parse cloudflare base url {base_url:?}: {err}"))?;
         let base_path = base.path().trim_end_matches('/');
         let relative_path = path.trim_start_matches('/');
         let resolved_path = if base_path.is_empty() || base_path == "/" {
