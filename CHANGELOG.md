@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Changed
 - Reverted the SI-local release-bundle helper path so ReleaseMind integration can land through a dedicated orbit client instead of new SI-owned release logic.
+- Added a Fort-backed `si surf` noVNC password injection path so `si surf start` can use a stable viewer secret without storing it in plaintext Surf config.
 
 ### Fixed
 - Updated the Nucleus architecture ticket to use accepted-state wording now that all tracked phases are closed.

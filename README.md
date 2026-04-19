@@ -22,7 +22,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCL
 - Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `shell`, `tail`, `list`, `remove`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
-- Browser runtime: local Playwright browser runtime under `si surf ...`.
+- Browser runtime: local Playwright browser runtime under `si surf ...`, including optional Fort-backed injection for a stable noVNC viewer password on `si surf start`.
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
 ## Repo layout

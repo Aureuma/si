@@ -350,6 +350,12 @@ enum Command {
         no_build: bool,
         #[arg(long)]
         bin: Option<PathBuf>,
+        #[arg(long)]
+        vnc_password_fort_key: Option<String>,
+        #[arg(long)]
+        vnc_password_fort_repo: Option<String>,
+        #[arg(long)]
+        vnc_password_fort_env: Option<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -35161,9 +35167,27 @@ fn main() -> Result<()> {
                 )?,
             },
         },
-        Command::Surf { home, settings_file, build, no_build, bin, args } => {
-            run_surf_wrapper(home, settings_file, build, no_build, bin, args)?
-        }
+        Command::Surf {
+            home,
+            settings_file,
+            build,
+            no_build,
+            bin,
+            vnc_password_fort_key,
+            vnc_password_fort_repo,
+            vnc_password_fort_env,
+            args,
+        } => run_surf_wrapper(
+            home,
+            settings_file,
+            build,
+            no_build,
+            bin,
+            vnc_password_fort_key,
+            vnc_password_fort_repo,
+            vnc_password_fort_env,
+            args,
+        )?,
         Command::Viva { home, settings_file, build, no_build, bin, args } => {
             run_viva_wrapper(home, settings_file, build, no_build, bin, args)?
         }
@@ -36700,12 +36724,22 @@ struct VivaConfigView {
     tunnel_default_profile: String,
 }
 
+#[derive(Debug, Clone)]
+struct SurfVncPasswordFortSource {
+    key: String,
+    repo: String,
+    env_name: String,
+}
+
 fn run_surf_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
+    vnc_password_fort_key: Option<String>,
+    vnc_password_fort_repo: Option<String>,
+    vnc_password_fort_env: Option<String>,
     args: Vec<String>,
 ) -> Result<()> {
     let args = strip_wrapper_passthrough_marker(args);
@@ -36713,7 +36747,17 @@ fn run_surf_wrapper(
         render_surf_wrapper_help();
         return Ok(());
     }
-    run_native_surf_command(home, settings_file, build, no_build, bin, &args)
+    run_native_surf_command(
+        home,
+        settings_file,
+        build,
+        no_build,
+        bin,
+        vnc_password_fort_key,
+        vnc_password_fort_repo,
+        vnc_password_fort_env,
+        &args,
+    )
 }
 
 fn render_surf_wrapper_help() {
@@ -36731,10 +36775,14 @@ fn render_surf_wrapper_help() {
     print_help_item("--build", CliTone::Flag);
     print_help_item("--no-build", CliTone::Flag);
     print_help_item("--bin <PATH>", CliTone::Flag);
+    print_help_item("--vnc-password-fort-key <KEY>", CliTone::Flag);
+    print_help_item("--vnc-password-fort-repo <REPO>", CliTone::Flag);
+    print_help_item("--vnc-password-fort-env <ENV>", CliTone::Flag);
     println!();
     print_help_section("Examples");
     print_help_item("si surf build", CliTone::Command);
     print_help_item("si surf start", CliTone::Command);
+    print_help_item("si surf --vnc-password-fort-key SURF_VNC_PASSWORD start", CliTone::Command);
     print_help_item("si surf config show", CliTone::Command);
 }
 
@@ -36744,25 +36792,33 @@ fn run_native_surf_command(
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
+    vnc_password_fort_key: Option<String>,
+    vnc_password_fort_repo: Option<String>,
+    vnc_password_fort_env: Option<String>,
     args: &[String],
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let explicit_program = bin.is_some() || !settings.surf.bin.trim().is_empty();
     let program = resolve_surf_program(&settings.surf, build, no_build, bin.clone())?;
-    let status = match StdCommand::new(&program).env("SI_SURF_WRAPPED", "1").args(args).status() {
+    let vnc_password_source = resolve_surf_vnc_password_fort_source(
+        &settings.surf,
+        vnc_password_fort_key.as_deref(),
+        vnc_password_fort_repo.as_deref(),
+        vnc_password_fort_env.as_deref(),
+    );
+    let status = match run_surf_program(&program, args, &settings, &home, &vnc_password_source) {
         Ok(status) => status,
         Err(error)
-            if error.kind() == std::io::ErrorKind::NotFound
+            if error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
                 && !build
                 && !no_build
                 && !explicit_program =>
         {
             let fallback = resolve_surf_build_fallback(&settings.surf)?;
-            StdCommand::new(&fallback)
-                .env("SI_SURF_WRAPPED", "1")
-                .args(args)
-                .status()
+            run_surf_program(&fallback, args, &settings, &home, &vnc_password_source)
                 .with_context(|| format!("run surf wrapper command via {}", fallback.display()))?
         }
         Err(error) => {
@@ -36774,6 +36830,145 @@ fn run_native_surf_command(
         return Ok(());
     }
     std::process::exit(status.code().unwrap_or(1));
+}
+
+fn run_surf_program(
+    program: &Path,
+    args: &[String],
+    settings: &Settings,
+    home: &Path,
+    vnc_password_source: &Option<SurfVncPasswordFortSource>,
+) -> Result<ExitStatus> {
+    let mut command = StdCommand::new(program);
+    command.env("SI_SURF_WRAPPED", "1").args(args);
+    if let Some(password) = resolve_surf_vnc_password(settings, home, vnc_password_source, args)? {
+        command.env("SURF_VNC_PASSWORD", password);
+    }
+    Ok(command.status()?)
+}
+
+fn resolve_surf_vnc_password(
+    settings: &Settings,
+    home: &Path,
+    source: &Option<SurfVncPasswordFortSource>,
+    args: &[String],
+) -> Result<Option<String>> {
+    if !surf_command_starts_browser(args)
+        || surf_args_include_option(args, "--vnc-password")
+        || std::env::var_os("SURF_VNC_PASSWORD").is_some()
+    {
+        return Ok(None);
+    }
+    let Some(source) = source.as_ref() else {
+        return Ok(None);
+    };
+    let secret = run_fort_get_secret(settings, home, &source.repo, &source.env_name, &source.key)?;
+    let secret = secret.trim();
+    if secret.is_empty() {
+        anyhow::bail!(
+            "Fort secret {} for si surf noVNC password resolved empty; set a non-empty value",
+            source.key
+        );
+    }
+    Ok(Some(secret.to_owned()))
+}
+
+fn resolve_surf_vnc_password_fort_source(
+    settings: &SurfSettings,
+    key: Option<&str>,
+    repo: Option<&str>,
+    env_name: Option<&str>,
+) -> Option<SurfVncPasswordFortSource> {
+    let key = key
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| non_empty_str(&settings.vnc_password_fort_key))?;
+    let repo = repo
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| non_empty_str(&settings.vnc_password_fort_repo))
+        .unwrap_or("surf");
+    let env_name = env_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| non_empty_str(&settings.vnc_password_fort_env))
+        .unwrap_or("dev");
+    Some(SurfVncPasswordFortSource {
+        key: key.to_owned(),
+        repo: repo.to_owned(),
+        env_name: env_name.to_owned(),
+    })
+}
+
+fn surf_command_starts_browser(args: &[String]) -> bool {
+    matches!(args.first().map(String::as_str), Some("start"))
+}
+
+fn surf_args_include_option(args: &[String], flag: &str) -> bool {
+    args.iter().any(|arg| arg == flag || arg.starts_with(&format!("{flag}=")))
+}
+
+fn run_fort_get_secret(
+    settings: &Settings,
+    home: &Path,
+    repo: &str,
+    env_name: &str,
+    key: &str,
+) -> Result<String> {
+    let args = vec![
+        "get".to_owned(),
+        "--repo".to_owned(),
+        repo.to_owned(),
+        "--env".to_owned(),
+        env_name.to_owned(),
+        "--key".to_owned(),
+        key.to_owned(),
+        "--format".to_owned(),
+        "raw".to_owned(),
+    ];
+    let explicit_program = settings.fort.bin.is_some();
+    let program = resolve_fort_program(&settings.fort, false, false, None)?;
+    match run_fort_capture_stdout(&program, &args, settings, home) {
+        Ok(stdout) => Ok(stdout),
+        Err(error)
+            if error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+                && !settings.fort.build.unwrap_or(false)
+                && !explicit_program =>
+        {
+            let fallback = resolve_fort_build_fallback(&settings.fort)?;
+            run_fort_capture_stdout(&fallback, &args, settings, home)
+                .with_context(|| format!("run fort get via {}", fallback.display()))
+        }
+        Err(error) => Err(error).with_context(|| format!("run fort get via {}", program.display())),
+    }
+}
+
+fn run_fort_capture_stdout(
+    program: &Path,
+    args: &[String],
+    settings: &Settings,
+    home: &Path,
+) -> Result<String> {
+    let mut command = StdCommand::new(program);
+    command.args(build_fort_command_args(program, args, settings, home)?);
+    command.env_remove("FORT_HOST");
+    command.env_remove("FORT_SETTINGS_FILE");
+    command.env_remove("FORT_TOKEN_PATH");
+    command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
+    command.env_remove("FORT_REFRESH_TOKEN_PATH");
+    command.env_remove("FORT_TOKEN");
+    command.env_remove("FORT_REFRESH_TOKEN");
+    let output = command.output()?;
+    if output.status.success() {
+        return String::from_utf8(output.stdout).context("decode fort stdout");
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    if stderr.is_empty() {
+        anyhow::bail!("fort command failed with status {}", output.status);
+    }
+    anyhow::bail!(stderr);
 }
 
 fn run_viva_wrapper(
