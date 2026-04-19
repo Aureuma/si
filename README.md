@@ -104,6 +104,19 @@ Browser runtime:
 ./si surf stop
 ```
 
+If you want a stable noVNC viewer password without storing it in `~/.si/surf/settings.toml`,
+set the wrapper source in `~/.si/settings.toml` and let `si surf start` fetch it from Fort:
+
+```toml
+[surf]
+vnc_password_fort_key = "SURF_VNC_PASSWORD"
+vnc_password_fort_repo = "surf"
+vnc_password_fort_env = "dev"
+```
+
+When the Fort-backed wrapper path is configured, keep `browser.vnc_password` empty in the Surf
+runtime settings so the viewer secret only enters the container at start time.
+
 By default, `si nucleus ...` discovers the local gateway via `SI_NUCLEUS_WS_ADDR`,
 then `~/.si/nucleus/gateway/metadata.json`, then `ws://127.0.0.1:4747/ws`.
 
