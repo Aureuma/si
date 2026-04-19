@@ -30,6 +30,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
 | `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
 | `si settings` | Show resolved SI settings | none | [CLI Reference](./CLI_REFERENCE) |
+| `si doctor` | Check fresh-machine distribution prerequisites | `--format json` | [Testing](./testing) |
 | `si commands` | List visible SI root commands | `list` | [CLI Reference](./CLI_REFERENCE) |
 
 ## Provider and integration command families
