@@ -19130,7 +19130,11 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
     copy_dir_recursive(&package_root, stage.path())?;
     fs::copy(repo_root.join("LICENSE"), stage.path().join("LICENSE"))
         .with_context(|| format!("copy LICENSE into {}", stage.path().display()))?;
-    rewrite_package_version(&stage.path().join("package.json"), version.trim_start_matches('v'))?;
+    write_staged_npm_package_json(
+        &package_root.join("package.template.json"),
+        &stage.path().join("package.json"),
+        version.trim_start_matches('v'),
+    )?;
 
     let output = StdCommand::new("npm")
         .current_dir(stage.path())
@@ -19182,18 +19186,23 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-fn rewrite_package_version(path: &Path, version: &str) -> Result<()> {
-    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+fn write_staged_npm_package_json(
+    template_path: &Path,
+    output_path: &Path,
+    version: &str,
+) -> Result<()> {
+    let raw = fs::read_to_string(template_path)
+        .with_context(|| format!("read {}", template_path.display()))?;
     let mut value: Value =
-        serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", template_path.display()))?;
     let object =
-        value.as_object_mut().ok_or_else(|| anyhow!("package.json must be a JSON object"))?;
+        value.as_object_mut().ok_or_else(|| anyhow!("package template must be a JSON object"))?;
     object.insert("version".to_owned(), Value::String(version.to_owned()));
     fs::write(
-        path,
+        output_path,
         format!("{}\n", serde_json::to_string_pretty(&value).context("render package.json")?),
     )
-    .with_context(|| format!("write {}", path.display()))?;
+    .with_context(|| format!("write {}", output_path.display()))?;
     Ok(())
 }
 

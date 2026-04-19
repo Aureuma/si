@@ -1551,8 +1551,8 @@ fn build_npm_build_package_creates_tarball() {
     fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
-        repo.path().join("npm/si/package.json"),
-        "{\n  \"name\": \"@aureuma/si\",\n  \"version\": \"0.0.0\"\n}\n",
+        repo.path().join("npm/si/package.template.json"),
+        "{\n  \"name\": \"@aureuma/si\"\n}\n",
     )
     .expect("write package");
     fs::write(repo.path().join("npm/si/index.js"), "console.log('si');\n").expect("write js");
@@ -1611,8 +1611,8 @@ fn build_npm_publish_package_dry_run_uses_generated_tarball() {
     fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
     fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
     fs::write(
-        repo.path().join("npm/si/package.json"),
-        "{\n  \"name\": \"@aureuma/si\",\n  \"version\": \"0.0.0\"\n}\n",
+        repo.path().join("npm/si/package.template.json"),
+        "{\n  \"name\": \"@aureuma/si\"\n}\n",
     )
     .expect("write package");
     fs::write(repo.path().join("npm/si/index.js"), "console.log('si');\n").expect("write js");
