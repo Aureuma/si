@@ -1353,7 +1353,7 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
     );
     let out_dir = repo.path().join("out");
     let path_env =
@@ -1376,7 +1376,6 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     for name in [
         "si_1.2.3_linux_amd64.tar.gz",
         "si_1.2.3_linux_arm64.tar.gz",
-        "si_1.2.3_linux_armv7.tar.gz",
         "si_1.2.3_darwin_amd64.tar.gz",
         "si_1.2.3_darwin_arm64.tar.gz",
     ] {
@@ -1384,7 +1383,7 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     }
     let checksums = fs::read_to_string(out_dir.join("checksums.txt")).expect("read checksums");
     assert!(checksums.contains("si_1.2.3_linux_amd64.tar.gz"));
-    assert_eq!(checksums.lines().count(), 5);
+    assert_eq!(checksums.lines().count(), 4);
     let file = File::open(out_dir.join("si_1.2.3_linux_amd64.tar.gz")).expect("open archive");
     let decoder = flate2::read::GzDecoder::new(file);
     let mut archive = Archive::new(decoder);
@@ -9860,7 +9859,7 @@ fn build_self_verify_release_assets_checks_archives() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
     );
     let out_dir = repo.path().join("out");
     let path_env =
@@ -10272,7 +10271,7 @@ fn build_self_release_asset_creates_single_archive() {
     let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
     );
     #[cfg(unix)]
     {
@@ -10293,10 +10292,8 @@ fn build_self_release_asset_creates_single_archive() {
             repo.path().to_str().expect("repo"),
             "--version",
             "v1.2.3",
-            "--goos",
-            "linux",
-            "--goarch",
-            "amd64",
+            "--target",
+            "linux-amd64",
             "--out-dir",
             out_dir.to_str().expect("out"),
         ])
@@ -12391,8 +12388,9 @@ fn help_output_uses_single_word_operational_subcommands() {
     )
     .expect("utf8 build self asset help");
     assert!(build_self_asset_help.contains("--version"));
-    assert!(build_self_asset_help.contains("--goos"));
-    assert!(build_self_asset_help.contains("--goarch"));
+    assert!(build_self_asset_help.contains("--target"));
+    assert!(!build_self_asset_help.contains("--goos"));
+    assert!(!build_self_asset_help.contains("--goarch"));
 
     let build_self_validate_help = String::from_utf8(
         cargo_bin()

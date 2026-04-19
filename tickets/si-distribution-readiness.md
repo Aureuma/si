@@ -60,7 +60,7 @@ target label is worse than a smaller honest matrix.
 
 ### 1. Make the Plan Durable
 
-Status: in progress.
+Status: completed.
 
 Steps:
 
@@ -75,7 +75,7 @@ GitHub Actions. A durable ticket keeps the intent and ordering visible.
 
 ### 2. Replace Go-Style Release Target Inputs
 
-Status: pending.
+Status: completed.
 
 Steps:
 
