@@ -150,7 +150,7 @@ impl Settings {
             }
             SettingsModule::Surf => {
                 let payload: SurfSettingsModule = toml::from_str(source)?;
-                self.surf = payload.surf;
+                self.surf.merge(payload.surf);
             }
             SettingsModule::Viva => {
                 let payload: VivaSettingsModule = toml::from_str(source)?;
@@ -1116,6 +1116,34 @@ pub struct SurfSettings {
 }
 
 impl SurfSettings {
+    fn merge(&mut self, other: Self) {
+        if !other.repo.is_empty() {
+            self.repo = other.repo;
+        }
+        if !other.bin.is_empty() {
+            self.bin = other.bin;
+        }
+        if other.build.is_some() {
+            self.build = other.build;
+        }
+        if !other.settings_file.is_empty() {
+            self.settings_file = other.settings_file;
+        }
+        if !other.state_dir.is_empty() {
+            self.state_dir = other.state_dir;
+        }
+        if !other.vnc_password_fort_key.is_empty() {
+            self.vnc_password_fort_key = other.vnc_password_fort_key;
+        }
+        if !other.vnc_password_fort_repo.is_empty() {
+            self.vnc_password_fort_repo = other.vnc_password_fort_repo;
+        }
+        if !other.vnc_password_fort_env.is_empty() {
+            self.vnc_password_fort_env = other.vnc_password_fort_env;
+        }
+        self.tunnel.merge(other.tunnel);
+    }
+
     fn normalize(&mut self) {
         trim_string(&mut self.repo);
         trim_string(&mut self.bin);
@@ -1144,6 +1172,20 @@ pub struct SurfTunnelSettings {
     pub mode: String,
     #[serde(default)]
     pub vault_key: String,
+}
+
+impl SurfTunnelSettings {
+    fn merge(&mut self, other: Self) {
+        if !other.name.is_empty() {
+            self.name = other.name;
+        }
+        if !other.mode.is_empty() {
+            self.mode = other.mode;
+        }
+        if !other.vault_key.is_empty() {
+            self.vault_key = other.vault_key;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -1681,6 +1723,41 @@ auth_updated = "2026-03-23T00:00:00Z"
             Some("~/.si/codex/profiles/profile-delta/auth.json")
         );
         assert_eq!(entry.auth_updated.as_deref(), Some("2026-03-23T00:00:00Z"));
+    }
+
+    #[test]
+    fn metadata_only_surf_settings_module_does_not_wipe_core_surf_config() {
+        let home = tempdir().expect("tempdir");
+        let root = home.path().join(".si");
+        let surf_dir = root.join("surf");
+        fs::create_dir_all(&surf_dir).expect("mkdir surf settings dir");
+        fs::write(
+            root.join("settings.toml"),
+            r#"
+schema_version = 1
+
+[surf]
+vnc_password_fort_key = "SURF_VNC_PASSWORD"
+vnc_password_fort_repo = "surf"
+vnc_password_fort_env = "dev"
+"#,
+        )
+        .expect("write core settings");
+        fs::write(
+            surf_dir.join("si.settings.toml"),
+            "schema_version = 1
+
+[metadata]
+updated_at = '2026-03-18T03:19:46Z'
+",
+        )
+        .expect("write metadata-only surf settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+
+        assert_eq!(settings.surf.vnc_password_fort_key, "SURF_VNC_PASSWORD");
+        assert_eq!(settings.surf.vnc_password_fort_repo, "surf");
+        assert_eq!(settings.surf.vnc_password_fort_env, "dev");
     }
 
     #[test]
