@@ -1,25 +1,22 @@
-name: fort-vault-ci
+name: Fort/Vault CI
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "rust/crates/si-fort/**"
       - "rust/crates/si-vault/**"
-      - "rust/crates/si-runtime/**"
       - "rust/crates/si-config/**"
       - "rust/crates/si-cli/**"
       - "rust/crates/si-tools/**"
-      - "tools/si-image/**"
       - ".github/workflows/fort-vault-ci.yml"
   pull_request:
     paths:
       - "rust/crates/si-fort/**"
       - "rust/crates/si-vault/**"
-      - "rust/crates/si-runtime/**"
       - "rust/crates/si-config/**"
       - "rust/crates/si-cli/**"
       - "rust/crates/si-tools/**"
-      - "tools/si-image/**"
       - ".github/workflows/fort-vault-ci.yml"
 
 jobs:
@@ -42,9 +39,6 @@ jobs:
       - name: Unit tests (Fort/Vault surface)
         run: |
           cargo test -p si-rs-fort -p si-rs-vault
-
-      - name: Build SI local image for spawn integration
-        run: docker build -t aureuma/si:local -f tools/si-image/Dockerfile .
 
       - name: SI Fort spawn matrix integration
         run: cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin test-fort-spawn-matrix --
