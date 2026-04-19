@@ -120,7 +120,7 @@ binary inside the archive can run on the labeled platform.
 
 ### 4. Build Release Assets in GitHub Actions by Platform
 
-Status: pending.
+Status: completed.
 
 Steps:
 
