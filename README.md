@@ -214,15 +214,16 @@ ReleaseMind automation stays in the ReleaseMind repo and API. SI consumes it as
 an orbit client:
 
 ```bash
-si orbit releasemind doctor Aureuma/si --json
-si orbit releasemind release prepare Aureuma/si --release-tag vX.Y.0 --wait-for-ready --json
-si orbit releasemind release status Aureuma/si post_123 --json
+si orbit releasemind auth login
+si orbit releasemind release create vX.Y.0 --repo-ref Aureuma/si --draft --json
+si orbit releasemind release view Aureuma/si post_123 --json
 si orbit releasemind release publish Aureuma/si post_123 --json
 ```
 
-Use ReleaseMind dashboard auth, GitHub linking, repo onboarding, and automation
-token minting first. Then inject `RELEASEMIND_API_BASE_URL` and
-`RELEASEMIND_AUTOMATION_TOKEN` with `si fort`.
+Use `si orbit releasemind auth login` for interactive operator work. Use
+dashboard-linked automation tokens only for CI or unattended flows, and inject
+`RELEASEMIND_API_BASE_URL` and `RELEASEMIND_AUTOMATION_TOKEN` with `si fort`
+when you need those lower-level automation endpoints.
 
 ## License
 
