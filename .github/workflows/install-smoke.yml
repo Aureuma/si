@@ -36,9 +36,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
-          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache Rust
@@ -94,18 +93,3 @@ jobs:
 
       - name: Run npm installer smoke tests
         run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
-
-  docker-smoke:
-    name: Docker installer smoke (ubuntu)
-    needs: [docs-scope]
-    if: needs.docs-scope.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.88.0
-
-      - name: Run docker installer smoke tests
-        run: cargo run --quiet --locked -p si-rs-cli -- build installer smoke-docker

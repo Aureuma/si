@@ -2482,7 +2482,7 @@ fn resolve_url(
     let existing_path = url.path().trim_end_matches('/');
     let next_path = path.trim_start_matches('/');
     let joined = if existing_path.is_empty() || existing_path == "/" {
-        format!("/{}", next_path)
+        format!("/{next_path}")
     } else if next_path.is_empty() {
         existing_path.to_owned()
     } else {

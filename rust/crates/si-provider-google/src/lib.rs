@@ -842,7 +842,7 @@ pub fn upload_youtube_video(
         );
     }
     let file_bytes = std::fs::read(file_path)
-        .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
+        .map_err(|err| format!("failed to read youtube upload file {file_path:?}: {err}"))?;
     let metadata_raw = serde_json::to_vec(metadata)
         .map_err(|err| format!("invalid youtube video metadata: {err}"))?;
     let token = resolve_youtube_bearer_token(runtime)?;
@@ -998,11 +998,11 @@ pub fn download_youtube_caption(
         && !parent.as_os_str().is_empty()
     {
         std::fs::create_dir_all(parent).map_err(|err| {
-            format!("failed to create caption output directory {:?}: {err}", parent)
+            format!("failed to create caption output directory {parent:?}: {err}")
         })?;
     }
     std::fs::write(output, &bytes)
-        .map_err(|err| format!("failed to write youtube caption output {:?}: {err}", output))?;
+        .map_err(|err| format!("failed to write youtube caption output {output:?}: {err}"))?;
     Ok((bytes.len() as i64, content_type))
 }
 
@@ -1433,23 +1433,23 @@ fn upload_youtube_multipart(
 ) -> Result<GoogleYouTubeAPIResponse, String> {
     let token = resolve_youtube_bearer_token(runtime)?;
     let file_bytes = std::fs::read(file_path)
-        .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
+        .map_err(|err| format!("failed to read youtube upload file {file_path:?}: {err}"))?;
     let metadata_raw = serde_json::to_vec(metadata)
         .map_err(|err| format!("invalid youtube upload metadata: {err}"))?;
     let boundary = format!("si-rs-youtube-{}", std::process::id());
     let mut body = Vec::new();
-    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(b"Content-Type: application/json; charset=UTF-8\r\n\r\n");
     body.extend_from_slice(&metadata_raw);
     body.extend_from_slice(b"\r\n");
-    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(
         format!("Content-Type: {}\r\n\r\n", detect_youtube_content_type(file_path, content_type))
             .as_bytes(),
     );
     body.extend_from_slice(&file_bytes);
     body.extend_from_slice(b"\r\n");
-    body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
     let client = Client::builder()
         .timeout(Duration::from_secs(10 * 60))
         .build()
@@ -1475,9 +1475,8 @@ fn upload_youtube_media(
     content_type: &str,
 ) -> Result<GoogleYouTubeAPIResponse, String> {
     let token = resolve_youtube_bearer_token(runtime)?;
-    let file_bytes = std::fs::read(file_path).map_err(|err| {
-        format!("failed to read youtube media upload file {:?}: {err}", file_path)
-    })?;
+    let file_bytes = std::fs::read(file_path)
+        .map_err(|err| format!("failed to read youtube media upload file {file_path:?}: {err}"))?;
     let client = Client::builder()
         .timeout(Duration::from_secs(5 * 60))
         .build()

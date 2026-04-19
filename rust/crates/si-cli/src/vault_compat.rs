@@ -591,7 +591,7 @@ fn run_vault_decrypt(target: VaultTargetArgs, stdout: bool, inplace: bool) -> Re
         println!("file={}", target.env_file.display());
         println!("repo={}", target.repo);
         println!("env={}", target.env);
-        println!("decrypted={}", decrypted);
+        println!("decrypted={decrypted}");
         println!("backup={}", restore_backup_path(&target.env_file).display());
     }
     if print_stdout {
@@ -764,7 +764,7 @@ fn run_vault_run(
     command.stderr(std::process::Stdio::inherit());
     let status = command.status().context("run vault command")?;
     if !status.success() {
-        bail!("vault command exited with {}", status);
+        bail!("vault command exited with {status}");
     }
     Ok(())
 }
@@ -1310,11 +1310,11 @@ fn validate_key_name(key: &str) -> Result<()> {
         bail!("key required");
     }
     if key.len() > 512 {
-        bail!("invalid key {:?}: too long", key);
+        bail!("invalid key {key:?}: too long");
     }
     for ch in key.chars() {
         if matches!(ch, '=' | '\0' | '\n' | '\r') || ch.is_whitespace() || !ch.is_ascii_graphic() {
-            bail!("invalid key {:?}: contains forbidden character", key);
+            bail!("invalid key {key:?}: contains forbidden character");
         }
     }
     Ok(())
