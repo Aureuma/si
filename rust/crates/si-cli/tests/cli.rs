@@ -768,6 +768,7 @@ fn wait_for_cli_task_status_with_token(
     auth_token: Option<&str>,
 ) -> Value {
     let start = Instant::now();
+    let mut last_task = Value::Null;
     while start.elapsed() < Duration::from_secs(5) {
         let mut command = cargo_bin();
         if let Some(token) = auth_token {
@@ -784,9 +785,10 @@ fn wait_for_cli_task_status_with_token(
         if task["status"] == expected {
             return task;
         }
+        last_task = task;
         thread::sleep(Duration::from_millis(50));
     }
-    panic!("task {task_id} did not reach status {expected}");
+    panic!("task {task_id} did not reach status {expected}; last observed task: {last_task}");
 }
 
 fn wait_for_cli_task_predicate(
@@ -4795,9 +4797,8 @@ fn nucleus_fort_auth_required_blocks_task_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
-    write_fort_session_state_via_cli(&codex_home, "america");
-    clear_fort_session_state_via_cli(&codex_home);
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    clear_fort_session_state_via_cli(&codex_home);
     let session_id = session["session"]["session_id"].as_str().expect("session id");
 
     let created = create_task_over_websocket(
@@ -4833,8 +4834,8 @@ fn nucleus_fort_unavailable_blocks_task_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
-    write_invalid_fort_session_state(&codex_home);
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    write_invalid_fort_session_state(&codex_home);
     let session_id = session["session"]["session_id"].as_str().expect("session id");
 
     let created = create_task_over_websocket(
@@ -4880,8 +4881,8 @@ fn nucleus_run_submit_turn_blocks_fort_unavailable_task_on_live_service() {
 
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
-    write_invalid_fort_session_state(&codex_home);
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    write_invalid_fort_session_state(&codex_home);
     let session_id = session["session"]["session_id"].as_str().expect("session id").to_owned();
 
     let active = create_task_over_websocket(
@@ -5423,6 +5424,7 @@ fn nucleus_session_create_prefers_stable_lexical_worker_id_on_live_service() {
     let home_dir = temp.path().join("home");
     for worker_suffix in ["b", "a"] {
         let codex_home = home_dir.join(format!(".si/codex/profiles/america-{worker_suffix}"));
+        write_reusable_codex_fort_session(&codex_home, "america");
         cargo_bin()
             .args([
                 "nucleus",
@@ -6851,6 +6853,7 @@ fn nucleus_worker_repair_auth_requeues_blocked_task_on_live_service() {
     let home_dir = temp.path().join("home");
     let codex_home = home_dir.join(".si/codex/profiles/america");
     let session = create_session_via_cli(&ws_url, &home_dir, &codex_home, temp.path());
+    clear_fort_session_state_via_cli(&codex_home);
     let worker_id = session["worker"]["worker_id"].as_str().expect("worker id").to_owned();
 
     let created = create_task_over_websocket(
@@ -7162,6 +7165,7 @@ fn nucleus_worker_repair_auth_does_not_requeue_other_profile_task_on_live_servic
         &britain_codex_home,
         temp.path(),
     );
+    clear_fort_session_state_via_cli(&britain_codex_home);
 
     let created = create_task_over_websocket(
         &ws_url,
@@ -8024,8 +8028,8 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
-            ["type"],
-        json!("object")
+            ["$ref"],
+        json!("#/components/schemas/OpenApiDocumentView")
     );
     assert_eq!(
         body["paths"]["/openapi.json"]["get"]["responses"]["200"]["description"],
@@ -12367,26 +12371,28 @@ fn help_output_uses_single_word_operational_subcommands() {
     )
     .expect("utf8 build self help");
     assert!(build_self_help.contains("check"));
-    assert!(build_self_help.contains("bundle"));
+    assert!(build_self_help.contains("asset"));
     assert!(build_self_help.contains("assets"));
     assert!(build_self_help.contains("validate"));
-    assert!(!build_self_help.contains("releasebundle"));
+    assert!(build_self_help.contains("verify"));
+    assert!(!build_self_help.contains("bundle"));
+    assert!(!build_self_help.contains("releaseasset"));
     assert!(!build_self_help.contains("releaseassets"));
     assert!(!build_self_help.contains("validatereleaseversion"));
 
-    let build_self_bundle_help = String::from_utf8(
+    let build_self_asset_help = String::from_utf8(
         cargo_bin()
-            .args(["build", "self", "bundle", "--help"])
+            .args(["build", "self", "asset", "--help"])
             .assert()
             .success()
             .get_output()
             .stdout
             .clone(),
     )
-    .expect("utf8 build self bundle help");
-    assert!(build_self_bundle_help.contains("--publish"));
-    assert!(build_self_bundle_help.contains("--skip-notes"));
-    assert!(build_self_bundle_help.contains("--notes-file"));
+    .expect("utf8 build self asset help");
+    assert!(build_self_asset_help.contains("--version"));
+    assert!(build_self_asset_help.contains("--goos"));
+    assert!(build_self_asset_help.contains("--goarch"));
 
     let build_self_validate_help = String::from_utf8(
         cargo_bin()
@@ -12398,7 +12404,7 @@ fn help_output_uses_single_word_operational_subcommands() {
             .clone(),
     )
     .expect("utf8 build self validate help");
-    assert!(build_self_validate_help.contains("--publish"));
+    assert!(build_self_validate_help.contains("--tag"));
 
     let build_help = String::from_utf8(
         cargo_bin().args(["build", "--help"]).assert().success().get_output().stdout.clone(),
