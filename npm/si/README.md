@@ -31,7 +31,7 @@ rather than from a checked-in npm manifest version.
 Supported targets:
 
 - macOS: `amd64`, `arm64`
-- Linux: `amd64`, `arm64`, `armv7`
+- Linux: `amd64`, `arm64`
 
 ## Environment overrides
 

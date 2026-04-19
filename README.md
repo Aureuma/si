@@ -201,7 +201,7 @@ Versioning rules:
 - Every commit bumps PATCH in that one place; minor releases reset PATCH to `0` and are the only tagged releases.
 
 Published GitHub Releases automatically include multi-arch CLI archives for:
-- Linux (`amd64`, `arm64`, `armv7`)
+- Linux (`amd64`, `arm64`)
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:

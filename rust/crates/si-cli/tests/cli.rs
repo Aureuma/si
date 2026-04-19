@@ -1980,13 +1980,19 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
         .env("SI_NUCLEUS_SYSTEMCTL_EXEC", "/bin/true")
         .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .env("SI_NUCLEUS_PUBLIC_URL", "https://nucleus.example.test")
+        .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .assert()
         .success();
     let _systemd_payload: Value =
         serde_json::from_slice(&systemd_output.get_output().stdout).expect("parse systemd json");
     let systemd_unit =
         fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
+    assert!(systemd_unit.contains("Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\""));
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_AUTH_TOKEN=secret-token\""));
+    assert!(
+        systemd_unit.contains("Environment=\"SI_NUCLEUS_PUBLIC_URL=https://nucleus.example.test\"")
+    );
 
     let launchd_dir = temp.path().join("launch-agents");
     let launchd_output = cargo_bin()
@@ -2003,14 +2009,20 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         ])
         .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
         .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .env("SI_NUCLEUS_PUBLIC_URL", "https://nucleus.example.test")
+        .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .assert()
         .success();
     let _launchd_payload: Value =
         serde_json::from_slice(&launchd_output.get_output().stdout).expect("parse launchd json");
     let plist = fs::read_to_string(launchd_dir.join("com.aureuma.si.nucleus.plist"))
         .expect("read launchd plist");
+    assert!(plist.contains("<key>PATH</key>"));
+    assert!(plist.contains("<string>/usr/local/bin:/usr/bin:/bin</string>"));
     assert!(plist.contains("<key>SI_NUCLEUS_AUTH_TOKEN</key>"));
     assert!(plist.contains("<string>secret-token</string>"));
+    assert!(plist.contains("<key>SI_NUCLEUS_PUBLIC_URL</key>"));
+    assert!(plist.contains("<string>https://nucleus.example.test</string>"));
 }
 
 #[test]
