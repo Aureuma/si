@@ -3004,7 +3004,8 @@ impl NucleusService {
                 continue;
             }
 
-            let can_fallback = task.session_id.is_none() && candidates.len() > 1;
+            let can_fallback =
+                task.session_id.is_none() && task.profile.is_none() && candidates.len() > 1;
             let mut attempted_any = false;
             for (index, profile) in candidates.iter().enumerate() {
                 if selected_profiles.contains(profile) {
@@ -8930,7 +8931,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_restart_keeps_preferred_profile_fallback_assignment() {
+    async fn worker_restart_does_not_requeue_other_profile_assignment() {
         let temp = tempdir().expect("tempdir");
         let runtime = FakeRuntime::default();
         let service = NucleusService::open_with_runtime(
@@ -8991,15 +8992,15 @@ mod tests {
         runtime.fail_next_starts(1);
         service.reconcile_and_dispatch_once().expect("dispatch britain blocked task");
 
-        wait_for_task_status(&service, britain_task_id.as_str(), TaskStatus::Done);
-        let fallback_task = service
+        let blocked_task = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(fallback_task.profile.as_ref().map(ProfileName::as_str), Some("america"));
-        assert_eq!(fallback_task.blocked_reason, None);
-        assert!(fallback_task.latest_run_id.is_some());
+        assert_eq!(blocked_task.status, TaskStatus::Blocked);
+        assert_eq!(blocked_task.profile.as_ref().map(ProfileName::as_str), Some("britain"));
+        assert_eq!(blocked_task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(blocked_task.latest_run_id.is_none());
 
         let restarted = service
             .dispatch_request(GatewayRequest {
@@ -9010,13 +9011,15 @@ mod tests {
             .await;
         assert!(restarted.ok);
 
-        let still_done = service
+        let still_blocked = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(still_done.status, TaskStatus::Done);
-        assert_eq!(still_done.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.profile.as_ref().map(ProfileName::as_str), Some("britain"));
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(still_blocked.latest_run_id.is_none());
     }
 
     #[tokio::test]
@@ -9345,7 +9348,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_repair_auth_requeues_fallback_profile_assignment() {
+    async fn worker_repair_auth_does_not_requeue_other_profile_assignment() {
         let temp = tempdir().expect("tempdir");
         let america_codex_home = temp.path().join("home/.si/codex/profiles/america");
         let britain_codex_home = temp.path().join("home/.si/codex/profiles/britain");
@@ -9420,13 +9423,15 @@ mod tests {
 
         service.reconcile_and_dispatch_once().expect("dispatch britain auth-blocked task");
 
-        let routed = service
+        let blocked = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(routed.profile.as_ref().map(ProfileName::as_str), Some("america"));
-        assert!(matches!(routed.status, TaskStatus::Blocked | TaskStatus::Queued));
+        assert_eq!(blocked.status, TaskStatus::Blocked);
+        assert_eq!(blocked.profile.as_ref().map(ProfileName::as_str), Some("britain"));
+        assert_eq!(blocked.blocked_reason, Some(BlockedReason::AuthRequired));
+        assert!(blocked.latest_run_id.is_none());
 
         write_fort_session_state(
             &america_codex_home,
@@ -9450,18 +9455,17 @@ mod tests {
             })
             .await;
         assert!(repaired.ok);
-        service.reconcile_and_dispatch_once().expect("dispatch repaired fallback task");
+        service.reconcile_and_dispatch_once().expect("dispatch after repairing other profile");
 
-        wait_for_task_status(&service, britain_task_id.as_str(), TaskStatus::Done);
-        let completed = service
+        let still_blocked = service
             .store
             .inspect_task(&britain_task_id)
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(completed.status, TaskStatus::Done);
-        assert_eq!(completed.profile.as_ref().map(ProfileName::as_str), Some("america"));
-        assert_eq!(completed.blocked_reason, None);
-        assert!(completed.latest_run_id.is_some());
+        assert_eq!(still_blocked.status, TaskStatus::Blocked);
+        assert_eq!(still_blocked.profile.as_ref().map(ProfileName::as_str), Some("britain"));
+        assert_eq!(still_blocked.blocked_reason, Some(BlockedReason::AuthRequired));
+        assert!(still_blocked.latest_run_id.is_none());
     }
 
     #[tokio::test]
@@ -10553,7 +10557,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dispatcher_falls_back_when_preferred_profile_worker_is_unavailable() {
+    async fn dispatcher_blocks_explicit_profile_when_worker_is_unavailable() {
         let temp = tempdir().expect("tempdir");
         let runtime = FakeRuntime::default();
         let service = NucleusService::open_with_runtime(
@@ -10586,8 +10590,8 @@ mod tests {
                 id: json!("task-fallback-profile"),
                 method: "task.create".to_owned(),
                 params: json!({
-                    "title": "Fallback profile task",
-                    "instructions": "Use another profile if the preferred profile cannot start",
+                    "title": "Explicit profile task",
+                    "instructions": "Stay on the requested profile when its worker cannot start",
                     "profile": "zulu",
                 }),
             })
@@ -10597,16 +10601,16 @@ mod tests {
             created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
 
         service.reconcile_and_dispatch_once().expect("dispatch queued work");
-        wait_for_task_status(&service, task_id, TaskStatus::Done);
+        wait_for_task_status(&service, task_id, TaskStatus::Blocked);
 
         let task = service
             .store
             .inspect_task(&TaskId::new(task_id).expect("task id"))
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("america"));
-        assert_eq!(task.blocked_reason, None);
-        assert!(task.latest_run_id.is_some());
+        assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("zulu"));
+        assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(task.latest_run_id.is_none());
     }
 
     #[tokio::test]
