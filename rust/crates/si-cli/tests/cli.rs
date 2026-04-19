@@ -140,6 +140,39 @@ fn write_reusable_codex_fort_session(codex_home: &Path, profile_id: &str) {
     }
 }
 
+fn write_releasemind_auth_state(
+    home: &Path,
+    base_url: &str,
+    session_token: &str,
+    github_username: &str,
+    email: &str,
+) {
+    let path = home.join(".si").join("releasemind").join("auth.json");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("mkdir releasemind auth dir");
+    }
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&json!({
+            "base_url": base_url,
+            "session_token": session_token,
+            "expires_at": "2030-01-01T00:00:00Z",
+            "user": {
+                "github_username": github_username,
+                "email": email,
+            },
+        }))
+        .expect("serialize releasemind auth state"),
+    )
+    .expect("write releasemind auth state");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+            .expect("chmod releasemind auth state");
+    }
+}
+
 fn write_workspace_manifest(repo: &Path, version: &str) {
     fs::create_dir_all(repo.join("rust/crates/si-cli")).expect("mkdir cli crate");
     fs::write(
@@ -13861,30 +13894,45 @@ fn providers_characteristics_includes_releasemind() {
 }
 
 #[test]
-fn releasemind_auth_status_verifies_repo_with_env_token() {
-    let server = start_one_shot_http_server(|request| {
-        assert!(
-            request
-                .starts_with("GET /api/automation/verify?repo_full_name=Aureuma%2Fsi HTTP/1.1\r\n")
-        );
-        assert!(request.contains("authorization: Bearer rmatk.test.secret\r\n"));
-        http_json_response(
-            "200 OK",
-            &[("x-request-id", "req_rm_verify")],
-            r#"{"ok":true,"principal":{"token_id":"tok-1","user_id":"user-1","label":"SI CLI","repo_scope":"aureuma/si"}}"#,
-        )
+fn releasemind_auth_login_persists_session_state() {
+    let home = tempdir().expect("tempdir");
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("POST /api/cli/auth/flows/start HTTP/1.1\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_auth_start")],
+                    r#"{"ok":true,"flow_id":"flow-1","flow_token":"flow-token-1","auth_url":"https://releasemind.example.test/login","poll_interval_seconds":1}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with(
+                    "GET /api/cli/auth/flows/status?flow_id=flow-1&flow_token=flow-token-1 HTTP/1.1\r\n"
+                ));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_auth_status")],
+                    r#"{"ok":true,"status":"complete","session_token":"rmses.test.secret","expires_at":"2030-01-01T00:00:00Z","user":{"github_username":"SHi-ON","email":"shi-on@example.com"}}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
     });
 
     let output = cargo_bin()
-        .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
+        .env("HOME", home.path())
         .args([
             "orbit",
             "releasemind",
             "auth",
-            "status",
-            "Aureuma/si",
+            "login",
             "--base-url",
             &server.base_url,
+            "--no-open",
             "--json",
         ])
         .assert()
@@ -13895,9 +13943,51 @@ fn releasemind_auth_status_verifies_repo_with_env_token() {
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["token_source"], "env:RELEASEMIND_AUTOMATION_TOKEN");
-    assert_eq!(parsed["verify"]["request_id"], "req_rm_verify");
-    assert_eq!(parsed["verify"]["data"]["principal"]["label"], "SI CLI");
+    assert_eq!(parsed["base_url"], server.base_url);
+    assert_eq!(parsed["opened_browser"], false);
+    assert_eq!(parsed["user"]["github_username"], "SHi-ON");
+
+    let state_path = home.path().join(".si").join("releasemind").join("auth.json");
+    let stored: Value = serde_json::from_slice(&fs::read(&state_path).expect("read auth state"))
+        .expect("parse auth state");
+    assert_eq!(stored["session_token"], "rmses.test.secret");
+    assert_eq!(stored["user"]["github_username"], "SHi-ON");
+    server.join();
+}
+
+#[test]
+fn releasemind_auth_status_uses_saved_session() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /api/cli/auth/session HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_auth_session")],
+            r#"{"ok":true,"user":{"github_username":"SHi-ON","email":"shi-on@example.com"}}"#,
+        )
+    });
+    write_releasemind_auth_state(
+        home.path(),
+        &server.base_url,
+        "rmses.test.secret",
+        "SHi-ON",
+        "shi-on@example.com",
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["orbit", "releasemind", "auth", "status", "--base-url", &server.base_url, "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["authenticated"], true);
+    assert_eq!(parsed["base_url"], server.base_url);
+    assert_eq!(parsed["user"]["github_username"], "SHi-ON");
     server.join();
 }
 
@@ -14022,6 +14112,159 @@ fn releasemind_release_prepare_posts_api_payload() {
     assert_eq!(parsed["request_id"], "req_rm_prepare");
     assert_eq!(parsed["data"]["post_id"], "post-1");
     assert_eq!(parsed["data"]["release_tag"], "v1.2.3");
+    server.join();
+}
+
+#[test]
+fn releasemind_release_create_uses_saved_session_and_git_origin() {
+    let home = tempdir().expect("tempdir");
+    let repo = tempdir().expect("repo tempdir");
+    let notes_path = repo.path().join("release-notes.md");
+    fs::write(&notes_path, "Release notes from file.\n").expect("write notes file");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/cli/releases/create HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        assert!(request.contains("\"release_tag\":\"v1.2.3\""));
+        assert!(request.contains("\"notes\":\"Release notes from file.\""));
+        assert!(request.contains("\"draft\":true"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_release_create")],
+            r#"{"ok":true,"post_id":"post-1","status":"draft","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
+        )
+    });
+    write_releasemind_auth_state(
+        home.path(),
+        &server.base_url,
+        "rmses.test.secret",
+        "SHi-ON",
+        "shi-on@example.com",
+    );
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("HOME", home.path())
+        .args([
+            "orbit",
+            "releasemind",
+            "release",
+            "create",
+            "v1.2.3",
+            "--base-url",
+            &server.base_url,
+            "--notes-file",
+            notes_path.to_str().expect("notes path"),
+            "--draft",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_release_create");
+    assert_eq!(parsed["data"]["post_id"], "post-1");
+    assert_eq!(parsed["data"]["release_tag"], "v1.2.3");
+    server.join();
+}
+
+#[test]
+fn releasemind_release_view_uses_saved_session() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /api/cli/releases/view?repo_full_name=Aureuma%2Fsi&post_id=post-1 HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_release_view")],
+            r#"{"ok":true,"post_id":"post-1","status":"ready","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
+        )
+    });
+    write_releasemind_auth_state(
+        home.path(),
+        &server.base_url,
+        "rmses.test.secret",
+        "SHi-ON",
+        "shi-on@example.com",
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args([
+            "orbit",
+            "releasemind",
+            "release",
+            "view",
+            "Aureuma/si",
+            "post-1",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_release_view");
+    assert_eq!(parsed["data"]["status"], "ready");
+    server.join();
+}
+
+#[test]
+fn releasemind_release_publish_uses_saved_session_without_automation_token() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/cli/releases/publish HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        assert!(request.contains("\"post_id\":\"post-1\""));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_release_publish")],
+            r#"{"ok":true,"post_id":"post-1","status":"published","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
+        )
+    });
+    write_releasemind_auth_state(
+        home.path(),
+        &server.base_url,
+        "rmses.test.secret",
+        "SHi-ON",
+        "shi-on@example.com",
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args([
+            "orbit",
+            "releasemind",
+            "release",
+            "publish",
+            "Aureuma/si",
+            "post-1",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_release_publish");
+    assert_eq!(parsed["data"]["status"], "published");
     server.join();
 }
 
