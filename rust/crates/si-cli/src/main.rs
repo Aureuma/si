@@ -256,6 +256,10 @@ enum Command {
         command: BuildCommand,
     },
     Commands(CommandsArgs),
+    Doctor {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Settings(SettingsArgs),
     Orbit {
         #[command(subcommand)]
@@ -18570,6 +18574,17 @@ fn release_target_by_id(raw: &str) -> Result<ReleaseTarget> {
     )
 }
 
+fn current_host_release_target() -> Result<ReleaseTarget> {
+    let id = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "linux-amd64",
+        ("linux", "aarch64") => "linux-arm64",
+        ("macos", "x86_64") => "darwin-amd64",
+        ("macos", "aarch64") => "darwin-arm64",
+        (os, arch) => anyhow::bail!("unsupported host release target {os}/{arch}"),
+    };
+    release_target_by_id(id)
+}
+
 fn release_asset_name(version: &str, target: ReleaseTarget) -> String {
     let version_no_v = version.trim_start_matches('v');
     format!("si_{version_no_v}_{}_{}.tar.gz", target.os_label, target.arch_label)
@@ -18676,6 +18691,76 @@ fn resolve_self_install_path(path: Option<PathBuf>) -> Result<PathBuf> {
 struct PreparedCargoTargetDir {
     path: PathBuf,
     _temp: Option<tempfile::TempDir>,
+}
+
+#[derive(Debug, Serialize)]
+struct DistributionDoctorView {
+    version: String,
+    binary: String,
+    checks: Vec<DistributionDoctorCheck>,
+}
+
+#[derive(Debug, Serialize)]
+struct DistributionDoctorCheck {
+    name: String,
+    required_for: String,
+    ok: bool,
+    path: String,
+    detail: String,
+}
+
+fn distribution_doctor_check(name: &str, required_for: &str) -> DistributionDoctorCheck {
+    match resolve_program_on_path(name) {
+        Some(path) => DistributionDoctorCheck {
+            name: name.to_owned(),
+            required_for: required_for.to_owned(),
+            ok: true,
+            path: path.display().to_string(),
+            detail: "found on PATH".to_owned(),
+        },
+        None => DistributionDoctorCheck {
+            name: name.to_owned(),
+            required_for: required_for.to_owned(),
+            ok: false,
+            path: String::new(),
+            detail: "missing from PATH".to_owned(),
+        },
+    }
+}
+
+fn run_distribution_doctor(format: OutputFormat) -> Result<()> {
+    let binary =
+        env::current_exe().map(|path| path.display().to_string()).unwrap_or_else(|_| String::new());
+    let mut checks = vec![
+        distribution_doctor_check("codex", "Nucleus worker runtime"),
+        distribution_doctor_check("tmux", "operator Codex sessions"),
+        distribution_doctor_check("tar", "npm launcher archive extraction"),
+        distribution_doctor_check("git", "source install and repo workflows"),
+        distribution_doctor_check("cargo", "source install"),
+        distribution_doctor_check("rustc", "source install"),
+    ];
+    if cfg!(target_os = "macos") {
+        checks.push(distribution_doctor_check("brew", "Homebrew install validation"));
+    }
+    let view = DistributionDoctorView {
+        version: si_rs_core::version::current_version().to_owned(),
+        binary,
+        checks,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("SI distribution doctor");
+            print_cli_kv("version", &view.version);
+            print_cli_kv("binary", &view.binary);
+            for check in &view.checks {
+                let state = if check.ok { "OK" } else { "MISS" };
+                let detail = if check.path.is_empty() { &check.detail } else { &check.path };
+                println!("  {state:<4} {:<8} {:<34} {detail}", check.name, check.required_for);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn resolve_program_on_path(name: &str) -> Option<PathBuf> {
@@ -19995,19 +20080,27 @@ fn run_installer_smoke_npm() -> Result<()> {
                 &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
             )?;
         } else {
+            let target = current_host_release_target()?;
             run_path_command_checked(
                 &root,
                 &self_bin,
                 &[
                     "build",
                     "self",
-                    "assets",
+                    "asset",
                     "--version",
                     &version,
+                    "--target",
+                    target.id,
                     "--out-dir",
                     assets_dir.to_str().unwrap_or_default(),
                 ],
             )?;
+            let archive_name = release_asset_name(&version, target);
+            let archive_path = assets_dir.join(&archive_name);
+            let digest = sha256_file(&archive_path)?;
+            fs::write(assets_dir.join("checksums.txt"), format!("{digest}  {archive_name}\n"))
+                .with_context(|| format!("write {}", assets_dir.join("checksums.txt").display()))?;
         }
     }
     if let Some(npm_builder) = &npm_builder {
@@ -20901,6 +20994,7 @@ fn main() -> Result<()> {
             println!("{}", si_rs_core::version::current_version());
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
+        Command::Doctor { format } => run_distribution_doctor(format)?,
         Command::Build { command } => match command {
             BuildCommand::Self_ { args } => match args.command {
                 Some(BuildSelfCommand::Build(BuildSelfBuildArgs {

@@ -52,6 +52,13 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
+        name: "doctor",
+        aliases: &[],
+        category: CommandCategory::Runtime,
+        summary: "Check fresh-machine SI distribution prerequisites.",
+        hidden: false,
+    },
+    CommandSpec {
         name: "settings",
         aliases: &[],
         category: CommandCategory::Runtime,

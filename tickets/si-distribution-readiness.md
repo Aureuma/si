@@ -182,7 +182,7 @@ an interactive shell. A fresh machine needs service definitions that find
 
 ### 7. Add Fresh-Machine Doctor Checks
 
-Status: pending.
+Status: completed.
 
 Steps:
 
