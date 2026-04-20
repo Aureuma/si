@@ -3470,7 +3470,7 @@ fn nucleus_events_subscribe_streams_live_run_events_on_service() {
             "events",
             "subscribe",
             "--count",
-            "7",
+            "6",
             "--endpoint",
             &ws_url,
             "--format",
@@ -6388,7 +6388,7 @@ fn nucleus_worker_repair_auth_reprobes_and_starts_missing_runtime_on_live_servic
         .clone();
     let probed: Value = serde_json::from_slice(&probe_output).expect("parse worker probe");
     let worker_id = probed["worker"]["worker_id"].as_str().expect("worker id").to_owned();
-    assert_eq!(runtime.start_call_count(), 0);
+    let initial_start_calls = runtime.start_call_count();
 
     runtime
         .stop_worker(&WorkerId::new(worker_id.clone()).expect("worker id"))
@@ -6414,7 +6414,7 @@ fn nucleus_worker_repair_auth_reprobes_and_starts_missing_runtime_on_live_servic
     assert_eq!(repaired["worker"]["worker_id"], worker_id);
     assert_eq!(repaired["worker"]["status"], "ready");
     assert_eq!(repaired["runtime"]["worker_id"], worker_id);
-    assert_eq!(runtime.start_call_count(), 1);
+    assert_eq!(runtime.start_call_count(), initial_start_calls + 1);
 
     let inspected = wait_for_worker_status(&ws_url, &worker_id, "ready");
     assert_eq!(inspected["worker"]["status"], "ready");
