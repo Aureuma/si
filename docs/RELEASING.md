@@ -9,6 +9,9 @@ This document is the single source for SI release policy and the release checkli
 - Every commit must bump PATCH in the same commit.
 - A published release bumps MINOR, resets PATCH to `0`, and uses a release tag of `vX.Y.0`.
 - Only minor release versions are tagged and published to GitHub Releases or external distribution channels.
+- Use the `v` prefix consistently for release tags and GitHub Releases. The canonical release/tag form is `vX.Y.0`; bare forms such as `0.50.0` are non-canonical and must not be introduced.
+- Patch versions such as `vX.Y.1` remain commit-scoped working versions only. They are not release tags and must not have GitHub Release entries.
+- There must be exactly one canonical GitHub Release per minor release tag. Do not leave duplicate release entries for both a bare tag and a `v`-prefixed tag on the same version line.
 - MAJOR changes remain exceptional and must be called out explicitly when they happen.
 
 ## Changelog Format (Predefined)
@@ -48,11 +51,18 @@ git pull --ff-only
 - Ensure you can push tags and create GitHub releases.
 - Ensure the working tree is clean and the branch is up to date.
 - Make sure you have all remote tags locally before picking the next version.
+- Inspect existing release/tag state before cutting a new release:
+```
+si orbit github release list Aureuma/si --auth-mode oauth
+git tag -l
+```
+- Confirm there are no stray patch-version releases such as `vX.Y.1`, no bare-tag releases such as `0.50.0`, and no duplicate release entries for the same minor line.
 
 ### 1) Determine the next version + release name
 - Decide the next release version `vX.Y.0`.
 - Choose a short suggested name for the release title (e.g., “Safari Login Flow”).
 - Title format for GitHub Release: `vX.Y.0 - Suggested Name`.
+- Do not cut release tags or release titles in bare form such as `0.50.0 - Suggested Name`.
 
 ### 2) Draft the changelog entry (authoritative notes)
 1. Add a new entry to the top of `CHANGELOG.md` with today’s UTC date.
@@ -89,6 +99,8 @@ git commit -m "release: vX.Y.0"
 git tag -a vX.Y.0 -m "vX.Y.0"
 ```
 - Annotated tags are recommended for releases and are the best practice (they store metadata like tagger, date, and message).
+- Do not create patch tags such as `vX.Y.1`.
+- Do not create bare tags such as `X.Y.0`.
 
 ### 6) Push commits and the new tag
 ```
@@ -108,6 +120,7 @@ git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
 ```
 GitHub Releases should include a clear, hand-written release note (not just a verbatim copy of `CHANGELOG.md`). Use the changelog and commit history as inputs, then write a concise, user-facing summary of what changed since the last published GitHub Release.
 Because only minor releases are tagged, this range is the full set of patch-bump commits that must be reflected in the release notes.
+The release entry itself must target the canonical `vX.Y.0` tag. Do not publish releases against patch tags or bare tags.
 Option A: Use the changelog entry as the release body.
 1. Extract the new `vX.Y.0` section into `release-notes.md` (manual or script).
 2. Create the release with a title and notes file:
@@ -176,6 +189,25 @@ gh release view vX.Y.0 --web
 ```
 - Confirm title, notes, and tag target are correct.
 - Optional: if your repo uses release attestations, run `gh release verify vX.Y.0`.
+- Confirm the release `tag_name` is exactly `vX.Y.0`.
+- Confirm there is no duplicate bare-tag release such as `X.Y.0`.
+- Confirm there is no GitHub Release entry for any patch tag in that release line.
+
+### 8.1) Canonicalize accidental duplicate release entries
+If you discover a non-canonical release entry after publication:
+
+- Keep the canonical `vX.Y.0` tag and GitHub Release.
+- Remove patch-version GitHub Releases such as `v0.39.1` or `v0.46.1`; patch versions are not published release lines in SI.
+- Remove bare-tag GitHub Releases such as `0.50.0` when a canonical `v0.50.0` release already exists.
+- If both local and remote git tags exist for a non-canonical patch tag, delete both:
+```
+git tag -d vX.Y.Z
+git push origin :refs/tags/vX.Y.Z
+```
+- Re-fetch tags after cleanup so local state matches the remote:
+```
+git fetch --tags --prune origin
+```
 
 ### 9) Verify automated CLI release assets
 When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
@@ -242,6 +274,9 @@ Notes:
 - Use annotated tags only for minor releases: `git tag -a vX.Y.0 -m "vX.Y.0" <commit>`.
 - Tags should point at the release commit that includes the changelog update.
 - Push tags explicitly: `git push origin vX.Y.0`.
+- Tag names are canonical only in `vX.Y.0` form.
+- Do not create bare release tags such as `0.50.0`.
+- Do not create or keep patch-only release tags as part of the published release surface.
 
 ## Release Notes Style
 - Lead with 2–4 key changes.

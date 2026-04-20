@@ -240,10 +240,12 @@ si orbit github release delete Aureuma/si vX.Y.0 --force
 Release create behavior:
 
 - For SI itself, the release tag should come from the one repo-wide version in root `Cargo.toml [workspace.package].version`.
+- For SI releases, use the canonical `vX.Y.0` tag form. Do not create GitHub Releases against bare tags such as `0.50.0`.
 - If the requested tag already exists remotely, `si orbit github release create` reuses it.
 - If the tag is missing and `--target <sha>` is provided, SI creates `refs/tags/<tag>` first, then creates the release.
 - If the tag is missing and `--target` is omitted, the command fails clearly instead of creating a broken/tagless release flow.
 - For draft releases, GitHub can still report an `untagged-...` release URL until publish time. Treat `tag_name` plus the remote git ref as the source of truth.
+- For SI, patch versions are not published release lines. Do not create GitHub Releases for `vX.Y.Z` where `Z > 0`.
 
 Practical first-release example:
 
