@@ -111,7 +111,7 @@ si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
 si build self assets --out-dir .artifacts/release-preflight
 si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 si orbit releasemind auth login
-si orbit releasemind release create vX.Y.0 --repo-ref Aureuma/si --draft --json
+si orbit releasemind release create vX.Y.0 --repo Aureuma/si --generate-notes --draft --json
 si orbit releasemind release view Aureuma/si post_123 --json
 ```
 

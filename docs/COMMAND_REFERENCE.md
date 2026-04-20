@@ -48,7 +48,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | OCI | `si orbit oci ...` | `si orbit oci auth status`, `si orbit oci doctor` | [OCI](./OCI) |
 | Stripe | `si orbit stripe ...` | `si orbit stripe auth status`, `si orbit stripe doctor` | [Stripe](./STRIPE) |
 | WorkOS | `si orbit workos ...` | `si orbit workos auth status`, `si orbit workos doctor` | [WorkOS](./WORKOS) |
-| ReleaseMind | `si orbit releasemind ...` | `si orbit releasemind auth login`, `si orbit releasemind release create vX.Y.0 --repo-ref Aureuma/si --draft --json` | ReleaseMind API client |
+| ReleaseMind | `si orbit releasemind ...` | `si orbit releasemind auth login`, `si orbit releasemind release create vX.Y.0 --repo Aureuma/si --generate-notes --draft --json` | ReleaseMind API client |
 | Apple App Store Connect | `si orbit apple store ...` | `si orbit apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
 | Provider inventory | `si orbit list` | `si orbit list`, `si orbit list --provider github --json` | [Providers](./PROVIDERS) |
 
@@ -93,7 +93,7 @@ si orbit releasemind doctor Aureuma/si --json
 si build self assets --out-dir .artifacts/release-preflight
 si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 si orbit releasemind auth login
-si orbit releasemind release create vX.Y.0 --repo-ref Aureuma/si --draft --json
+si orbit releasemind release create vX.Y.0 --repo Aureuma/si --generate-notes --draft --json
 si orbit releasemind release view Aureuma/si post_123 --json
 si orbit releasemind release publish Aureuma/si post_123 --json
 ```
