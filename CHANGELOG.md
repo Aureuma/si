@@ -11,7 +11,14 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.59.0] - 2026-04-20
+### Added
+- Added a ReleaseMind-backed GitHub release flow in `si orbit releasemind` with browser-based auth, repo inference from the current GitHub checkout, and release create/view/publish commands.
+- Added SI distribution doctor and release-preflight hardening so the CLI release path has a clearer local verification lane before publishing.
+
 ### Changed
+- Changed the ReleaseMind release-create CLI to align more closely with `gh` by leading with `--repo`, accepting explicit `--generate-notes`, and keeping `--repo-ref` as a compatibility alias.
 - Removed stale `.sops.*` gitignore exceptions now that SI uses the native `si vault`/Fort secret path instead of a SOPS+age repo workflow.
 - Reverted the SI-local release-bundle helper path so ReleaseMind integration can land through a dedicated orbit client instead of new SI-owned release logic.
 - Added a Fort-backed `si surf` noVNC password injection path so `si surf start` can use a stable viewer secret without storing it in plaintext Surf config.

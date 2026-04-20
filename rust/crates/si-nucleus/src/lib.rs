@@ -9530,7 +9530,7 @@ mod tests {
         assert!(run.ok);
         let run_id = run.result.as_ref().and_then(|item| item["run_id"].as_str()).expect("run id");
 
-        thread::sleep(Duration::from_millis(150));
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
 
         let inspected_run = service
             .dispatch_request(GatewayRequest {
