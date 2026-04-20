@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <a href="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge" alt="License: AGPL-3.0"></a>
-  <a href="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/rust-1.86-000000?logo=rust&logoColor=white&style=for-the-badge" alt="Rust 1.86"></a>
-  <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-0f766e?style=for-the-badge" alt="License: AGPL-3.0"></a>
+  <a href="./docs/index.mdx"><img src="https://img.shields.io/badge/docs-reference-0f766e?style=for-the-badge" alt="Docs Reference"></a>
+  <a href="https://github.com/Aureuma/si/releases"><img src="https://img.shields.io/github/v/release/Aureuma/si?display_name=tag&style=for-the-badge" alt="GitHub Release"></a>
   <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
   <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Formula: aureuma/si/si"></a>
 </p>
@@ -45,7 +45,7 @@ brew install aureuma/si/si
 
 Homebrew uses `user/repo/formula` for external taps, so `brew install aureuma/si` is not a valid formula path.
 
-Direct source install remains available:
+Direct source install remains available and installs the `si` launcher on this host:
 
 ```bash
 cargo run --quiet --locked -p si-rs-cli -- build installer run --force
@@ -55,14 +55,20 @@ cargo run --quiet --locked -p si-rs-cli -- build installer run --force
 
 Prerequisites:
 
-- Latest stable Rust toolchain for local source builds.
-- `si-rs` is the runtime entrypoint.
+- Rust `1.88.0` for local source builds (see `rust-toolchain.toml`).
+- Installed `si` for normal usage, or `target/release/si-rs` if you want to run the just-built binary directly from source.
 
-Build local CLI:
+Build the local source binary:
 
 ```bash
 cd /path/to/si
 cargo build --release --locked --bin si-rs
+```
+
+Run the built binary directly without installing it:
+
+```bash
+target/release/si-rs --help
 ```
 
 Fast local iteration:
@@ -77,31 +83,31 @@ si build self --timings
 Nucleus control plane:
 
 ```bash
-./si nucleus status
-./si nucleus task create "Investigate release drift" "Summarize the last failed release attempt."
-./si nucleus task list
-./si nucleus service install
-./si nucleus service start
+si nucleus status
+si nucleus task create "Investigate release drift" "Summarize the last failed release attempt."
+si nucleus task list
+si nucleus service install
+si nucleus service start
 ```
 
 Codex lifecycle:
 
 ```bash
-./si codex spawn --profile <profile> --workspace "$PWD"
-./si codex list
-./si codex shell --profile <profile> -- bash
-./si codex tail --profile <profile>
-./si codex remove --profile <profile>
+si codex spawn --profile <profile> --workspace "$PWD"
+si codex list
+si codex shell --profile <profile> -- bash
+si codex tail --profile <profile>
+si codex remove --profile <profile>
 ```
 
 Browser runtime:
 
 ```bash
-./si surf build
-./si surf start --profile default
-./si surf status
-./si surf logs
-./si surf stop
+si surf build
+si surf start --profile default
+si surf status
+si surf logs
+si surf stop
 ```
 
 If you want a stable noVNC viewer password without storing it in `~/.si/surf/settings.toml`,
@@ -123,9 +129,9 @@ then `~/.si/nucleus/gateway/metadata.json`, then `ws://127.0.0.1:4747/ws`.
 Mintlify docs tooling:
 
 ```bash
-./si mintlify init --repo . --docs-dir docs --site-url https://docs.si.aureuma.ai --force
-./si mintlify validate
-./si mintlify dev
+si mintlify init --repo . --docs-dir docs --site-url https://docs.si.aureuma.ai --force
+si mintlify validate
+si mintlify dev
 ```
 
 ## Command map
@@ -185,7 +191,7 @@ Scenario coverage and expected behavior are documented in [`docs/HOST_TEST_MATRI
 Run static analysis:
 
 ```bash
-./si analyze
+si analyze
 ```
 
 ## Releases
