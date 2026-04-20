@@ -3559,7 +3559,7 @@ fn nucleus_rest_task_matches_websocket_and_cli_state() {
 fn nucleus_rest_mutations_return_documented_status_codes_and_shapes() {
     let temp = tempdir().expect("tempdir");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -4034,7 +4034,7 @@ fn nucleus_rest_worker_session_and_run_match_websocket_and_cli_state() {
 fn nucleus_rest_task_cancel_matches_websocket_and_cli_state() {
     let temp = tempdir().expect("tempdir");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -4923,7 +4923,7 @@ fn nucleus_run_submit_turn_blocks_fort_unavailable_task_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -5007,7 +5007,7 @@ fn nucleus_session_backlog_stays_serial_and_reuses_the_same_session_on_live_serv
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(700),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -5589,7 +5589,7 @@ fn nucleus_session_create_does_not_reuse_session_with_conflicting_active_run_on_
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -5880,7 +5880,7 @@ fn nucleus_run_submit_turn_failure_before_run_started_marks_run_and_task_failed_
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -6029,7 +6029,7 @@ fn nucleus_task_prune_removes_only_old_terminal_tasks_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(700),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -6214,7 +6214,7 @@ fn nucleus_run_cancel_projects_cancelled_state_consistently_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -6258,7 +6258,7 @@ fn nucleus_run_cancel_marks_session_broken_when_thread_id_is_missing_on_live_ser
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -6426,7 +6426,7 @@ fn nucleus_task_cancel_marks_session_broken_when_thread_id_is_missing_on_live_se
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
@@ -6487,7 +6487,7 @@ fn nucleus_worker_loss_blocks_task_run_and_worker_projections_on_live_service() 
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -6676,7 +6676,7 @@ fn nucleus_worker_restart_rejects_active_run_on_live_service() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -6831,7 +6831,7 @@ fn nucleus_worker_restart_does_not_requeue_broken_session_task_on_live_service()
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");
     let runtime = TestRuntime::with_config(TestRuntimeConfig {
-        run_delay: Duration::from_millis(900),
+        run_delay: Duration::from_secs(3),
         step_delay: Duration::from_millis(0),
         output_deltas: vec!["nucleus-smoke".to_owned()],
         fail_execute: false,
@@ -8247,7 +8247,7 @@ fn nucleus_live_openapi_document_advertises_bounded_contract() {
 fn nucleus_live_rest_task_cancel_requires_token_and_succeeds_with_bearer() {
     let temp = tempdir().expect("tempdir");
     let runtime = TestRuntime::with_streaming_output(
-        Duration::from_millis(900),
+        Duration::from_secs(3),
         Duration::from_millis(0),
         &["nucleus-smoke"],
     );
