@@ -14175,6 +14175,58 @@ fn releasemind_release_create_uses_saved_session_and_git_origin() {
 }
 
 #[test]
+fn releasemind_release_create_accepts_repo_flag_and_generate_notes() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/cli/releases/create HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        assert!(request.contains("\"release_tag\":\"v1.2.4\""));
+        assert!(!request.contains("\"notes\":"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_release_create_repo_flag")],
+            r#"{"ok":true,"post_id":"post-2","status":"draft","release_tag":"v1.2.4","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.4"}"#,
+        )
+    });
+    write_releasemind_auth_state(
+        home.path(),
+        &server.base_url,
+        "rmses.test.secret",
+        "SHi-ON",
+        "shi-on@example.com",
+    );
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args([
+            "orbit",
+            "releasemind",
+            "release",
+            "create",
+            "v1.2.4",
+            "--repo",
+            "Aureuma/si",
+            "--generate-notes",
+            "--draft",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_release_create_repo_flag");
+    assert_eq!(parsed["data"]["post_id"], "post-2");
+    assert_eq!(parsed["data"]["release_tag"], "v1.2.4");
+    server.join();
+}
+
+#[test]
 fn releasemind_release_view_uses_saved_session() {
     let home = tempdir().expect("tempdir");
     let server = start_one_shot_http_server(|request| {

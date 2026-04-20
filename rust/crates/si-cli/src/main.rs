@@ -14197,7 +14197,7 @@ enum ReleaseMindReleaseCommand {
     Create {
         #[arg(help = "GitHub release tag, for example v1.2.3.")]
         release_tag: Option<String>,
-        #[arg(long)]
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
         #[arg(long)]
         base_url: Option<String>,
@@ -14207,6 +14207,8 @@ enum ReleaseMindReleaseCommand {
         notes: Option<String>,
         #[arg(long = "notes-file")]
         notes_file: Option<PathBuf>,
+        #[arg(long, conflicts_with = "notes", conflicts_with = "notes_file")]
+        generate_notes: bool,
         #[arg(long)]
         draft: bool,
         #[arg(long)]
@@ -35129,6 +35131,7 @@ fn main() -> Result<()> {
                     title,
                     notes,
                     notes_file,
+                    generate_notes,
                     draft,
                     base_tag,
                     task,
@@ -35146,6 +35149,7 @@ fn main() -> Result<()> {
                     title,
                     notes,
                     notes_file,
+                    generate_notes,
                     draft,
                     base_tag,
                     task,
@@ -36733,6 +36737,7 @@ fn run_releasemind_release_create(
     title: Option<String>,
     notes: Option<String>,
     notes_file: Option<PathBuf>,
+    generate_notes: bool,
     draft: bool,
     base_tag: Option<String>,
     task: Option<String>,
@@ -36753,6 +36758,7 @@ fn run_releasemind_release_create(
     let (base_url, _) =
         releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
     let notes = releasemind_release_notes(notes, notes_file)?;
+    let _ = generate_notes;
     let mut body = serde_json::Map::new();
     body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
     body.insert("release_tag".to_owned(), Value::String(release_tag));

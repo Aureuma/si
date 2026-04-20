@@ -221,7 +221,7 @@ an orbit client:
 
 ```bash
 si orbit releasemind auth login
-si orbit releasemind release create vX.Y.0 --repo-ref Aureuma/si --draft --json
+si orbit releasemind release create vX.Y.0 --repo Aureuma/si --draft --json
 si orbit releasemind release view Aureuma/si post_123 --json
 si orbit releasemind release publish Aureuma/si post_123 --json
 ```
