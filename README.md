@@ -228,8 +228,8 @@ si orbit releasemind release publish Aureuma/si post_123 --json
 
 Use `si orbit releasemind auth login` for interactive operator work. Use
 dashboard-linked automation tokens only for CI or unattended flows, and inject
-`RELEASEMIND_API_BASE_URL` and `RELEASEMIND_AUTOMATION_TOKEN` with `si fort`
-when you need those lower-level automation endpoints.
+`RELEASEMIND_AUTOMATION_TOKEN` with `si fort` when you need those lower-level
+automation endpoints.
 
 ## License
 

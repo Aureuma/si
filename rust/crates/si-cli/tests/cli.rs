@@ -142,7 +142,6 @@ fn write_reusable_codex_fort_session(codex_home: &Path, profile_id: &str) {
 
 fn write_releasemind_auth_state(
     home: &Path,
-    base_url: &str,
     session_token: &str,
     github_username: &str,
     email: &str,
@@ -154,7 +153,6 @@ fn write_releasemind_auth_state(
     fs::write(
         &path,
         serde_json::to_vec_pretty(&json!({
-            "base_url": base_url,
             "session_token": session_token,
             "expires_at": "2030-01-01T00:00:00Z",
             "user": {
@@ -13925,16 +13923,8 @@ fn releasemind_auth_login_persists_session_state() {
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args([
-            "orbit",
-            "releasemind",
-            "auth",
-            "login",
-            "--base-url",
-            &server.base_url,
-            "--no-open",
-            "--json",
-        ])
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "auth", "login", "--no-open", "--json"])
         .assert()
         .success()
         .get_output()
@@ -13967,17 +13957,12 @@ fn releasemind_auth_status_uses_saved_session() {
             r#"{"ok":true,"user":{"github_username":"SHi-ON","email":"shi-on@example.com"}}"#,
         )
     });
-    write_releasemind_auth_state(
-        home.path(),
-        &server.base_url,
-        "rmses.test.secret",
-        "SHi-ON",
-        "shi-on@example.com",
-    );
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args(["orbit", "releasemind", "auth", "status", "--base-url", &server.base_url, "--json"])
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "auth", "status", "--json"])
         .assert()
         .success()
         .get_output()
@@ -14044,15 +14029,8 @@ fn releasemind_doctor_checks_repo_billing_and_usage() {
 
     let output = cargo_bin()
         .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
-        .args([
-            "orbit",
-            "releasemind",
-            "doctor",
-            "Aureuma/si",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "doctor", "Aureuma/si", "--json"])
         .assert()
         .success()
         .get_output()
@@ -14085,14 +14063,13 @@ fn releasemind_release_prepare_posts_api_payload() {
 
     let output = cargo_bin()
         .env("RELEASEMIND_AUTOMATION_TOKEN", "rmatk.test.secret")
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
         .args([
             "orbit",
             "releasemind",
             "release",
             "prepare",
             "Aureuma/si",
-            "--base-url",
-            &server.base_url,
             "--release-tag",
             "v1.2.3",
             "--wait-for-ready",
@@ -14137,25 +14114,18 @@ fn releasemind_release_create_uses_saved_session_and_git_origin() {
             r#"{"ok":true,"post_id":"post-1","status":"draft","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
         )
     });
-    write_releasemind_auth_state(
-        home.path(),
-        &server.base_url,
-        "rmses.test.secret",
-        "SHi-ON",
-        "shi-on@example.com",
-    );
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
 
     let output = cargo_bin()
         .current_dir(repo.path())
         .env("HOME", home.path())
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
         .args([
             "orbit",
             "releasemind",
             "release",
             "create",
             "v1.2.3",
-            "--base-url",
-            &server.base_url,
             "--notes-file",
             notes_path.to_str().expect("notes path"),
             "--draft",
@@ -14189,16 +14159,11 @@ fn releasemind_release_create_accepts_repo_flag_and_generate_notes() {
             r#"{"ok":true,"post_id":"post-2","status":"draft","release_tag":"v1.2.4","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.4"}"#,
         )
     });
-    write_releasemind_auth_state(
-        home.path(),
-        &server.base_url,
-        "rmses.test.secret",
-        "SHi-ON",
-        "shi-on@example.com",
-    );
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
 
     let output = cargo_bin()
         .env("HOME", home.path())
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
         .args([
             "orbit",
             "releasemind",
@@ -14209,8 +14174,6 @@ fn releasemind_release_create_accepts_repo_flag_and_generate_notes() {
             "Aureuma/si",
             "--generate-notes",
             "--draft",
-            "--base-url",
-            &server.base_url,
             "--json",
         ])
         .assert()
@@ -14240,27 +14203,12 @@ fn releasemind_release_view_uses_saved_session() {
             r#"{"ok":true,"post_id":"post-1","status":"ready","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
         )
     });
-    write_releasemind_auth_state(
-        home.path(),
-        &server.base_url,
-        "rmses.test.secret",
-        "SHi-ON",
-        "shi-on@example.com",
-    );
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args([
-            "orbit",
-            "releasemind",
-            "release",
-            "view",
-            "Aureuma/si",
-            "post-1",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "release", "view", "Aureuma/si", "post-1", "--json"])
         .assert()
         .success()
         .get_output()
@@ -14287,27 +14235,12 @@ fn releasemind_release_publish_uses_saved_session_without_automation_token() {
             r#"{"ok":true,"post_id":"post-1","status":"published","release_tag":"v1.2.3","release_url":"https://github.com/Aureuma/si/releases/tag/v1.2.3"}"#,
         )
     });
-    write_releasemind_auth_state(
-        home.path(),
-        &server.base_url,
-        "rmses.test.secret",
-        "SHi-ON",
-        "shi-on@example.com",
-    );
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
 
     let output = cargo_bin()
         .env("HOME", home.path())
-        .args([
-            "orbit",
-            "releasemind",
-            "release",
-            "publish",
-            "Aureuma/si",
-            "post-1",
-            "--base-url",
-            &server.base_url,
-            "--json",
-        ])
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "release", "publish", "Aureuma/si", "post-1", "--json"])
         .assert()
         .success()
         .get_output()
@@ -14318,6 +14251,20 @@ fn releasemind_release_publish_uses_saved_session_without_automation_token() {
     assert_eq!(parsed["request_id"], "req_rm_release_publish");
     assert_eq!(parsed["data"]["status"], "published");
     server.join();
+}
+
+#[test]
+fn releasemind_auth_login_help_omits_base_url_flag() {
+    let output = cargo_bin()
+        .args(["orbit", "releasemind", "auth", "login", "--help"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("help output utf8");
+    assert!(!text.contains("--base-url"));
 }
 
 #[test]

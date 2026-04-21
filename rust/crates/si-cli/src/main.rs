@@ -14136,8 +14136,6 @@ enum ReleaseMindCommand {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
@@ -14156,23 +14154,17 @@ enum ReleaseMindCommand {
 enum ReleaseMindAuthCommand {
     Login {
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         no_open: bool,
         #[arg(long)]
         json: bool,
     },
     Status {
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         no_refresh: bool,
         #[arg(long)]
         json: bool,
     },
     Logout {
-        #[arg(long)]
-        base_url: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -14183,8 +14175,6 @@ enum ReleaseMindRepoCommand {
     Resolve {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
-        #[arg(long)]
-        base_url: Option<String>,
         #[arg(long)]
         token: Option<String>,
         #[arg(long)]
@@ -14199,8 +14189,6 @@ enum ReleaseMindReleaseCommand {
         release_tag: Option<String>,
         #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
-        #[arg(long)]
-        base_url: Option<String>,
         #[arg(long)]
         title: Option<String>,
         #[arg(long)]
@@ -14234,8 +14222,6 @@ enum ReleaseMindReleaseCommand {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         token: Option<String>,
         #[arg(long)]
         release_tag: Option<String>,
@@ -14268,8 +14254,6 @@ enum ReleaseMindReleaseCommand {
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
@@ -14280,8 +14264,6 @@ enum ReleaseMindReleaseCommand {
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
         #[arg(long)]
-        base_url: Option<String>,
-        #[arg(long)]
         json: bool,
     },
     Publish {
@@ -14289,8 +14271,6 @@ enum ReleaseMindReleaseCommand {
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
-        #[arg(long)]
-        base_url: Option<String>,
         #[arg(long)]
         token: Option<String>,
         #[arg(long)]
@@ -35131,29 +35111,26 @@ fn main() -> Result<()> {
         },
         Command::ReleaseMind { command } => match command {
             ReleaseMindCommand::Auth { command } => match command {
-                ReleaseMindAuthCommand::Login { base_url, no_open, json } => {
-                    run_releasemind_auth_login(base_url, no_open, json)?
+                ReleaseMindAuthCommand::Login { no_open, json } => {
+                    run_releasemind_auth_login(no_open, json)?
                 }
-                ReleaseMindAuthCommand::Status { base_url, no_refresh, json } => {
-                    run_releasemind_auth_status(base_url, no_refresh, json)?
+                ReleaseMindAuthCommand::Status { no_refresh, json } => {
+                    run_releasemind_auth_status(no_refresh, json)?
                 }
-                ReleaseMindAuthCommand::Logout { base_url, json } => {
-                    run_releasemind_auth_logout(base_url, json)?
-                }
+                ReleaseMindAuthCommand::Logout { json } => run_releasemind_auth_logout(json)?,
             },
-            ReleaseMindCommand::Doctor { repo_ref, base_url, token, json } => {
-                run_releasemind_doctor(repo_ref, base_url, token, json)?
+            ReleaseMindCommand::Doctor { repo_ref, token, json } => {
+                run_releasemind_doctor(repo_ref, token, json)?
             }
             ReleaseMindCommand::Repo { command } => match command {
-                ReleaseMindRepoCommand::Resolve { repo_ref, base_url, token, json } => {
-                    run_releasemind_repo_resolve(repo_ref, base_url, token, json)?
+                ReleaseMindRepoCommand::Resolve { repo_ref, token, json } => {
+                    run_releasemind_repo_resolve(repo_ref, token, json)?
                 }
             },
             ReleaseMindCommand::Release { command } => match command {
                 ReleaseMindReleaseCommand::Create {
                     release_tag,
                     repo_ref,
-                    base_url,
                     title,
                     notes,
                     notes_file,
@@ -35171,7 +35148,6 @@ fn main() -> Result<()> {
                 } => run_releasemind_release_create(
                     release_tag,
                     repo_ref,
-                    base_url,
                     title,
                     notes,
                     notes_file,
@@ -35189,7 +35165,6 @@ fn main() -> Result<()> {
                 )?,
                 ReleaseMindReleaseCommand::Prepare {
                     repo_ref,
-                    base_url,
                     token,
                     release_tag,
                     base_tag,
@@ -35205,7 +35180,6 @@ fn main() -> Result<()> {
                     json,
                 } => run_releasemind_release_prepare(
                     repo_ref,
-                    base_url,
                     token,
                     release_tag,
                     base_tag,
@@ -35220,14 +35194,14 @@ fn main() -> Result<()> {
                     timeout_seconds,
                     json,
                 )?,
-                ReleaseMindReleaseCommand::Status { repo_ref, post_id, base_url, token, json } => {
-                    run_releasemind_release_status(repo_ref, post_id, base_url, token, json)?
+                ReleaseMindReleaseCommand::Status { repo_ref, post_id, token, json } => {
+                    run_releasemind_release_status(repo_ref, post_id, token, json)?
                 }
-                ReleaseMindReleaseCommand::View { repo_ref, post_id, base_url, json } => {
-                    run_releasemind_release_view(repo_ref, post_id, base_url, json)?
+                ReleaseMindReleaseCommand::View { repo_ref, post_id, json } => {
+                    run_releasemind_release_view(repo_ref, post_id, json)?
                 }
-                ReleaseMindReleaseCommand::Publish { repo_ref, post_id, base_url, token, json } => {
-                    run_releasemind_release_publish(repo_ref, post_id, base_url, token, json)?
+                ReleaseMindReleaseCommand::Publish { repo_ref, post_id, token, json } => {
+                    run_releasemind_release_publish(repo_ref, post_id, token, json)?
                 }
             },
         },
@@ -36321,14 +36295,13 @@ fn cli_help_styles() -> Styles {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ReleaseMindAuthState {
-    base_url: String,
     session_token: String,
     expires_at: Option<String>,
     user: Value,
 }
 
-fn run_releasemind_auth_login(base_url: Option<String>, no_open: bool, json: bool) -> Result<()> {
-    let (base_url, base_url_source) = releasemind_base_url(base_url.as_deref());
+fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
+    let (base_url, base_url_source) = releasemind_base_url();
     let start =
         releasemind_request(Method::POST, "/api/cli/auth/flows/start", None, &base_url, None)?;
     let flow_id =
@@ -36362,7 +36335,6 @@ fn run_releasemind_auth_login(base_url: Option<String>, no_open: bool, json: boo
             let session_token = json_string_field(&status.2, "session_token")
                 .ok_or_else(|| anyhow!("missing session_token"))?;
             let auth_state = ReleaseMindAuthState {
-                base_url: base_url.clone(),
                 session_token: session_token.to_owned(),
                 expires_at: status.2.get("expires_at").and_then(Value::as_str).map(str::to_owned),
                 user: status.2.get("user").cloned().unwrap_or(Value::Null),
@@ -36413,23 +36385,9 @@ fn run_releasemind_auth_login(base_url: Option<String>, no_open: bool, json: boo
     }
 }
 
-fn run_releasemind_auth_status(
-    base_url: Option<String>,
-    no_refresh: bool,
-    json: bool,
-) -> Result<()> {
+fn run_releasemind_auth_status(no_refresh: bool, json: bool) -> Result<()> {
     let mut state = load_releasemind_auth_state()?;
-    if let Some(value) =
-        base_url.as_deref().map(str::trim).map(|value| value.trim_end_matches('/').to_owned())
-        && !value.is_empty()
-        && let Some(item) = state.as_mut()
-    {
-        item.base_url = value;
-    }
-    let (base_url, base_url_source) = releasemind_base_url_with_state(
-        base_url.as_deref(),
-        state.as_ref().map(|item| item.base_url.as_str()),
-    );
+    let (base_url, base_url_source) = releasemind_base_url();
     let session = match state.as_ref() {
         Some(item) => {
             if no_refresh {
@@ -36456,7 +36414,6 @@ fn run_releasemind_auth_status(
     if let (Some(item), Some(user)) = (state.as_mut(), session.as_ref())
         && !no_refresh
     {
-        item.base_url = base_url.clone();
         item.user = user.clone();
         save_releasemind_auth_state(item)?;
     }
@@ -36499,7 +36456,7 @@ fn run_releasemind_auth_status(
     Ok(())
 }
 
-fn run_releasemind_auth_logout(base_url: Option<String>, json: bool) -> Result<()> {
+fn run_releasemind_auth_logout(json: bool) -> Result<()> {
     let state = load_releasemind_auth_state()?;
     let Some(state) = state else {
         if json {
@@ -36509,8 +36466,7 @@ fn run_releasemind_auth_logout(base_url: Option<String>, json: bool) -> Result<(
         }
         return Ok(());
     };
-    let (base_url, _) =
-        releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
+    let (base_url, _) = releasemind_base_url();
     let _ = releasemind_request(
         Method::POST,
         "/api/cli/auth/logout",
@@ -36530,12 +36486,11 @@ fn run_releasemind_auth_logout(base_url: Option<String>, json: bool) -> Result<(
 
 fn run_releasemind_doctor(
     repo_ref: Option<String>,
-    base_url: Option<String>,
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required for doctor")?;
-    let (base_url, base_url_source) = releasemind_base_url(base_url.as_deref());
+    let (base_url, base_url_source) = releasemind_base_url();
     let (token, token_source) = releasemind_token(token.as_deref())?;
     let verify = releasemind_request(
         Method::GET,
@@ -36611,13 +36566,12 @@ fn run_releasemind_doctor(
 
 fn run_releasemind_repo_resolve(
     repo_ref: Option<String>,
-    base_url: Option<String>,
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
     let response = if let Ok((token, _)) = releasemind_token(token.as_deref()) {
-        let (base_url, _) = releasemind_base_url(base_url.as_deref());
+        let (base_url, _) = releasemind_base_url();
         releasemind_request(
             Method::GET,
             &format!(
@@ -36630,8 +36584,7 @@ fn run_releasemind_repo_resolve(
         )?
     } else {
         let state = require_releasemind_auth_state()?;
-        let (base_url, _) =
-            releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
+        let (base_url, _) = releasemind_base_url();
         releasemind_request(
             Method::GET,
             &format!("/api/cli/repos/resolve?repo_full_name={}", encode_query_value(&repo_ref)),
@@ -36668,7 +36621,6 @@ fn run_releasemind_repo_resolve(
 #[allow(clippy::too_many_arguments)]
 fn run_releasemind_release_prepare(
     repo_ref: Option<String>,
-    base_url: Option<String>,
     token: Option<String>,
     release_tag: Option<String>,
     base_tag: Option<String>,
@@ -36684,7 +36636,7 @@ fn run_releasemind_release_prepare(
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
-    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (base_url, _) = releasemind_base_url();
     let (token, _) = releasemind_token(token.as_deref())?;
     let mut body = serde_json::Map::new();
     body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
@@ -36759,7 +36711,6 @@ fn run_releasemind_release_prepare(
 fn run_releasemind_release_create(
     release_tag: Option<String>,
     repo_ref: Option<String>,
-    base_url: Option<String>,
     title: Option<String>,
     notes: Option<String>,
     notes_file: Option<PathBuf>,
@@ -36781,8 +36732,7 @@ fn run_releasemind_release_create(
         .ok_or_else(|| anyhow!("release tag is required"))?;
     let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let state = require_releasemind_auth_state()?;
-    let (base_url, _) =
-        releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
+    let (base_url, _) = releasemind_base_url();
     let notes = releasemind_release_notes(notes, notes_file)?;
     let _ = generate_notes;
     let mut body = serde_json::Map::new();
@@ -36856,13 +36806,12 @@ fn run_releasemind_release_create(
 fn run_releasemind_release_status(
     repo_ref: Option<String>,
     post_id: Option<String>,
-    base_url: Option<String>,
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
     let post_id = releasemind_post_id_required(post_id)?;
-    let (base_url, _) = releasemind_base_url(base_url.as_deref());
+    let (base_url, _) = releasemind_base_url();
     let (token, _) = releasemind_token(token.as_deref())?;
     let response = releasemind_request(
         Method::GET,
@@ -36888,14 +36837,12 @@ fn run_releasemind_release_status(
 fn run_releasemind_release_view(
     repo_ref: Option<String>,
     post_id: Option<String>,
-    base_url: Option<String>,
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let post_id = releasemind_post_id_required(post_id)?;
     let state = require_releasemind_auth_state()?;
-    let (base_url, _) =
-        releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
+    let (base_url, _) = releasemind_base_url();
     let response = releasemind_request(
         Method::GET,
         &format!(
@@ -36918,14 +36865,13 @@ fn run_releasemind_release_view(
 fn run_releasemind_release_publish(
     repo_ref: Option<String>,
     post_id: Option<String>,
-    base_url: Option<String>,
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
     let post_id = releasemind_post_id_required(post_id)?;
     let response = if let Ok((token, _)) = releasemind_token(token.as_deref()) {
-        let (base_url, _) = releasemind_base_url(base_url.as_deref());
+        let (base_url, _) = releasemind_base_url();
         releasemind_request(
             Method::POST,
             "/api/automation/releases/publish",
@@ -36938,8 +36884,7 @@ fn run_releasemind_release_publish(
         )?
     } else {
         let state = require_releasemind_auth_state()?;
-        let (base_url, _) =
-            releasemind_base_url_with_state(base_url.as_deref(), Some(state.base_url.as_str()));
+        let (base_url, _) = releasemind_base_url();
         releasemind_request(
             Method::POST,
             "/api/cli/releases/publish",
@@ -36961,29 +36906,13 @@ fn run_releasemind_release_publish(
     Ok(())
 }
 
-fn releasemind_base_url(override_base: Option<&str>) -> (String, &'static str) {
-    if let Some(value) = override_base.map(str::trim).filter(|value| !value.is_empty()) {
-        return (value.trim_end_matches('/').to_owned(), "flag:--base-url");
-    }
+fn releasemind_base_url() -> (String, &'static str) {
     if let Ok(value) = env::var("RELEASEMIND_API_BASE_URL")
         && !value.trim().is_empty()
     {
         return (value.trim().trim_end_matches('/').to_owned(), "env:RELEASEMIND_API_BASE_URL");
     }
     ("https://releasemind.ai".to_owned(), "default")
-}
-
-fn releasemind_base_url_with_state(
-    override_base: Option<&str>,
-    state_base: Option<&str>,
-) -> (String, &'static str) {
-    if let Some(value) = override_base.map(str::trim).filter(|value| !value.is_empty()) {
-        return (value.trim_end_matches('/').to_owned(), "flag:--base-url");
-    }
-    if let Some(value) = state_base.map(str::trim).filter(|value| !value.is_empty()) {
-        return (value.trim_end_matches('/').to_owned(), "state");
-    }
-    releasemind_base_url(None)
 }
 
 fn releasemind_token(override_token: Option<&str>) -> Result<(String, &'static str)> {

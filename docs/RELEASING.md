@@ -173,7 +173,6 @@ Notes:
 
 Option D: Use the Releasemind GitHub workflow for draft + publish orchestration.
 1. Add the required repo secrets:
-   - `RELEASEMIND_API_BASE_URL`
    - `RELEASEMIND_AUTOMATION_TOKEN`
 2. Push the release tag.
 3. Let `.github/workflows/releasemind-release.yml` create or refresh the draft release notes and publish the release.
