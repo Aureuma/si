@@ -246,4 +246,4 @@ Live `v0.59.0` release verification on 2026-04-21:
 - The same run finished `failure` because two post-publish Homebrew jobs exposed follow-up issues:
   - `Verify local Homebrew install path` failed because Homebrew now rejects loose formula-file installs outside a tap.
   - `Update homebrew-si tap formula` failed because the dedicated tap token could clone `Aureuma/homebrew-si` but could not push; `GH_PAT_AUREUMA` has push permission and is now used as a retry fallback on `main`.
-- Follow-up patch `0.59.1` on `main` fixes both release-lane issues for the next release.
+- Follow-up patches `0.59.1` and `0.59.2` on `main` fix the release-lane issues for the next release, including the final CI clippy cleanup in the Homebrew smoke path.

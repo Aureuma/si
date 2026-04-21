@@ -20341,11 +20341,11 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     }
     let prefix_output = prefix_cmd.output().context("run brew --prefix")?;
     if !prefix_output.status.success() {
-        return Err(anyhow!("brew --prefix {} failed: {}", formula_ref, prefix_output.status));
+        return Err(anyhow!("brew --prefix {formula_ref} failed: {}", prefix_output.status));
     }
     let prefix = String::from_utf8_lossy(&prefix_output.stdout).trim().to_owned();
     if prefix.is_empty() {
-        return Err(anyhow!("brew --prefix {} returned empty output", formula_ref));
+        return Err(anyhow!("brew --prefix {formula_ref} returned empty output"));
     }
 
     let installed = PathBuf::from(&prefix).join("bin").join("si");
