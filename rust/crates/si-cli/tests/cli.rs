@@ -13889,8 +13889,8 @@ fn providers_characteristics_includes_releasemind() {
     let providers = parsed["providers"].as_array().expect("providers array");
     assert_eq!(providers.len(), 1);
     assert_eq!(providers[0]["provider"], "releasemind");
-    assert_eq!(providers[0]["base_url"], "https://api.releasemind.ai");
-    assert_eq!(providers[0]["public_probe"]["path"], "/healthz");
+    assert_eq!(providers[0]["base_url"], "https://releasemind.ai");
+    assert_eq!(providers[0]["public_probe"]["path"], "/api/health");
 }
 
 #[test]

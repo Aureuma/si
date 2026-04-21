@@ -157,13 +157,13 @@ const ENTRIES: &[ProviderCatalogEntry] = &[
     entry(
         ProviderId::ReleaseMind,
         spec(
-            "https://api.releasemind.ai",
+            "https://releasemind.ai",
             None,
             Some("v1"),
             Some("bearer"),
             1.0,
             2,
-            Some(PublicProbe { method: "GET", path: "/healthz" }),
+            Some(PublicProbe { method: "GET", path: "/api/health" }),
         ),
         caps(false, false, false, false),
     ),
@@ -472,10 +472,13 @@ mod tests {
     #[test]
     fn releasemind_snapshot_matches_expected_values() {
         let releasemind = find(ProviderId::ReleaseMind).expect("releasemind catalog entry");
-        assert_eq!(releasemind.spec.base_url, "https://api.releasemind.ai");
+        assert_eq!(releasemind.spec.base_url, "https://releasemind.ai");
         assert_eq!(releasemind.spec.api_version, Some("v1"));
         assert_eq!(releasemind.spec.auth_style, Some("bearer"));
-        assert_eq!(releasemind.spec.public_probe.expect("probe").path, "/healthz");
+        assert_eq!(
+            releasemind.spec.public_probe.expect("probe").path,
+            "/api/health"
+        );
         assert!(!releasemind.capabilities.supports_raw);
     }
 }
