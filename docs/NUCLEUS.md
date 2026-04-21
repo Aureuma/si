@@ -95,20 +95,9 @@ The main control-plane transport is WebSocket:
 - request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.create`, `session.list`, `session.show`, `run.submit_turn`, `run.inspect`, and `run.cancel`
 - server-pushed canonical events through `events.subscribe`
 
-The bounded REST surface is exposed by the same Nucleus service and source of truth:
+The external REST contract is the generated `docs/gpt-actions-openapi.yaml` artifact and the live `GET /openapi.json` response from the same Nucleus source of truth. Treat those generated OpenAPI surfaces as canonical for GPT Actions and other bounded external clients.
 
-- `GET /openapi.json`
-- `GET /status`
-- `POST /tasks`
-- `GET /tasks`
-- `GET /tasks/{task_id}`
-- `POST /tasks/{task_id}/cancel`
-- `GET /workers`
-- `GET /workers/{worker_id}`
-- `GET /sessions/{session_id}`
-- `GET /runs/{run_id}`
-
-`/openapi.json` is public OpenAPI 3.1 for GPT Actions URL import and includes summaries, descriptions, schemas, examples, and `x-si-purpose` annotations for bounded external consumers. Operational REST endpoints remain bearer-token protected.
+Additional local service routes such as `/events` and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
 
 ## Task Profile Assignment
 
@@ -135,7 +124,18 @@ For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/g
 - Every JSON request or response body must define a concrete schema. Do not use generic object schemas such as `type: object` with only `additionalProperties`.
 - Every object schema must include a `properties` key. Map-like objects may use `properties: {}` plus `additionalProperties`, but the `properties` key must still be present for GPT Actions compatibility.
 - Public bootstrap endpoints such as `GET /openapi.json` must set operation `security: []`; operational endpoints must explicitly require `bearerAuth`.
-- Keep the generated runtime document and `docs/gpt-actions-openapi.yaml` in sync with the package patch version.
+- Generate `docs/gpt-actions-openapi.yaml` from the canonical runtime model instead of editing version strings or endpoint lists by hand:
+
+  ```bash
+  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-sync-nucleus-openapi -- --write
+  ```
+
+- Use `--check` in automation or before a commit to catch drift:
+
+  ```bash
+  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-sync-nucleus-openapi -- --check
+  ```
+
 - Run the Nucleus OpenAPI tests before committing schema changes so importer compatibility failures are caught locally.
 
 ## Public route ownership
