@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.1` after publishing `v0.59.0`.
+- Bumped the working version to `0.59.2` after publishing `v0.59.0` and landing the Homebrew follow-up fixes.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
