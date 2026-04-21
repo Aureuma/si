@@ -299,35 +299,37 @@ jobs:
             [[ -n "${token}" ]] || return 1
             rm -rf "${tap_dir}"
             git clone "https://x-access-token:${token}@github.com/Aureuma/homebrew-si.git" "${tap_dir}"
+            git -C "${tap_dir}" remote set-url origin "https://x-access-token:${token}@github.com/Aureuma/homebrew-si.git"
           }
 
-          tap_push_token=""
+          run_tap_update() {
+            local token="$1"
+            clone_with_token "${token}"
+            git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
+            git -C "${tap_dir}" config user.name "github-actions[bot]"
+            cargo run --quiet --locked --release -p si-rs-cli -- build homebrew update \
+              --version "${tag}" \
+              --checksums dist/checksums.txt \
+              --tap-dir "${tap_dir}" \
+              --repo "${{ github.repository }}" \
+              --commit \
+              --push
+          }
+
           if [[ -n "${primary_token}" ]]; then
-            if clone_with_token "${primary_token}"; then
-              tap_push_token="${primary_token}"
-            elif [[ -n "${fallback_token}" && "${fallback_token}" != "${primary_token}" ]]; then
-              echo "Primary Homebrew token auth failed; retrying with GH_PAT_AUREUMA fallback."
-              clone_with_token "${fallback_token}"
-              tap_push_token="${fallback_token}"
-            else
-              echo "Primary Homebrew token auth failed and no distinct fallback token is available." >&2
-              exit 1
+            if run_tap_update "${primary_token}"; then
+              exit 0
             fi
-          else
-            clone_with_token "${fallback_token}"
-            tap_push_token="${fallback_token}"
+            if [[ -n "${fallback_token}" && "${fallback_token}" != "${primary_token}" ]]; then
+              echo "Primary Homebrew token update failed; retrying with GH_PAT_AUREUMA fallback."
+              run_tap_update "${fallback_token}"
+              exit 0
+            fi
+            echo "Primary Homebrew token update failed and no distinct fallback token is available." >&2
+            exit 1
           fi
 
-          git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
-          git -C "${tap_dir}" config user.name "github-actions[bot]"
-
-          cargo run --quiet --locked --release -p si-rs-cli -- build homebrew update \
-            --version "${tag}" \
-            --checksums dist/checksums.txt \
-            --tap-dir "${tap_dir}" \
-            --repo "${{ github.repository }}" \
-            --commit \
-            --push
+          run_tap_update "${fallback_token}"
 
   verify-release-distribution:
     name: Verify release assets, npm package, and Homebrew tap

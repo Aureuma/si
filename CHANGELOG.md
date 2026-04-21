@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Changed
+- Bumped the working version to `0.59.1` after publishing `v0.59.0`.
+
+### Fixed
+- Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
+- Hardened the Homebrew tap release workflow to retry `homebrew-si` pushes with `GH_PAT_AUREUMA` when a dedicated tap token can clone but cannot push.
 
 ## [v0.59.0] - 2026-04-20
 ### Added

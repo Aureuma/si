@@ -2,7 +2,7 @@
 
 ## Status
 
-Completed.
+Completed, with post-release hardening landed on `main`.
 
 This ticket tracks the work needed to make SI distributable on fresh Linux and
 macOS machines through GitHub Releases, npm, Homebrew, and source install paths.
@@ -237,3 +237,13 @@ describe the same contract.
 Completed in patch commits `6a58425e` through `1e3a2eea`, with this final
 documentation/status commit recording the completed state. The final supported
 binary matrix is Linux AMD64, Linux ARM64, macOS AMD64, and macOS ARM64.
+
+Live `v0.59.0` release verification on 2026-04-21:
+
+- Workspace validation passed locally before release, including the full workspace test suite.
+- GitHub Release published successfully: https://github.com/Aureuma/si/releases/tag/v0.59.0
+- GitHub Actions release run `24697694272` uploaded `checksums.txt` and the four platform archives, then published `@aureuma/si` successfully: https://github.com/Aureuma/si/actions/runs/24697694272
+- The same run finished `failure` because two post-publish Homebrew jobs exposed follow-up issues:
+  - `Verify local Homebrew install path` failed because Homebrew now rejects loose formula-file installs outside a tap.
+  - `Update homebrew-si tap formula` failed because the dedicated tap token could clone `Aureuma/homebrew-si` but could not push; `GH_PAT_AUREUMA` has push permission and is now used as a retry fallback on `main`.
+- Follow-up patch `0.59.1` on `main` fixes both release-lane issues for the next release.

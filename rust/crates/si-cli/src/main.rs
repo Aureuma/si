@@ -20222,7 +20222,8 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     let version = read_si_version(&root)?;
     let tmp = tempfile::tempdir().context("create temp dir")?;
     let assets_dir = tmp.path().join("assets");
-    let formula_dir = tmp.path().join("Formula");
+    let tap_dir = tmp.path().join("homebrew-si-smoke");
+    let formula_dir = tap_dir.join("Formula");
     let formula_path = formula_dir.join("si-smoke.rb");
     let cache_dir = tmp.path().join("homebrew-cache");
     let keg_prefix = tmp.path().join("si-smoke-prefix");
@@ -20294,22 +20295,37 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     fs::write(&formula_path, rendered)
         .with_context(|| format!("write {}", formula_path.display()))?;
 
+    run_command_checked(&tap_dir, "git", ["init"])?;
+    run_command_checked(&tap_dir, "git", ["config", "user.name", "SI Smoke"])?;
+    run_command_checked(&tap_dir, "git", ["config", "user.email", "si-smoke@example.invalid"])?;
+    run_command_checked(&tap_dir, "git", ["add", "Formula/si-smoke.rb"])?;
+    run_command_checked(&tap_dir, "git", ["commit", "-m", "Add smoke formula"])?;
+
+    let tap_name = "si/homebrew-si-smoke".to_owned();
+    let formula_ref = format!("{tap_name}/si-smoke");
     let cache_dir_value = cache_dir.display().to_string();
     let keg_prefix_value = keg_prefix.display().to_string();
     let brew_env = [
         ("HOMEBREW_NO_AUTO_UPDATE", "1"),
         ("HOMEBREW_NO_INSTALL_CLEANUP", "1"),
         ("HOMEBREW_NO_ENV_HINTS", "1"),
+        ("HOMEBREW_NO_INSTALL_FROM_API", "1"),
         ("HOMEBREW_CACHE", cache_dir_value.as_str()),
         ("SI_HOMEBREW_SMOKE_PREFIX", keg_prefix_value.as_str()),
     ];
 
+    let mut tap = StdCommand::new("brew");
+    tap.current_dir(&root).args(["tap", tap_name.as_str(), tap_dir.to_str().unwrap_or_default()]);
+    for (key, value) in &brew_env {
+        tap.env(key, value);
+    }
+    let tap_status = tap.status().context("run brew tap")?;
+    if !tap_status.success() {
+        return Err(anyhow!("brew tap failed: {tap_status}"));
+    }
+
     let mut install = StdCommand::new("brew");
-    install.current_dir(&root).args([
-        "install",
-        "--formula",
-        formula_path.to_str().unwrap_or_default(),
-    ]);
+    install.current_dir(&root).args(["install", formula_ref.as_str()]);
     for (key, value) in &brew_env {
         install.env(key, value);
     }
@@ -20319,17 +20335,17 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     }
 
     let mut prefix_cmd = StdCommand::new("brew");
-    prefix_cmd.current_dir(&root).args(["--prefix", "si-smoke"]);
+    prefix_cmd.current_dir(&root).args(["--prefix", formula_ref.as_str()]);
     for (key, value) in &brew_env {
         prefix_cmd.env(key, value);
     }
-    let prefix_output = prefix_cmd.output().context("run brew --prefix si-smoke")?;
+    let prefix_output = prefix_cmd.output().context("run brew --prefix")?;
     if !prefix_output.status.success() {
-        return Err(anyhow!("brew --prefix si-smoke failed: {}", prefix_output.status));
+        return Err(anyhow!("brew --prefix {} failed: {}", formula_ref, prefix_output.status));
     }
     let prefix = String::from_utf8_lossy(&prefix_output.stdout).trim().to_owned();
     if prefix.is_empty() {
-        return Err(anyhow!("brew --prefix si-smoke returned empty output"));
+        return Err(anyhow!("brew --prefix {} returned empty output", formula_ref));
     }
 
     let installed = PathBuf::from(&prefix).join("bin").join("si");
@@ -20339,13 +20355,23 @@ fn run_installer_smoke_homebrew() -> Result<()> {
     run_path_command_checked(&root, &installed, &["version"])?;
 
     let mut uninstall = StdCommand::new("brew");
-    uninstall.current_dir(&root).args(["uninstall", "--force", "si-smoke"]);
+    uninstall.current_dir(&root).args(["uninstall", "--force", formula_ref.as_str()]);
     for (key, value) in &brew_env {
         uninstall.env(key, value);
     }
     let uninstall_status = uninstall.status().context("run brew uninstall")?;
     if !uninstall_status.success() {
         return Err(anyhow!("brew uninstall failed: {uninstall_status}"));
+    }
+
+    let mut untap = StdCommand::new("brew");
+    untap.current_dir(&root).args(["untap", tap_name.as_str()]);
+    for (key, value) in &brew_env {
+        untap.env(key, value);
+    }
+    let untap_status = untap.status().context("run brew untap")?;
+    if !untap_status.success() {
+        return Err(anyhow!("brew untap failed: {untap_status}"));
     }
 
     println!("homebrew install smoke passed");
