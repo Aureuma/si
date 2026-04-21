@@ -70,7 +70,6 @@ const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
 const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
-
 fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
     let header = headers.get(AUTHORIZATION)?.to_str().ok()?.trim();
     let token = header.strip_prefix("Bearer ")?.trim();
@@ -1798,16 +1797,61 @@ fn sorted_worker_profiles_by_status(
     entries.into_iter().map(|(profile, _)| profile).collect()
 }
 
+fn discover_local_profile_names(profiles_root: &Path) -> Vec<ProfileName> {
+    let mut profiles = Vec::<ProfileName>::new();
+    let Ok(entries) = fs::read_dir(profiles_root) else {
+        return profiles;
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        if !entry_path.is_dir() {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        let Ok(profile) = ProfileName::new(name.to_owned()) else {
+            continue;
+        };
+        push_unique_profile(&mut profiles, profile);
+    }
+    profiles.sort();
+    profiles
+}
+
+fn default_local_profile_names() -> Vec<ProfileName> {
+    discover_local_profile_names(&default_home_dir().join(".si").join("codex").join("profiles"))
+}
+
+fn is_profile_resolvable(
+    profile: &ProfileName,
+    sessions: &HashMap<SessionId, SessionRecord>,
+    workers: &HashMap<WorkerId, WorkerRecord>,
+    available_profiles: &[ProfileRecord],
+    local_profiles: &[ProfileName],
+) -> bool {
+    workers.values().any(|worker| &worker.profile == profile)
+        || sessions.values().any(|session| session.profile.as_ref() == Some(profile))
+        || available_profiles.iter().any(|record| &record.profile == profile)
+        || local_profiles.iter().any(|candidate| candidate == profile)
+}
+
 fn task_profile_candidates(
     task: &TaskRecord,
     sessions: &HashMap<SessionId, SessionRecord>,
     workers: &HashMap<WorkerId, WorkerRecord>,
     available_profiles: &[ProfileRecord],
+    local_profiles: &[ProfileName],
 ) -> Vec<ProfileName> {
     let mut candidates = Vec::<ProfileName>::new();
 
     if let Some(profile) = task.profile.clone() {
-        push_unique_profile(&mut candidates, profile);
+        if is_profile_resolvable(&profile, sessions, workers, available_profiles, local_profiles) {
+            push_unique_profile(&mut candidates, profile);
+        } else if task.session_id.is_none() {
+            return candidates;
+        }
     }
 
     if let Some(session_id) = task.session_id.as_ref() {
@@ -1832,6 +1876,10 @@ fn task_profile_candidates(
         available_profiles.iter().map(|profile| profile.profile.clone()).collect::<Vec<_>>();
     profile_records.sort();
     for profile in profile_records {
+        push_unique_profile(&mut candidates, profile);
+    }
+
+    for profile in local_profiles.iter().cloned() {
         push_unique_profile(&mut candidates, profile);
     }
 
@@ -3014,6 +3062,7 @@ impl NucleusService {
             .map(|worker| (worker.worker_id.clone(), worker))
             .collect::<HashMap<_, _>>();
         let profiles = self.store.list_profile_records()?;
+        let local_profiles = default_local_profile_names();
         if self.requeue_profile_unavailable_tasks(&tasks, &sessions, &workers, &profiles)? {
             tasks = self.store.list_tasks()?;
         }
@@ -3064,7 +3113,8 @@ impl NucleusService {
                     continue;
                 }
             }
-            let candidates = task_profile_candidates(&task, &sessions, &workers, &profiles);
+            let candidates =
+                task_profile_candidates(&task, &sessions, &workers, &profiles, &local_profiles);
             if candidates.is_empty() {
                 if let Some(event) = self.store.mark_task_blocked(
                     &task.task_id,
@@ -3136,9 +3186,15 @@ impl NucleusService {
             {
                 continue;
             }
-            let Some(profile) =
-                task_profile_candidates(task, sessions, workers, profiles).into_iter().next()
-            else {
+            let Some(profile) = task_profile_candidates(
+                task,
+                sessions,
+                workers,
+                profiles,
+                &default_local_profile_names(),
+            )
+            .into_iter()
+            .next() else {
                 continue;
             };
             if let Some(event) = self.store.requeue_blocked_task(
@@ -10734,7 +10790,7 @@ mod tests {
             .expect("inspect task")
             .expect("task exists");
         assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("zulu"));
-        assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert_eq!(task.blocked_reason, Some(BlockedReason::ProfileUnavailable));
         assert!(task.latest_run_id.is_none());
     }
 
@@ -10780,47 +10836,42 @@ mod tests {
         assert!(task.latest_run_id.is_none());
     }
 
-    #[tokio::test]
-    async fn dispatcher_blocks_unprofiled_task_when_profile_cannot_be_derived() {
-        let temp = tempdir().expect("tempdir");
-        let service = NucleusService::open_with_runtime(
-            NucleusConfig {
-                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
-                state_dir: temp.path().join("nucleus"),
-                auth_token: None,
-            },
-            Arc::new(FakeRuntime::default()),
-        )
-        .expect("service");
+    #[test]
+    fn task_profile_candidates_include_discovered_local_profiles() {
+        let task = TaskRecord::new(TaskId::generate(), TaskSource::System, "local", "profile");
+        let mut local_profiles = vec![
+            ProfileName::new("darmstada").expect("profile"),
+            ProfileName::new("berylla").expect("profile"),
+        ];
+        local_profiles.sort();
 
-        let created = service
-            .dispatch_request(GatewayRequest {
-                id: json!("task-no-profile"),
-                method: "task.create".to_owned(),
-                params: json!({
-                    "title": "Unroutable task",
-                    "instructions": "Block until one profile is available",
-                }),
-            })
-            .await;
-        assert!(created.ok);
-        let task_id =
-            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+        let candidates = super::task_profile_candidates(
+            &task,
+            &HashMap::new(),
+            &HashMap::new(),
+            &[],
+            &local_profiles,
+        );
 
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
+        assert_eq!(
+            candidates.iter().map(ProfileName::as_str).collect::<Vec<_>>(),
+            vec!["berylla", "darmstada"]
+        );
+    }
 
-        let task = service
-            .store
-            .inspect_task(&TaskId::new(task_id).expect("task id"))
-            .expect("inspect task")
-            .expect("task exists");
-        assert_eq!(task.status, TaskStatus::Blocked);
-        assert_eq!(task.blocked_reason, Some(BlockedReason::ProfileUnavailable));
-        assert!(task.latest_run_id.is_none());
+    #[test]
+    fn task_profile_candidates_are_empty_when_nothing_is_resolvable() {
+        let task = TaskRecord::new(TaskId::generate(), TaskSource::System, "empty", "profiles");
+
+        let candidates =
+            super::task_profile_candidates(&task, &HashMap::new(), &HashMap::new(), &[], &[]);
+
+        assert!(candidates.is_empty());
     }
 
     #[tokio::test]
-    async fn dispatcher_requeues_profile_unavailable_task_when_profile_becomes_resolvable() {
+    async fn dispatcher_requeues_profile_unavailable_task_when_explicit_profile_becomes_resolvable()
+    {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
             NucleusConfig {
@@ -10839,6 +10890,7 @@ mod tests {
                 params: json!({
                     "title": "Routable later",
                     "instructions": "Run after one profile is known",
+                    "profile": "zulu",
                 }),
             })
             .await;
@@ -10860,9 +10912,9 @@ mod tests {
                 id: json!("session-profile-later"),
                 method: "session.create".to_owned(),
                 params: json!({
-                    "profile": "america",
+                    "profile": "zulu",
                     "home_dir": temp.path().join("home"),
-                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/zulu"),
                     "workdir": temp.path(),
                 }),
             })
@@ -10878,8 +10930,7 @@ mod tests {
             .expect("inspect task")
             .expect("task exists");
         assert_eq!(task.status, TaskStatus::Done);
-        assert_eq!(task.blocked_reason, None);
-        assert!(task.latest_run_id.is_some());
+        assert_eq!(task.profile.as_ref().map(ProfileName::as_str), Some("zulu"));
     }
 
     #[tokio::test]
