@@ -12,11 +12,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.2` after publishing `v0.59.0` and landing the Homebrew follow-up fixes.
+- Bumped the working version to `0.59.5` after landing the latest Nucleus runtime timeout fix set.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
 - Hardened the Homebrew tap release workflow to retry `homebrew-si` pushes with `GH_PAT_AUREUMA` when a dedicated tap token can clone but cannot push.
+- Fixed Nucleus runtime timeout handling so task and turn submissions now pass `timeout_seconds` through to the runtime instead of always timing out after 15 minutes of silence.
 
 ## [v0.59.0] - 2026-04-20
 ### Added
