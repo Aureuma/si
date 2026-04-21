@@ -70,6 +70,8 @@ const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
 const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
+pub const GPT_ACTIONS_OPENAPI_PUBLIC_URL: &str = "https://nucleus.aureuma.ai";
+
 fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
     let header = headers.get(AUTHORIZATION)?.to_str().ok()?.trim();
     let token = header.strip_prefix("Bearer ")?.trim();
@@ -4967,12 +4969,11 @@ fn openapi_server_url(headers: &HeaderMap) -> String {
     format!("{}://{}", proto.trim_end_matches(':'), host)
 }
 
-fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
+fn openapi_document_with_server_url(server_url: &str) -> Value {
     let task_example = task_record_example();
     let run_example = run_record_example();
     let worker_example = worker_record_example();
     let session_example = session_record_example();
-    let server_url = openapi_server_url(headers);
 
     json!({
         "openapi": "3.1.0",
@@ -5490,6 +5491,14 @@ fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
     })
 }
 
+pub fn public_openapi_document(public_url: &str) -> Value {
+    openapi_document_with_server_url(public_url.trim())
+}
+
+fn openapi_document(_config: &NucleusConfig, headers: &HeaderMap) -> Value {
+    openapi_document_with_server_url(&openapi_server_url(headers))
+}
+
 async fn rest_openapi_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
@@ -5958,10 +5967,11 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        CreateTaskInput, CronRuleRecord, CronScheduleKind, GatewayRequest, HookRuleRecord,
-        MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
-        load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
+        CreateTaskInput, CronRuleRecord, CronScheduleKind, GPT_ACTIONS_OPENAPI_PUBLIC_URL,
+        GatewayRequest, HookRuleRecord, MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths,
+        NucleusService, NucleusStore, append_jsonl_with_rotation, cron_due_key,
+        current_persisted_version, hook_event_key, load_canonical_events,
+        load_canonical_events_for_live_iteration, load_last_event_seq, public_openapi_document,
         write_json_atomic,
     };
     use anyhow::Result;
@@ -7221,7 +7231,13 @@ mod tests {
             json!("si-run-0123456789abcdef00000001")
         );
         let gpt_actions_openapi = include_str!("../../../../docs/gpt-actions-openapi.yaml");
-        assert!(gpt_actions_openapi.contains(&format!("version: {}", env!("CARGO_PKG_VERSION"))));
+        let rendered_openapi: Value = serde_yaml::from_str(gpt_actions_openapi)
+            .expect("parse checked-in GPT Actions OpenAPI");
+        assert_eq!(
+            rendered_openapi,
+            public_openapi_document(GPT_ACTIONS_OPENAPI_PUBLIC_URL),
+            "docs/gpt-actions-openapi.yaml must be generated from the canonical Nucleus OpenAPI document"
+        );
         for required_text in [
             "operationId: listWorkers",
             "operationId: inspectWorker",

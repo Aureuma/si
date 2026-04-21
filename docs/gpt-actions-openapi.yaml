@@ -1,812 +1,1165 @@
-openapi: 3.1.0
-info:
-  title: SI Nucleus REST API
-  version: 0.59.2
-  description: GPT Actions profile for the public SI Nucleus REST surface on nucleus.aureuma.ai.
-servers:
-  - url: https://nucleus.aureuma.ai
-security:
-  - bearerAuth: []
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: opaque token
-      description: Opaque bearer token provided by SI Fort for Nucleus REST access.
   schemas:
-    OpenApiDocumentView:
-      type: object
-      description: Public OpenAPI document returned by this endpoint.
-      additionalProperties: true
-      required: [openapi, info, servers, paths]
-      properties:
-        openapi:
-          type: string
-          description: OpenAPI specification version.
-          example: 3.1.0
-        info:
-          type: object
-          description: API metadata.
-          additionalProperties: true
-          required: [title, version]
-          properties:
-            title:
-              type: string
-              description: API title.
-              example: SI Nucleus REST API
-            version:
-              type: string
-              description: API package version.
-              example: 0.58.15
-            description:
-              type: string
-              description: API description.
-        servers:
-          type: array
-          description: Absolute server URLs clients can call.
-          items:
-            type: object
-            additionalProperties: true
-            required: [url]
-            properties:
-              url:
-                type: string
-                description: Absolute API base URL.
-                format: uri
-                example: https://nucleus.aureuma.ai
-        paths:
-          type: object
-          description: OpenAPI path item map.
-          additionalProperties: true
-          properties: {}
-        components:
-          type: object
-          description: OpenAPI reusable components.
-          additionalProperties: true
-          properties: {}
-        security:
-          type: array
-          description: Default security requirements.
-          items:
-            type: object
-            additionalProperties: true
-            properties: {}
-    RestErrorEnvelope:
-      type: object
-      description: Standard REST error envelope returned when a Nucleus request fails.
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: object
-          description: Machine-readable error details.
-          additionalProperties: false
-          required: [code, message]
-          properties:
-            code:
-              type: string
-              description: Stable Nucleus error code.
-              example: not_found
-            message:
-              type: string
-              description: Human-readable error summary.
-              example: task not found
-            details:
-              description: Optional structured details for debugging the request.
     NucleusStatusView:
-      type: object
-      description: Current Nucleus status projection and durable object counts.
       additionalProperties: false
-      required: [version, bind_addr, ws_url, state_dir, task_count, worker_count, session_count, run_count, next_event_seq]
+      description: Current Nucleus status projection and durable object counts.
       properties:
-        version:
-          type: string
-          description: Running SI Nucleus package version.
-          example: 0.57.31
-          readOnly: true
         bind_addr:
-          type: string
           description: TCP address where Nucleus listens.
           example: 0.0.0.0:4747
           readOnly: true
-        ws_url:
           type: string
-          description: Websocket URL exposed by the same Nucleus service.
-          example: ws://0.0.0.0:4747/ws
+        next_event_seq:
+          description: Next canonical event sequence number that will be written.
+          example: 128
+          minimum: 0
           readOnly: true
+          type: integer
+        run_count:
+          description: Number of durable run records.
+          example: 8
+          minimum: 0
+          readOnly: true
+          type: integer
+        session_count:
+          description: Number of durable session records.
+          example: 2
+          minimum: 0
+          readOnly: true
+          type: integer
         state_dir:
-          type: string
           description: Filesystem directory that stores durable Nucleus state.
           example: /home/si/.local/state/si/nucleus
           readOnly: true
+          type: string
         task_count:
-          type: integer
           description: Number of durable task records.
-          minimum: 0
           example: 12
+          minimum: 0
           readOnly: true
+          type: integer
+        version:
+          description: Running SI Nucleus package version.
+          example: 0.59.8
+          readOnly: true
+          type: string
         worker_count:
-          type: integer
           description: Number of durable worker records.
-          minimum: 0
           example: 2
+          minimum: 0
           readOnly: true
-        session_count:
           type: integer
-          description: Number of durable session records.
-          minimum: 0
-          example: 2
+        ws_url:
+          description: Websocket URL exposed by the same Nucleus service.
+          example: ws://0.0.0.0:4747/ws
           readOnly: true
-        run_count:
-          type: integer
-          description: Number of durable run records.
-          minimum: 0
-          example: 8
-          readOnly: true
-        next_event_seq:
-          type: integer
-          description: Next canonical event sequence number that will be written.
-          minimum: 0
-          example: 128
-          readOnly: true
-    TaskCreateParams:
+          type: string
+      required:
+      - version
+      - bind_addr
+      - ws_url
+      - state_dir
+      - task_count
+      - worker_count
+      - session_count
+      - run_count
+      - next_event_seq
       type: object
-      description: Request body for creating durable Nucleus work.
-      additionalProperties: false
-      required: [title, instructions]
+    OpenApiDocumentView:
+      additionalProperties: true
+      description: Public OpenAPI document returned by this endpoint.
       properties:
-        title:
-          type: string
-          description: Short operator-facing summary of the work to perform.
-          minLength: 1
-          example: Audit Nucleus tasks
-        instructions:
-          type: string
-          description: Complete task instructions for the assigned worker.
-          minLength: 1
-          example: Inspect queued and running tasks and report any items that are stuck.
-        source:
-          type: string
-          description: Source category for the task intake request. External GPT Actions should normally use websocket.
-          enum: [cli, websocket, cron, hook, system]
-          default: websocket
-          example: websocket
-        profile:
-          type: [string, "null"]
-          description: "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers."
-          pattern: ^[a-z][a-z0-9-]*$
-          default: null
-          example: darmstada
-        session_id:
-          type: [string, "null"]
-          description: Optional existing SI session id to reuse for continuity.
-          pattern: ^si-session-.+
-          default: null
-          example: si-session-0123456789abcdef00000001
-        max_retries:
-          type: [integer, "null"]
-          description: Optional maximum retry attempts after failed execution.
-          minimum: 0
-          default: null
-          example: 0
-        timeout_seconds:
-          type: [integer, "null"]
-          description: Optional execution timeout in seconds for this task.
-          minimum: 0
-          default: null
-          example: 900
-    TaskRecord:
-      type: object
-      description: Durable task projection stored by Nucleus.
-      additionalProperties: false
-      required: [task_id, source, title, instructions, status, created_at, updated_at]
-      properties:
-        task_id:
-          type: string
-          description: Canonical SI task id.
-          pattern: ^si-task-.+
-          example: si-task-0123456789abcdef00000001
-          readOnly: true
-        source:
-          type: string
-          description: Source category that created the task.
-          enum: [cli, websocket, cron, hook, system]
-          example: websocket
-          readOnly: true
-        title:
-          type: string
-          description: Short operator-facing summary of the task.
-          example: Audit Nucleus tasks
-        instructions:
-          type: string
-          description: Full worker instructions captured at intake.
-          example: Inspect queued and running tasks and report any items that are stuck.
-        status:
-          type: string
-          description: Current task lifecycle status.
-          enum: [queued, running, blocked, done, failed, cancelled]
-          example: queued
-          readOnly: true
-        profile:
-          type: [string, "null"]
-          description: Preferred SI worker profile for this task.
-          pattern: ^[a-z][a-z0-9-]*$
-          example: darmstada
-        session_id:
-          type: [string, "null"]
-          description: Session currently associated with this task, if any.
-          pattern: ^si-session-.+
-          example: si-session-0123456789abcdef00000001
-          readOnly: true
-        latest_run_id:
-          type: [string, "null"]
-          description: Most recent run created for this task.
-          pattern: ^si-run-.+
-          example: si-run-0123456789abcdef00000001
-          readOnly: true
-        checkpoint_summary:
-          type: [string, "null"]
-          description: Latest durable progress summary reported by the worker.
-          example: Checked all queued tasks.
-        checkpoint_at:
-          type: [string, "null"]
-          description: Timestamp of the latest checkpoint.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-        checkpoint_seq:
-          type: [integer, "null"]
-          description: Canonical event sequence for the latest checkpoint.
-          minimum: 0
-          example: 128
-        parent_task_id:
-          type: [string, "null"]
-          description: Parent task id when this task was produced by another task.
-          pattern: ^si-task-.+
-          example: si-task-0123456789abcdef00000000
-        producer_rule_name:
-          type: [string, "null"]
-          description: Hook or producer rule that created this task.
-          example: nightly-audit
-        producer_dedup_key:
-          type: [string, "null"]
-          description: Producer deduplication key used to avoid duplicate task intake.
-          example: nightly-audit:2026-04-17
-        blocked_reason:
-          type: [string, "null"]
-          description: Reason the task is blocked when status is blocked.
-          enum: [null, auth_required, worker_unavailable, profile_unavailable, session_broken, producer_error, operator_hold, fort_unavailable]
-          example: null
-        created_at:
-          type: string
-          description: Task creation timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
-        updated_at:
-          type: string
-          description: Last task update timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
-        max_retries:
-          type: [integer, "null"]
-          description: Maximum retry attempts configured for this task.
-          minimum: 0
-          example: 0
-        timeout_seconds:
-          type: [integer, "null"]
-          description: Execution timeout configured for this task.
-          minimum: 0
-          example: 900
-    WorkerRecord:
-      type: object
-      description: Durable worker projection tracked by Nucleus.
-      additionalProperties: false
-      required: [worker_id, profile, codex_home, status]
-      properties:
-        worker_id:
-          type: string
-          description: Canonical SI worker id.
-          pattern: ^si-worker-.+
-          example: si-worker-0123456789abcdef00000001
-          readOnly: true
-        profile:
-          type: string
-          description: SI profile this worker runs as.
-          pattern: ^[a-z][a-z0-9-]*$
-          example: darmstada
-        home_dir:
-          type: [string, "null"]
-          description: Home directory used by the worker process.
-          example: /home/si
-        codex_home:
-          type: string
-          description: Codex home directory used by this worker.
-          example: /home/si/.codex
-        workdir:
-          type: [string, "null"]
-          description: Default workspace directory for worker execution.
-          example: /home/si/Development/si
-        extra_env:
-          type: object
-          description: Non-secret extra environment values configured for the worker.
+        components:
+          additionalProperties: true
+          description: OpenAPI reusable components.
           properties: {}
-          additionalProperties:
-            type: string
-          example: {}
-        status:
+          type: object
+        info:
+          additionalProperties: true
+          description: API metadata.
+          properties:
+            description:
+              description: API description.
+              type: string
+            title:
+              description: API title.
+              example: SI Nucleus REST API
+              type: string
+            version:
+              description: API package version.
+              example: 0.59.8
+              type: string
+          required:
+          - title
+          - version
+          type: object
+        openapi:
+          description: OpenAPI specification version.
+          example: 3.1.0
           type: string
-          description: Worker lifecycle status.
-          enum: [starting, ready, degraded, failed, stopped]
-          example: ready
-          readOnly: true
-        capability_version:
-          type: [string, "null"]
-          description: Worker capability or package version when reported.
-          example: 0.57.31
-        last_heartbeat_at:
-          type: [string, "null"]
-          description: Most recent heartbeat timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
-        effective_account_state:
-          type: [string, "null"]
-          description: Observed account/authentication state for this worker.
-          example: authenticated
-          readOnly: true
-    WorkerRuntimeView:
+        paths:
+          additionalProperties: true
+          description: OpenAPI path item map.
+          properties: {}
+          type: object
+        security:
+          description: Default security requirements.
+          items:
+            additionalProperties: true
+            properties: {}
+            type: object
+          type: array
+        servers:
+          description: Absolute server URLs clients can call.
+          items:
+            additionalProperties: true
+            properties:
+              url:
+                description: Absolute API base URL.
+                example: https://nucleus.aureuma.ai
+                format: uri
+                type: string
+            required:
+            - url
+            type: object
+          type: array
+      required:
+      - openapi
+      - info
+      - servers
+      - paths
       type: object
-      description: Observed runtime process attached to a worker.
+    RestErrorEnvelope:
       additionalProperties: false
-      required: [worker_id, runtime_name, pid, started_at, checked_at]
+      description: Standard REST error envelope returned when a Nucleus request fails.
       properties:
-        worker_id:
-          type: string
-          description: Canonical SI worker id for the runtime process.
-          pattern: ^si-worker-.+
-          example: si-worker-0123456789abcdef00000001
-          readOnly: true
-        runtime_name:
-          type: string
-          description: Runtime adapter name.
-          example: codex
-          readOnly: true
-        pid:
-          type: integer
-          description: Operating system process id.
-          minimum: 0
-          example: 12345
-          readOnly: true
-        started_at:
-          type: string
-          description: Runtime process start timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
-        checked_at:
-          type: string
-          description: Timestamp when runtime process state was checked.
-          format: date-time
-          example: 2026-04-17T00:00:10Z
-          readOnly: true
-    WorkerInspectView:
+        error:
+          additionalProperties: false
+          description: Machine-readable error details.
+          properties:
+            code:
+              description: Stable Nucleus error code.
+              example: not_found
+              type: string
+            details:
+              description: Optional structured details for debugging the request.
+            message:
+              description: Human-readable error summary.
+              example: task not found
+              type: string
+          required:
+          - code
+          - message
+          type: object
+      required:
+      - error
       type: object
-      description: Worker record plus optional live runtime observation.
-      additionalProperties: false
-      required: [worker]
-      properties:
-        worker:
-          description: Durable worker projection.
-          allOf:
-            - $ref: "#/components/schemas/WorkerRecord"
-        runtime:
-          description: Live runtime process details when the worker process can be observed.
-          anyOf:
-            - $ref: "#/components/schemas/WorkerRuntimeView"
-            - type: "null"
-    SessionRecord:
-      type: object
-      description: Durable worker session projection tracked by Nucleus.
-      additionalProperties: false
-      required: [session_id, worker_id, lifecycle_state, created_at, updated_at]
-      properties:
-        session_id:
-          type: string
-          description: Canonical SI session id.
-          pattern: ^si-session-.+
-          example: si-session-0123456789abcdef00000001
-          readOnly: true
-        worker_id:
-          type: string
-          description: Worker currently associated with the session.
-          pattern: ^si-worker-.+
-          example: si-worker-0123456789abcdef00000001
-          readOnly: true
-        profile:
-          type: [string, "null"]
-          description: SI profile associated with the session.
-          pattern: ^[a-z][a-z0-9-]*$
-          example: darmstada
-        app_server_thread_id:
-          type: [string, "null"]
-          description: Underlying app server thread id for continuity.
-          example: thread_0123456789abcdef
-          readOnly: true
-        workdir:
-          type: [string, "null"]
-          description: Workspace directory associated with the session.
-          example: /home/si/Development/si
-        lifecycle_state:
-          type: string
-          description: Current session lifecycle state.
-          enum: [opening, ready, busy, broken, closed]
-          example: ready
-          readOnly: true
-        summary_state:
-          type: [string, "null"]
-          description: Short durable summary of reusable session context.
-          example: idle
-        created_at:
-          type: string
-          description: Session creation timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
-        updated_at:
-          type: string
-          description: Last session update timestamp.
-          format: date-time
-          example: 2026-04-17T00:00:00Z
-          readOnly: true
     RunRecord:
-      type: object
-      description: Durable execution attempt for a task.
       additionalProperties: false
-      required: [run_id, task_id, session_id, status]
+      description: Durable execution attempt for a task.
       properties:
-        run_id:
-          type: string
-          description: Canonical SI run id.
-          pattern: ^si-run-.+
-          example: si-run-0123456789abcdef00000001
-          readOnly: true
-        task_id:
-          type: string
-          description: Task executed by this run.
-          pattern: ^si-task-.+
-          example: si-task-0123456789abcdef00000001
-          readOnly: true
-        session_id:
-          type: string
-          description: Session used by this run.
-          pattern: ^si-session-.+
-          example: si-session-0123456789abcdef00000001
-          readOnly: true
-        status:
-          type: string
-          description: Current run lifecycle status.
-          enum: [queued, running, blocked, completed, failed, cancelled]
-          example: running
-          readOnly: true
-        started_at:
-          type: [string, "null"]
-          description: Timestamp when execution started.
-          format: date-time
-          example: 2026-04-17T00:00:05Z
-          readOnly: true
-        ended_at:
-          type: [string, "null"]
-          description: Timestamp when execution reached a terminal state.
-          format: date-time
-          example: null
-          readOnly: true
-        parent_run_id:
-          type: [string, "null"]
-          description: Parent run id for nested execution, if any.
-          pattern: ^si-run-.+
-          example: null
-          readOnly: true
         app_server_turn_id:
-          type: [string, "null"]
           description: Underlying app server turn id associated with this run.
           example: null
           readOnly: true
-    TaskCancelResultView:
+          type:
+          - string
+          - 'null'
+        ended_at:
+          description: Timestamp when execution reached a terminal state.
+          example: null
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        parent_run_id:
+          description: Parent run id for nested execution, if any.
+          example: null
+          pattern: ^si-run-.+
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        run_id:
+          description: Canonical SI run id.
+          example: si-run-0123456789abcdef00000001
+          pattern: ^si-run-.+
+          readOnly: true
+          type: string
+        session_id:
+          description: Session used by this run.
+          example: si-session-0123456789abcdef00000001
+          pattern: ^si-session-.+
+          readOnly: true
+          type: string
+        started_at:
+          description: Timestamp when execution started.
+          example: 2026-04-17T00:00:05Z
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Current run lifecycle status.
+          enum:
+          - queued
+          - running
+          - blocked
+          - completed
+          - failed
+          - cancelled
+          example: running
+          readOnly: true
+          type: string
+        task_id:
+          description: Task executed by this run.
+          example: si-task-0123456789abcdef00000001
+          pattern: ^si-task-.+
+          readOnly: true
+          type: string
+      required:
+      - run_id
+      - task_id
+      - session_id
+      - status
       type: object
-      description: Result returned after requesting cancellation for a task.
+    SessionRecord:
       additionalProperties: false
-      required: [task, cancellation_requested]
+      description: Durable worker session projection tracked by Nucleus.
       properties:
-        task:
-          description: Task projection after the cancellation request was handled.
-          allOf:
-            - $ref: "#/components/schemas/TaskRecord"
-        run:
-          description: Run affected by the cancellation request, when the task had an active or latest run.
-          anyOf:
-            - $ref: "#/components/schemas/RunRecord"
-            - type: "null"
+        app_server_thread_id:
+          description: Underlying app server thread id for continuity.
+          example: thread_0123456789abcdef
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Session creation timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type: string
+        lifecycle_state:
+          description: Current session lifecycle state.
+          enum:
+          - opening
+          - ready
+          - busy
+          - broken
+          - closed
+          example: ready
+          readOnly: true
+          type: string
+        profile:
+          description: SI profile associated with the session.
+          example: darmstada
+          pattern: ^[a-z][a-z0-9-]*$
+          type:
+          - string
+          - 'null'
+        session_id:
+          description: Canonical SI session id.
+          example: si-session-0123456789abcdef00000001
+          pattern: ^si-session-.+
+          readOnly: true
+          type: string
+        summary_state:
+          description: Short durable summary of reusable session context.
+          example: idle
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last session update timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type: string
+        workdir:
+          description: Workspace directory associated with the session.
+          example: /home/si/Development/si
+          type:
+          - string
+          - 'null'
+        worker_id:
+          description: Worker currently associated with the session.
+          example: si-worker-0123456789abcdef00000001
+          pattern: ^si-worker-.+
+          readOnly: true
+          type: string
+      required:
+      - session_id
+      - worker_id
+      - lifecycle_state
+      - created_at
+      - updated_at
+      type: object
+    TaskCancelResultView:
+      additionalProperties: false
+      description: Result returned after requesting cancellation for a task.
+      properties:
         cancellation_requested:
-          type: boolean
           description: True when Nucleus issued a new cancellation request; false when the task was already terminal or no action was needed.
           example: true
           readOnly: true
+          type: boolean
+        run:
+          anyOf:
+          - $ref: '#/components/schemas/RunRecord'
+          - type: 'null'
+          description: Run affected by the cancellation request, when the task had an active or latest run.
+        task:
+          allOf:
+          - $ref: '#/components/schemas/TaskRecord'
+          description: Task projection after the cancellation request was handled.
+      required:
+      - task
+      - cancellation_requested
+      type: object
+    TaskCreateParams:
+      additionalProperties: false
+      description: Request body for creating durable Nucleus work.
+      properties:
+        instructions:
+          description: Complete task instructions for the assigned worker.
+          example: Inspect queued and running tasks and report any items that are stuck.
+          minLength: 1
+          type: string
+        max_retries:
+          default: null
+          description: Optional maximum retry attempts after failed execution.
+          example: 0
+          minimum: 0
+          type:
+          - integer
+          - 'null'
+        profile:
+          default: null
+          description: 'Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers.'
+          example: darmstada
+          pattern: ^[a-z][a-z0-9-]*$
+          type:
+          - string
+          - 'null'
+        session_id:
+          default: null
+          description: Optional existing SI session id to reuse for continuity.
+          example: si-session-0123456789abcdef00000001
+          pattern: ^si-session-.+
+          type:
+          - string
+          - 'null'
+        source:
+          default: websocket
+          description: Source category for the task intake request. External GPT Actions should normally use websocket.
+          enum:
+          - cli
+          - websocket
+          - cron
+          - hook
+          - system
+          example: websocket
+          type: string
+        timeout_seconds:
+          default: null
+          description: Optional execution timeout in seconds for this task.
+          example: 900
+          minimum: 0
+          type:
+          - integer
+          - 'null'
+        title:
+          description: Short operator-facing summary of the work to perform.
+          example: Audit Nucleus tasks
+          minLength: 1
+          type: string
+      required:
+      - title
+      - instructions
+      type: object
+    TaskRecord:
+      additionalProperties: false
+      description: Durable task projection stored by Nucleus.
+      properties:
+        blocked_reason:
+          description: Reason the task is blocked when status is blocked.
+          enum:
+          - null
+          - auth_required
+          - worker_unavailable
+          - profile_unavailable
+          - session_broken
+          - producer_error
+          - operator_hold
+          - fort_unavailable
+          example: null
+          type:
+          - string
+          - 'null'
+        checkpoint_at:
+          description: Timestamp of the latest checkpoint.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          type:
+          - string
+          - 'null'
+        checkpoint_seq:
+          description: Canonical event sequence for the latest checkpoint.
+          example: 128
+          minimum: 0
+          type:
+          - integer
+          - 'null'
+        checkpoint_summary:
+          description: Latest durable progress summary reported by the worker.
+          example: Checked all queued tasks.
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Task creation timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type: string
+        instructions:
+          description: Full worker instructions captured at intake.
+          example: Inspect queued and running tasks and report any items that are stuck.
+          type: string
+        latest_run_id:
+          description: Most recent run created for this task.
+          example: si-run-0123456789abcdef00000001
+          pattern: ^si-run-.+
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        max_retries:
+          description: Maximum retry attempts configured for this task.
+          example: 0
+          minimum: 0
+          type:
+          - integer
+          - 'null'
+        parent_task_id:
+          description: Parent task id when this task was produced by another task.
+          example: si-task-0123456789abcdef00000000
+          pattern: ^si-task-.+
+          type:
+          - string
+          - 'null'
+        producer_dedup_key:
+          description: Producer deduplication key used to avoid duplicate task intake.
+          example: nightly-audit:2026-04-17
+          type:
+          - string
+          - 'null'
+        producer_rule_name:
+          description: Hook or producer rule that created this task.
+          example: nightly-audit
+          type:
+          - string
+          - 'null'
+        profile:
+          description: Preferred SI worker profile for this task.
+          example: darmstada
+          pattern: ^[a-z][a-z0-9-]*$
+          type:
+          - string
+          - 'null'
+        session_id:
+          description: Session currently associated with this task, if any.
+          example: si-session-0123456789abcdef00000001
+          pattern: ^si-session-.+
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        source:
+          description: Source category that created the task.
+          enum:
+          - cli
+          - websocket
+          - cron
+          - hook
+          - system
+          example: websocket
+          readOnly: true
+          type: string
+        status:
+          description: Current task lifecycle status.
+          enum:
+          - queued
+          - running
+          - blocked
+          - done
+          - failed
+          - cancelled
+          example: queued
+          readOnly: true
+          type: string
+        task_id:
+          description: Canonical SI task id.
+          example: si-task-0123456789abcdef00000001
+          pattern: ^si-task-.+
+          readOnly: true
+          type: string
+        timeout_seconds:
+          description: Execution timeout configured for this task.
+          example: 900
+          minimum: 0
+          type:
+          - integer
+          - 'null'
+        title:
+          description: Short operator-facing summary of the task.
+          example: Audit Nucleus tasks
+          type: string
+        updated_at:
+          description: Last task update timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type: string
+      required:
+      - task_id
+      - source
+      - title
+      - instructions
+      - status
+      - created_at
+      - updated_at
+      type: object
+    WorkerInspectView:
+      additionalProperties: false
+      description: Worker record plus optional live runtime observation.
+      properties:
+        runtime:
+          anyOf:
+          - $ref: '#/components/schemas/WorkerRuntimeView'
+          - type: 'null'
+          description: Live runtime process details when the worker process can be observed.
+        worker:
+          allOf:
+          - $ref: '#/components/schemas/WorkerRecord'
+          description: Durable worker projection.
+      required:
+      - worker
+      type: object
+    WorkerRecord:
+      additionalProperties: false
+      description: Durable worker projection tracked by Nucleus.
+      properties:
+        capability_version:
+          description: Worker capability or package version when reported.
+          example: 0.59.8
+          type:
+          - string
+          - 'null'
+        codex_home:
+          description: Codex home directory used by this worker.
+          example: /home/si/.codex
+          type: string
+        effective_account_state:
+          description: Observed account/authentication state for this worker.
+          example: authenticated
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        extra_env:
+          additionalProperties:
+            type: string
+          description: Non-secret extra environment values configured for the worker.
+          example: {}
+          properties: {}
+          type: object
+        home_dir:
+          description: Home directory used by the worker process.
+          example: /home/si
+          type:
+          - string
+          - 'null'
+        last_heartbeat_at:
+          description: Most recent heartbeat timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        profile:
+          description: SI profile this worker runs as.
+          example: darmstada
+          pattern: ^[a-z][a-z0-9-]*$
+          type: string
+        status:
+          description: Worker lifecycle status.
+          enum:
+          - starting
+          - ready
+          - degraded
+          - failed
+          - stopped
+          example: ready
+          readOnly: true
+          type: string
+        workdir:
+          description: Default workspace directory for worker execution.
+          example: /home/si/Development/si
+          type:
+          - string
+          - 'null'
+        worker_id:
+          description: Canonical SI worker id.
+          example: si-worker-0123456789abcdef00000001
+          pattern: ^si-worker-.+
+          readOnly: true
+          type: string
+      required:
+      - worker_id
+      - profile
+      - codex_home
+      - status
+      type: object
+    WorkerRuntimeView:
+      additionalProperties: false
+      description: Observed runtime process attached to a worker.
+      properties:
+        checked_at:
+          description: Timestamp when runtime process state was checked.
+          example: 2026-04-17T00:00:10Z
+          format: date-time
+          readOnly: true
+          type: string
+        pid:
+          description: Operating system process id.
+          example: 12345
+          minimum: 0
+          readOnly: true
+          type: integer
+        runtime_name:
+          description: Runtime adapter name.
+          example: codex
+          readOnly: true
+          type: string
+        started_at:
+          description: Runtime process start timestamp.
+          example: 2026-04-17T00:00:00Z
+          format: date-time
+          readOnly: true
+          type: string
+        worker_id:
+          description: Canonical SI worker id for the runtime process.
+          example: si-worker-0123456789abcdef00000001
+          pattern: ^si-worker-.+
+          readOnly: true
+          type: string
+      required:
+      - worker_id
+      - runtime_name
+      - pid
+      - started_at
+      - checked_at
+      type: object
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: opaque token
+      description: Opaque bearer token provided by SI Fort for Nucleus REST access.
+      scheme: bearer
+      type: http
+info:
+  description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
+  title: SI Nucleus REST API
+  version: 0.59.8
+openapi: 3.1.0
 paths:
   /openapi.json:
     get:
-      operationId: getOpenApiDocument
-      summary: Fetch the OpenAPI document
       description: Read the public OpenAPI-compatible REST description for bounded external integrations.
-      security: []
+      operationId: getOpenApiDocument
       responses:
-        "200":
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenApiDocumentView'
           description: Public OpenAPI document.
+        '500':
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OpenApiDocumentView"
-  /status:
-    get:
-      operationId: getNucleusStatus
-      summary: Inspect Nucleus status
-      description: Read the current Nucleus status projection, including bind address, state directory, and durable object counts.
-      responses:
-        "200":
-          description: Current nucleus status.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/NucleusStatusView"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /tasks:
-    get:
-      operationId: listTasks
-      summary: List tasks
-      description: List durable tasks from the same source of truth used by the websocket gateway and CLI.
-      responses:
-        "200":
-          description: All durable tasks.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TaskRecord"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-    post:
-      operationId: createTask
-      summary: Create a task
-      description: Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.
-      x-openai-isConsequential: true
-      requestBody:
-        required: true
-        description: Task intake request. Provide a concise title and complete operator instructions; optionally provide a preferred profile, but Nucleus can assign or fall back to another available profile when no session is pinned.
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/TaskCreateParams"
-            example:
-              title: Audit Nucleus tasks
-              instructions: Inspect queued and running tasks and report any items that are stuck.
-              source: websocket
-              profile: darmstada
-              session_id: null
-              max_retries: 0
-              timeout_seconds: 900
-      responses:
-        "201":
-          description: Created task.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskRecord"
-        "400":
-          description: Invalid request.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /tasks/{task_id}:
-    get:
-      operationId: inspectTask
-      summary: Inspect one task
-      description: Read one durable task projection by task id.
-      parameters:
-        - name: task_id
-          in: path
-          required: true
-          description: Canonical SI task id returned by task creation or task listing.
-          schema:
-            type: string
-            pattern: ^si-task-.+
-            example: si-task-0123456789abcdef00000001
-      responses:
-        "200":
-          description: Task record.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskRecord"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Task not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /tasks/{task_id}/cancel:
-    post:
-      operationId: cancelTask
-      summary: Cancel one task
-      description: Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.
-      x-openai-isConsequential: true
-      parameters:
-        - name: task_id
-          in: path
-          required: true
-          description: Canonical SI task id returned by task creation or task listing.
-          schema:
-            type: string
-            pattern: ^si-task-.+
-            example: si-task-0123456789abcdef00000001
-      responses:
-        "200":
-          description: Cancellation result.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskCancelResultView"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Task not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /workers:
-    get:
-      operationId: listWorkers
-      summary: List workers
-      description: List durable worker records tracked by Nucleus.
-      responses:
-        "200":
-          description: All durable workers.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/WorkerRecord"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /workers/{worker_id}:
-    get:
-      operationId: inspectWorker
-      summary: Inspect one worker
-      description: Read one worker projection, including persisted runtime view when available.
-      parameters:
-        - name: worker_id
-          in: path
-          required: true
-          description: Canonical SI worker id returned by worker listing.
-          schema:
-            type: string
-            pattern: ^si-worker-.+
-            example: si-worker-0123456789abcdef00000001
-      responses:
-        "200":
-          description: Worker inspect view.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkerInspectView"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Worker not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-  /sessions/{session_id}:
-    get:
-      operationId: inspectSession
-      summary: Inspect one session
-      description: Read one durable session projection by session id.
-      parameters:
-        - name: session_id
-          in: path
-          required: true
-          description: Canonical SI session id returned by session or run inspection.
-          schema:
-            type: string
-            pattern: ^si-session-.+
-            example: si-session-0123456789abcdef00000001
-      responses:
-        "200":
-          description: Session record.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SessionRecord"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
-          description: Session not found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security: []
+      summary: Fetch the OpenAPI document
+      x-si-purpose: Use this unauthenticated endpoint to bootstrap GPT Actions or other external tool clients against the bounded REST surface.
   /runs/{run_id}:
     get:
-      operationId: inspectRun
-      summary: Inspect one run
       description: Read one durable run projection by run id.
+      operationId: inspectRun
       parameters:
-        - name: run_id
-          in: path
-          required: true
-          description: Canonical SI run id returned by task or session inspection.
-          schema:
-            type: string
-            pattern: ^si-run-.+
-            example: si-run-0123456789abcdef00000001
+      - description: Canonical SI run id returned by task or session inspection.
+        example: si-run-0123456789abcdef00000001
+        in: path
+        name: run_id
+        required: true
+        schema:
+          example: si-run-0123456789abcdef00000001
+          pattern: ^si-run-.+
+          type: string
       responses:
-        "200":
+        '200':
+          content:
+            application/json:
+              example:
+                app_server_turn_id: null
+                ended_at: null
+                parent_run_id: null
+                run_id: si-run-0123456789abcdef00000001
+                session_id: si-session-0123456789abcdef00000001
+                started_at: 2026-04-17T00:00:05Z
+                status: running
+                task_id: si-task-0123456789abcdef00000001
+              schema:
+                $ref: '#/components/schemas/RunRecord'
           description: Run record.
+        '404':
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RunRecord"
-        "401":
-          description: Unauthorized.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
-        "404":
+                $ref: '#/components/schemas/RestErrorEnvelope'
           description: Run not found.
+        '500':
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RestErrorEnvelope"
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Inspect one run
+      x-si-purpose: Use this to inspect bounded run state from external tools without subscribing to websocket events.
+  /sessions/{session_id}:
+    get:
+      description: Read one durable session projection by session id.
+      operationId: inspectSession
+      parameters:
+      - description: Canonical SI session id returned by session or run inspection.
+        example: si-session-0123456789abcdef00000001
+        in: path
+        name: session_id
+        required: true
+        schema:
+          example: si-session-0123456789abcdef00000001
+          pattern: ^si-session-.+
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                app_server_thread_id: thread_0123456789abcdef
+                created_at: 2026-04-17T00:00:00Z
+                lifecycle_state: ready
+                profile: darmstada
+                session_id: si-session-0123456789abcdef00000001
+                summary_state: idle
+                updated_at: 2026-04-17T00:00:00Z
+                workdir: /home/si/Development/si
+                worker_id: si-worker-0123456789abcdef00000001
+              schema:
+                $ref: '#/components/schemas/SessionRecord'
+          description: Session record.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Session not found.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Inspect one session
+      x-si-purpose: Use this to inspect worker/session binding and reusable thread identity from external tooling.
+  /status:
+    get:
+      description: Read the current Nucleus status projection, including bind address, state directory, and durable object counts.
+      operationId: getNucleusStatus
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                bind_addr: 0.0.0.0:4747
+                next_event_seq: 128
+                run_count: 8
+                session_count: 2
+                state_dir: /home/si/.local/state/si/nucleus
+                task_count: 12
+                version: 0.59.8
+                worker_count: 2
+                ws_url: ws://0.0.0.0:4747/ws
+              schema:
+                $ref: '#/components/schemas/NucleusStatusView'
+          description: Current nucleus status.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Inspect Nucleus status
+      x-si-purpose: Use this for bounded external health and topology inspection without opening the websocket control plane.
+  /tasks:
+    get:
+      description: List durable tasks from the same source of truth used by the websocket gateway and CLI.
+      operationId: listTasks
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+              - blocked_reason: null
+                checkpoint_at: null
+                checkpoint_seq: null
+                checkpoint_summary: null
+                created_at: 2026-04-17T00:00:00Z
+                instructions: Inspect queued and running tasks and report any items that are stuck.
+                latest_run_id: null
+                max_retries: 0
+                parent_task_id: null
+                producer_dedup_key: null
+                producer_rule_name: null
+                profile: darmstada
+                session_id: null
+                source: websocket
+                status: queued
+                task_id: si-task-0123456789abcdef00000001
+                timeout_seconds: 900
+                title: Audit Nucleus tasks
+                updated_at: 2026-04-17T00:00:00Z
+              schema:
+                items:
+                  $ref: '#/components/schemas/TaskRecord'
+                type: array
+          description: All durable tasks.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: List tasks
+      x-si-purpose: Use this for bounded task inspection and polling from external tools such as GPT Actions.
+    post:
+      description: Create a durable task through Nucleus so it can be routed, executed, and observed through the canonical control plane.
+      operationId: createTask
+      requestBody:
+        content:
+          application/json:
+            example:
+              instructions: Inspect queued and running tasks and report any items that are stuck.
+              max_retries: 0
+              profile: darmstada
+              session_id: null
+              source: websocket
+              timeout_seconds: 900
+              title: Audit Nucleus tasks
+            schema:
+              $ref: '#/components/schemas/TaskCreateParams'
+        description: Task intake request. Provide a concise title and complete operator instructions; optionally provide a preferred profile, but Nucleus can assign or fall back to another available profile when no session is pinned.
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              example:
+                blocked_reason: null
+                checkpoint_at: null
+                checkpoint_seq: null
+                checkpoint_summary: null
+                created_at: 2026-04-17T00:00:00Z
+                instructions: Inspect queued and running tasks and report any items that are stuck.
+                latest_run_id: null
+                max_retries: 0
+                parent_task_id: null
+                producer_dedup_key: null
+                producer_rule_name: null
+                profile: darmstada
+                session_id: null
+                source: websocket
+                status: queued
+                task_id: si-task-0123456789abcdef00000001
+                timeout_seconds: 900
+                title: Audit Nucleus tasks
+                updated_at: 2026-04-17T00:00:00Z
+              schema:
+                $ref: '#/components/schemas/TaskRecord'
+          description: Created task.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Invalid request.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Bearer token missing or invalid for an authenticated request.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Create a task
+      x-openai-isConsequential: true
+      x-si-purpose: Use this to create bounded external work without bypassing Nucleus task intake rules.
+  /tasks/{task_id}:
+    get:
+      description: Read one durable task projection by task id.
+      operationId: inspectTask
+      parameters:
+      - description: Canonical SI task id returned by task creation or task listing.
+        example: si-task-0123456789abcdef00000001
+        in: path
+        name: task_id
+        required: true
+        schema:
+          example: si-task-0123456789abcdef00000001
+          pattern: ^si-task-.+
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                blocked_reason: null
+                checkpoint_at: null
+                checkpoint_seq: null
+                checkpoint_summary: null
+                created_at: 2026-04-17T00:00:00Z
+                instructions: Inspect queued and running tasks and report any items that are stuck.
+                latest_run_id: null
+                max_retries: 0
+                parent_task_id: null
+                producer_dedup_key: null
+                producer_rule_name: null
+                profile: darmstada
+                session_id: null
+                source: websocket
+                status: queued
+                task_id: si-task-0123456789abcdef00000001
+                timeout_seconds: 900
+                title: Audit Nucleus tasks
+                updated_at: 2026-04-17T00:00:00Z
+              schema:
+                $ref: '#/components/schemas/TaskRecord'
+          description: Task record.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Task not found.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Inspect one task
+      x-si-purpose: Use this to inspect bounded task state from external tooling.
+  /tasks/{task_id}/cancel:
+    post:
+      description: Request cancellation for a task through Nucleus. Queued tasks cancel immediately; active runs are interrupted through the runtime when needed.
+      operationId: cancelTask
+      parameters:
+      - description: Canonical SI task id returned by task creation or task listing.
+        example: si-task-0123456789abcdef00000001
+        in: path
+        name: task_id
+        required: true
+        schema:
+          example: si-task-0123456789abcdef00000001
+          pattern: ^si-task-.+
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                cancellation_requested: true
+                run:
+                  app_server_turn_id: null
+                  ended_at: null
+                  parent_run_id: null
+                  run_id: si-run-0123456789abcdef00000001
+                  session_id: si-session-0123456789abcdef00000001
+                  started_at: 2026-04-17T00:00:05Z
+                  status: running
+                  task_id: si-task-0123456789abcdef00000001
+                task:
+                  blocked_reason: null
+                  checkpoint_at: null
+                  checkpoint_seq: null
+                  checkpoint_summary: null
+                  created_at: 2026-04-17T00:00:00Z
+                  instructions: Inspect queued and running tasks and report any items that are stuck.
+                  latest_run_id: null
+                  max_retries: 0
+                  parent_task_id: null
+                  producer_dedup_key: null
+                  producer_rule_name: null
+                  profile: darmstada
+                  session_id: null
+                  source: websocket
+                  status: queued
+                  task_id: si-task-0123456789abcdef00000001
+                  timeout_seconds: 900
+                  title: Audit Nucleus tasks
+                  updated_at: 2026-04-17T00:00:00Z
+              schema:
+                $ref: '#/components/schemas/TaskCancelResultView'
+          description: Cancellation result.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Bearer token missing or invalid for an authenticated request.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Task not found.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Runtime unavailable for active-run cancellation.
+      security:
+      - bearerAuth: []
+      summary: Cancel one task
+      x-openai-isConsequential: true
+      x-si-purpose: Use this for bounded external cancellation requests and then re-read the task or run to observe final state.
+  /workers:
+    get:
+      description: List durable worker records tracked by Nucleus.
+      operationId: listWorkers
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+              - capability_version: 0.59.8
+                codex_home: /home/si/.codex
+                effective_account_state: authenticated
+                extra_env: {}
+                home_dir: /home/si
+                last_heartbeat_at: 2026-04-17T00:00:00Z
+                profile: darmstada
+                status: ready
+                workdir: /home/si/Development/si
+                worker_id: si-worker-0123456789abcdef00000001
+              schema:
+                items:
+                  $ref: '#/components/schemas/WorkerRecord'
+                type: array
+          description: All durable workers.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: List workers
+      x-si-purpose: Use this for bounded worker inspection without relying on tmux or direct runtime internals.
+  /workers/{worker_id}:
+    get:
+      description: Read one worker projection, including persisted runtime view when available.
+      operationId: inspectWorker
+      parameters:
+      - description: Canonical SI worker id returned by worker listing.
+        example: si-worker-0123456789abcdef00000001
+        in: path
+        name: worker_id
+        required: true
+        schema:
+          example: si-worker-0123456789abcdef00000001
+          pattern: ^si-worker-.+
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                runtime:
+                  checked_at: 2026-04-17T00:00:10Z
+                  pid: 12345
+                  runtime_name: codex
+                  started_at: 2026-04-17T00:00:00Z
+                  worker_id: si-worker-0123456789abcdef00000001
+                worker:
+                  capability_version: 0.59.8
+                  codex_home: /home/si/.codex
+                  effective_account_state: authenticated
+                  extra_env: {}
+                  home_dir: /home/si
+                  last_heartbeat_at: 2026-04-17T00:00:00Z
+                  profile: darmstada
+                  status: ready
+                  workdir: /home/si/Development/si
+                  worker_id: si-worker-0123456789abcdef00000001
+              schema:
+                $ref: '#/components/schemas/WorkerInspectView'
+          description: Worker inspect view.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Worker not found.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security:
+      - bearerAuth: []
+      summary: Inspect one worker
+      x-si-purpose: Use this to inspect worker assignment and runtime attachment through the Nucleus model.
+security:
+- bearerAuth: []
+servers:
+- url: https://nucleus.aureuma.ai

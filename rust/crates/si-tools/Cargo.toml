@@ -39,6 +39,10 @@ name = "si-entrypoint"
 path = "src/bin/si_entrypoint.rs"
 
 [[bin]]
+name = "si-sync-nucleus-openapi"
+path = "src/bin/si_sync_nucleus_openapi.rs"
+
+[[bin]]
 name = "codex-stdout-parser"
 path = "src/bin/codex_stdout_parser.rs"
 
@@ -52,7 +56,9 @@ libc.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 tempfile.workspace = true
+si-nucleus = { path = "../si-nucleus" }
 
 [dev-dependencies]
 tempfile.workspace = true
