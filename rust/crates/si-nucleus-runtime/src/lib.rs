@@ -95,6 +95,7 @@ pub struct RunTurnSpec {
     pub session_id: SessionId,
     pub profile: ProfileName,
     pub thread_id: String,
+    pub timeout_seconds: Option<u64>,
     pub input: Vec<RunInputItem>,
 }
 

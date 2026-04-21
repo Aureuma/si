@@ -4,7 +4,7 @@ use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Local, TimeZone, Utc};
@@ -22,7 +22,8 @@ use si_rs_codex::codex_profile_fort_runtime_env;
 use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
-const TURN_TIMEOUT: Duration = Duration::from_secs(900);
+const DEFAULT_TURN_TIMEOUT: Duration = Duration::from_secs(900);
+const TURN_POLL_INTERVAL: Duration = Duration::from_secs(15);
 
 fn is_managed_codex_runtime_env(key: &str) -> bool {
     matches!(key, "HOME" | "CODEX_HOME" | "FORT_TOKEN_PATH" | "FORT_REFRESH_TOKEN_PATH" | "TERM")
@@ -284,6 +285,10 @@ impl CodexNucleusRuntime {
         let snapshot = runtime_status_snapshot_from_values(&rate_limits, &account, &config)?;
         Ok(WorkerProbeResult { status: WorkerStatus::Ready, snapshot, checked_at: Utc::now() })
     }
+
+    fn turn_timeout(spec: &RunTurnSpec) -> Duration {
+        spec.timeout_seconds.map(Duration::from_secs).unwrap_or(DEFAULT_TURN_TIMEOUT)
+    }
 }
 
 impl NucleusRuntime for CodexNucleusRuntime {
@@ -473,10 +478,17 @@ impl NucleusRuntime for CodexNucleusRuntime {
         on_event(run_started_event(spec, &turn_id))?;
 
         let mut final_output = String::new();
+        let started_at = Instant::now();
+        let turn_timeout = Self::turn_timeout(spec);
         loop {
-            let notification = match subscription.recv_timeout(TURN_TIMEOUT) {
+            let elapsed = started_at.elapsed();
+            if elapsed >= turn_timeout {
+                anyhow::bail!("turn timed out");
+            }
+            let poll_timeout = TURN_POLL_INTERVAL.min(turn_timeout.saturating_sub(elapsed));
+            let notification = match subscription.recv_timeout(poll_timeout) {
                 Ok(notification) => notification,
-                Err(mpsc::RecvTimeoutError::Timeout) => anyhow::bail!("turn timed out"),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     anyhow::bail!("worker notification stream closed")
                 }
@@ -1196,6 +1208,7 @@ mod tests {
             session_id: SessionId::generate(),
             profile: ProfileName::new("america").expect("profile"),
             thread_id: "thread-123".to_owned(),
+            timeout_seconds: Some(7200),
             input: vec![RunInputItem::Text { text: "ping".to_owned() }],
         };
         let event = run_started_event(&spec, "turn-123");

@@ -3126,6 +3126,7 @@ impl NucleusService {
                 .app_server_thread_id
                 .clone()
                 .ok_or_else(|| anyhow!("session missing app-server thread id"))?,
+            timeout_seconds: task.timeout_seconds,
             input: vec![RunInputItem::Text { text: task.instructions }],
         };
         self.spawn_run_execution(runtime, run_spec);
@@ -4113,6 +4114,7 @@ impl NucleusService {
                     session_id: session_id.clone(),
                     profile,
                     thread_id,
+                    timeout_seconds: params.timeout_seconds,
                     input: vec![RunInputItem::Text { text: params.prompt }],
                 };
                 self.spawn_run_execution(runtime.as_ref(), run_spec);
@@ -5733,6 +5735,7 @@ struct RunSubmitTurnParams {
     session_id: String,
     task_id: String,
     prompt: String,
+    timeout_seconds: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -5857,6 +5860,7 @@ mod tests {
         remaining_start_failures: usize,
         start_calls: usize,
         interrupted_turns: HashSet<String>,
+        last_timeout_seconds: Option<u64>,
     }
 
     #[derive(Clone, Default)]
@@ -5883,6 +5887,10 @@ mod tests {
 
         fn start_call_count(&self) -> usize {
             self.state.lock().expect("state").start_calls
+        }
+
+        fn last_timeout_seconds(&self) -> Option<u64> {
+            self.state.lock().expect("state").last_timeout_seconds
         }
     }
 
@@ -5970,7 +5978,8 @@ mod tests {
             on_event: &mut dyn FnMut(CanonicalEventDraft) -> Result<()>,
         ) -> Result<RuntimeRunOutcome> {
             let (run_delay, fail_execute) = {
-                let state = self.state.lock().expect("state");
+                let mut state = self.state.lock().expect("state");
+                state.last_timeout_seconds = spec.timeout_seconds;
                 (state.run_delay, state.fail_execute)
             };
             if fail_execute {
@@ -13032,6 +13041,117 @@ mod tests {
             event.event_type == CanonicalEventType::FortAuthRequired
                 && event.data.payload["fort_state"] == json!("refresh_token_missing")
         }));
+    }
+
+    #[tokio::test]
+    async fn dispatched_tasks_pass_timeout_seconds_to_runtime() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:0".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("create-timeout-task"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Long-running task",
+                    "instructions": "stay alive",
+                    "profile": "america",
+                    "timeout_seconds": 7200,
+                }),
+            })
+            .await;
+        assert!(created.ok);
+
+        service.reconcile_and_dispatch_once().expect("dispatch task");
+
+        for _ in 0..50 {
+            if runtime.last_timeout_seconds() == Some(7200) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+
+        assert_eq!(runtime.last_timeout_seconds(), Some(7200));
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_passes_timeout_seconds_to_runtime() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:0".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-timeout"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session.result.expect("session")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-timeout"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Direct timeout run",
+                    "instructions": "stay alive",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = task.result.expect("task")["task_id"].as_str().expect("task id").to_owned();
+
+        let response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-submit-timeout"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "stay alive",
+                    "timeout_seconds": 1800,
+                }),
+            })
+            .await;
+        assert!(response.ok);
+
+        for _ in 0..50 {
+            if runtime.last_timeout_seconds() == Some(1800) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+
+        assert_eq!(runtime.last_timeout_seconds(), Some(1800));
     }
 
     #[tokio::test]
