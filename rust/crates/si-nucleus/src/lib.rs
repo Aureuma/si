@@ -428,20 +428,18 @@ impl NucleusStore {
         let paths = NucleusPaths::new(state_dir);
         paths.ensure_layout()?;
         let instance_lock = NucleusInstanceLock::acquire(&paths)?;
-        let last_seq = load_last_event_seq(&paths.events_path)?;
+        let recovered_events = load_canonical_events_for_startup_recovery(&paths.events_path)?;
         let store = Self {
             paths,
-            next_event_seq: AtomicU64::new(last_seq),
+            next_event_seq: AtomicU64::new(recovered_events.last_seq),
             write_lock: Mutex::new(()),
             _instance_lock: instance_lock,
         };
-        let mut warnings = store.rebuild_markdown_projections()?;
+        let mut warnings = recovered_events.warnings;
+        warnings.extend(store.rebuild_markdown_projections()?);
         warnings.extend(store.scan_persisted_state_health()?);
         for warning in warnings {
-            store.append_system_warning(
-                "isolated malformed persisted object during startup recovery",
-                warning,
-            )?;
+            store.append_system_warning(startup_recovery_warning_message(&warning), warning)?;
         }
         Ok(store)
     }
@@ -2191,30 +2189,60 @@ where
     Ok(records)
 }
 
-fn load_canonical_events(path: &Path) -> Result<Vec<CanonicalEvent>> {
-    let mut events = Vec::new();
-    for log_path in canonical_event_log_paths(path)? {
-        events.extend(load_canonical_events_from_path(&log_path)?);
-    }
-    Ok(events)
+struct CanonicalEventLoadResult {
+    events: Vec<CanonicalEvent>,
+    last_seq: u64,
+    warnings: Vec<Value>,
 }
 
-fn load_canonical_events_for_live_iteration(path: &Path) -> Result<Vec<CanonicalEvent>> {
-    let mut last_error = None;
-    for _ in 0..3 {
-        match load_canonical_events(path) {
-            Ok(events) => return Ok(events),
-            Err(error)
-                if error.to_string().contains("parse ")
-                    && error.to_string().contains("EOF while parsing") =>
-            {
-                last_error = Some(error);
-                thread::sleep(Duration::from_millis(20));
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanonicalEventLoadMode {
+    #[cfg(test)]
+    Strict,
+    StartupRecovery,
+    LiveRecovery,
+}
+
+#[cfg(test)]
+fn load_canonical_events(path: &Path) -> Result<Vec<CanonicalEvent>> {
+    Ok(load_canonical_events_with_mode(path, CanonicalEventLoadMode::Strict)?.events)
+}
+
+fn load_canonical_events_for_startup_recovery(path: &Path) -> Result<CanonicalEventLoadResult> {
+    load_canonical_events_with_mode(path, CanonicalEventLoadMode::StartupRecovery)
+}
+
+fn load_canonical_events_for_live_iteration(path: &Path) -> Result<CanonicalEventLoadResult> {
+    load_canonical_events_with_mode(path, CanonicalEventLoadMode::LiveRecovery)
+}
+
+fn load_canonical_events_with_mode(
+    path: &Path,
+    mode: CanonicalEventLoadMode,
+) -> Result<CanonicalEventLoadResult> {
+    let mut result =
+        CanonicalEventLoadResult { events: Vec::new(), last_seq: 0, warnings: Vec::new() };
+    for log_path in canonical_event_log_paths(path)? {
+        match load_canonical_events_from_path_with_retry(
+            &log_path,
+            matches!(mode, CanonicalEventLoadMode::LiveRecovery) && log_path == path,
+        ) {
+            Ok(events) => {
+                for event in events {
+                    result.last_seq = result.last_seq.max(event.seq);
+                    result.events.push(event);
+                }
             }
-            Err(error) => return Err(error),
+            #[cfg(test)]
+            Err(error) if matches!(mode, CanonicalEventLoadMode::Strict) => {
+                return Err(error);
+            }
+            Err(error) => {
+                result.warnings.push(quarantine_malformed_canonical_event_log(&log_path, &error)?);
+            }
         }
     }
-    Err(last_error.expect("live iteration parse retry should record an error"))
+    Ok(result)
 }
 
 fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
@@ -2227,14 +2255,9 @@ fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
     }
 }
 
+#[cfg(test)]
 fn load_last_event_seq(path: &Path) -> Result<u64> {
-    let mut last_seq = 0_u64;
-    for log_path in canonical_event_log_paths(path)? {
-        for event in load_canonical_events_from_path(&log_path)? {
-            last_seq = last_seq.max(event.seq);
-        }
-    }
-    Ok(last_seq)
+    Ok(load_canonical_events_with_mode(path, CanonicalEventLoadMode::Strict)?.last_seq)
 }
 
 fn canonical_event_log_paths(path: &Path) -> Result<Vec<PathBuf>> {
@@ -2273,6 +2296,51 @@ fn load_canonical_events_from_path(path: &Path) -> Result<Vec<CanonicalEvent>> {
         );
     }
     Ok(events)
+}
+
+fn load_canonical_events_from_path_with_retry(
+    path: &Path,
+    retry_eof: bool,
+) -> Result<Vec<CanonicalEvent>> {
+    let attempts = if retry_eof { 3 } else { 1 };
+    let mut last_error = None;
+    for attempt in 0..attempts {
+        match load_canonical_events_from_path(path) {
+            Ok(events) => return Ok(events),
+            Err(error) if retry_eof && is_eof_parse_error(&error) && attempt + 1 < attempts => {
+                last_error = Some(error);
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error.expect("canonical event retry should capture an error"))
+}
+
+fn is_eof_parse_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.contains("parse ") && message.contains("EOF while parsing")
+}
+
+fn quarantine_malformed_canonical_event_log(path: &Path, error: &anyhow::Error) -> Result<Value> {
+    let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or("events.jsonl");
+    let quarantine_path = path.with_file_name(format!("{file_name}.corrupt-{}", temp_suffix()));
+    fs::rename(path, &quarantine_path)
+        .with_context(|| format!("rename {} -> {}", path.display(), quarantine_path.display()))?;
+    Ok(json!({
+        "kind": "canonical_event_log",
+        "path": path.display().to_string(),
+        "quarantine_path": quarantine_path.display().to_string(),
+        "error": error.to_string(),
+    }))
+}
+
+fn startup_recovery_warning_message(details: &Value) -> &'static str {
+    if details.get("kind").and_then(Value::as_str) == Some("canonical_event_log") {
+        "isolated malformed canonical event log during startup recovery"
+    } else {
+        "isolated malformed persisted object during startup recovery"
+    }
 }
 
 fn read_json_path<T: DeserializeOwned>(path: &Path) -> Result<T> {
@@ -2738,9 +2806,16 @@ impl NucleusService {
             return Ok(());
         }
 
-        let events = load_canonical_events_for_live_iteration(&self.store.paths().events_path)?;
+        let loaded = load_canonical_events_for_live_iteration(&self.store.paths().events_path)?;
+        for warning in loaded.warnings {
+            let event = self.store.append_system_warning(
+                "isolated malformed canonical event log during live iteration",
+                warning,
+            )?;
+            let _ = self.events.send(event);
+        }
         for mut rule in rules {
-            if let Err(error) = self.process_single_hook_rule(&mut rule, &events) {
+            if let Err(error) = self.process_single_hook_rule(&mut rule, &loaded.events) {
                 if let Ok(event) = self.store.append_system_warning(
                     "hook producer iteration failed",
                     json!({
@@ -6418,21 +6493,34 @@ mod tests {
     }
 
     #[test]
-    fn startup_fails_clearly_when_canonical_event_ledger_is_unreadable() {
+    fn startup_quarantines_malformed_canonical_event_ledger_and_emits_system_warning() {
         let temp = tempdir().expect("tempdir");
         let state_dir = temp.path().join("nucleus");
         let paths = NucleusPaths::new(state_dir.clone());
         paths.ensure_layout().expect("ensure layout");
         fs::write(&paths.events_path, b"{\"seq\":").expect("write malformed events ledger");
 
-        let error = match NucleusStore::open(state_dir) {
-            Ok(_) => panic!("startup should fail"),
-            Err(error) => error,
-        };
-        let message = format!("{error:#}");
-        assert!(message.contains("parse"));
-        assert!(message.contains("events.jsonl"));
-        assert!(message.contains("line 1"));
+        let store = NucleusStore::open(state_dir).expect("open store");
+        let warning = load_canonical_events(&store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .find(|event| {
+                event.event_type == CanonicalEventType::SystemWarning
+                    && event.data.payload["details"]["kind"] == json!("canonical_event_log")
+            })
+            .expect("canonical event log warning");
+        assert_eq!(warning.source, CanonicalEventSource::System);
+        assert_eq!(
+            warning.data.payload["message"],
+            json!("isolated malformed canonical event log during startup recovery"),
+        );
+        assert_eq!(
+            warning.data.payload["details"]["path"],
+            json!(store.paths().events_path.display().to_string()),
+        );
+        let quarantine_path =
+            warning.data.payload["details"]["quarantine_path"].as_str().expect("quarantine path");
+        assert!(Path::new(quarantine_path).exists());
     }
 
     #[tokio::test]
@@ -10173,13 +10261,41 @@ mod tests {
         assert_ne!(run_id, turn_id);
         assert!(!turn_id.starts_with("si-run-"));
 
-        let events = load_canonical_events_for_live_iteration(&service.store.paths().events_path)
+        let loaded = load_canonical_events_for_live_iteration(&service.store.paths().events_path)
             .expect("load events");
-        assert!(!events.is_empty());
+        assert!(!loaded.events.is_empty());
         assert!(
-            events.iter().all(|event| event.event_id.as_str().starts_with("si-event-")),
+            loaded.events.iter().all(|event| event.event_id.as_str().starts_with("si-event-")),
             "canonical event ids must keep the si-event namespace"
         );
+    }
+
+    #[test]
+    fn live_iteration_quarantines_malformed_canonical_event_logs() {
+        let temp = tempdir().expect("tempdir");
+        let state_dir = temp.path().join("nucleus");
+        let store = NucleusStore::open(state_dir).expect("open store");
+        store
+            .append_system_warning("seed event", json!({ "kind": "seed" }))
+            .expect("append seed event");
+        let rotated_path = store
+            .paths()
+            .events_path
+            .parent()
+            .expect("events parent")
+            .join("events-00000000000000000001-test.jsonl");
+        fs::write(&rotated_path, b"{\"seq\":").expect("write malformed rotated events ledger");
+
+        let loaded = load_canonical_events_for_live_iteration(&store.paths().events_path)
+            .expect("load live events");
+        assert_eq!(loaded.warnings.len(), 1);
+        assert_eq!(loaded.warnings[0]["kind"], json!("canonical_event_log"));
+        assert_eq!(loaded.warnings[0]["path"], json!(rotated_path.display().to_string()),);
+        let quarantine_path =
+            loaded.warnings[0]["quarantine_path"].as_str().expect("quarantine path");
+        assert!(Path::new(quarantine_path).exists());
+        assert_eq!(loaded.events.len(), 1);
+        assert_eq!(loaded.events[0].event_type, CanonicalEventType::SystemWarning);
     }
 
     #[tokio::test]
