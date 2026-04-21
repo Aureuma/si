@@ -36970,7 +36970,7 @@ fn releasemind_base_url(override_base: Option<&str>) -> (String, &'static str) {
     {
         return (value.trim().trim_end_matches('/').to_owned(), "env:RELEASEMIND_API_BASE_URL");
     }
-    ("https://api.releasemind.ai".to_owned(), "default")
+    ("https://releasemind.ai".to_owned(), "default")
 }
 
 fn releasemind_base_url_with_state(
