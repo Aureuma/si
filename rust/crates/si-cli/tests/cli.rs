@@ -10273,6 +10273,50 @@ fn build_installer_smoke_homebrew_uses_provided_assets_dir() {
 }
 
 #[test]
+fn build_installer_smoke_homebrew_resolves_relative_assets_dir() {
+    let repo = tempdir().expect("repo tempdir");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+
+    let provided_assets = repo.path().join("dist");
+    fs::create_dir_all(&provided_assets).expect("mkdir dist");
+    fs::write(
+        provided_assets.join("checksums.txt"),
+        "sha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\n",
+    )
+    .expect("write checksums");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let brew_prefix = repo.path().join("fake-brew-prefix");
+    let brew = bin_dir.path().join("brew");
+    fs::write(
+        &brew,
+        format!(
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nexpected_path={expected_path}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q \"file://$expected_path\" \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
+            prefix = shell_escape_for_test(&brew_prefix),
+            expected_path = shell_escape_for_test(&provided_assets),
+        ),
+    )
+    .expect("write brew");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&brew).expect("stat brew").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&brew, perms).expect("chmod brew");
+    }
+
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-homebrew"])
+        .env("PATH", path_env)
+        .env("SI_INSTALL_SMOKE_ASSETS_DIR", "dist")
+        .assert()
+        .success();
+}
+
+#[test]
 fn aws_doctor_public_runs_rust_probe() {
     let base_url = spawn_single_response_server("200 OK", "<ok/>");
     let stdout = cargo_bin()

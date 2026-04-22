@@ -20234,9 +20234,14 @@ fn run_installer_smoke_homebrew() -> Result<()> {
 
     let formula_assets_dir =
         if let Ok(provided_assets_dir) = std::env::var("SI_INSTALL_SMOKE_ASSETS_DIR") {
-            let provided = Path::new(&provided_assets_dir).to_path_buf();
+            let provided = if Path::new(&provided_assets_dir).is_absolute() {
+                Path::new(&provided_assets_dir).to_path_buf()
+            } else {
+                root.join(&provided_assets_dir)
+            };
             if provided.join("checksums.txt").exists() {
-                provided
+                fs::canonicalize(&provided)
+                    .with_context(|| format!("canonicalize {}", provided.display()))?
             } else if let Some(assets_builder) = &assets_builder {
                 run_path_command_checked(
                     &root,
