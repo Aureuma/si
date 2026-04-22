@@ -20232,10 +20232,34 @@ fn run_installer_smoke_homebrew() -> Result<()> {
         .with_context(|| format!("create {}", formula_dir.display()))?;
     fs::create_dir_all(&cache_dir).with_context(|| format!("create {}", cache_dir.display()))?;
 
-    let formula_assets_dir = if let Ok(provided_assets_dir) = std::env::var("SI_INSTALL_SMOKE_ASSETS_DIR") {
-        let provided = Path::new(&provided_assets_dir).to_path_buf();
-        if provided.join("checksums.txt").exists() {
-            provided
+    let formula_assets_dir =
+        if let Ok(provided_assets_dir) = std::env::var("SI_INSTALL_SMOKE_ASSETS_DIR") {
+            let provided = Path::new(&provided_assets_dir).to_path_buf();
+            if provided.join("checksums.txt").exists() {
+                provided
+            } else if let Some(assets_builder) = &assets_builder {
+                run_path_command_checked(
+                    &root,
+                    assets_builder,
+                    &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+                )?;
+                assets_dir.clone()
+            } else {
+                run_path_command_checked(
+                    &root,
+                    &self_bin,
+                    &[
+                        "build",
+                        "self",
+                        "assets",
+                        "--version",
+                        &version,
+                        "--out-dir",
+                        assets_dir.to_str().unwrap_or_default(),
+                    ],
+                )?;
+                assets_dir.clone()
+            }
         } else if let Some(assets_builder) = &assets_builder {
             run_path_command_checked(
                 &root,
@@ -20258,30 +20282,7 @@ fn run_installer_smoke_homebrew() -> Result<()> {
                 ],
             )?;
             assets_dir.clone()
-        }
-    } else if let Some(assets_builder) = &assets_builder {
-        run_path_command_checked(
-            &root,
-            assets_builder,
-            &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
-        )?;
-        assets_dir.clone()
-    } else {
-        run_path_command_checked(
-            &root,
-            &self_bin,
-            &[
-                "build",
-                "self",
-                "assets",
-                "--version",
-                &version,
-                "--out-dir",
-                assets_dir.to_str().unwrap_or_default(),
-            ],
-        )?;
-        assets_dir.clone()
-    };
+        };
 
     let checksums_path = formula_assets_dir.join("checksums.txt");
     let base_url = format!("file://{}", formula_assets_dir.display());
