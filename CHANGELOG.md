@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.8` after wiring a generated Nucleus OpenAPI sync tool and refreshing the GPT Actions schema from code.
+- Bumped the working version to `0.59.9` after tightening Nucleus task-create preflight validation and REST contract enforcement.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - Fixed Nucleus canonical event-log recovery so malformed JSONL ledgers are quarantined during startup and live iteration instead of repeatedly breaking recovery.
 - Fixed Nucleus profile resolution so explicit unknown profiles block immediately as `profile_unavailable`, and fresh no-profile tasks can discover local Codex profiles without requiring a pre-existing worker.
 - Fixed the Nucleus OpenAPI maintenance path by adding the missing `si-sync-nucleus-openapi` generator and regenerating the checked-in GPT Actions schema from the canonical runtime document.
+- Fixed Nucleus task intake so blank create requests are rejected as invalid params and deterministic invalid session-bound tasks return blocked immediately instead of pretending to queue first.
 
 ## [v0.59.0] - 2026-04-20
 ### Added

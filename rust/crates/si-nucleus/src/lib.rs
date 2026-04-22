@@ -1839,8 +1839,9 @@ fn is_profile_resolvable(
         || local_profiles.iter().any(|candidate| candidate == profile)
 }
 
-fn task_profile_candidates(
-    task: &TaskRecord,
+fn task_profile_candidates_for_binding(
+    profile: Option<&ProfileName>,
+    session_id: Option<&SessionId>,
     sessions: &HashMap<SessionId, SessionRecord>,
     workers: &HashMap<WorkerId, WorkerRecord>,
     available_profiles: &[ProfileRecord],
@@ -1848,15 +1849,15 @@ fn task_profile_candidates(
 ) -> Vec<ProfileName> {
     let mut candidates = Vec::<ProfileName>::new();
 
-    if let Some(profile) = task.profile.clone() {
+    if let Some(profile) = profile.cloned() {
         if is_profile_resolvable(&profile, sessions, workers, available_profiles, local_profiles) {
             push_unique_profile(&mut candidates, profile);
-        } else if task.session_id.is_none() {
+        } else if session_id.is_none() {
             return candidates;
         }
     }
 
-    if let Some(session_id) = task.session_id.as_ref() {
+    if let Some(session_id) = session_id {
         if let Some(session) = sessions.get(session_id) {
             if let Some(profile) = session.profile.clone() {
                 push_unique_profile(&mut candidates, profile);
@@ -1899,6 +1900,23 @@ fn task_profile_candidates(
     }
 
     candidates
+}
+
+fn task_profile_candidates(
+    task: &TaskRecord,
+    sessions: &HashMap<SessionId, SessionRecord>,
+    workers: &HashMap<WorkerId, WorkerRecord>,
+    available_profiles: &[ProfileRecord],
+    local_profiles: &[ProfileName],
+) -> Vec<ProfileName> {
+    task_profile_candidates_for_binding(
+        task.profile.as_ref(),
+        task.session_id.as_ref(),
+        sessions,
+        workers,
+        available_profiles,
+        local_profiles,
+    )
 }
 
 fn can_try_next_profile(reason: BlockedReason) -> bool {
@@ -3046,6 +3064,72 @@ impl NucleusService {
         Ok(())
     }
 
+    fn validate_task_create_input(&self, input: &CreateTaskInput) -> Result<()> {
+        if input.title.trim().is_empty() {
+            anyhow::bail!("task title cannot be empty");
+        }
+        if input.instructions.trim().is_empty() {
+            anyhow::bail!("task instructions cannot be empty");
+        }
+        Ok(())
+    }
+
+    fn task_create_bound_session_profile(
+        &self,
+        session: &SessionRecord,
+    ) -> Result<Option<ProfileName>> {
+        if let Some(profile) = session.profile.clone() {
+            return Ok(Some(profile));
+        }
+        Ok(self.store.inspect_worker(&session.worker_id)?.map(|worker| worker.profile))
+    }
+
+    fn preflight_task_create_block(
+        &self,
+        input: &CreateTaskInput,
+    ) -> Result<Option<TaskCreatePreflightBlock>> {
+        if let Some(session_id) = input.session_id.as_ref() {
+            let Some(session) = self.store.inspect_session(session_id)? else {
+                return Ok(Some(TaskCreatePreflightBlock {
+                    worker_id: None,
+                    session_id: Some(session_id.clone()),
+                    profile: input.profile.clone(),
+                    blocked_reason: BlockedReason::SessionBroken,
+                    message: "task references a missing session".to_owned(),
+                }));
+            };
+            let bound_profile = self.task_create_bound_session_profile(&session)?;
+            if let (Some(requested_profile), Some(bound_profile)) =
+                (input.profile.as_ref(), bound_profile.as_ref())
+            {
+                if requested_profile != bound_profile {
+                    return Ok(Some(TaskCreatePreflightBlock {
+                        worker_id: Some(session.worker_id.clone()),
+                        session_id: Some(session.session_id.clone()),
+                        profile: Some(requested_profile.clone()),
+                        blocked_reason: BlockedReason::SessionBroken,
+                        message: "task profile does not match session profile".to_owned(),
+                    }));
+                }
+            }
+            if matches!(
+                session.lifecycle_state,
+                SessionLifecycleState::Broken | SessionLifecycleState::Closed
+            ) {
+                return Ok(Some(TaskCreatePreflightBlock {
+                    worker_id: Some(session.worker_id.clone()),
+                    session_id: Some(session.session_id.clone()),
+                    profile: input.profile.clone().or(bound_profile),
+                    blocked_reason: BlockedReason::SessionBroken,
+                    message: "task is queued behind a non-reusable session".to_owned(),
+                }));
+            }
+            return Ok(None);
+        }
+
+        Ok(None)
+    }
+
     fn dispatch_queued_tasks(&self) -> Result<()> {
         let Some(runtime) = self.runtime.as_ref() else {
             return Ok(());
@@ -3955,7 +4039,7 @@ impl NucleusService {
                     Some(value) => Some(SessionId::new(value)?),
                     None => None,
                 };
-                let events = self.store.create_task(CreateTaskInput {
+                let input = CreateTaskInput {
                     title: params.title,
                     instructions: params.instructions,
                     source: params.source,
@@ -3963,16 +4047,30 @@ impl NucleusService {
                     session_id,
                     max_retries: params.max_retries,
                     timeout_seconds: params.timeout_seconds,
-                })?;
+                };
+                self.validate_task_create_input(&input)?;
+                let preflight_block = self.preflight_task_create_block(&input)?;
+                let mut events = self.store.create_task(input)?;
+                let task_id = events[0]
+                    .data
+                    .task_id
+                    .clone()
+                    .ok_or_else(|| anyhow!("task id missing after create"))?;
+                if let Some(blocked) = preflight_block {
+                    if let Some(event) = self.store.mark_task_blocked(
+                        &task_id,
+                        blocked.worker_id,
+                        blocked.session_id,
+                        blocked.profile,
+                        blocked.blocked_reason,
+                        &blocked.message,
+                    )? {
+                        events.push(event);
+                    }
+                }
                 let task = self
                     .store
-                    .inspect_task(
-                        &events[0]
-                            .data
-                            .task_id
-                            .clone()
-                            .ok_or_else(|| anyhow!("task id missing after create"))?,
-                    )?
+                    .inspect_task(&task_id)?
                     .ok_or_else(|| anyhow!("task missing after create"))?;
                 for event in events {
                     let _ = self.events.send(event);
@@ -4561,6 +4659,14 @@ struct BlockedRunReconciliation {
     blocked_reason: BlockedReason,
     message: String,
     mark_session_broken: bool,
+}
+
+struct TaskCreatePreflightBlock {
+    worker_id: Option<WorkerId>,
+    session_id: Option<SessionId>,
+    profile: Option<ProfileName>,
+    blocked_reason: BlockedReason,
+    message: String,
 }
 
 struct EnsureWorkerRequest<'a> {
@@ -5739,7 +5845,10 @@ fn infer_error_code(error: &anyhow::Error) -> &'static str {
     let message = error.to_string();
     if message.contains("unauthorized") {
         "unauthorized"
-    } else if message.contains("must match") || message.contains("parse ") {
+    } else if message.contains("must match")
+        || message.contains("parse ")
+        || message.contains("cannot be empty")
+    {
         "invalid_params"
     } else if message.contains("unavailable") {
         "unavailable"
@@ -8164,6 +8273,142 @@ mod tests {
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_rejects_blank_title_and_instructions() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "   ",
+                            "instructions": "",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], json!("invalid_params"));
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("cannot be empty"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_blocks_missing_session_immediately() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST missing session task",
+                            "instructions": "Reject impossible session binding at intake",
+                            "profile": "america",
+                            "session_id": "si-session-missing",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created = response_json(response).await;
+        assert_eq!(created["status"], json!("blocked"));
+        assert_eq!(created["blocked_reason"], json!("session_broken"));
+        assert_eq!(created["latest_run_id"], json!(null));
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_blocks_session_profile_mismatch_immediately() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+        let app = service.clone().router();
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-rest-mismatch"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST mismatched session task",
+                            "instructions": "Reject cross-profile session reuse at intake",
+                            "profile": "europe",
+                            "session_id": session_id,
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created = response_json(response).await;
+        assert_eq!(created["status"], json!("blocked"));
+        assert_eq!(created["blocked_reason"], json!("session_broken"));
+        assert_eq!(created["latest_run_id"], json!(null));
     }
 
     #[tokio::test]
@@ -10974,10 +11219,12 @@ mod tests {
             })
             .await;
         assert!(created.ok);
+        assert_eq!(
+            created.result.as_ref().and_then(|task| task["status"].as_str()),
+            Some("blocked")
+        );
         let task_id =
             created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
-
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
         let task = service
             .store
@@ -11034,10 +11281,12 @@ mod tests {
             })
             .await;
         assert!(created.ok);
+        assert_eq!(
+            created.result.as_ref().and_then(|task| task["status"].as_str()),
+            Some("blocked")
+        );
         let task_id =
             created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
-
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
         let task = service
             .store
@@ -11253,10 +11502,12 @@ mod tests {
             })
             .await;
         assert!(created.ok);
+        assert_eq!(
+            created.result.as_ref().and_then(|task| task["status"].as_str()),
+            Some("blocked")
+        );
         let task_id =
             created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
-
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
         let task = service
             .store
@@ -11321,10 +11572,12 @@ mod tests {
             })
             .await;
         assert!(created.ok);
+        assert_eq!(
+            created.result.as_ref().and_then(|task| task["status"].as_str()),
+            Some("blocked")
+        );
         let task_id =
             created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
-
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
         let task = service
             .store
