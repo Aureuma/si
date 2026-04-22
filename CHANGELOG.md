@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.6` while keeping the Homebrew smoke validation changes aligned with the Rust formatting gate.
+- Bumped the working version to `0.59.7` while resolving the Homebrew smoke validation path handling for downloaded release artifacts.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
