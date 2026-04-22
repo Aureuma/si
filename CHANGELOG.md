@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.4` while ensuring validation-only ReleaseMind runs never resolve the external publish action.
+- Bumped the working version to `0.59.5` while wiring Homebrew smoke validations to use provided release artifacts directly.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
