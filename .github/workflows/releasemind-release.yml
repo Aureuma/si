@@ -13,7 +13,7 @@ on:
       publish:
         description: Publish the release after draft generation
         required: true
-        default: true
+        default: false
         type: boolean
       base_tag:
         description: Optional base tag override for changelog diff
@@ -73,7 +73,14 @@ jobs:
           echo "base_tag=${base_tag}" >> "${GITHUB_OUTPUT}"
           echo "pull_request_numbers=${{ inputs.pull_request_numbers }}" >> "${GITHUB_OUTPUT}"
 
+      - name: Validate release tag and workspace version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
+
       - name: Ensure draft release exists
+        if: steps.resolve.outputs.publish == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -90,6 +97,7 @@ jobs:
           fi
 
       - name: Run ReleaseMind automation
+        if: steps.resolve.outputs.publish == 'true'
         uses: Aureuma/releasemind/.github/actions/releasemind-release-runbook@d117d52422083f393fcc9bbf4b6884ac52e49e3c
         with:
           api_base_url: ${{ secrets.RELEASEMIND_API_BASE_URL }}
@@ -102,3 +110,10 @@ jobs:
           publish: ${{ steps.resolve.outputs.publish }}
           preflight_command: cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
           post_publish_command: ./.github/scripts/wait-cli-release-assets.sh "${{ steps.resolve.outputs.tag }}" "${{ github.repository }}"
+
+      - name: Skip ReleaseMind publish automation
+        if: steps.resolve.outputs.publish != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Validation-only run; ReleaseMind publish automation skipped."

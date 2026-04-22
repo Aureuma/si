@@ -6,9 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build/upload (for example v0.48.0)
+        description: Release tag or validation version to build (for example v0.48.0)
         required: true
         type: string
+      publish:
+        description: Upload release assets and publish external packages
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: cli-release-assets-${{ github.event.release.tag_name || github.event.inputs.tag || github.run_id }}
@@ -24,22 +29,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
+      checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
+      publish: ${{ steps.resolve.outputs.publish }}
     steps:
-      - name: Resolve release tag
+      - name: Resolve release inputs
         id: resolve
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ github.event.release.tag_name }}"
-          if [[ -z "${tag}" ]]; then
+          checkout_ref="${{ github.event.release.tag_name }}"
+          publish="true"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             tag="${{ github.event.inputs.tag }}"
+            checkout_ref="${GITHUB_SHA}"
+            publish="${{ github.event.inputs.publish }}"
           fi
           if [[ -z "${tag}" ]]; then
             echo "No release tag provided." >&2
             exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "Building assets for tag: ${tag}"
+          echo "checkout_ref=${checkout_ref}" >> "${GITHUB_OUTPUT}"
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          echo "Preparing release assets for tag ${tag} from ${checkout_ref} (publish=${publish})"
 
   build-release-asset:
     name: Build ${{ matrix.target }}
@@ -65,7 +78,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
@@ -105,7 +118,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
@@ -142,6 +155,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload assets to GitHub Release
+        if: needs.resolve-tag.outputs.publish == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -152,6 +166,7 @@ jobs:
           gh release upload "${tag}" dist/*.tar.gz dist/checksums.txt --repo "${{ github.repository }}" --clobber
 
       - name: Attest release artifacts
+        if: needs.resolve-tag.outputs.publish == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
@@ -170,7 +185,10 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ -z "${NPM_TOKEN}" ]]; then
+          if [[ "${{ needs.resolve-tag.outputs.publish }}" != "true" ]]; then
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Validation-only run; skipping npm publish."
+          elif [[ -z "${NPM_TOKEN}" ]]; then
             echo "enabled=false" >> "${GITHUB_OUTPUT}"
             echo "NPM_TOKEN is not configured; skipping npm publish."
           else
@@ -181,7 +199,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
 
       - name: Setup Node
         if: steps.gate.outputs.enabled == 'true'
@@ -211,7 +229,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@1.88.0
@@ -246,7 +264,10 @@ jobs:
           GH_PAT_AUREUMA: ${{ secrets.GH_PAT_AUREUMA }}
         run: |
           set -euo pipefail
-          if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
+          if [[ "${{ needs.resolve-tag.outputs.publish }}" != "true" ]]; then
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Validation-only run; skipping Homebrew tap update."
+          elif [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
             echo "token_source=HOMEBREW_TAP_PUSH_TOKEN" >> "${GITHUB_OUTPUT}"
           elif [[ -n "${GH_PAT_AUREUMA}" ]]; then
@@ -262,7 +283,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve-tag.outputs.checkout_ref }}
 
       - name: Setup Rust
         if: steps.gate.outputs.enabled == 'true'
@@ -345,6 +366,11 @@ jobs:
           GH_PAT_AUREUMA: ${{ secrets.GH_PAT_AUREUMA }}
         run: |
           set -euo pipefail
+
+          if [[ "${{ needs.resolve-tag.outputs.publish }}" != "true" ]]; then
+            echo "Validation-only run; skipping published release, npm, and Homebrew tap verification."
+            exit 0
+          fi
 
           tag="${{ needs.resolve-tag.outputs.tag }}"
           version="${tag#v}"
