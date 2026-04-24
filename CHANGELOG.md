@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.9` after tightening Nucleus task-create preflight validation and REST contract enforcement.
+- Bumped the working version to `0.59.10` after consolidating Nucleus task/session binding validation and closing the remaining direct-run integrity gaps.
 
 ### Fixed
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - Fixed Nucleus profile resolution so explicit unknown profiles block immediately as `profile_unavailable`, and fresh no-profile tasks can discover local Codex profiles without requiring a pre-existing worker.
 - Fixed the Nucleus OpenAPI maintenance path by adding the missing `si-sync-nucleus-openapi` generator and regenerating the checked-in GPT Actions schema from the canonical runtime document.
 - Fixed Nucleus task intake so blank create requests are rejected as invalid params and deterministic invalid session-bound tasks return blocked immediately instead of pretending to queue first.
+- Fixed Nucleus task/session binding evaluation so task intake, queued dispatch, and direct run submission now share the same deterministic session checks, including immediate blocking and session breakage for missing app-server thread ids.
+- Fixed `run.submit_turn` so tasks already bound to one session cannot be submitted against a different session id.
+- Fixed the public Nucleus cancel-task contract to describe `cancellation_requested` as a live runtime interrupt signal rather than a generic state-change flag.
 
 ## [v0.59.0] - 2026-04-20
 ### Added
