@@ -3084,50 +3084,100 @@ impl NucleusService {
         Ok(self.store.inspect_worker(&session.worker_id)?.map(|worker| worker.profile))
     }
 
+    fn evaluate_task_session_binding(
+        &self,
+        session_id: &SessionId,
+        requested_profile: Option<&ProfileName>,
+    ) -> Result<TaskSessionBindingEvaluation> {
+        let Some(session) = self.store.inspect_session(session_id)? else {
+            return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
+                worker_id: None,
+                session_id: Some(session_id.clone()),
+                profile: requested_profile.cloned(),
+                blocked_reason: BlockedReason::SessionBroken,
+                message: "task references a missing session".to_owned(),
+                mark_session_broken: false,
+            }));
+        };
+        let bound_profile = self.task_create_bound_session_profile(&session)?;
+        if let (Some(requested_profile), Some(bound_profile)) =
+            (requested_profile, bound_profile.as_ref())
+        {
+            if requested_profile != bound_profile {
+                return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
+                    worker_id: Some(session.worker_id.clone()),
+                    session_id: Some(session.session_id.clone()),
+                    profile: Some(requested_profile.clone()),
+                    blocked_reason: BlockedReason::SessionBroken,
+                    message: "task profile does not match session profile".to_owned(),
+                    mark_session_broken: false,
+                }));
+            }
+        }
+        if matches!(
+            session.lifecycle_state,
+            SessionLifecycleState::Broken | SessionLifecycleState::Closed
+        ) {
+            return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
+                worker_id: Some(session.worker_id.clone()),
+                session_id: Some(session.session_id.clone()),
+                profile: requested_profile.cloned().or(bound_profile),
+                blocked_reason: BlockedReason::SessionBroken,
+                message: "task references a non-reusable session".to_owned(),
+                mark_session_broken: false,
+            }));
+        }
+        if session.app_server_thread_id.is_none() {
+            return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
+                worker_id: Some(session.worker_id.clone()),
+                session_id: Some(session.session_id.clone()),
+                profile: requested_profile.cloned().or(bound_profile),
+                blocked_reason: BlockedReason::SessionBroken,
+                message: "session missing app-server thread id".to_owned(),
+                mark_session_broken: true,
+            }));
+        }
+        Ok(TaskSessionBindingEvaluation::Ready(session))
+    }
+
+    fn apply_task_binding_block(
+        &self,
+        task_id: &TaskId,
+        blocked: TaskSessionBindingBlock,
+    ) -> Result<()> {
+        if let Some(event) = self.store.mark_task_blocked(
+            task_id,
+            blocked.worker_id.clone(),
+            blocked.session_id.clone(),
+            blocked.profile,
+            blocked.blocked_reason,
+            &blocked.message,
+        )? {
+            let _ = self.events.send(event);
+        }
+        if blocked.mark_session_broken {
+            if let Some(session_id) = blocked.session_id {
+                if let Some(event) =
+                    self.store.mark_session_broken(&session_id, &blocked.message)?
+                {
+                    let _ = self.events.send(event);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn preflight_task_create_block(
         &self,
         input: &CreateTaskInput,
-    ) -> Result<Option<TaskCreatePreflightBlock>> {
-        if let Some(session_id) = input.session_id.as_ref() {
-            let Some(session) = self.store.inspect_session(session_id)? else {
-                return Ok(Some(TaskCreatePreflightBlock {
-                    worker_id: None,
-                    session_id: Some(session_id.clone()),
-                    profile: input.profile.clone(),
-                    blocked_reason: BlockedReason::SessionBroken,
-                    message: "task references a missing session".to_owned(),
-                }));
-            };
-            let bound_profile = self.task_create_bound_session_profile(&session)?;
-            if let (Some(requested_profile), Some(bound_profile)) =
-                (input.profile.as_ref(), bound_profile.as_ref())
-            {
-                if requested_profile != bound_profile {
-                    return Ok(Some(TaskCreatePreflightBlock {
-                        worker_id: Some(session.worker_id.clone()),
-                        session_id: Some(session.session_id.clone()),
-                        profile: Some(requested_profile.clone()),
-                        blocked_reason: BlockedReason::SessionBroken,
-                        message: "task profile does not match session profile".to_owned(),
-                    }));
-                }
-            }
-            if matches!(
-                session.lifecycle_state,
-                SessionLifecycleState::Broken | SessionLifecycleState::Closed
-            ) {
-                return Ok(Some(TaskCreatePreflightBlock {
-                    worker_id: Some(session.worker_id.clone()),
-                    session_id: Some(session.session_id.clone()),
-                    profile: input.profile.clone().or(bound_profile),
-                    blocked_reason: BlockedReason::SessionBroken,
-                    message: "task is queued behind a non-reusable session".to_owned(),
-                }));
-            }
+    ) -> Result<Option<TaskSessionBindingBlock>> {
+        let Some(session_id) = input.session_id.as_ref() else {
             return Ok(None);
+        };
+        match self.evaluate_task_session_binding(session_id, input.profile.as_ref())? {
+            TaskSessionBindingEvaluation::Ready(_) => Ok(None),
+            TaskSessionBindingEvaluation::Blocked(blocked) => Ok(Some(blocked)),
         }
-
-        Ok(None)
     }
 
     fn dispatch_queued_tasks(&self) -> Result<()> {
@@ -3402,55 +3452,13 @@ impl NucleusService {
         profile: &ProfileName,
     ) -> Result<Option<SessionRecord>> {
         if let Some(session_id) = task.session_id.as_ref() {
-            let Some(session) = self.store.inspect_session(session_id)? else {
-                if let Some(event) = self.store.mark_task_blocked(
-                    &task.task_id,
-                    None,
-                    Some(session_id.clone()),
-                    Some(profile.clone()),
-                    BlockedReason::SessionBroken,
-                    "task references a missing session",
-                )? {
-                    let _ = self.events.send(event);
+            let session = match self.evaluate_task_session_binding(session_id, Some(profile))? {
+                TaskSessionBindingEvaluation::Ready(session) => session,
+                TaskSessionBindingEvaluation::Blocked(blocked) => {
+                    self.apply_task_binding_block(&task.task_id, blocked)?;
+                    return Ok(None);
                 }
-                return Ok(None);
             };
-            let bound_profile = session.profile.clone().or_else(|| {
-                self.store
-                    .inspect_worker(&session.worker_id)
-                    .ok()
-                    .flatten()
-                    .map(|worker| worker.profile)
-            });
-            if bound_profile.as_ref().is_some_and(|bound_profile| bound_profile != profile) {
-                if let Some(event) = self.store.mark_task_blocked(
-                    &task.task_id,
-                    Some(session.worker_id.clone()),
-                    Some(session.session_id.clone()),
-                    Some(profile.clone()),
-                    BlockedReason::SessionBroken,
-                    "task profile does not match session profile",
-                )? {
-                    let _ = self.events.send(event);
-                }
-                return Ok(None);
-            }
-            if matches!(
-                session.lifecycle_state,
-                SessionLifecycleState::Broken | SessionLifecycleState::Closed
-            ) {
-                if let Some(event) = self.store.mark_task_blocked(
-                    &task.task_id,
-                    Some(session.worker_id.clone()),
-                    Some(session.session_id.clone()),
-                    Some(profile.clone()),
-                    BlockedReason::SessionBroken,
-                    "task is queued behind a non-reusable session",
-                )? {
-                    let _ = self.events.send(event);
-                }
-                return Ok(None);
-            }
             let worker = self.ensure_worker_started(
                 runtime,
                 profile,
@@ -3463,25 +3471,10 @@ impl NucleusService {
                     env: None,
                 },
             )?;
-            let Some(thread_id) = session.app_server_thread_id.clone() else {
-                if let Some(event) = self.store.mark_session_broken(
-                    &session.session_id,
-                    "session is missing an app-server thread id",
-                )? {
-                    let _ = self.events.send(event);
-                }
-                if let Some(event) = self.store.mark_task_blocked(
-                    &task.task_id,
-                    Some(worker.worker.worker_id.clone()),
-                    Some(session.session_id.clone()),
-                    Some(profile.clone()),
-                    BlockedReason::SessionBroken,
-                    "session is missing an app-server thread id",
-                )? {
-                    let _ = self.events.send(event);
-                }
-                return Ok(None);
-            };
+            let thread_id = session
+                .app_server_thread_id
+                .clone()
+                .ok_or_else(|| anyhow!("session missing app-server thread id"))?;
             let workdir =
                 session.workdir.as_ref().map(PathBuf::from).unwrap_or_else(default_workdir);
             match runtime.ensure_session(&SessionOpenSpec {
@@ -3501,21 +3494,17 @@ impl NucleusService {
                     return self.store.inspect_session(&session.session_id);
                 }
                 Err(error) => {
-                    if let Some(event) =
-                        self.store.mark_session_broken(&session.session_id, &error.to_string())?
-                    {
-                        let _ = self.events.send(event);
-                    }
-                    if let Some(event) = self.store.mark_task_blocked(
+                    self.apply_task_binding_block(
                         &task.task_id,
-                        Some(worker.worker.worker_id.clone()),
-                        Some(session.session_id.clone()),
-                        Some(profile.clone()),
-                        BlockedReason::SessionBroken,
-                        &error.to_string(),
-                    )? {
-                        let _ = self.events.send(event);
-                    }
+                        TaskSessionBindingBlock {
+                            worker_id: Some(worker.worker.worker_id.clone()),
+                            session_id: Some(session.session_id.clone()),
+                            profile: Some(profile.clone()),
+                            blocked_reason: BlockedReason::SessionBroken,
+                            message: error.to_string(),
+                            mark_session_broken: true,
+                        },
+                    )?;
                     return Ok(None);
                 }
             }
@@ -4050,31 +4039,22 @@ impl NucleusService {
                 };
                 self.validate_task_create_input(&input)?;
                 let preflight_block = self.preflight_task_create_block(&input)?;
-                let mut events = self.store.create_task(input)?;
+                let events = self.store.create_task(input)?;
                 let task_id = events[0]
                     .data
                     .task_id
                     .clone()
                     .ok_or_else(|| anyhow!("task id missing after create"))?;
+                for event in events {
+                    let _ = self.events.send(event);
+                }
                 if let Some(blocked) = preflight_block {
-                    if let Some(event) = self.store.mark_task_blocked(
-                        &task_id,
-                        blocked.worker_id,
-                        blocked.session_id,
-                        blocked.profile,
-                        blocked.blocked_reason,
-                        &blocked.message,
-                    )? {
-                        events.push(event);
-                    }
+                    self.apply_task_binding_block(&task_id, blocked)?;
                 }
                 let task = self
                     .store
                     .inspect_task(&task_id)?
                     .ok_or_else(|| anyhow!("task missing after create"))?;
-                for event in events {
-                    let _ = self.events.send(event);
-                }
                 Ok(serde_json::to_value(task)?)
             }
             "task.list" => Ok(serde_json::to_value(self.store.list_tasks()?)?),
@@ -4281,23 +4261,28 @@ impl NucleusService {
                 let params: RunSubmitTurnParams =
                     serde_json::from_value(params).context("parse run.submit_turn params")?;
                 let session_id = SessionId::new(params.session_id)?;
-                let session = self
-                    .store
-                    .inspect_session(&session_id)?
-                    .ok_or_else(|| anyhow!("session not found"))?;
+                let task_id = TaskId::new(params.task_id)?;
+                let task =
+                    self.store.inspect_task(&task_id)?.ok_or_else(|| anyhow!("task not found"))?;
+                if let Some(bound_session_id) = task.session_id.as_ref() {
+                    if bound_session_id != &session_id {
+                        anyhow::bail!("task is bound to a different session");
+                    }
+                }
+                let session =
+                    match self.evaluate_task_session_binding(&session_id, task.profile.as_ref())? {
+                        TaskSessionBindingEvaluation::Ready(session) => session,
+                        TaskSessionBindingEvaluation::Blocked(blocked) => {
+                            let message = blocked.message.clone();
+                            self.apply_task_binding_block(&task.task_id, blocked)?;
+                            anyhow::bail!(message);
+                        }
+                    };
                 let worker = self
                     .store
                     .inspect_worker(&session.worker_id)?
                     .ok_or_else(|| anyhow!("worker not found"))?;
                 let profile = worker.profile.clone();
-                let task_id = TaskId::new(params.task_id)?;
-                let task =
-                    self.store.inspect_task(&task_id)?.ok_or_else(|| anyhow!("task not found"))?;
-                if let Some(task_profile) = task.profile.as_ref() {
-                    if task_profile != &profile {
-                        anyhow::bail!("task profile does not match session profile");
-                    }
-                }
                 if let Some(latest_run_id) = task.latest_run_id.as_ref() {
                     if let Some(latest_run) = self.store.inspect_run(latest_run_id)? {
                         if is_active_run_status(latest_run.status) {
@@ -4314,28 +4299,10 @@ impl NucleusService {
                 )? {
                     anyhow::bail!(message);
                 }
-                let thread_id = match session.app_server_thread_id.clone() {
-                    Some(thread_id) => thread_id,
-                    None => {
-                        let message = "session missing app-server thread id";
-                        if let Some(event) =
-                            self.store.mark_session_broken(&session.session_id, message)?
-                        {
-                            let _ = self.events.send(event);
-                        }
-                        if let Some(event) = self.store.mark_task_blocked(
-                            &task.task_id,
-                            Some(worker.worker_id.clone()),
-                            Some(session.session_id.clone()),
-                            Some(profile.clone()),
-                            BlockedReason::SessionBroken,
-                            message,
-                        )? {
-                            let _ = self.events.send(event);
-                        }
-                        anyhow::bail!(message);
-                    }
-                };
+                let thread_id = session
+                    .app_server_thread_id
+                    .clone()
+                    .ok_or_else(|| anyhow!("session missing app-server thread id"))?;
                 let run = RunRecord::new(RunId::generate(), task_id.clone(), session_id.clone());
                 let run = self.store.claim_run_for_task(run)?;
                 let run_spec = RunTurnSpec {
@@ -4661,12 +4628,18 @@ struct BlockedRunReconciliation {
     mark_session_broken: bool,
 }
 
-struct TaskCreatePreflightBlock {
+enum TaskSessionBindingEvaluation {
+    Ready(SessionRecord),
+    Blocked(TaskSessionBindingBlock),
+}
+
+struct TaskSessionBindingBlock {
     worker_id: Option<WorkerId>,
     session_id: Option<SessionId>,
     profile: Option<ProfileName>,
     blocked_reason: BlockedReason,
     message: String,
+    mark_session_broken: bool,
 }
 
 struct EnsureWorkerRequest<'a> {
@@ -5589,7 +5562,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                             "description": "Run affected by the cancellation request, when the task had an active or latest run.",
                             "anyOf": [schema_ref("RunRecord"), { "type": "null" }]
                         },
-                        "cancellation_requested": { "type": "boolean", "description": "True when Nucleus issued a new cancellation request; false when the task was already terminal or no action was needed.", "example": true, "readOnly": true }
+                        "cancellation_requested": { "type": "boolean", "description": "True when Nucleus sent a live runtime interrupt for an active run; false when cancellation completed without a runtime interrupt or the task was already terminal.", "example": true, "readOnly": true }
                     }
                 }
             }
@@ -8409,6 +8382,87 @@ mod tests {
         assert_eq!(created["status"], json!("blocked"));
         assert_eq!(created["blocked_reason"], json!("session_broken"));
         assert_eq!(created["latest_run_id"], json!(null));
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_marks_session_broken_when_referenced_session_lacks_thread_id() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+        let app = service.clone().router();
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-rest-missing-thread"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let mut persisted_session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        persisted_session.app_server_thread_id = None;
+        service
+            .store
+            .write_session_projection_locked(&persisted_session)
+            .expect("persist session without thread id");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST missing thread task",
+                            "instructions": "Reject impossible session reuse without a thread id",
+                            "profile": "america",
+                            "session_id": session_id.as_str(),
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created = response_json(response).await;
+        assert_eq!(created["status"], json!("blocked"));
+        assert_eq!(created["blocked_reason"], json!("session_broken"));
+        assert_eq!(created["latest_run_id"], json!(null));
+
+        let session = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
     }
 
     #[tokio::test]
@@ -11458,7 +11512,10 @@ mod tests {
         assert!(
             run.error
                 .as_ref()
-                .map(|error| error.message.contains("session missing app-server thread id"))
+                .map(|error| {
+                    error.message.contains("session missing app-server thread id")
+                        || error.message.contains("task references a non-reusable session")
+                })
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_runs().expect("runs").len(), 0);
@@ -11474,6 +11531,182 @@ mod tests {
             .expect("inspect session")
             .expect("session exists");
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_rejects_different_bound_session() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let first_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-direct-bound-a"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(first_session.ok);
+        let first_session_id = first_session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("first session id");
+
+        let second_session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-direct-bound-b"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home-b"),
+                    "codex_home": temp.path().join("home-b/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(second_session.ok);
+        let second_session_id = second_session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("second session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-direct-bound"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Direct run wrong session",
+                    "instructions": "Attempt direct run with a different bound session",
+                    "profile": "america",
+                    "session_id": first_session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-direct-bound-mismatch"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": second_session_id,
+                    "task_id": task_id.as_str(),
+                    "prompt": "attempt direct run with wrong session",
+                }),
+            })
+            .await;
+        assert!(!run.ok);
+        assert!(
+            run.error
+                .as_ref()
+                .map(|error| error.message.contains("task is bound to a different session"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_runs().expect("runs").len(), 0);
+
+        let task =
+            service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+        assert_eq!(task.status, TaskStatus::Queued);
+        assert_eq!(task.session_id.as_ref().map(SessionId::as_str), Some(first_session_id));
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_rejects_non_reusable_session_binding() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-broken-run"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+        service
+            .store
+            .mark_session_broken(&session_id, "marked broken for direct-run test")
+            .expect("mark broken");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-broken-run"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Direct run broken session",
+                    "instructions": "Attempt direct run through a broken session",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-broken-session"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id.as_str(),
+                    "task_id": task_id,
+                    "prompt": "attempt direct run with broken session",
+                }),
+            })
+            .await;
+        assert!(!run.ok);
+        assert!(
+            run.error
+                .as_ref()
+                .map(|error| error.message.contains("task references a non-reusable session"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_runs().expect("runs").len(), 0);
     }
 
     #[tokio::test]
@@ -11590,7 +11823,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dispatcher_marks_session_broken_when_referenced_session_lacks_thread_id() {
+    async fn task_create_marks_session_broken_when_referenced_session_lacks_thread_id() {
         let temp = tempdir().expect("tempdir");
         let service = NucleusService::open_with_runtime(
             NucleusConfig {
@@ -11649,6 +11882,10 @@ mod tests {
             })
             .await;
         assert!(created_task.ok);
+        assert_eq!(
+            created_task.result.as_ref().and_then(|item| item["status"].as_str()),
+            Some("blocked")
+        );
         let task_id = TaskId::new(
             created_task
                 .result
@@ -11658,8 +11895,6 @@ mod tests {
                 .to_owned(),
         )
         .expect("task id");
-
-        service.reconcile_and_dispatch_once().expect("dispatch queued work");
 
         let task =
             service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");

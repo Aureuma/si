@@ -122,6 +122,7 @@ For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/g
 - `servers[0].url` must be an absolute HTTPS URL for public imports. Use `SI_NUCLEUS_PUBLIC_URL` in deployed environments.
 - Every operation must have a stable `operationId`, `summary`, `description`, success response schema, and `x-si-purpose`.
 - Every JSON request or response body must define a concrete schema. Do not use generic object schemas such as `type: object` with only `additionalProperties`.
+- Field descriptions must match live semantics exactly. If a field only reports a runtime-side action, describe that narrow behavior instead of a broader workflow outcome.
 - Every object schema must include a `properties` key. Map-like objects may use `properties: {}` plus `additionalProperties`, but the `properties` key must still be present for GPT Actions compatibility.
 - Public bootstrap endpoints such as `GET /openapi.json` must set operation `security: []`; operational endpoints must explicitly require `bearerAuth`.
 - Generate `docs/gpt-actions-openapi.yaml` from the canonical runtime model instead of editing version strings or endpoint lists by hand:
