@@ -1903,7 +1903,8 @@ fn task_profile_candidates_for_binding(
     if let Some(profile) = profile.cloned() {
         if is_profile_resolvable(&profile, sessions, workers, available_profiles, local_profiles) {
             push_unique_profile(&mut candidates, profile);
-        } else if session_id.is_none() {
+        }
+        if session_id.is_none() {
             return candidates;
         }
     }
@@ -11165,6 +11166,93 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn explicit_profile_tasks_do_not_fall_back_when_requested_profile_is_busy() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::with_run_delay(Duration::from_millis(250));
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime.clone()),
+        )
+        .expect("service");
+
+        for profile_name in ["america", "berylla"] {
+            let profile = ProfileName::new(profile_name).expect("profile");
+            let home_dir = temp.path().join(format!("home-{profile_name}"));
+            let spec = WorkerLaunchSpec {
+                worker_id: WorkerId::generate(),
+                profile: profile.clone(),
+                home_dir: home_dir.clone(),
+                codex_home: home_dir.join(format!(".si/codex/profiles/{profile_name}")),
+                workdir: temp.path().to_path_buf(),
+                extra_env: BTreeMap::new(),
+            };
+            let started = runtime.start_worker(&spec).expect("start worker");
+            service.store.record_worker_start(&spec, &started, &runtime).expect("record worker");
+        }
+
+        let first = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-explicit-busy-first"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "First pinned task",
+                    "instructions": "Hold america busy",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(first.ok);
+        let first_task_id = first.result.as_ref().expect("first result")["task_id"]
+            .as_str()
+            .expect("first task id")
+            .to_owned();
+
+        let second = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-explicit-busy-second"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Second pinned task",
+                    "instructions": "Wait for america instead of falling back",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(second.ok);
+        let second_task_id = second.result.as_ref().expect("second result")["task_id"]
+            .as_str()
+            .expect("second task id")
+            .to_owned();
+
+        service.reconcile_and_dispatch_once().expect("dispatch first wave");
+        thread::sleep(Duration::from_millis(40));
+
+        let second_task = service
+            .store
+            .inspect_task(&TaskId::new(second_task_id.clone()).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(second_task.status, TaskStatus::Queued);
+        assert_eq!(second_task.profile.as_ref().map(ProfileName::as_str), Some("america"));
+        assert!(second_task.latest_run_id.is_none());
+
+        wait_for_task_status(&service, &first_task_id, TaskStatus::Done);
+        service.reconcile_and_dispatch_once().expect("dispatch second wave");
+        wait_for_task_status(&service, &second_task_id, TaskStatus::Done);
+
+        let second_task = service
+            .store
+            .inspect_task(&TaskId::new(second_task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(second_task.profile.as_ref().map(ProfileName::as_str), Some("america"));
+    }
+
+    #[tokio::test]
     async fn session_create_prefers_stable_lexical_worker_id_when_candidates_tie() {
         let temp = tempdir().expect("tempdir");
         let runtime = FakeRuntime::default();
@@ -11370,6 +11458,31 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Blocked);
         assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
         assert!(task.latest_run_id.is_none());
+    }
+
+    #[test]
+    fn task_profile_candidates_stay_pinned_to_explicit_profile() {
+        let task = TaskRecord {
+            profile: Some(ProfileName::new("america").expect("profile")),
+            ..TaskRecord::new(
+                TaskId::generate(),
+                TaskSource::Websocket,
+                "Pinned profile".to_owned(),
+                "Pinned profile".to_owned(),
+            )
+        };
+        let candidates = super::task_profile_candidates(
+            &task,
+            &HashMap::new(),
+            &HashMap::new(),
+            &[],
+            &[
+                ProfileName::new("america").expect("profile"),
+                ProfileName::new("berylla").expect("profile"),
+                ProfileName::new("cadma").expect("profile"),
+            ],
+        );
+        assert_eq!(candidates, vec![ProfileName::new("america").expect("profile")]);
     }
 
     #[test]
