@@ -149,6 +149,7 @@ impl TaskStatus {
                 | (Self::Running, Self::Cancelled)
                 | (Self::Blocked, Self::Queued)
                 | (Self::Blocked, Self::Cancelled)
+                | (Self::Failed, Self::Queued)
         )
     }
 }
@@ -247,7 +248,6 @@ impl RunStatus {
                 | (Self::Running, Self::Failed)
                 | (Self::Running, Self::Blocked)
                 | (Self::Running, Self::Cancelled)
-                | (Self::Blocked, Self::Queued)
                 | (Self::Blocked, Self::Cancelled)
         )
     }
@@ -285,7 +285,11 @@ pub struct TaskRecord {
     pub blocked_reason: Option<BlockedReason>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub attempt_count: u32,
     pub max_retries: Option<u32>,
+    #[serde(default)]
+    pub session_binding_locked: bool,
     pub timeout_seconds: Option<u64>,
 }
 
@@ -315,7 +319,9 @@ impl TaskRecord {
             blocked_reason: None,
             created_at: now,
             updated_at: now,
+            attempt_count: 0,
             max_retries: None,
+            session_binding_locked: false,
             timeout_seconds: None,
         }
     }

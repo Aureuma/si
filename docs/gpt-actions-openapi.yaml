@@ -40,7 +40,7 @@ components:
           type: integer
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.13
+          example: 0.59.16
           readOnly: true
           type: string
         worker_count:
@@ -87,7 +87,7 @@ components:
               type: string
             version:
               description: API package version.
-              example: 0.59.13
+              example: 0.59.16
               type: string
           required:
           - title
@@ -384,6 +384,12 @@ components:
       additionalProperties: false
       description: Durable task projection stored by Nucleus.
       properties:
+        attempt_count:
+          description: How many execution attempts Nucleus has already started for this task.
+          example: 1
+          minimum: 0
+          readOnly: true
+          type: integer
         blocked_reason:
           description: Reason the task is blocked when status is blocked.
           enum:
@@ -438,7 +444,7 @@ components:
           - string
           - 'null'
         max_retries:
-          description: Maximum retry attempts configured for this task.
+          description: Maximum retry attempts configured for this task after a failed run.
           example: 0
           minimum: 0
           type:
@@ -470,6 +476,11 @@ components:
           type:
           - string
           - 'null'
+        session_binding_locked:
+          description: True when the task was created against an explicit existing session and retries must preserve that session binding.
+          example: false
+          readOnly: true
+          type: boolean
         session_id:
           description: Session currently associated with this task, if any.
           example: si-session-0123456789abcdef00000001
@@ -555,7 +566,7 @@ components:
       properties:
         capability_version:
           description: Worker capability or package version when reported.
-          example: 0.59.13
+          example: 0.59.16
           type:
           - string
           - 'null'
@@ -674,7 +685,7 @@ components:
 info:
   description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
   title: SI Nucleus REST API
-  version: 0.59.13
+  version: 0.59.16
 openapi: 3.1.0
 paths:
   /openapi.json:
@@ -805,7 +816,7 @@ paths:
                 session_count: 2
                 state_dir: /home/si/.local/state/si/nucleus
                 task_count: 12
-                version: 0.59.13
+                version: 0.59.16
                 worker_count: 2
                 ws_url: ws://0.0.0.0:4747/ws
               schema:
@@ -830,7 +841,8 @@ paths:
           content:
             application/json:
               example:
-              - blocked_reason: null
+              - attempt_count: 1
+                blocked_reason: null
                 checkpoint_at: null
                 checkpoint_seq: null
                 checkpoint_summary: null
@@ -842,6 +854,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                session_binding_locked: false
                 session_id: null
                 source: websocket
                 status: queued
@@ -887,6 +900,7 @@ paths:
           content:
             application/json:
               example:
+                attempt_count: 1
                 blocked_reason: null
                 checkpoint_at: null
                 checkpoint_seq: null
@@ -899,6 +913,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                session_binding_locked: false
                 session_id: null
                 source: websocket
                 status: queued
@@ -951,6 +966,7 @@ paths:
           content:
             application/json:
               example:
+                attempt_count: 1
                 blocked_reason: null
                 checkpoint_at: null
                 checkpoint_seq: null
@@ -963,6 +979,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                session_binding_locked: false
                 session_id: null
                 source: websocket
                 status: queued
@@ -1019,6 +1036,7 @@ paths:
                   status: running
                   task_id: si-task-0123456789abcdef00000001
                 task:
+                  attempt_count: 1
                   blocked_reason: null
                   checkpoint_at: null
                   checkpoint_seq: null
@@ -1031,6 +1049,7 @@ paths:
                   producer_dedup_key: null
                   producer_rule_name: null
                   profile: darmstada
+                  session_binding_locked: false
                   session_id: null
                   source: websocket
                   status: queued
@@ -1079,7 +1098,7 @@ paths:
           content:
             application/json:
               example:
-              - capability_version: 0.59.13
+              - capability_version: 0.59.16
                 codex_home: /home/si/.codex
                 effective_account_state: authenticated
                 extra_env: {}
@@ -1130,7 +1149,7 @@ paths:
                   started_at: 2026-04-17T00:00:00Z
                   worker_id: si-worker-0123456789abcdef00000001
                 worker:
-                  capability_version: 0.59.13
+                  capability_version: 0.59.16
                   codex_home: /home/si/.codex
                   effective_account_state: authenticated
                   extra_env: {}

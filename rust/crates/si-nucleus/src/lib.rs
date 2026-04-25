@@ -702,6 +702,7 @@ impl NucleusStore {
             TaskRecord::new(TaskId::generate(), input.source, input.title, input.instructions);
         task.profile = input.profile;
         task.session_id = input.session_id;
+        task.session_binding_locked = task.session_id.is_some();
         if let Some(max_retries) = input.max_retries {
             task.max_retries = Some(max_retries);
         }
@@ -783,6 +784,7 @@ impl NucleusStore {
             TaskRecord::new(TaskId::generate(), input.source, input.title, input.instructions);
         task.profile = input.profile;
         task.session_id = input.session_id;
+        task.session_binding_locked = task.session_id.is_some();
         task.producer_rule_name = Some(producer_rule_name.to_owned());
         task.producer_dedup_key = Some(producer_dedup_key.to_owned());
         if let Some(max_retries) = input.max_retries {
@@ -1154,6 +1156,7 @@ impl NucleusStore {
         if task.session_id.is_none() {
             task.session_id = Some(run.session_id.clone());
         }
+        task.attempt_count = task.attempt_count.saturating_add(1);
         task.latest_run_id = Some(run.run_id.clone());
         task.updated_at = Utc::now();
         write_json_atomic(&self.paths.task_path(&run.task_id), &task)?;
@@ -1255,6 +1258,7 @@ impl NucleusStore {
                 )?;
             }
             CanonicalEventType::RunFailed => {
+                let retry_plan = self.task_retry_plan_for_run_failure_locked(&primary)?;
                 self.finish_run_locked(
                     &primary,
                     RunStatus::Failed,
@@ -1264,6 +1268,13 @@ impl NucleusStore {
                     &mut events,
                 )?;
                 self.apply_run_failure_consequences_locked(&primary, &mut events)?;
+                if let Some(retry_plan) = retry_plan {
+                    if let Some(task_id) = primary.data.task_id.as_ref() {
+                        if let Some(event) = self.retry_failed_task_locked(task_id, &retry_plan)? {
+                            events.push(event);
+                        }
+                    }
+                }
             }
             CanonicalEventType::RunCancelled => {
                 self.finish_run_locked(
@@ -1334,6 +1345,77 @@ impl NucleusStore {
             }
         }
         Ok(())
+    }
+
+    fn task_retry_plan_for_run_failure_locked(
+        &self,
+        event: &CanonicalEvent,
+    ) -> Result<Option<TaskRetryPlan>> {
+        let Some(task_id) = event.data.task_id.as_ref() else {
+            return Ok(None);
+        };
+        let Some(task) = self.read_task_locked(task_id)? else {
+            return Ok(None);
+        };
+        let Some(max_retries) = task.max_retries else {
+            return Ok(None);
+        };
+        if task.attempt_count == 0 || task.attempt_count > max_retries {
+            return Ok(None);
+        }
+        let failure_breaks_session = event
+            .data
+            .payload
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_some_and(run_failure_requires_session_quarantine);
+        if failure_breaks_session && task.session_binding_locked {
+            return Ok(None);
+        }
+        Ok(Some(TaskRetryPlan {
+            next_session_id: if failure_breaks_session { None } else { task.session_id.clone() },
+            attempt_count: task.attempt_count,
+            max_retries,
+        }))
+    }
+
+    fn retry_failed_task_locked(
+        &self,
+        task_id: &TaskId,
+        retry_plan: &TaskRetryPlan,
+    ) -> Result<Option<CanonicalEvent>> {
+        let Some(mut task) = self.read_task_locked(task_id)? else {
+            return Ok(None);
+        };
+        if task.status != TaskStatus::Failed {
+            return Ok(None);
+        }
+        task.session_id = retry_plan.next_session_id.clone();
+        task.transition_to(TaskStatus::Queued, None).map_err(anyhow::Error::new)?;
+        write_json_atomic(&self.paths.task_path(task_id), &task)?;
+        let event = self.append_event_locked(
+            CanonicalEventType::TaskUpdated,
+            CanonicalEventSource::Nucleus,
+            EventDataEnvelope {
+                task_id: Some(task.task_id.clone()),
+                worker_id: None,
+                session_id: task.session_id.clone(),
+                run_id: task.latest_run_id.clone(),
+                profile: task.profile.clone(),
+                payload: json!({
+                    "status": task.status,
+                    "blocked_reason": task.blocked_reason,
+                    "message": format!(
+                        "retrying task after failed attempt {}/{}",
+                        retry_plan.attempt_count,
+                        retry_plan.max_retries + 1
+                    ),
+                }),
+            },
+        )?;
+        Ok(Some(event))
     }
 
     fn finish_run_locked(
@@ -4972,7 +5054,9 @@ fn task_record_example() -> Value {
         "blocked_reason": null,
         "created_at": "2026-04-17T00:00:00Z",
         "updated_at": "2026-04-17T00:00:00Z",
+        "attempt_count": 1,
         "max_retries": 0,
+        "session_binding_locked": false,
         "timeout_seconds": 900
     })
 }
@@ -5573,7 +5657,9 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         },
                         "created_at": { "type": "string", "description": "Task creation timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
                         "updated_at": { "type": "string", "description": "Last task update timestamp.", "format": "date-time", "example": "2026-04-17T00:00:00Z", "readOnly": true },
-                        "max_retries": { "type": ["integer", "null"], "description": "Maximum retry attempts configured for this task.", "minimum": 0, "example": 0 },
+                        "attempt_count": { "type": "integer", "description": "How many execution attempts Nucleus has already started for this task.", "minimum": 0, "example": 1, "readOnly": true },
+                        "max_retries": { "type": ["integer", "null"], "description": "Maximum retry attempts configured for this task after a failed run.", "minimum": 0, "example": 0 },
+                        "session_binding_locked": { "type": "boolean", "description": "True when the task was created against an explicit existing session and retries must preserve that session binding.", "example": false, "readOnly": true },
                         "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 0, "example": 900 }
                     }
                 },
@@ -5987,6 +6073,13 @@ struct CreateTaskInput {
     timeout_seconds: Option<u64>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct TaskRetryPlan {
+    next_session_id: Option<SessionId>,
+    attempt_count: u32,
+    max_retries: u32,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TaskCreateParams {
     title: String,
@@ -6195,7 +6288,8 @@ mod tests {
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
         EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
-        SessionLifecycleState, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId, WorkerStatus,
+        SessionLifecycleState, SessionRecord, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId,
+        WorkerStatus,
     };
     use si_nucleus_runtime::{
         CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
@@ -6216,6 +6310,7 @@ mod tests {
         interrupted_turns: HashSet<String>,
         last_timeout_seconds: Option<u64>,
         run_failure_error: Option<String>,
+        remaining_run_failures: usize,
     }
 
     #[derive(Clone, Default)]
@@ -6237,8 +6332,15 @@ mod tests {
         }
 
         fn with_run_failure(error: &str) -> Self {
+            Self::with_run_failures(error, 1)
+        }
+
+        fn with_run_failures(error: &str, count: usize) -> Self {
             let runtime = Self::default();
-            runtime.state.lock().expect("state").run_failure_error = Some(error.to_owned());
+            let mut state = runtime.state.lock().expect("state");
+            state.run_failure_error = Some(error.to_owned());
+            state.remaining_run_failures = count;
+            drop(state);
             runtime
         }
 
@@ -6341,7 +6443,13 @@ mod tests {
             let (run_delay, fail_execute, run_failure_error) = {
                 let mut state = self.state.lock().expect("state");
                 state.last_timeout_seconds = spec.timeout_seconds;
-                (state.run_delay, state.fail_execute, state.run_failure_error.clone())
+                let run_failure_error = if state.remaining_run_failures > 0 {
+                    state.remaining_run_failures -= 1;
+                    state.run_failure_error.clone()
+                } else {
+                    None
+                };
+                (state.run_delay, state.fail_execute, run_failure_error)
             };
             if fail_execute {
                 anyhow::bail!("fake-runtime execute_turn failed before run.started");
@@ -6513,6 +6621,47 @@ mod tests {
         let task =
             service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
         panic!("expected task {} status {:?}, got {:?}", task_id, expected, task.status);
+    }
+
+    fn wait_for_task_state(
+        service: &NucleusService,
+        task_id: &str,
+        predicate: impl Fn(&TaskRecord) -> bool,
+    ) -> TaskRecord {
+        let task_id = TaskId::new(task_id).expect("task id");
+        for _ in 0..120 {
+            let task =
+                service.store.inspect_task(&task_id).expect("inspect task").expect("task exists");
+            if predicate(&task) {
+                return task;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        service.store.inspect_task(&task_id).expect("inspect task").expect("task exists")
+    }
+
+    fn wait_for_session_state(
+        service: &NucleusService,
+        session_id: &str,
+        expected: SessionLifecycleState,
+    ) -> SessionRecord {
+        let session_id = SessionId::new(session_id).expect("session id");
+        for _ in 0..120 {
+            let session = service
+                .store
+                .inspect_session(&session_id)
+                .expect("inspect session")
+                .expect("session exists");
+            if session.lifecycle_state == expected {
+                return session;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists")
     }
 
     fn wait_for_run_started(service: &NucleusService, run_id: &str) -> RunRecord {
@@ -13913,11 +14062,7 @@ mod tests {
         wait_for_task_status(&service, task_id, TaskStatus::Failed);
         let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
         assert_eq!(run.status, RunStatus::Failed);
-        let session = service
-            .store
-            .inspect_session(&SessionId::new(session_id).expect("session id"))
-            .expect("inspect session")
-            .expect("session exists");
+        let session = wait_for_session_state(&service, &session_id, SessionLifecycleState::Broken);
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
     }
 
@@ -14208,6 +14353,228 @@ mod tests {
             .expect("inspect worker")
             .expect("worker exists");
         assert_eq!(worker.status, WorkerStatus::Failed);
+    }
+
+    #[tokio::test]
+    async fn dispatched_task_retries_after_non_quarantining_failure() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::with_run_failures("agent refused to answer", 1);
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-retry-soft-fail"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Retry soft failure",
+                    "instructions": "Retry soft failure",
+                    "profile": "america",
+                    "max_retries": 1,
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.expect("task result")["task_id"].as_str().expect("task id").to_owned();
+
+        service.reconcile_and_dispatch_once().expect("dispatch first attempt");
+
+        let queued = wait_for_task_state(&service, &task_id, |task| {
+            task.status == TaskStatus::Queued && task.attempt_count == 1
+        });
+        assert_eq!(queued.max_retries, Some(1));
+        assert!(!queued.session_binding_locked);
+        let first_run_id = queued.latest_run_id.clone().expect("first run id");
+        let first_session_id = queued.session_id.clone().expect("reused session id");
+
+        for _ in 0..20 {
+            service.reconcile_and_dispatch_once().expect("dispatch retry attempt");
+            let task = service
+                .store
+                .inspect_task(&TaskId::new(&task_id).expect("task id"))
+                .expect("inspect task")
+                .expect("task exists");
+            if task.status == TaskStatus::Done {
+                break;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        wait_for_task_status(&service, &task_id, TaskStatus::Done);
+
+        let final_task = service
+            .store
+            .inspect_task(&TaskId::new(&task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(final_task.attempt_count, 2);
+        assert_eq!(final_task.status, TaskStatus::Done);
+        assert_eq!(final_task.max_retries, Some(1));
+        assert_eq!(final_task.session_id, Some(first_session_id));
+
+        let runs = service.store.list_runs().expect("list runs");
+        let task_runs =
+            runs.into_iter().filter(|run| run.task_id.as_str() == task_id).collect::<Vec<_>>();
+        assert_eq!(task_runs.len(), 2);
+        assert_eq!(task_runs[0].run_id, first_run_id);
+        assert_eq!(task_runs[0].status, RunStatus::Failed);
+        assert_eq!(task_runs[1].status, RunStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn dispatched_task_retries_after_session_breaking_failure_with_new_session() {
+        let temp = tempdir().expect("tempdir");
+        let runtime =
+            FakeRuntime::with_run_failures("turn exceeded max duration of 7200 seconds", 1);
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-retry-broken-session"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Retry broken session",
+                    "instructions": "Retry broken session",
+                    "profile": "america",
+                    "max_retries": 1,
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.expect("task result")["task_id"].as_str().expect("task id").to_owned();
+
+        service.reconcile_and_dispatch_once().expect("dispatch first attempt");
+
+        let queued = wait_for_task_state(&service, &task_id, |task| {
+            task.status == TaskStatus::Queued
+                && task.attempt_count == 1
+                && task.session_id.is_none()
+        });
+        let first_run_id = queued.latest_run_id.clone().expect("first run id");
+        let first_run =
+            service.store.inspect_run(&first_run_id).expect("inspect run").expect("run exists");
+        let first_session_id = first_run.session_id.clone();
+        let broken_session = service
+            .store
+            .inspect_session(&first_session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(broken_session.lifecycle_state, SessionLifecycleState::Broken);
+
+        for _ in 0..20 {
+            service.reconcile_and_dispatch_once().expect("dispatch retry attempt");
+            let task = service
+                .store
+                .inspect_task(&TaskId::new(&task_id).expect("task id"))
+                .expect("inspect task")
+                .expect("task exists");
+            if task.status == TaskStatus::Done {
+                break;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        wait_for_task_status(&service, &task_id, TaskStatus::Done);
+
+        let final_task = service
+            .store
+            .inspect_task(&TaskId::new(&task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(final_task.attempt_count, 2);
+        let final_session_id = final_task.session_id.clone().expect("retry session id");
+        assert_ne!(final_session_id, first_session_id);
+
+        let final_run_id = final_task.latest_run_id.clone().expect("final run id");
+        let final_run =
+            service.store.inspect_run(&final_run_id).expect("inspect run").expect("run exists");
+        assert_eq!(final_run.status, RunStatus::Completed);
+        assert_eq!(final_run.session_id, final_session_id);
+    }
+
+    #[tokio::test]
+    async fn dispatched_task_does_not_retry_when_explicit_session_breaks() {
+        let temp = tempdir().expect("tempdir");
+        let runtime =
+            FakeRuntime::with_run_failures("turn exceeded max duration of 7200 seconds", 1);
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-retry-locked"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session.result.expect("session")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-retry-locked"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Retry locked session",
+                    "instructions": "Retry locked session",
+                    "profile": "america",
+                    "session_id": session_id,
+                    "max_retries": 2,
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.expect("task result")["task_id"].as_str().expect("task id").to_owned();
+
+        service.reconcile_and_dispatch_once().expect("dispatch explicit session attempt");
+        wait_for_task_status(&service, &task_id, TaskStatus::Failed);
+
+        let task = service
+            .store
+            .inspect_task(&TaskId::new(&task_id).expect("task id"))
+            .expect("inspect task")
+            .expect("task exists");
+        assert_eq!(task.attempt_count, 1);
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert!(task.session_binding_locked);
+        assert_eq!(task.session_id.as_ref().map(SessionId::as_str), Some(session_id.as_str()));
+
+        let runs = service.store.list_runs().expect("list runs");
+        let task_runs =
+            runs.into_iter().filter(|run| run.task_id.as_str() == task_id).collect::<Vec<_>>();
+        assert_eq!(task_runs.len(), 1);
+        assert_eq!(task_runs[0].status, RunStatus::Failed);
     }
 
     #[tokio::test]
