@@ -66,6 +66,7 @@ const REST_RUN_PATH: &str = "/runs/{run_id}";
 const REST_HOOK_RULES_PATH: &str = "/producers/hook";
 const REST_HOOK_RULE_PATH: &str = "/producers/hook/{rule_name}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
+const BACKGROUND_WARNING_THROTTLE_WINDOW: ChronoDuration = ChronoDuration::seconds(60);
 const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
@@ -2626,6 +2627,7 @@ pub struct NucleusService {
     runtime: Option<Arc<dyn NucleusRuntime>>,
     background_started: Arc<AtomicBool>,
     worker_restart_state: Arc<Mutex<HashMap<WorkerId, WorkerRestartState>>>,
+    background_warning_state: Arc<Mutex<BackgroundWarningState>>,
 }
 
 impl NucleusService {
@@ -2643,6 +2645,7 @@ impl NucleusService {
             runtime: None,
             background_started: Arc::new(AtomicBool::new(false)),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
+            background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
         })
     }
 
@@ -2659,6 +2662,7 @@ impl NucleusService {
             runtime: Some(runtime),
             background_started: Arc::new(AtomicBool::new(false)),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
+            background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
         })
     }
 
@@ -2730,11 +2734,13 @@ impl NucleusService {
     fn background_runtime_loop(self) {
         loop {
             if let Err(error) = self.reconcile_and_dispatch_once() {
-                if let Ok(event) = self.store.append_system_warning(
-                    "nucleus background loop iteration failed",
-                    json!({ "error": error.to_string() }),
-                ) {
-                    let _ = self.events.send(event);
+                if let Some(payload) = self.record_background_loop_warning(Utc::now(), &error) {
+                    if let Ok(event) = self
+                        .store
+                        .append_system_warning("nucleus background loop iteration failed", payload)
+                    {
+                        let _ = self.events.send(event);
+                    }
                 }
             }
             thread::sleep(DISPATCH_LOOP_INTERVAL);
@@ -2748,6 +2754,32 @@ impl NucleusService {
         self.process_hook_producers()?;
         self.dispatch_queued_tasks()?;
         Ok(())
+    }
+
+    fn record_background_loop_warning(
+        &self,
+        now: DateTime<Utc>,
+        error: &anyhow::Error,
+    ) -> Option<Value> {
+        let signature = error.to_string();
+        let mut state = self.background_warning_state.lock().ok()?;
+        let mut suppressed = 0_u64;
+        if state.last_error.as_deref() == Some(signature.as_str()) {
+            if let Some(last_emitted_at) = state.last_emitted_at {
+                if now < last_emitted_at + BACKGROUND_WARNING_THROTTLE_WINDOW {
+                    state.suppressed += 1;
+                    return None;
+                }
+            }
+            suppressed = state.suppressed;
+        }
+        state.last_error = Some(signature.clone());
+        state.last_emitted_at = Some(now);
+        state.suppressed = 0;
+        Some(json!({
+            "error": signature,
+            "suppressed_since_last_emit": suppressed,
+        }))
     }
 
     fn reconcile_worker_runtime_state(&self) -> Result<()> {
@@ -3941,6 +3973,7 @@ impl NucleusService {
                 Ok(())
             };
             if let Err(error) = runtime.execute_turn(&run_spec, &mut sink) {
+                let error_message = error.to_string();
                 let failure = CanonicalEventDraft {
                     event_type: CanonicalEventType::RunFailed,
                     source: CanonicalEventSource::System,
@@ -3953,12 +3986,24 @@ impl NucleusService {
                         payload: json!({
                             "thread_id": run_spec.thread_id,
                             "turn_id": Value::Null,
-                            "error": error.to_string(),
+                            "error": error_message,
                         }),
                     },
                 };
                 if let Ok(appended) = store.apply_runtime_event(failure) {
                     for event in appended {
+                        let _ = events.send(event);
+                    }
+                }
+                if let Ok(Some(event)) =
+                    store.mark_session_broken(&run_spec.session_id, &error_message)
+                {
+                    let _ = events.send(event);
+                }
+                if runtime_error_requires_worker_quarantine(&error_message) {
+                    if let Ok(Some(event)) =
+                        store.mark_worker_failed(&run_spec.worker_id, &error_message)
+                    {
                         let _ = events.send(event);
                     }
                 }
@@ -4676,6 +4721,13 @@ struct WorkerRestartState {
     attempts: u32,
     next_retry_at: Option<DateTime<Utc>>,
     exhausted: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct BackgroundWarningState {
+    last_error: Option<String>,
+    last_emitted_at: Option<DateTime<Utc>>,
+    suppressed: u64,
 }
 
 async fn ws_handler(
@@ -5842,8 +5894,27 @@ fn default_codex_home_dir(profile: &str) -> PathBuf {
     default_home_dir().join(".si").join("codex").join("profiles").join(profile)
 }
 
+fn stable_workdir_from(current_dir: Option<PathBuf>, home_dir: PathBuf) -> PathBuf {
+    if let Some(path) = current_dir.filter(|path| path.is_absolute() && path.is_dir()) {
+        return path;
+    }
+    if home_dir.is_absolute() && home_dir.is_dir() {
+        return home_dir;
+    }
+    PathBuf::from("/")
+}
+
 fn default_workdir() -> PathBuf {
-    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    stable_workdir_from(env::current_dir().ok(), default_home_dir())
+}
+
+fn runtime_error_requires_worker_quarantine(message: &str) -> bool {
+    let normalized = message.trim().to_ascii_lowercase();
+    normalized.contains("worker notification stream closed")
+        || normalized.contains("worker response channel closed")
+        || normalized.contains("worker request channel closed")
+        || normalized.contains("worker request timed out")
+        || normalized.contains("worker not running")
 }
 
 #[derive(Clone, Debug)]
@@ -6049,14 +6120,15 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        CreateTaskInput, CronRuleRecord, CronScheduleKind, GPT_ACTIONS_OPENAPI_PUBLIC_URL,
-        GatewayRequest, HookRuleRecord, MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths,
-        NucleusService, NucleusStore, append_jsonl_with_rotation, cron_due_key,
-        current_persisted_version, hook_event_key, load_canonical_events,
-        load_canonical_events_for_live_iteration, load_last_event_seq, public_openapi_document,
+        BACKGROUND_WARNING_THROTTLE_WINDOW, CreateTaskInput, CronRuleRecord, CronScheduleKind,
+        GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest, HookRuleRecord,
+        MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
+        append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
+        load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
+        public_openapi_document, runtime_error_requires_worker_quarantine, stable_workdir_from,
         write_json_atomic,
     };
-    use anyhow::Result;
+    use anyhow::{Result, anyhow};
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
     use chrono::{Duration as ChronoDuration, Utc};
@@ -6669,6 +6741,66 @@ mod tests {
         let quarantine_path =
             warning.data.payload["details"]["quarantine_path"].as_str().expect("quarantine path");
         assert!(Path::new(quarantine_path).exists());
+    }
+
+    #[test]
+    fn background_loop_warning_suppresses_repeated_errors_within_window() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_without_runtime(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+
+        let first = service
+            .record_background_loop_warning(now, &anyhow!("failed to load configuration"))
+            .expect("first warning");
+        assert_eq!(first["suppressed_since_last_emit"], json!(0));
+
+        assert!(
+            service
+                .record_background_loop_warning(
+                    now + ChronoDuration::seconds(10),
+                    &anyhow!("failed to load configuration"),
+                )
+                .is_none()
+        );
+
+        let third = service
+            .record_background_loop_warning(
+                now + BACKGROUND_WARNING_THROTTLE_WINDOW + ChronoDuration::seconds(1),
+                &anyhow!("failed to load configuration"),
+            )
+            .expect("throttled warning re-emits");
+        assert_eq!(third["suppressed_since_last_emit"], json!(1));
+    }
+
+    #[test]
+    fn background_loop_warning_emits_new_errors_immediately() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_without_runtime(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+
+        assert!(
+            service
+                .record_background_loop_warning(now, &anyhow!("failed to load configuration"))
+                .is_some()
+        );
+        let second = service
+            .record_background_loop_warning(
+                now + ChronoDuration::seconds(1),
+                &anyhow!("worker not found"),
+            )
+            .expect("different error emits immediately");
+        assert_eq!(second["error"], json!("worker not found"));
+        assert_eq!(second["suppressed_since_last_emit"], json!(0));
     }
 
     #[tokio::test]
@@ -13579,6 +13711,123 @@ mod tests {
         wait_for_task_status(&service, task_id, TaskStatus::Failed);
         let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
         assert_eq!(run.status, RunStatus::Failed);
+        let session = service
+            .store
+            .inspect_session(&SessionId::new(session_id).expect("session id"))
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+    }
+
+    #[tokio::test]
+    async fn task_create_blocks_reuse_after_execute_turn_failure_breaks_session() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_execute_failure()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fail-reuse"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id")
+            .to_owned();
+
+        let first_task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fail-reuse-first"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "First run fails",
+                    "instructions": "First run fails",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(first_task.ok);
+        let first_task_id = first_task
+            .result
+            .as_ref()
+            .and_then(|item| item["task_id"].as_str())
+            .expect("task id")
+            .to_owned();
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-fail-reuse-first"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": first_task_id,
+                    "prompt": "fail before run.started",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+
+        wait_for_task_status(&service, &first_task_id, TaskStatus::Failed);
+
+        let second_task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fail-reuse-second"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Reuse broken session",
+                    "instructions": "Reuse broken session",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(second_task.ok);
+        let created = second_task.result.expect("created task");
+        assert_eq!(created["status"], json!("blocked"));
+        assert_eq!(created["blocked_reason"], json!("session_broken"));
+    }
+
+    #[test]
+    fn stable_workdir_prefers_existing_current_dir() {
+        let temp = tempdir().expect("tempdir");
+        let home = temp.path().join("home");
+        fs::create_dir_all(&home).expect("create home");
+        let workdir = stable_workdir_from(Some(temp.path().to_path_buf()), home);
+        assert_eq!(workdir, temp.path());
+    }
+
+    #[test]
+    fn stable_workdir_falls_back_to_home_when_current_dir_is_missing() {
+        let temp = tempdir().expect("tempdir");
+        let home = temp.path().join("home");
+        fs::create_dir_all(&home).expect("create home");
+        let workdir = stable_workdir_from(Some(temp.path().join("missing")), home.clone());
+        assert_eq!(workdir, home);
+    }
+
+    #[test]
+    fn runtime_error_requires_worker_quarantine_matches_worker_channel_failures() {
+        assert!(runtime_error_requires_worker_quarantine("worker notification stream closed"));
+        assert!(runtime_error_requires_worker_quarantine("worker request timed out: turn/start"));
+        assert!(!runtime_error_requires_worker_quarantine("turn became idle for 900 seconds"));
     }
 
     #[tokio::test]

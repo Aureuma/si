@@ -40,7 +40,7 @@ components:
           type: integer
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.10
+          example: 0.59.11
           readOnly: true
           type: string
         worker_count:
@@ -87,7 +87,7 @@ components:
               type: string
             version:
               description: API package version.
-              example: 0.59.10
+              example: 0.59.11
               type: string
           required:
           - title
@@ -555,7 +555,7 @@ components:
       properties:
         capability_version:
           description: Worker capability or package version when reported.
-          example: 0.59.10
+          example: 0.59.11
           type:
           - string
           - 'null'
@@ -674,7 +674,7 @@ components:
 info:
   description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
   title: SI Nucleus REST API
-  version: 0.59.10
+  version: 0.59.11
 openapi: 3.1.0
 paths:
   /openapi.json:
@@ -805,7 +805,7 @@ paths:
                 session_count: 2
                 state_dir: /home/si/.local/state/si/nucleus
                 task_count: 12
-                version: 0.59.10
+                version: 0.59.11
                 worker_count: 2
                 ws_url: ws://0.0.0.0:4747/ws
               schema:
@@ -1079,7 +1079,7 @@ paths:
           content:
             application/json:
               example:
-              - capability_version: 0.59.10
+              - capability_version: 0.59.11
                 codex_home: /home/si/.codex
                 effective_account_state: authenticated
                 extra_env: {}
@@ -1130,7 +1130,7 @@ paths:
                   started_at: 2026-04-17T00:00:00Z
                   worker_id: si-worker-0123456789abcdef00000001
                 worker:
-                  capability_version: 0.59.10
+                  capability_version: 0.59.11
                   codex_home: /home/si/.codex
                   effective_account_state: authenticated
                   extra_env: {}

@@ -22,7 +22,8 @@ use si_rs_codex::codex_profile_fort_runtime_env;
 use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
-const DEFAULT_TURN_TIMEOUT: Duration = Duration::from_secs(900);
+const DEFAULT_TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(900);
+const DEFAULT_TURN_MAX_DURATION: Duration = Duration::from_secs(7200);
 const TURN_POLL_INTERVAL: Duration = Duration::from_secs(15);
 
 fn is_managed_codex_runtime_env(key: &str) -> bool {
@@ -286,8 +287,13 @@ impl CodexNucleusRuntime {
         Ok(WorkerProbeResult { status: WorkerStatus::Ready, snapshot, checked_at: Utc::now() })
     }
 
-    fn turn_timeout(spec: &RunTurnSpec) -> Duration {
-        spec.timeout_seconds.map(Duration::from_secs).unwrap_or(DEFAULT_TURN_TIMEOUT)
+    fn turn_timeout_budget(spec: &RunTurnSpec) -> TurnTimeoutBudget {
+        let max_duration =
+            spec.timeout_seconds.map(Duration::from_secs).unwrap_or(DEFAULT_TURN_MAX_DURATION);
+        TurnTimeoutBudget {
+            idle_timeout: DEFAULT_TURN_IDLE_TIMEOUT.min(max_duration),
+            max_duration,
+        }
     }
 }
 
@@ -479,13 +485,15 @@ impl NucleusRuntime for CodexNucleusRuntime {
 
         let mut final_output = String::new();
         let started_at = Instant::now();
-        let turn_timeout = Self::turn_timeout(spec);
+        let timeout_budget = Self::turn_timeout_budget(spec);
+        let mut last_activity_at: Option<Instant> = None;
         loop {
-            let elapsed = started_at.elapsed();
-            if elapsed >= turn_timeout {
-                anyhow::bail!("turn timed out");
+            let now = Instant::now();
+            let deadline = turn_timeout_deadline(started_at, last_activity_at, timeout_budget);
+            if now >= deadline {
+                anyhow::bail!("{}", turn_timeout_message(last_activity_at, timeout_budget));
             }
-            let poll_timeout = TURN_POLL_INTERVAL.min(turn_timeout.saturating_sub(elapsed));
+            let poll_timeout = TURN_POLL_INTERVAL.min(deadline.saturating_duration_since(now));
             let notification = match subscription.recv_timeout(poll_timeout) {
                 Ok(notification) => notification,
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -497,6 +505,9 @@ impl NucleusRuntime for CodexNucleusRuntime {
                 continue;
             };
             let params = notification.get("params").cloned().unwrap_or(Value::Null);
+            if notification_matches_turn(&params, &spec.thread_id, &turn_id) {
+                last_activity_at = Some(Instant::now());
+            }
             match method {
                 "item/agentMessage/delta" => {
                     if !matches_turn(&params, &spec.thread_id, &turn_id) {
@@ -851,6 +862,45 @@ fn matches_turn(params: &Value, thread_id: &str, turn_id: &str) -> bool {
         && params.get("turnId").and_then(Value::as_str) == Some(turn_id)
 }
 
+fn notification_matches_turn(params: &Value, thread_id: &str, turn_id: &str) -> bool {
+    if params.get("threadId").and_then(Value::as_str) != Some(thread_id) {
+        return false;
+    }
+    params.get("turnId").and_then(Value::as_str) == Some(turn_id)
+        || params.get("turn").and_then(|turn| turn.get("id")).and_then(Value::as_str)
+            == Some(turn_id)
+        || params.get("item").and_then(|item| item.get("turnId")).and_then(Value::as_str)
+            == Some(turn_id)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TurnTimeoutBudget {
+    idle_timeout: Duration,
+    max_duration: Duration,
+}
+
+fn turn_timeout_deadline(
+    started_at: Instant,
+    last_activity_at: Option<Instant>,
+    budget: TurnTimeoutBudget,
+) -> Instant {
+    match last_activity_at {
+        Some(last_activity_at) => {
+            std::cmp::min(started_at + budget.max_duration, last_activity_at + budget.idle_timeout)
+        }
+        None => started_at + budget.max_duration,
+    }
+}
+
+fn turn_timeout_message(last_activity_at: Option<Instant>, budget: TurnTimeoutBudget) -> String {
+    match last_activity_at {
+        Some(_) if budget.idle_timeout < budget.max_duration => {
+            format!("turn became idle for {} seconds", budget.idle_timeout.as_secs())
+        }
+        _ => format!("turn exceeded max duration of {} seconds", budget.max_duration.as_secs()),
+    }
+}
+
 fn run_started_event(spec: &RunTurnSpec, turn_id: &str) -> CanonicalEventDraft {
     CanonicalEventDraft {
         event_type: CanonicalEventType::RunStarted,
@@ -1087,6 +1137,7 @@ struct AppConfig {
 mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::time::{Duration, Instant};
 
     use serde_json::json;
     use si_nucleus_core::{ProfileName, SessionId, WorkerId, WorkerStatus};
@@ -1095,8 +1146,9 @@ mod tests {
     };
 
     use super::{
-        CodexNucleusRuntime, build_app_server_status_input, parse_app_server_status,
-        run_started_event,
+        CodexNucleusRuntime, TurnTimeoutBudget, build_app_server_status_input,
+        notification_matches_turn, parse_app_server_status, run_started_event,
+        turn_timeout_deadline, turn_timeout_message,
     };
 
     #[test]
@@ -1214,6 +1266,59 @@ mod tests {
         let event = run_started_event(&spec, "turn-123");
         assert_eq!(event.data.run_id, Some(spec.run_id.clone()));
         assert_eq!(event.data.payload["turn_id"], json!("turn-123"));
+    }
+
+    #[test]
+    fn timeout_deadline_uses_max_duration_before_any_activity() {
+        let started_at = Instant::now();
+        let budget = TurnTimeoutBudget {
+            idle_timeout: Duration::from_secs(900),
+            max_duration: Duration::from_secs(7200),
+        };
+        let deadline = turn_timeout_deadline(started_at, None, budget);
+        assert!(deadline.duration_since(started_at) >= Duration::from_secs(7199));
+        assert!(deadline.duration_since(started_at) <= Duration::from_secs(7200));
+    }
+
+    #[test]
+    fn timeout_deadline_switches_to_idle_window_after_activity() {
+        let started_at = Instant::now();
+        let budget = TurnTimeoutBudget {
+            idle_timeout: Duration::from_secs(900),
+            max_duration: Duration::from_secs(7200),
+        };
+        let last_activity_at = started_at + Duration::from_secs(600);
+        let deadline = turn_timeout_deadline(started_at, Some(last_activity_at), budget);
+        assert!(deadline.duration_since(last_activity_at) >= Duration::from_secs(899));
+        assert!(deadline.duration_since(last_activity_at) <= Duration::from_secs(900));
+    }
+
+    #[test]
+    fn timeout_message_distinguishes_idle_from_max_duration() {
+        let budget = TurnTimeoutBudget {
+            idle_timeout: Duration::from_secs(900),
+            max_duration: Duration::from_secs(7200),
+        };
+        assert_eq!(
+            turn_timeout_message(None, budget),
+            "turn exceeded max duration of 7200 seconds"
+        );
+        assert_eq!(
+            turn_timeout_message(Some(Instant::now()), budget),
+            "turn became idle for 900 seconds"
+        );
+    }
+
+    #[test]
+    fn notification_matches_turn_accepts_nested_turn_fields() {
+        let params = json!({
+            "threadId": "thread-123",
+            "turn": { "id": "turn-123" },
+            "item": { "turnId": "turn-123" }
+        });
+        assert!(notification_matches_turn(&params, "thread-123", "turn-123"));
+        assert!(!notification_matches_turn(&params, "thread-999", "turn-123"));
+        assert!(!notification_matches_turn(&params, "thread-123", "turn-999"));
     }
 
     #[test]

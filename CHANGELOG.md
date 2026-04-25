@@ -12,9 +12,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.10` after consolidating Nucleus task/session binding validation and closing the remaining direct-run integrity gaps.
+- Bumped the working version to `0.59.11` after consolidating Nucleus task/session binding validation and closing the remaining direct-run integrity gaps.
 
 ### Fixed
+- Hardened Nucleus run failure recovery so timed-out or transport-broken turns break the bound session immediately, worker-channel failures also quarantine the worker, and repeated reuse of poisoned sessions now blocks instead of failing again later.
+- Hardened Nucleus daemon workdir selection so deleted or invalid current directories fall back to a stable absolute path instead of `.`.
+- Throttled repeated Nucleus background-loop warnings so one broken dependency no longer floods the canonical event ledger every 200ms.
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
 - Hardened the Homebrew tap release workflow to retry `homebrew-si` pushes with `GH_PAT_AUREUMA` when a dedicated tap token can clone but cannot push.
 - Fixed Nucleus runtime timeout handling so task and turn submissions now pass `timeout_seconds` through to the runtime instead of always timing out after 15 minutes of silence.
