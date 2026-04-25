@@ -14128,22 +14128,26 @@ enum GitHubCommand {
 
 #[derive(Debug, Subcommand)]
 enum ReleaseMindCommand {
+    #[command(about = "Authenticate the CLI with ReleaseMind.", long_about = None)]
     Auth {
         #[command(subcommand)]
         command: ReleaseMindAuthCommand,
     },
+    #[command(about = "Check ReleaseMind automation readiness for a repo.", long_about = None)]
     Doctor {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
     },
+    #[command(hide = true)]
     Repo {
         #[command(subcommand)]
         command: ReleaseMindRepoCommand,
     },
+    #[command(about = "Create and publish GitHub releases through ReleaseMind.", long_about = None)]
     Release {
         #[command(subcommand)]
         command: ReleaseMindReleaseCommand,
@@ -14152,18 +14156,21 @@ enum ReleaseMindCommand {
 
 #[derive(Debug, Subcommand)]
 enum ReleaseMindAuthCommand {
+    #[command(about = "Start an interactive GitHub OAuth login.", long_about = None)]
     Login {
         #[arg(long)]
         no_open: bool,
         #[arg(long)]
         json: bool,
     },
+    #[command(about = "Show the current ReleaseMind login status.", long_about = None)]
     Status {
-        #[arg(long)]
+        #[arg(long, hide = true)]
         no_refresh: bool,
         #[arg(long)]
         json: bool,
     },
+    #[command(about = "Remove the saved ReleaseMind session.", long_about = None)]
     Logout {
         #[arg(long)]
         json: bool,
@@ -14175,7 +14182,7 @@ enum ReleaseMindRepoCommand {
     Resolve {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
@@ -14184,6 +14191,10 @@ enum ReleaseMindRepoCommand {
 
 #[derive(Debug, Subcommand)]
 enum ReleaseMindReleaseCommand {
+    #[command(
+        about = "Create a GitHub release draft or published release via ReleaseMind.",
+        long_about = None
+    )]
     Create {
         #[arg(help = "GitHub release tag, for example v1.2.3.")]
         release_tag: Option<String>,
@@ -14195,33 +14206,34 @@ enum ReleaseMindReleaseCommand {
         notes: Option<String>,
         #[arg(long = "notes-file")]
         notes_file: Option<PathBuf>,
-        #[arg(long, conflicts_with = "notes", conflicts_with = "notes_file")]
+        #[arg(long, hide = true, conflicts_with = "notes", conflicts_with = "notes_file")]
         generate_notes: bool,
         #[arg(long)]
         draft: bool,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         base_tag: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         task: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         audience: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         tone: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         custom_prompt: Option<String>,
-        #[arg(long = "pull-request")]
+        #[arg(long = "pull-request", hide = true)]
         pull_request_numbers: Vec<i64>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         changelog_path: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         timeout_seconds: Option<i64>,
         #[arg(long)]
         json: bool,
     },
+    #[command(hide = true)]
     Prepare {
-        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         token: Option<String>,
         #[arg(long)]
         release_tag: Option<String>,
@@ -14248,30 +14260,39 @@ enum ReleaseMindReleaseCommand {
         #[arg(long)]
         json: bool,
     },
+    #[command(hide = true)]
     Status {
-        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
     },
+    #[command(
+        about = "Inspect a prepared or published release from ReleaseMind.",
+        long_about = None
+    )]
     View {
-        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
         #[arg(long)]
         json: bool,
     },
+    #[command(
+        about = "Publish a prepared GitHub release through ReleaseMind.",
+        long_about = None
+    )]
     Publish {
-        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, hide = true)]
         token: Option<String>,
         #[arg(long)]
         json: bool,
@@ -36356,8 +36377,6 @@ fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
             }
 
             println!("releasemind auth login complete");
-            print_cli_kv("base_url", base_url);
-            print_cli_kv("base_url_source", base_url_source);
             print_cli_kv("state_path", releasemind_auth_state_path().display());
             print_cli_kv(
                 "github_username",
@@ -36444,8 +36463,6 @@ fn run_releasemind_auth_status(no_refresh: bool, json: bool) -> Result<()> {
     }
 
     println!("releasemind auth configured");
-    print_cli_kv("base_url", base_url);
-    print_cli_kv("base_url_source", base_url_source);
     print_cli_kv("state_path", releasemind_auth_state_path().display());
     print_cli_kv(
         "expires_at",
@@ -36494,7 +36511,7 @@ fn run_releasemind_doctor(
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required for doctor")?;
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let (base_url, base_url_source) = releasemind_base_url();
     let (token, token_source) = releasemind_token(token.as_deref())?;
     let verify = releasemind_request(
@@ -36547,8 +36564,6 @@ fn run_releasemind_doctor(
 
     println!("releasemind doctor ok");
     print_cli_kv("repo_ref", &repo_ref);
-    print_cli_kv("base_url", base_url);
-    print_cli_kv("base_url_source", base_url_source);
     print_cli_kv("token_source", token_source);
     print_cli_kv(
         "repo_id",
@@ -36574,7 +36589,7 @@ fn run_releasemind_repo_resolve(
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let response = if let Ok((token, _)) = releasemind_token(token.as_deref()) {
         let (base_url, _) = releasemind_base_url();
         releasemind_request(
@@ -36640,7 +36655,7 @@ fn run_releasemind_release_prepare(
     timeout_seconds: Option<i64>,
     json: bool,
 ) -> Result<()> {
-    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let (base_url, _) = releasemind_base_url();
     let (token, _) = releasemind_token(token.as_deref())?;
     let mut body = serde_json::Map::new();
@@ -36814,7 +36829,7 @@ fn run_releasemind_release_status(
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let post_id = releasemind_post_id_required(post_id)?;
     let (base_url, _) = releasemind_base_url();
     let (token, _) = releasemind_token(token.as_deref())?;
@@ -36873,7 +36888,7 @@ fn run_releasemind_release_publish(
     token: Option<String>,
     json: bool,
 ) -> Result<()> {
-    let repo_ref = releasemind_repo_ref_required(repo_ref, "repo ref is required")?;
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let post_id = releasemind_post_id_required(post_id)?;
     let response = if let Ok((token, _)) = releasemind_token(token.as_deref()) {
         let (base_url, _) = releasemind_base_url();
@@ -37118,13 +37133,6 @@ fn releasemind_error_message(payload: &Value) -> Option<String> {
         .and_then(Value::as_str)
         .map(str::to_owned)
         .or_else(|| payload.get("error").and_then(Value::as_str).map(str::to_owned))
-}
-
-fn releasemind_repo_ref_required(repo_ref: Option<String>, message: &str) -> Result<String> {
-    repo_ref
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow!(message.to_owned()))
 }
 
 fn releasemind_post_id_required(post_id: Option<String>) -> Result<String> {
