@@ -1263,6 +1263,7 @@ impl NucleusStore {
                     None,
                     &mut events,
                 )?;
+                self.apply_run_failure_consequences_locked(&primary, &mut events)?;
             }
             CanonicalEventType::RunCancelled => {
                 self.finish_run_locked(
@@ -1300,6 +1301,39 @@ impl NucleusStore {
         }
 
         Ok(events)
+    }
+
+    fn apply_run_failure_consequences_locked(
+        &self,
+        event: &CanonicalEvent,
+        events: &mut Vec<CanonicalEvent>,
+    ) -> Result<()> {
+        let Some(error) = event
+            .data
+            .payload
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Ok(());
+        };
+
+        if run_failure_requires_session_quarantine(error) {
+            if let Some(session_id) = event.data.session_id.as_ref() {
+                if let Some(appended) = self.mark_session_broken_locked(session_id, error)? {
+                    events.push(appended);
+                }
+            }
+        }
+        if runtime_error_requires_worker_quarantine(error) {
+            if let Some(worker_id) = event.data.worker_id.as_ref() {
+                if let Some(appended) = self.mark_worker_failed_locked(worker_id, error)? {
+                    events.push(appended);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn finish_run_locked(
@@ -1531,6 +1565,14 @@ impl NucleusStore {
         message: &str,
     ) -> Result<Option<CanonicalEvent>> {
         let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        self.mark_worker_failed_locked(worker_id, message)
+    }
+
+    fn mark_worker_failed_locked(
+        &self,
+        worker_id: &WorkerId,
+        message: &str,
+    ) -> Result<Option<CanonicalEvent>> {
         let Some(mut worker) = self.read_worker_locked(worker_id)? else {
             return Ok(None);
         };
@@ -1563,6 +1605,14 @@ impl NucleusStore {
         message: &str,
     ) -> Result<Option<CanonicalEvent>> {
         let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        self.mark_session_broken_locked(session_id, message)
+    }
+
+    fn mark_session_broken_locked(
+        &self,
+        session_id: &SessionId,
+        message: &str,
+    ) -> Result<Option<CanonicalEvent>> {
         let Some(mut session) = self.read_session_locked(session_id)? else {
             return Ok(None);
         };
@@ -5908,6 +5958,14 @@ fn default_workdir() -> PathBuf {
     stable_workdir_from(env::current_dir().ok(), default_home_dir())
 }
 
+fn run_failure_requires_session_quarantine(message: &str) -> bool {
+    let normalized = message.trim().to_ascii_lowercase();
+    normalized.contains("turn timed out")
+        || normalized.contains("turn became idle")
+        || normalized.contains("turn exceeded max duration")
+        || runtime_error_requires_worker_quarantine(&normalized)
+}
+
 fn runtime_error_requires_worker_quarantine(message: &str) -> bool {
     let normalized = message.trim().to_ascii_lowercase();
     normalized.contains("worker notification stream closed")
@@ -6125,8 +6183,8 @@ mod tests {
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
         append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
         load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
-        public_openapi_document, runtime_error_requires_worker_quarantine, stable_workdir_from,
-        write_json_atomic,
+        public_openapi_document, run_failure_requires_session_quarantine,
+        runtime_error_requires_worker_quarantine, stable_workdir_from, write_json_atomic,
     };
     use anyhow::{Result, anyhow};
     use axum::body::{Body, to_bytes};
@@ -6156,6 +6214,7 @@ mod tests {
         start_calls: usize,
         interrupted_turns: HashSet<String>,
         last_timeout_seconds: Option<u64>,
+        run_failure_error: Option<String>,
     }
 
     #[derive(Clone, Default)]
@@ -6173,6 +6232,12 @@ mod tests {
         fn with_execute_failure() -> Self {
             let runtime = Self::default();
             runtime.state.lock().expect("state").fail_execute = true;
+            runtime
+        }
+
+        fn with_run_failure(error: &str) -> Self {
+            let runtime = Self::default();
+            runtime.state.lock().expect("state").run_failure_error = Some(error.to_owned());
             runtime
         }
 
@@ -6272,10 +6337,10 @@ mod tests {
             spec: &RunTurnSpec,
             on_event: &mut dyn FnMut(CanonicalEventDraft) -> Result<()>,
         ) -> Result<RuntimeRunOutcome> {
-            let (run_delay, fail_execute) = {
+            let (run_delay, fail_execute, run_failure_error) = {
                 let mut state = self.state.lock().expect("state");
                 state.last_timeout_seconds = spec.timeout_seconds;
-                (state.run_delay, state.fail_execute)
+                (state.run_delay, state.fail_execute, state.run_failure_error.clone())
             };
             if fail_execute {
                 anyhow::bail!("fake-runtime execute_turn failed before run.started");
@@ -6328,6 +6393,30 @@ mod tests {
                     }
                     thread::sleep(Duration::from_millis(20));
                 }
+            }
+            if let Some(error) = run_failure_error {
+                on_event(CanonicalEventDraft {
+                    event_type: CanonicalEventType::RunFailed,
+                    source: CanonicalEventSource::System,
+                    data: EventDataEnvelope {
+                        task_id: spec.task_id.clone(),
+                        worker_id: Some(spec.worker_id.clone()),
+                        session_id: Some(spec.session_id.clone()),
+                        run_id: Some(spec.run_id.clone()),
+                        profile: Some(spec.profile.clone()),
+                        payload: json!({
+                            "thread_id": spec.thread_id,
+                            "turn_id": turn_id,
+                            "error": error,
+                        }),
+                    },
+                })?;
+                return Ok(RuntimeRunOutcome {
+                    turn_id,
+                    status: RunStatus::Failed,
+                    completed_at: Utc::now(),
+                    final_output: None,
+                });
             }
             on_event(CanonicalEventDraft {
                 event_type: CanonicalEventType::RunOutputDelta,
@@ -13827,7 +13916,185 @@ mod tests {
     fn runtime_error_requires_worker_quarantine_matches_worker_channel_failures() {
         assert!(runtime_error_requires_worker_quarantine("worker notification stream closed"));
         assert!(runtime_error_requires_worker_quarantine("worker request timed out: turn/start"));
-        assert!(!runtime_error_requires_worker_quarantine("turn became idle for 900 seconds"));
+        assert!(!runtime_error_requires_worker_quarantine("turn became idle for 7200 seconds"));
+    }
+
+    #[test]
+    fn run_failure_requires_session_quarantine_matches_timeout_failures() {
+        assert!(run_failure_requires_session_quarantine("turn timed out"));
+        assert!(run_failure_requires_session_quarantine("turn became idle for 7200 seconds"));
+        assert!(run_failure_requires_session_quarantine(
+            "turn exceeded max duration of 7200 seconds"
+        ));
+        assert!(!run_failure_requires_session_quarantine("agent refused to answer"));
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_runtime_failure_marks_session_broken() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_failure("turn exceeded max duration of 7200 seconds")),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-runtime-fail"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session.result.as_ref().expect("session result")["worker"]["worker_id"]
+                .as_str()
+                .expect("worker id"),
+        )
+        .expect("worker id");
+        let session_id = session.result.as_ref().expect("session result")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-runtime-fail"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Runtime failure",
+                    "instructions": "Runtime failure",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().expect("task result")["task_id"].as_str().expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-runtime-fail"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "fail via run.failed event",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+        let run_id = RunId::new(
+            run.result.as_ref().expect("run result")["run_id"].as_str().expect("run id"),
+        )
+        .expect("run id");
+
+        wait_for_task_status(&service, task_id, TaskStatus::Failed);
+        let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
+        assert_eq!(run.status, RunStatus::Failed);
+        let session = service
+            .store
+            .inspect_session(&SessionId::new(session_id).expect("session id"))
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+        let worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(worker.status, WorkerStatus::Ready);
+    }
+
+    #[tokio::test]
+    async fn run_submit_turn_worker_runtime_failure_marks_worker_failed() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::with_run_failure("worker notification stream closed")),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-worker-runtime-fail"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let worker_id = WorkerId::new(
+            session.result.as_ref().expect("session result")["worker"]["worker_id"]
+                .as_str()
+                .expect("worker id"),
+        )
+        .expect("worker id");
+        let session_id = session.result.as_ref().expect("session result")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-worker-runtime-fail"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Worker runtime failure",
+                    "instructions": "Worker runtime failure",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().expect("task result")["task_id"].as_str().expect("task id");
+
+        let run = service
+            .dispatch_request(GatewayRequest {
+                id: json!("run-worker-runtime-fail"),
+                method: "run.submit_turn".to_owned(),
+                params: json!({
+                    "session_id": session_id,
+                    "task_id": task_id,
+                    "prompt": "fail via worker transport",
+                }),
+            })
+            .await;
+        assert!(run.ok);
+
+        wait_for_task_status(&service, task_id, TaskStatus::Failed);
+        let session = service
+            .store
+            .inspect_session(&SessionId::new(session_id).expect("session id"))
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
+        let worker = service
+            .store
+            .inspect_worker(&worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(worker.status, WorkerStatus::Failed);
     }
 
     #[tokio::test]

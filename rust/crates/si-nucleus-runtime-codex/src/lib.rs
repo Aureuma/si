@@ -22,7 +22,6 @@ use si_rs_codex::codex_profile_fort_runtime_env;
 use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
-const DEFAULT_TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(900);
 const DEFAULT_TURN_MAX_DURATION: Duration = Duration::from_secs(7200);
 const TURN_POLL_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -290,10 +289,7 @@ impl CodexNucleusRuntime {
     fn turn_timeout_budget(spec: &RunTurnSpec) -> TurnTimeoutBudget {
         let max_duration =
             spec.timeout_seconds.map(Duration::from_secs).unwrap_or(DEFAULT_TURN_MAX_DURATION);
-        TurnTimeoutBudget {
-            idle_timeout: DEFAULT_TURN_IDLE_TIMEOUT.min(max_duration),
-            max_duration,
-        }
+        TurnTimeoutBudget { idle_timeout: max_duration, max_duration }
     }
 }
 
@@ -1281,22 +1277,22 @@ mod tests {
     }
 
     #[test]
-    fn timeout_deadline_switches_to_idle_window_after_activity() {
+    fn timeout_deadline_keeps_full_budget_after_activity_by_default() {
         let started_at = Instant::now();
         let budget = TurnTimeoutBudget {
-            idle_timeout: Duration::from_secs(900),
+            idle_timeout: Duration::from_secs(7200),
             max_duration: Duration::from_secs(7200),
         };
         let last_activity_at = started_at + Duration::from_secs(600);
         let deadline = turn_timeout_deadline(started_at, Some(last_activity_at), budget);
-        assert!(deadline.duration_since(last_activity_at) >= Duration::from_secs(899));
-        assert!(deadline.duration_since(last_activity_at) <= Duration::from_secs(900));
+        assert!(deadline.duration_since(started_at) >= Duration::from_secs(7199));
+        assert!(deadline.duration_since(started_at) <= Duration::from_secs(7200));
     }
 
     #[test]
-    fn timeout_message_distinguishes_idle_from_max_duration() {
+    fn timeout_message_uses_max_duration_when_idle_cutoff_matches_budget() {
         let budget = TurnTimeoutBudget {
-            idle_timeout: Duration::from_secs(900),
+            idle_timeout: Duration::from_secs(7200),
             max_duration: Duration::from_secs(7200),
         };
         assert_eq!(
@@ -1305,8 +1301,25 @@ mod tests {
         );
         assert_eq!(
             turn_timeout_message(Some(Instant::now()), budget),
-            "turn became idle for 900 seconds"
+            "turn exceeded max duration of 7200 seconds"
         );
+    }
+
+    #[test]
+    fn timeout_budget_preserves_explicit_timeout_above_default_window() {
+        let spec = RunTurnSpec {
+            run_id: si_nucleus_core::RunId::generate(),
+            task_id: Some(si_nucleus_core::TaskId::generate()),
+            worker_id: WorkerId::generate(),
+            session_id: SessionId::generate(),
+            profile: ProfileName::new("america").expect("profile"),
+            thread_id: "thread-123".to_owned(),
+            timeout_seconds: Some(10_800),
+            input: vec![RunInputItem::Text { text: "ping".to_owned() }],
+        };
+        let budget = CodexNucleusRuntime::turn_timeout_budget(&spec);
+        assert_eq!(budget.idle_timeout, Duration::from_secs(10_800));
+        assert_eq!(budget.max_duration, Duration::from_secs(10_800));
     }
 
     #[test]
