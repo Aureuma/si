@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.13` after removing the hidden Nucleus idle cutoff and aligning runtime-emitted failure projection with the hardened session and worker quarantine rules.
+- Bumped the working version to `0.59.16` after hardening Nucleus task retries and keeping the public REST/OpenAPI contract in sync.
 
 ### Fixed
 - Fixed Nucleus task execution so the default task ceiling is the real runtime ceiling again; deep tasks no longer fail after a hidden 900-second idle cutoff when they did not ask for one.
@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - Fixed Nucleus task/session binding evaluation so task intake, queued dispatch, and direct run submission now share the same deterministic session checks, including immediate blocking and session breakage for missing app-server thread ids.
 - Fixed `run.submit_turn` so tasks already bound to one session cannot be submitted against a different session id.
 - Fixed the public Nucleus cancel-task contract to describe `cancellation_requested` as a live runtime interrupt signal rather than a generic state-change flag.
+- Fixed Nucleus task retry handling so `max_retries` is now enforced instead of ignored, retried tasks expose `attempt_count` and `session_binding_locked`, unlocked tasks drop broken session affinity before retry, and explicit session-bound tasks do not silently hop to a different session.
 
 ## [v0.59.0] - 2026-04-20
 ### Added
