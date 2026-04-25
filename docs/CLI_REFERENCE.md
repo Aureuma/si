@@ -111,8 +111,8 @@ si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
 si build self assets --out-dir .artifacts/release-preflight
 si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 si orbit releasemind auth login
-si orbit releasemind release create vX.Y.0 --repo Aureuma/si --generate-notes --draft --json
-si orbit releasemind release view Aureuma/si post_123 --json
+si orbit releasemind release create vX.Y.0 --draft --json
+si orbit releasemind release view post_123 --json
 ```
 
 - `si build self assets` defaults to the canonical SI workspace version from root `Cargo.toml`.
@@ -121,8 +121,10 @@ si orbit releasemind release view Aureuma/si post_123 --json
 - When the tag is missing, pass `--target <sha>` and SI will create the git tag ref before creating the release.
 - For draft releases, GitHub may still return an `untagged-...` HTML URL until publish; verify with `tag_name` and `git ls-remote --tags`.
 - `si orbit releasemind ...` is a thin client to ReleaseMind APIs; OAuth auth, repo linking, note generation, and publish logic stay in ReleaseMind.
+- `si orbit releasemind` now favors the interactive operator flow in help: `auth login`, `release create`, `release view`, and `release publish`.
+- Release commands infer `owner/repo` from the current Git checkout when possible, so `--repo` is usually unnecessary.
 - Use `si orbit releasemind auth login` for interactive release work.
-- Use automation tokens only for `doctor` and low-level automation endpoints such as `release prepare` / `release status` in CI-style flows.
+- Use automation tokens only for `doctor` and hidden low-level automation endpoints in CI-style flows.
 
 ### Faster Rust iteration
 
