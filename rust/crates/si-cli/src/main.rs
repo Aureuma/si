@@ -216,7 +216,7 @@ use std::net::IpAddr;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command as StdCommand, ExitStatus};
+use std::process::{Command as StdCommand, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
@@ -36312,10 +36312,8 @@ fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
         json_string_field(&start.2, "auth_url").ok_or_else(|| anyhow!("missing auth_url"))?;
     let poll_interval =
         start.2.get("poll_interval_seconds").and_then(Value::as_i64).unwrap_or(2).max(1);
-
-    if !no_open {
-        let _ = releasemind_try_open_browser(auth_url);
-    }
+    let opened_browser = if no_open { false } else { releasemind_try_open_browser(auth_url) };
+    let mut announced_instructions = false;
 
     let started = Instant::now();
     loop {
@@ -36347,7 +36345,7 @@ fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
                         "ok": true,
                         "base_url": base_url,
                         "base_url_source": base_url_source,
-                        "opened_browser": !no_open,
+                        "opened_browser": opened_browser,
                         "auth_url": auth_url,
                         "user": auth_state.user,
                         "expires_at": auth_state.expires_at,
@@ -36377,9 +36375,16 @@ fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
         if started.elapsed() > Duration::from_secs(600) {
             anyhow::bail!("timed out waiting for ReleaseMind browser login");
         }
-        if !json && started.elapsed() < Duration::from_secs(2) {
-            println!("open this URL to continue login");
+        if !json && !announced_instructions {
+            if no_open {
+                println!("open this URL to continue login");
+            } else if opened_browser {
+                println!("browser opened; if it did not switch tabs, use this URL");
+            } else {
+                println!("automatic browser launch unavailable; open this URL to continue login");
+            }
             print_cli_kv("auth_url", auth_url);
+            announced_instructions = true;
         }
         thread::sleep(Duration::from_secs(poll_interval as u64));
     }
@@ -37020,6 +37025,8 @@ fn releasemind_try_open_browser(url: &str) -> bool {
     };
     StdCommand::new(command.0)
         .args(command.1)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
