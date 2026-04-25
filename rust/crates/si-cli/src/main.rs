@@ -14919,6 +14919,13 @@ enum GitHubReleaseCommand {
     List {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(
+            short = 'R',
+            long = "repo",
+            conflicts_with = "repo_ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
+        repo: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -14952,6 +14959,13 @@ enum GitHubReleaseCommand {
     Get {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(
+            short = 'R',
+            long = "repo",
+            conflicts_with = "repo_ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
+        repo: Option<String>,
         #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
@@ -14981,11 +14995,18 @@ enum GitHubReleaseCommand {
     },
     #[command(
         about = "Create a GitHub release.",
-        long_about = "Create a GitHub release.\n\nIf the requested tag already exists remotely, SI reuses it.\nIf the tag is missing and --target <sha> is provided, SI creates refs/tags/<tag> first, then creates the release.\nIf the tag is missing and --target is omitted, the command fails clearly."
+        long_about = "Create a GitHub release.\n\nWhen [REPO_REF] is omitted, SI infers owner/repo from the current GitHub checkout.\nIf --title is omitted, SI reuses the tag as the release title.\nIf the requested tag already exists remotely, SI reuses it.\nIf the tag is missing and --target <sha> is provided, SI creates refs/tags/<tag> first, then creates the release.\nIf the tag is missing and --target is omitted, the command fails clearly."
     )]
     Create {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(
+            short = 'R',
+            long = "repo",
+            conflicts_with = "repo_ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
+        repo: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -15004,20 +15025,20 @@ enum GitHubReleaseCommand {
         installation_id: Option<i64>,
         #[arg(long, help = "Release tag name, for example v0.56.0.")]
         tag: Option<String>,
-        #[arg(long, help = "Release title shown in GitHub.")]
+        #[arg(short = 't', long, help = "Release title shown in GitHub. Defaults to the tag.")]
         title: Option<String>,
-        #[arg(long, help = "Inline release notes text.")]
+        #[arg(short = 'n', long, help = "Inline release notes text.")]
         notes: Option<String>,
-        #[arg(long, help = "Path to a file containing release notes.")]
+        #[arg(short = 'F', long, help = "Path to a file containing release notes.")]
         notes_file: Option<PathBuf>,
         #[arg(
             long,
             help = "Target branch or commit SHA. Required when the tag does not already exist on the remote."
         )]
         target: Option<String>,
-        #[arg(long, help = "Create the release as a draft.")]
+        #[arg(short = 'd', long, help = "Create the release as a draft.")]
         draft: bool,
-        #[arg(long, help = "Mark the release as a prerelease.")]
+        #[arg(short = 'p', long, help = "Mark the release as a prerelease.")]
         prerelease: bool,
         #[arg(long = "param", help = "Extra release body field in key=value form.")]
         params: Vec<String>,
@@ -15034,6 +15055,13 @@ enum GitHubReleaseCommand {
     Upload {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(
+            short = 'R',
+            long = "repo",
+            conflicts_with = "repo_ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
+        repo: Option<String>,
         #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
@@ -15071,6 +15099,13 @@ enum GitHubReleaseCommand {
     Delete {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
+        #[arg(
+            short = 'R',
+            long = "repo",
+            conflicts_with = "repo_ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
+        repo: Option<String>,
         #[arg(help = "Release tag or numeric release id.")]
         release_ref: Option<String>,
         #[arg(long)]
@@ -34737,6 +34772,7 @@ fn main() -> Result<()> {
             GitHubCommand::Release { command } => match command {
                 GitHubReleaseCommand::List {
                     repo_ref,
+                    repo,
                     account,
                     owner,
                     base_url,
@@ -34752,7 +34788,7 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 } => run_github_release_list(
-                    repo_ref,
+                    repo.or(repo_ref),
                     account,
                     owner,
                     base_url,
@@ -34770,6 +34806,7 @@ fn main() -> Result<()> {
                 )?,
                 GitHubReleaseCommand::Get {
                     repo_ref,
+                    repo,
                     release_ref,
                     account,
                     owner,
@@ -34784,7 +34821,7 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 } => run_github_release_get(
-                    repo_ref,
+                    repo.or(repo_ref),
                     release_ref,
                     account,
                     owner,
@@ -34801,6 +34838,7 @@ fn main() -> Result<()> {
                 )?,
                 GitHubReleaseCommand::Create {
                     repo_ref,
+                    repo,
                     account,
                     owner,
                     base_url,
@@ -34822,7 +34860,7 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 } => run_github_release_create(
-                    repo_ref,
+                    repo.or(repo_ref),
                     account,
                     owner,
                     base_url,
@@ -34846,6 +34884,7 @@ fn main() -> Result<()> {
                 )?,
                 GitHubReleaseCommand::Upload {
                     repo_ref,
+                    repo,
                     release_ref,
                     account,
                     owner,
@@ -34863,7 +34902,7 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 } => run_github_release_upload(
-                    repo_ref,
+                    repo.or(repo_ref),
                     release_ref,
                     account,
                     owner,
@@ -34883,6 +34922,7 @@ fn main() -> Result<()> {
                 )?,
                 GitHubReleaseCommand::Delete {
                     repo_ref,
+                    repo,
                     release_ref,
                     account,
                     owner,
@@ -34898,7 +34938,7 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 } => run_github_release_delete(
-                    repo_ref,
+                    repo.or(repo_ref),
                     release_ref,
                     account,
                     owner,
@@ -37101,6 +37141,42 @@ fn releasemind_repo_ref_infer_or_require(repo_ref: Option<String>) -> Result<Str
     infer_github_repo_ref_from_origin().ok_or_else(|| {
         anyhow!("repo ref is required; pass <owner/repo> or run inside a GitHub checkout")
     })
+}
+
+fn github_repo_ref_infer_or_require(repo_ref: Option<String>) -> Result<String> {
+    if let Some(repo_ref) =
+        repo_ref.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        return Ok(repo_ref);
+    }
+    infer_github_repo_ref_from_origin().ok_or_else(|| {
+        anyhow!("github repo is required; pass <owner/repo> or run inside a GitHub checkout")
+    })
+}
+
+fn looks_like_github_release_ref(value: &str) -> bool {
+    let trimmed = value.trim();
+    !trimmed.is_empty()
+        && (trimmed.chars().all(|ch| ch.is_ascii_digit())
+            || trimmed.starts_with('v')
+            || trimmed.contains('.')
+            || trimmed.contains('-'))
+}
+
+fn github_release_repo_and_ref(
+    repo_ref: Option<String>,
+    release_ref: Option<String>,
+) -> (Option<String>, Option<String>) {
+    if release_ref.is_none() {
+        if let Some(candidate) =
+            repo_ref.as_deref().map(str::trim).filter(|value| looks_like_github_release_ref(value))
+        {
+            if infer_github_repo_ref_from_origin().is_some() {
+                return (None, Some(candidate.to_owned()));
+            }
+        }
+    }
+    (repo_ref, release_ref)
 }
 
 fn infer_github_repo_ref_from_origin() -> Option<String> {
@@ -64131,8 +64207,8 @@ fn run_github_release_list(
         home,
         settings_file,
     )?;
-    let (repo_owner, repo_name) =
-        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let repo_ref = github_repo_ref_infer_or_require(repo_ref)?;
+    let (repo_owner, repo_name) = parse_github_owner_repo(&repo_ref, &runtime.owner)?;
     let params = parse_github_params(params)?;
     let response = github_list_releases(&runtime, &repo_owner, &repo_name, &params, max_pages)
         .map_err(anyhow::Error::msg)?;
@@ -64156,6 +64232,7 @@ fn run_github_release_get(
     json: bool,
     raw: bool,
 ) -> Result<()> {
+    let (repo_ref, release_ref) = github_release_repo_and_ref(repo_ref, release_ref);
     let runtime = load_github_runtime(
         account,
         owner,
@@ -64168,8 +64245,8 @@ fn run_github_release_get(
         home,
         settings_file,
     )?;
-    let (repo_owner, repo_name) =
-        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let repo_ref = github_repo_ref_infer_or_require(repo_ref)?;
+    let (repo_owner, repo_name) = parse_github_owner_repo(&repo_ref, &runtime.owner)?;
     let release_ref = release_ref
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("github release ref is required"))?;
@@ -64214,14 +64291,15 @@ fn run_github_release_create(
         home,
         settings_file,
     )?;
-    let (repo_owner, repo_name) =
-        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let repo_ref = github_repo_ref_infer_or_require(repo_ref)?;
+    let (repo_owner, repo_name) = parse_github_owner_repo(&repo_ref, &runtime.owner)?;
     let tag = tag
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow::Error::msg("--tag and --title are required"))?;
+        .ok_or_else(|| anyhow::Error::msg("--tag is required"))?;
     let title = title
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow::Error::msg("--tag and --title are required"))?;
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| tag.trim().to_owned());
     let mut payload = parse_github_body_params(params)?;
     payload.insert("tag_name".to_owned(), Value::String(tag.trim().to_owned()));
     payload.insert("name".to_owned(), Value::String(title.trim().to_owned()));
@@ -64310,6 +64388,7 @@ fn run_github_release_upload(
     json: bool,
     raw: bool,
 ) -> Result<()> {
+    let (repo_ref, release_ref) = github_release_repo_and_ref(repo_ref, release_ref);
     let runtime = load_github_runtime(
         account,
         owner,
@@ -64322,8 +64401,8 @@ fn run_github_release_upload(
         home,
         settings_file,
     )?;
-    let (repo_owner, repo_name) =
-        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let repo_ref = github_repo_ref_infer_or_require(repo_ref)?;
+    let (repo_owner, repo_name) = parse_github_owner_repo(&repo_ref, &runtime.owner)?;
     let release_ref = release_ref
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;
@@ -64369,6 +64448,7 @@ fn run_github_release_delete(
     if !force {
         return Err(anyhow::Error::msg("delete release requires --force"));
     }
+    let (repo_ref, release_ref) = github_release_repo_and_ref(repo_ref, release_ref);
     let runtime = load_github_runtime(
         account,
         owner,
@@ -64381,8 +64461,8 @@ fn run_github_release_delete(
         home,
         settings_file,
     )?;
-    let (repo_owner, repo_name) =
-        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let repo_ref = github_repo_ref_infer_or_require(repo_ref)?;
+    let (repo_owner, repo_name) = parse_github_owner_repo(&repo_ref, &runtime.owner)?;
     let release_ref = release_ref
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;

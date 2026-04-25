@@ -170,6 +170,8 @@ Notes:
 - `--generate-notes` uses GitHub’s Release Notes API and can be combined with `--notes`.
 - Add `--notes-start-tag vA.B.0` to define the start tag for generated notes when needed.
 - Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
+- In an SI checkout, `si orbit github release create` can omit the repo argument entirely and infer it from `origin`.
+- If you omit `--title`, SI uses the tag as the release title by default.
 
 Option D: Use the Releasemind GitHub workflow for draft + publish orchestration.
 1. Add the required repo secrets:

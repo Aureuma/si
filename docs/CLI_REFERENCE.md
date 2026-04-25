@@ -149,3 +149,7 @@ si build self --timings
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.
 - Keep command docs aligned with `si --help` and `si help --format json`.
+`si orbit github release create` now follows the checkout-first default path more closely:
+- omit the repo argument inside a GitHub checkout and SI infers it from `origin`
+- use `-R, --repo <owner/repo>` when you need an explicit override
+- omit `--title` to reuse the release tag as the title
