@@ -14142,15 +14142,25 @@ enum ReleaseMindCommand {
         #[arg(long)]
         json: bool,
     },
-    #[command(hide = true)]
+    #[command(about = "Manage repo linking in ReleaseMind.", long_about = None)]
     Repo {
         #[command(subcommand)]
         command: ReleaseMindRepoCommand,
+    },
+    #[command(about = "Manage ReleaseMind automation tokens.", long_about = None)]
+    Token {
+        #[command(subcommand)]
+        command: ReleaseMindTokenCommand,
     },
     #[command(about = "Create and publish GitHub releases through ReleaseMind.", long_about = None)]
     Release {
         #[command(subcommand)]
         command: ReleaseMindReleaseCommand,
+    },
+    #[command(about = "Plan and publish Google Play releases through ReleaseMind.", long_about = None)]
+    Play {
+        #[command(subcommand)]
+        command: ReleaseMindPlayCommand,
     },
 }
 
@@ -14179,11 +14189,46 @@ enum ReleaseMindAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum ReleaseMindRepoCommand {
+    #[command(about = "Ensure a repo is linked in ReleaseMind.", long_about = None)]
+    EnsureLink {
+        #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(hide = true)]
     Resolve {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindTokenCommand {
+    #[command(about = "List ReleaseMind automation tokens.", long_about = None)]
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Create a ReleaseMind automation token.", long_about = None)]
+    Create {
+        #[arg(help = "Short token label, for example CI or release-bot.")]
+        label: Option<String>,
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        expires_in_days: Option<i64>,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Revoke a ReleaseMind automation token.", long_about = None)]
+    Revoke {
+        #[arg(help = "Automation token id.")]
+        token_id: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -14294,6 +14339,66 @@ enum ReleaseMindReleaseCommand {
         post_id: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindPlayCommand {
+    #[command(about = "Generate a Google Play plan through ReleaseMind.", long_about = None)]
+    Plan {
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        base_tag: Option<String>,
+        #[arg(long)]
+        head_ref: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Publish a Google Play release through ReleaseMind.", long_about = None)]
+    Publish {
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        package_name: Option<String>,
+        #[arg(long, default_value = "production")]
+        track: String,
+        #[arg(long = "release-status", visible_alias = "status")]
+        release_status: Option<String>,
+        #[arg(long)]
+        user_fraction: Option<f64>,
+        #[arg(long)]
+        release_name: Option<String>,
+        #[arg(long = "release-notes-language")]
+        release_notes_language: Option<String>,
+        #[arg(long = "release-notes-text")]
+        release_notes_text: Option<String>,
+        #[arg(long = "version-code")]
+        version_codes: Vec<i64>,
+        #[arg(long)]
+        artifact: Option<PathBuf>,
+        #[arg(long)]
+        validate_only: bool,
+        #[arg(long = "listing-language")]
+        listing_language: Option<String>,
+        #[arg(long = "listing-title")]
+        listing_title: Option<String>,
+        #[arg(long = "listing-short-description")]
+        listing_short_description: Option<String>,
+        #[arg(long = "listing-full-description")]
+        listing_full_description: Option<String>,
+        #[arg(long = "listing-video")]
+        listing_video: Option<String>,
+        #[arg(long = "details-default-language")]
+        details_default_language: Option<String>,
+        #[arg(long = "details-contact-email")]
+        details_contact_email: Option<String>,
+        #[arg(long = "details-contact-phone")]
+        details_contact_phone: Option<String>,
+        #[arg(long = "details-contact-website")]
+        details_contact_website: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -35184,8 +35289,20 @@ fn main() -> Result<()> {
                 run_releasemind_doctor(repo_ref, token, json)?
             }
             ReleaseMindCommand::Repo { command } => match command {
+                ReleaseMindRepoCommand::EnsureLink { repo_ref, json } => {
+                    run_releasemind_repo_ensure_link(repo_ref, json)?
+                }
                 ReleaseMindRepoCommand::Resolve { repo_ref, token, json } => {
                     run_releasemind_repo_resolve(repo_ref, token, json)?
+                }
+            },
+            ReleaseMindCommand::Token { command } => match command {
+                ReleaseMindTokenCommand::List { json } => run_releasemind_token_list(json)?,
+                ReleaseMindTokenCommand::Create { label, repo_ref, expires_in_days, json } => {
+                    run_releasemind_token_create(label, repo_ref, expires_in_days, json)?
+                }
+                ReleaseMindTokenCommand::Revoke { token_id, json } => {
+                    run_releasemind_token_revoke(token_id, json)?
                 }
             },
             ReleaseMindCommand::Release { command } => match command {
@@ -35264,6 +35381,56 @@ fn main() -> Result<()> {
                 ReleaseMindReleaseCommand::Publish { repo_ref, post_id, token, json } => {
                     run_releasemind_release_publish(repo_ref, post_id, token, json)?
                 }
+            },
+            ReleaseMindCommand::Play { command } => match command {
+                ReleaseMindPlayCommand::Plan { repo_ref, base_tag, head_ref, json } => {
+                    run_releasemind_play_plan(repo_ref, base_tag, head_ref, json)?
+                }
+                ReleaseMindPlayCommand::Publish {
+                    repo_ref,
+                    package_name,
+                    track,
+                    release_status,
+                    user_fraction,
+                    release_name,
+                    release_notes_language,
+                    release_notes_text,
+                    version_codes,
+                    artifact,
+                    validate_only,
+                    listing_language,
+                    listing_title,
+                    listing_short_description,
+                    listing_full_description,
+                    listing_video,
+                    details_default_language,
+                    details_contact_email,
+                    details_contact_phone,
+                    details_contact_website,
+                    json,
+                } => run_releasemind_play_publish(
+                    repo_ref,
+                    package_name,
+                    track,
+                    release_status,
+                    user_fraction,
+                    release_name,
+                    release_notes_language,
+                    release_notes_text,
+                    version_codes,
+                    artifact,
+                    validate_only,
+                    listing_language,
+                    listing_title,
+                    listing_short_description,
+                    listing_full_description,
+                    listing_video,
+                    details_default_language,
+                    details_contact_email,
+                    details_contact_phone,
+                    details_contact_website,
+                    json,
+                )?,
             },
         },
         Command::Orbit { .. } => unreachable!("orbit commands are normalized before dispatch"),
@@ -36678,6 +36845,145 @@ fn run_releasemind_repo_resolve(
     Ok(())
 }
 
+fn run_releasemind_repo_ensure_link(repo_ref: Option<String>, json: bool) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/repos/ensure-link",
+        Some(json!({
+            "repo_full_name": repo_ref,
+        })),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind repo linked");
+    print_cli_kv("repo_id", json_string_field(&response.2, "repo_id").unwrap_or("(none)"));
+    print_cli_kv("repo_url", json_string_field(&response.2, "repo_url").unwrap_or("(none)"));
+    print_cli_kv(
+        "default_branch",
+        json_string_field(&response.2, "default_branch").unwrap_or("(none)"),
+    );
+    print_cli_kv(
+        "already_linked",
+        response
+            .2
+            .get("already_linked")
+            .and_then(Value::as_bool)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "(none)".to_owned()),
+    );
+    Ok(())
+}
+
+fn run_releasemind_token_list(json: bool) -> Result<()> {
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let response = releasemind_request(
+        Method::GET,
+        "/api/cli/tokens",
+        None,
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind tokens");
+    if let Some(tokens) = response.2.as_array() {
+        if tokens.is_empty() {
+            println!("no automation tokens");
+            return Ok(());
+        }
+        for token in tokens {
+            let token_id = json_string_field(token, "token_id").unwrap_or("(none)");
+            let label = json_string_field(token, "label").unwrap_or("(none)");
+            let repo_scope = json_string_field(token, "repo_scope").unwrap_or("(none)");
+            let expires_at = json_string_field(token, "expires_at").unwrap_or("(none)");
+            println!("{token_id} label={label} repo_scope={repo_scope} expires_at={expires_at}");
+        }
+    }
+    Ok(())
+}
+
+fn run_releasemind_token_create(
+    label: Option<String>,
+    repo_ref: Option<String>,
+    expires_in_days: Option<i64>,
+    json: bool,
+) -> Result<()> {
+    let label = label
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("token label is required"))?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let mut body = serde_json::Map::new();
+    body.insert("label".to_owned(), Value::String(label));
+    if let Some(repo_ref) =
+        repo_ref.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("repo_scope".to_owned(), Value::String(repo_ref));
+    }
+    if let Some(value) = expires_in_days.filter(|value| *value > 0) {
+        body.insert("expires_in_days".to_owned(), Value::Number(value.into()));
+    }
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/tokens",
+        Some(Value::Object(body)),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind token created");
+    print_cli_kv("token_id", json_string_field(&response.2, "token_id").unwrap_or("(none)"));
+    print_cli_kv("label", json_string_field(&response.2, "label").unwrap_or("(none)"));
+    print_cli_kv("repo_scope", json_string_field(&response.2, "repo_scope").unwrap_or("(none)"));
+    print_cli_kv("expires_at", json_string_field(&response.2, "expires_at").unwrap_or("(none)"));
+    print_cli_kv("token", json_string_field(&response.2, "token").unwrap_or("(none)"));
+    Ok(())
+}
+
+fn run_releasemind_token_revoke(token_id: Option<String>, json: bool) -> Result<()> {
+    let token_id = token_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("token id is required"))?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let response = releasemind_request(
+        Method::DELETE,
+        "/api/cli/tokens",
+        Some(json!({ "token_id": token_id })),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind token revoked");
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_releasemind_release_prepare(
     repo_ref: Option<String>,
@@ -36966,6 +37272,214 @@ fn run_releasemind_release_publish(
     Ok(())
 }
 
+fn run_releasemind_play_plan(
+    repo_ref: Option<String>,
+    base_tag: Option<String>,
+    head_ref: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let mut body = serde_json::Map::new();
+    body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
+    if let Some(value) =
+        base_tag.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("base_tag".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        head_ref.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("head_ref".to_owned(), Value::String(value));
+    }
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/releases/play/plan",
+        Some(Value::Object(body)),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind play plan ready");
+    print_cli_kv("repo_ref", &repo_ref);
+    print_cli_kv(
+        "package_name",
+        json_string_field(
+            response.2.get("plan").and_then(|value| value.get("project")).unwrap_or(&Value::Null),
+            "package_name",
+        )
+        .unwrap_or("(none)"),
+    );
+    print_cli_kv(
+        "release_name",
+        json_string_field(
+            response.2.get("plan").and_then(|value| value.get("release")).unwrap_or(&Value::Null),
+            "name",
+        )
+        .unwrap_or("(none)"),
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_releasemind_play_publish(
+    repo_ref: Option<String>,
+    package_name: Option<String>,
+    track: String,
+    release_status: Option<String>,
+    user_fraction: Option<f64>,
+    release_name: Option<String>,
+    release_notes_language: Option<String>,
+    release_notes_text: Option<String>,
+    version_codes: Vec<i64>,
+    artifact: Option<PathBuf>,
+    validate_only: bool,
+    listing_language: Option<String>,
+    listing_title: Option<String>,
+    listing_short_description: Option<String>,
+    listing_full_description: Option<String>,
+    listing_video: Option<String>,
+    details_default_language: Option<String>,
+    details_contact_email: Option<String>,
+    details_contact_phone: Option<String>,
+    details_contact_website: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let package_name = package_name
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("package name is required"))?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let mut body = serde_json::Map::new();
+    body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
+    body.insert("package_name".to_owned(), Value::String(package_name));
+    body.insert("track".to_owned(), Value::String(track));
+    if let Some(value) =
+        release_status.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("release_status".to_owned(), Value::String(value));
+    }
+    if let Some(value) = user_fraction.and_then(serde_json::Number::from_f64) {
+        body.insert("user_fraction".to_owned(), Value::Number(value));
+    }
+    if let Some(value) =
+        release_name.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("release_name".to_owned(), Value::String(value));
+    }
+    if let Some(value) = release_notes_language
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        body.insert("release_notes_language".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        release_notes_text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("release_notes_text".to_owned(), Value::String(value));
+    }
+    if !version_codes.is_empty() {
+        body.insert(
+            "version_codes".to_owned(),
+            Value::Array(
+                version_codes.into_iter().map(|value| Value::Number(value.into())).collect(),
+            ),
+        );
+    }
+    if validate_only {
+        body.insert("validate_only".to_owned(), Value::Bool(true));
+    }
+    if let Some(value) =
+        listing_language.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("listing_language".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        listing_title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("listing_title".to_owned(), Value::String(value));
+    }
+    if let Some(value) = listing_short_description
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        body.insert("listing_short_description".to_owned(), Value::String(value));
+    }
+    if let Some(value) = listing_full_description
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        body.insert("listing_full_description".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        listing_video.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("listing_video".to_owned(), Value::String(value));
+    }
+    if let Some(value) = details_default_language
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        body.insert("details_default_language".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        details_contact_email.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("details_contact_email".to_owned(), Value::String(value));
+    }
+    if let Some(value) =
+        details_contact_phone.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("details_contact_phone".to_owned(), Value::String(value));
+    }
+    if let Some(value) = details_contact_website
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    {
+        body.insert("details_contact_website".to_owned(), Value::String(value));
+    }
+    if let Some((artifact_kind, artifact_base64)) = releasemind_play_artifact_payload(artifact)? {
+        body.insert("artifact_kind".to_owned(), Value::String(artifact_kind));
+        body.insert("artifact_base64".to_owned(), Value::String(artifact_base64));
+    }
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/releases/play/publish",
+        Some(Value::Object(body)),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    println!("releasemind play publish complete");
+    print_cli_kv("repo_ref", &repo_ref);
+    print_cli_kv("edit_id", json_string_field(&response.2, "edit_id").unwrap_or("(none)"));
+    print_cli_kv("track", json_string_field(&response.2, "track").unwrap_or("(none)"));
+    print_cli_kv("status", json_string_field(&response.2, "status").unwrap_or("(none)"));
+    print_cli_kv(
+        "validated_only",
+        response
+            .2
+            .get("validated_only")
+            .and_then(Value::as_bool)
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "(none)".to_owned()),
+    );
+    Ok(())
+}
+
 fn releasemind_base_url() -> (String, &'static str) {
     if let Ok(value) = env::var("RELEASEMIND_API_BASE_URL")
         && !value.trim().is_empty()
@@ -37082,10 +37596,7 @@ fn releasemind_try_open_browser(url: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn releasemind_browser_command(
-    url: &str,
-    browser_override: Option<&str>,
-) -> (String, Vec<String>) {
+fn releasemind_browser_command(url: &str, browser_override: Option<&str>) -> (String, Vec<String>) {
     if let Some(browser) = browser_override.map(str::trim).filter(|value| !value.is_empty()) {
         let mut parts = browser.split_whitespace();
         if let Some(program) = parts.next() {
@@ -37109,10 +37620,7 @@ fn releasemind_browser_command(
     if cfg!(target_os = "macos") {
         ("open".to_owned(), vec![url.to_owned()])
     } else if cfg!(target_os = "windows") {
-        (
-            "cmd".to_owned(),
-            vec!["/C".to_owned(), "start".to_owned(), url.to_owned()],
-        )
+        ("cmd".to_owned(), vec!["/C".to_owned(), "start".to_owned(), url.to_owned()])
     } else {
         ("xdg-open".to_owned(), vec![url.to_owned()])
     }
@@ -37130,6 +37638,25 @@ fn releasemind_release_notes(
         }
     }
     Ok(notes.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()))
+}
+
+fn releasemind_play_artifact_payload(
+    artifact: Option<PathBuf>,
+) -> Result<Option<(String, String)>> {
+    let Some(path) = artifact else {
+        return Ok(None);
+    };
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    let artifact_kind = match extension.as_str() {
+        "aab" | "apk" => extension,
+        _ => anyhow::bail!("artifact must end with .aab or .apk"),
+    };
+    let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+    Ok(Some((artifact_kind, BASE64_STANDARD.encode(bytes))))
 }
 
 fn releasemind_repo_ref_infer_or_require(repo_ref: Option<String>) -> Result<String> {
@@ -70217,10 +70744,7 @@ mod tests {
         assert_eq!(program, "surf");
         assert_eq!(
             args,
-            vec![
-                "--new-window".to_string(),
-                "https://releasemind.ai/login".to_string()
-            ]
+            vec!["--new-window".to_string(), "https://releasemind.ai/login".to_string()]
         );
     }
 }

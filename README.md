@@ -221,15 +221,18 @@ an orbit client:
 
 ```bash
 si orbit releasemind auth login
+si orbit releasemind repo ensure-link Aureuma/si --json
+si orbit releasemind token list --json
 si orbit releasemind release create vX.Y.0 --draft --json
 si orbit releasemind release view post_123 --json
 si orbit releasemind release publish post_123 --json
+si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
 ```
 
 Use `si orbit releasemind auth login` for interactive operator work. Use
 dashboard-linked automation tokens only for CI or unattended flows, and inject
 `RELEASEMIND_AUTOMATION_TOKEN` with `si fort` when you need those lower-level
-automation endpoints. The release commands infer `owner/repo` from the current
+automation endpoints. The repo, release, and play commands infer `owner/repo` from the current
 Git checkout when possible, so `--repo` is usually unnecessary.
 
 ## License
