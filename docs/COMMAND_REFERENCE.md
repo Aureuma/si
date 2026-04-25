@@ -120,3 +120,7 @@ si orbit releasemind release publish post_123 --json
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
 - Run `si help --format json` or `si commands` when updating CLI docs.
+GitHub release commands follow a checkout-first default path:
+- `si orbit github release list|get|create|upload|delete` infer `owner/repo` from the current checkout when possible
+- pass `-R, --repo <owner/repo>` to override inference
+- `si orbit github release create` defaults the release title to the tag when `--title` is omitted

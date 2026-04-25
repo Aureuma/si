@@ -12804,11 +12804,13 @@ fn help_output_describes_github_release_create_tag_behavior() {
         .clone();
     let create_help = String::from_utf8_lossy(&create_help);
     assert!(create_help.contains("Create a GitHub release."));
-    assert!(create_help.contains("Create a GitHub release."));
+    assert!(create_help.contains("When [REPO_REF] is omitted, SI infers owner/repo"));
     assert!(create_help.contains(
         "Target branch or commit SHA. Required when the tag does not already exist on the remote."
     ));
     assert!(create_help.contains("Release tag name, for example v0.56.0."));
+    assert!(create_help.contains("Defaults to the tag."));
+    assert!(create_help.contains("-R, --repo <REPO>"));
 }
 
 #[test]
@@ -13637,6 +13639,139 @@ fn github_release_create_json_mutates_via_api_with_oauth() {
 }
 
 #[test]
+fn github_release_list_infers_repo_from_git_origin() {
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+    let server = start_one_shot_http_server(|request| {
+        assert!(
+            request.starts_with("GET /repos/Aureuma/si/releases?page=1&per_page=100 HTTP/1.1\r\n")
+        );
+        http_json_response("200 OK", &[], r#"[{"id":101,"tag_name":"v1.2.3"}]"#)
+    });
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["list"][0]["tag_name"], "v1.2.3");
+    server.join();
+}
+
+#[test]
+fn github_release_get_infers_repo_from_git_origin() {
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "https://github.com/Aureuma/si.git"]);
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.3 HTTP/1.1\r\n"));
+        http_json_response("200 OK", &[], r#"{"id":101,"tag_name":"v1.2.3"}"#)
+    });
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "get",
+            "v1.2.3",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["data"]["tag_name"], "v1.2.3");
+    server.join();
+}
+
+#[test]
+fn github_release_create_infers_repo_and_defaults_title_from_tag() {
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_tag_ref_get")],
+                r#"{"ref":"refs/tags/v1.2.7","object":{"sha":"abc123"}}"#,
+            ),
+            1 => {
+                assert!(request.starts_with("POST /repos/Aureuma/si/releases HTTP/1.1\r\n"));
+                assert!(request.contains("\"tag_name\":\"v1.2.7\""));
+                assert!(request.contains("\"name\":\"v1.2.7\""));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_release_create")],
+                    r#"{"id":104,"tag_name":"v1.2.7","name":"v1.2.7"}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "create",
+            "--tag",
+            "v1.2.7",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["data"]["tag_name"], "v1.2.7");
+    assert_eq!(parsed["data"]["name"], "v1.2.7");
+    server.join();
+}
+
+#[test]
 fn github_release_create_json_creates_missing_tag_ref_before_release() {
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let seen = calls.clone();
@@ -13702,6 +13837,122 @@ fn github_release_create_json_creates_missing_tag_ref_before_release() {
     assert_eq!(parsed["status_code"], 201);
     assert_eq!(parsed["request_id"], "req_gh_release_create");
     assert_eq!(parsed["data"]["tag_name"], "v1.2.5");
+    server.join();
+}
+
+#[test]
+fn github_release_upload_infers_repo_from_git_origin() {
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+    let asset_path = repo.path().join("asset.txt");
+    fs::write(&asset_path, "hello release asset\n").expect("write asset");
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let upload_base = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let upload_base_for_server = upload_base.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(
+                    request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n")
+                );
+                let base_url = upload_base_for_server.lock().expect("lock upload base").clone();
+                http_json_response(
+                    "200 OK",
+                    &[],
+                    &format!(
+                        r#"{{"id":201,"tag_name":"v1.2.4","upload_url":"{base_url}/uploads/repos/Aureuma/si/releases/201/assets{{?name,label}}"}}"#
+                    ),
+                )
+            }
+            1 => {
+                assert!(
+                    request.starts_with("POST /uploads/repos/Aureuma/si/releases/201/assets?name=asset.txt HTTP/1.1\r\n")
+                );
+                http_json_response("201 Created", &[], r#"{"id":202,"name":"asset.txt"}"#)
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    *upload_base.lock().expect("lock upload base") = server.base_url.clone();
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "upload",
+            "v1.2.4",
+            "--asset",
+        ])
+        .arg(&asset_path)
+        .args(["--base-url", &server.base_url, "--auth-mode", "oauth", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["data"]["name"], "asset.txt");
+    server.join();
+}
+
+#[test]
+fn github_release_delete_infers_repo_from_git_origin() {
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(
+                    request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n")
+                );
+                http_json_response("200 OK", &[], r#"{"id":102,"tag_name":"v1.2.4"}"#)
+            }
+            1 => {
+                assert!(
+                    request.starts_with("DELETE /repos/Aureuma/si/releases/102 HTTP/1.1\r\n")
+                );
+                http_json_response("204 No Content", &[], "")
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "orbit",
+            "github",
+            "release",
+            "delete",
+            "v1.2.4",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
     server.join();
 }
 
