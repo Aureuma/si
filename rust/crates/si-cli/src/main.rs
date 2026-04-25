@@ -37016,20 +37016,51 @@ fn clear_releasemind_auth_state() -> Result<()> {
 }
 
 fn releasemind_try_open_browser(url: &str) -> bool {
-    let command = if cfg!(target_os = "macos") {
-        ("open", vec![url.to_owned()])
-    } else if cfg!(target_os = "windows") {
-        ("cmd", vec!["/C".to_owned(), "start".to_owned(), url.to_owned()])
-    } else {
-        ("xdg-open", vec![url.to_owned()])
-    };
-    StdCommand::new(command.0)
-        .args(command.1)
+    let browser_override = env::var("BROWSER").ok();
+    let (program, args) = releasemind_browser_command(url, browser_override.as_deref());
+    StdCommand::new(program)
+        .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
+}
+
+fn releasemind_browser_command(
+    url: &str,
+    browser_override: Option<&str>,
+) -> (String, Vec<String>) {
+    if let Some(browser) = browser_override.map(str::trim).filter(|value| !value.is_empty()) {
+        let mut parts = browser.split_whitespace();
+        if let Some(program) = parts.next() {
+            let mut args = Vec::new();
+            let mut inserted_url = false;
+            for part in parts {
+                if part == "%s" {
+                    args.push(url.to_owned());
+                    inserted_url = true;
+                } else {
+                    args.push(part.to_owned());
+                }
+            }
+            if !inserted_url {
+                args.push(url.to_owned());
+            }
+            return (program.to_owned(), args);
+        }
+    }
+
+    if cfg!(target_os = "macos") {
+        ("open".to_owned(), vec![url.to_owned()])
+    } else if cfg!(target_os = "windows") {
+        (
+            "cmd".to_owned(),
+            vec!["/C".to_owned(), "start".to_owned(), url.to_owned()],
+        )
+    } else {
+        ("xdg-open".to_owned(), vec![url.to_owned()])
+    }
 }
 
 fn releasemind_release_notes(
@@ -70079,5 +70110,29 @@ mod tests {
 
         status.weekly_left_pct = None;
         assert!(!codex_warmup_weekly_quota_reached(&status));
+    }
+
+    #[test]
+    fn releasemind_browser_command_prefers_browser_override() {
+        let (program, args) =
+            releasemind_browser_command("https://releasemind.ai/login", Some("surf"));
+        assert_eq!(program, "surf");
+        assert_eq!(args, vec!["https://releasemind.ai/login".to_string()]);
+    }
+
+    #[test]
+    fn releasemind_browser_command_replaces_placeholder_url() {
+        let (program, args) = releasemind_browser_command(
+            "https://releasemind.ai/login",
+            Some("surf --new-window %s"),
+        );
+        assert_eq!(program, "surf");
+        assert_eq!(
+            args,
+            vec![
+                "--new-window".to_string(),
+                "https://releasemind.ai/login".to_string()
+            ]
+        );
     }
 }
