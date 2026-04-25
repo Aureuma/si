@@ -12,9 +12,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.11` after consolidating Nucleus task/session binding validation and closing the remaining direct-run integrity gaps.
+- Bumped the working version to `0.59.12` after removing the hidden Nucleus idle cutoff and aligning runtime-emitted failure projection with the hardened session and worker quarantine rules.
 
 ### Fixed
+- Fixed Nucleus task execution so the default task ceiling is the real runtime ceiling again; deep tasks no longer fail after a hidden 900-second idle cutoff when they did not ask for one.
+- Fixed Nucleus run-failure projection so runtime-emitted `run.failed` events now quarantine timed-out sessions and worker transport failures the same way direct runtime errors already do.
 - Hardened Nucleus run failure recovery so timed-out or transport-broken turns break the bound session immediately, worker-channel failures also quarantine the worker, and repeated reuse of poisoned sessions now blocks instead of failing again later.
 - Hardened Nucleus daemon workdir selection so deleted or invalid current directories fall back to a stable absolute path instead of `.`.
 - Throttled repeated Nucleus background-loop warnings so one broken dependency no longer floods the canonical event ledger every 200ms.
