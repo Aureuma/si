@@ -2,6 +2,7 @@
 
 - Repositories rooted under underscore-prefixed top-level directories, such as `_paases/<repo>`, `_agentic/<repo>`, or any similar `_<name>/<repo>` pattern, are reference-only. They are not owned working repos, are outside the default scope of modifications, and must not be modified unless the user explicitly overrides this rule for a specific task.
 - Those underscore-prefixed directories may be scanned, indexed, searched, or read for reference, but they must be treated as external/unowned code unless the user explicitly says otherwise.
+- Keep every `tickets/` directory and all files beneath it ignored by Git. Do not add, force-add, or commit ticket files to version control.
 
 # Release Discipline
 
