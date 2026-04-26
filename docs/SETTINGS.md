@@ -122,6 +122,30 @@ CLI and runtime behavior:
 - Codex profile provisioning explicitly requests a `30d` Fort refresh-session TTL even if Fort's general default refresh-session TTL is shorter.
 - Runtime worker token state remains file-backed under `~/.si/codex/profiles/<profile>/fort/`; profile refresh tokens must be rotated in place.
 
+### Orbit Fort secret materialization
+All `si orbit ...` provider accounts support a shared Fort-backed secret binding shape:
+
+- `fort_repo` (string): default Fort repo for this account's secret bindings.
+- `fort_env` (string): default Fort env for this account's secret bindings.
+- `fort_prefix` (string): default key prefix for derived Fort keys. If unset, `vault_prefix` remains the compatibility prefix.
+- `secrets` (table): logical secret names mapped to either `fort://<repo>/<env>/<key>` or to a key name resolved with `fort_repo` and `fort_env`.
+
+Example:
+
+```toml
+[cloudflare.accounts.viva]
+fort_repo = "viva"
+fort_env = "prod"
+fort_prefix = "VIVA_CLOUDFLARE_USER"
+
+[cloudflare.accounts.viva.secrets]
+api_token = "VIVA_CLOUDFLARE_USER_API_TOKEN"
+```
+
+Orbit commands materialize configured Fort secrets through the current `si fort` runtime session before provider clients are built. Do not pass secrets or `fort://...` references through command flags for normal use, and do not wrap orbit commands in `si fort run`.
+
+When a provider has no Fort binding configured, legacy env-var fallbacks continue to work for compatibility. Literal secret flags are reserved for emergency overrides and should not be used in scripts or shared shell history.
+
 ### `[stripe]`
 Defaults for `si orbit stripe` account and environment context.
 - `stripe.organization` (string): optional organization label
@@ -133,17 +157,19 @@ Defaults for `si orbit stripe` account and environment context.
 Per-account Stripe settings.
 - `id` (string): Stripe account id (`acct_...`) used for scoped calls
 - `name` (string): display name
+- `fort_repo`, `fort_env`, `fort_prefix`, `secrets` (Fort bindings): see "Orbit Fort secret materialization"
 - `live_key` (string): direct live API key (prefer env refs instead)
 - `sandbox_key` (string): direct sandbox API key (prefer env refs instead)
 - `live_key_env` (string): env var name holding the live key
 - `sandbox_key_env` (string): env var name holding the sandbox key
 
 Credential resolution order for `si orbit stripe`:
-1. `--api-key` (or `--live-api-key`/`--sandbox-api-key` for sync)
-2. Account settings key (`live_key` / `sandbox_key`)
-3. Account settings env ref (`live_key_env` / `sandbox_key_env`)
-4. Environment-specific env fallback (`SI_STRIPE_LIVE_API_KEY` / `SI_STRIPE_SANDBOX_API_KEY`)
-5. Generic env fallback (`SI_STRIPE_API_KEY`)
+1. Configured Fort binding for the selected account/environment
+2. Emergency CLI override (`--api-key`, or sync key flags)
+3. Account settings key (`live_key` / `sandbox_key`)
+4. Account settings env ref (`live_key_env` / `sandbox_key_env`)
+5. Environment-specific env fallback (`SI_STRIPE_LIVE_API_KEY` / `SI_STRIPE_SANDBOX_API_KEY`)
+6. Generic env fallback (`SI_STRIPE_API_KEY`)
 
 `SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
 
@@ -164,6 +190,7 @@ Per-account GitHub settings.
 - `api_base_url` (string): per-account API base URL (supports GHES)
 - `auth_mode` (string): `app` or `oauth` (overrides global default for this account)
 - `vault_prefix` (string): env key prefix override (example `GITHUB_CORE_`)
+- `fort_repo`, `fort_env`, `fort_prefix`, `secrets` (Fort bindings): see "Orbit Fort secret materialization"
 - `oauth_access_token` (string): direct OAuth token (prefer env refs)
 - `oauth_token_env` (string): env var with OAuth token
 - `app_id` (int): direct app id (prefer env refs for secretless settings)
@@ -180,18 +207,20 @@ Auth mode resolution for `si orbit github`:
 4. Global settings (`github.default_auth_mode`)
 
 Credential resolution for `si orbit github` in `app` mode:
-1. CLI overrides (`--app-id`, `--app-key`, `--installation-id`)
-2. Account settings (`app_id`, `app_private_key_pem`, `installation_id`)
-3. Account env refs (`app_id_env`, `app_private_key_env`, `installation_id_env`)
-4. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
-5. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
+1. Configured Fort binding for `app_private_key`
+2. Emergency CLI overrides (`--app-id`, `--app-key`, `--installation-id`)
+3. Account settings (`app_id`, `app_private_key_pem`, `installation_id`)
+4. Account env refs (`app_id_env`, `app_private_key_env`, `installation_id_env`)
+5. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
+6. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
 
 Credential resolution for `si orbit github` in `oauth` mode:
-1. CLI override (`--token` where available)
-2. Account settings (`oauth_access_token`)
-3. Account env ref (`oauth_token_env`)
-4. Account-prefix env keys (`GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN`, `GITHUB_<ACCOUNT>_TOKEN`)
-5. Global env fallbacks (`GITHUB_OAUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`)
+1. Configured Fort binding for `oauth_token`
+2. Emergency CLI override (`--token` where available)
+3. Account settings (`oauth_access_token`)
+4. Account env ref (`oauth_token_env`)
+5. Account-prefix env keys (`GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN`, `GITHUB_<ACCOUNT>_TOKEN`)
+6. Global env fallbacks (`GITHUB_OAUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`)
 
 ### `[cloudflare]`
 Defaults for `si orbit cloudflare` (token auth with multi-account and env context labels).
@@ -209,6 +238,7 @@ Per-account Cloudflare context and env-key pointers.
 - `account_id_env` (string): env var with account id
 - `api_base_url` (string): per-account API base URL override
 - `vault_prefix` (string): env key prefix override (example `CLOUDFLARE_CORE_`)
+- `fort_repo`, `fort_env`, `fort_prefix`, `secrets` (Fort bindings): see "Orbit Fort secret materialization"
 - `default_zone_id` (string): default zone id fallback
 - `default_zone_name` (string): default zone name fallback
 - `prod_zone_id` (string): zone id used when `env=prod`
@@ -217,11 +247,12 @@ Per-account Cloudflare context and env-key pointers.
 - `api_token_env` (string): env var with API token
 
 Credential resolution for `si orbit cloudflare` is vault-compatible and token-only:
-1. CLI overrides (`--api-token`, `--account-id`, `--zone-id`)
-2. Account settings (`account_id`, env-mapped zone ids, defaults)
-3. Account env refs (`account_id_env`, `api_token_env`)
-4. Account-prefix env keys (`CLOUDFLARE_<ACCOUNT>_API_TOKEN`, `CLOUDFLARE_<ACCOUNT>_ACCOUNT_ID`, `CLOUDFLARE_<ACCOUNT>_PROD_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_STAGING_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_DEV_ZONE_ID`)
-5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
+1. Configured Fort binding for `api_token` or legacy `api_token_fort_*`
+2. Emergency CLI overrides (`--api-token`, `--account-id`, `--zone-id`)
+3. Account settings (`account_id`, env-mapped zone ids, defaults)
+4. Account env refs (`account_id_env`, `api_token_env`)
+5. Account-prefix env keys (`CLOUDFLARE_<ACCOUNT>_API_TOKEN`, `CLOUDFLARE_<ACCOUNT>_ACCOUNT_ID`, `CLOUDFLARE_<ACCOUNT>_PROD_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_STAGING_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_DEV_ZONE_ID`)
+6. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
 
 ### `[gcp]`
 Defaults for `si orbit gcp` (Service Usage, IAM, API keys, Gemini, and Vertex AI).
