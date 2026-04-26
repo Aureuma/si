@@ -11,7 +11,12 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added a first-class Vertex Gemini generation command under `si orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
+
 ### Changed
+- Bumped the working version to `0.59.25` after adding Vertex Gemini generation and stronger Bedrock runtime converse controls for LLM usage.
+- Expanded `si orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
 - Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
