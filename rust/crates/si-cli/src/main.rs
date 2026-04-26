@@ -72085,6 +72085,70 @@ mod tests {
     }
 
     #[test]
+    fn fort_secret_reference_parses_canonical_uri() {
+        let source = parse_fort_secret_reference("fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN")
+            .expect("parse")
+            .expect("source");
+
+        assert_eq!(source.repo, "viva");
+        assert_eq!(source.env_name, "prod");
+        assert_eq!(source.key, "VIVA_CLOUDFLARE_USER_API_TOKEN");
+        assert_eq!(
+            format_fort_secret_source(&source),
+            "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN"
+        );
+    }
+
+    #[test]
+    fn orbit_secret_binding_uses_account_defaults_for_plain_key() {
+        let mut account = CloudflareAccountEntry {
+            fort_repo: Some("viva".to_owned()),
+            fort_env: Some("prod".to_owned()),
+            ..CloudflareAccountEntry::default()
+        };
+        account.secrets.insert("api_token".to_owned(), "VIVA_CLOUDFLARE_USER_API_TOKEN".to_owned());
+
+        let source = orbit_secret_ref_from_binding(
+            &account,
+            "cloudflare",
+            "dev",
+            "api_token",
+            "CLOUDFLARE_API_TOKEN",
+        )
+        .expect("secret ref");
+
+        assert_eq!(
+            format_fort_secret_source(&source),
+            "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN"
+        );
+    }
+
+    #[test]
+    fn github_credential_helper_command_does_not_embed_secrets() {
+        let command = build_github_credential_helper_command(
+            false,
+            "",
+            "core",
+            "Aureuma",
+            "https://api.github.com",
+            "app",
+            "ghp_secret",
+            123,
+            "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+            456,
+        );
+
+        assert!(command.contains("si orbit github git credential"));
+        assert!(command.contains("--account core"));
+        assert!(command.contains("--app-id 123"));
+        assert!(command.contains("--installation-id 456"));
+        assert!(!command.contains("--token"));
+        assert!(!command.contains("--app-key"));
+        assert!(!command.contains("ghp_secret"));
+        assert!(!command.contains("BEGIN PRIVATE KEY"));
+    }
+
+    #[test]
     fn codex_warmup_weekly_quota_requires_less_than_one_hundred_percent_left() {
         let mut status = CodexStatusView {
             source: None,
