@@ -18062,7 +18062,7 @@ fn cloudflare_raw_json_fetches_with_query_params() {
 }
 
 #[test]
-fn cloudflare_raw_materializes_api_token_from_fort_reference() {
+fn cloudflare_raw_materializes_api_token_from_settings_fort_binding() {
     let home = tempdir().expect("home tempdir");
     let codex_home = tempdir().expect("codex home tempdir");
     let access_token = fake_jwt(json!({ "exp": Utc::now().timestamp() + 3600 }));
@@ -18114,6 +18114,30 @@ fn cloudflare_raw_materializes_api_token_from_fort_reference() {
         }
     }
 
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[cloudflare]
+default_account = "viva"
+default_env = "prod"
+
+[cloudflare.accounts.viva]
+account_id = "acct_viva"
+default_zone_id = "zone_default"
+fort_repo = "viva"
+fort_env = "prod"
+fort_prefix = "VIVA_CLOUDFLARE_USER"
+
+[cloudflare.accounts.viva.secrets]
+api_token = "VIVA_CLOUDFLARE_USER_API_TOKEN"
+"#,
+    )
+    .expect("write settings");
+
     let cloudflare_server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /zones HTTP/1.1\r\n"));
         assert!(request.contains("authorization: Bearer cf-fort-token\r\n"));
@@ -18129,8 +18153,6 @@ fn cloudflare_raw_materializes_api_token_from_fort_reference() {
         .args([
             "--home",
             home.path().to_str().expect("home path"),
-            "--api-token",
-            "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN",
             "--base-url",
             &cloudflare_server.base_url,
             "--path",
@@ -18149,6 +18171,31 @@ fn cloudflare_raw_materializes_api_token_from_fort_reference() {
     assert_eq!(parsed["list"][0]["id"], "zone_123");
     fort_server.join();
     cloudflare_server.join();
+}
+
+#[test]
+fn cloudflare_raw_rejects_fort_reference_api_token_flag() {
+    let home = tempdir().expect("home tempdir");
+    let stderr = cargo_bin()
+        .args(["orbit", "cloudflare", "raw"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--api-token",
+            "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN",
+            "--base-url",
+            "http://127.0.0.1:1",
+            "--path",
+            "/zones",
+            "--json",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(stderr).expect("stderr utf8");
+    assert!(stderr.contains("Fort secret references are not accepted in --api-token"));
 }
 
 #[test]
