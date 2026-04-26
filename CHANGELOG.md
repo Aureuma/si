@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.19` after completing the focused Nucleus hardening e2e validation pass.
+- Bumped the working version to `0.59.20` after retiring the completed Nucleus hardening tickets.
+- Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
 ### Fixed
 - Fixed Nucleus hardening regression coverage so worker-restart scope tests seed the intended profile lane and direct-run failure smokes no longer assert unrelated concurrent task completion.
