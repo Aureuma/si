@@ -18911,6 +18911,39 @@ fn cloudflare_r2_bucket_get_json_fetches_account_endpoint() {
 }
 
 #[test]
+fn cloudflare_r2_bucket_list_json_reads_bucket_wrapper() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acct_123/r2/buckets?page=1 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_r2_bucket_list")],
+            r#"{"success":true,"result":{"buckets":[{"name":"viva-prod-db-backups"},{"name":"rm-postgres-walg"}]}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["orbit", "cloudflare", "r2", "bucket", "list"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["count"], 2);
+    assert_eq!(parsed["data"][0]["name"], "viva-prod-db-backups");
+    assert_eq!(parsed["data"][1]["name"], "rm-postgres-walg");
+    server.join();
+}
+
+#[test]
 fn cloudflare_d1_db_create_json_posts_account_resource() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /accounts/acct_123/d1/database HTTP/1.1\r\n"));
