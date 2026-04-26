@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Bumped the working version to `0.59.20` after retiring the completed Nucleus hardening tickets.
+- Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
 - Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
 ### Fixed
