@@ -5556,9 +5556,19 @@ enum AWSBedrockRuntimeCommand {
         #[arg(long)]
         prompt: Option<String>,
         #[arg(long)]
+        system: Option<String>,
+        #[arg(long)]
         body: Option<String>,
         #[arg(long)]
         body_file: Option<PathBuf>,
+        #[arg(long)]
+        temperature: Option<f64>,
+        #[arg(long)]
+        top_p: Option<f64>,
+        #[arg(long)]
+        max_output_tokens: Option<u64>,
+        #[arg(long = "stop-sequence")]
+        stop_sequences: Vec<String>,
         #[arg(long)]
         trace: Option<String>,
         #[arg(long)]
@@ -7506,6 +7516,26 @@ struct GCPVertexCommonArgs {
 
 #[derive(Debug, Subcommand)]
 enum GCPVertexCommand {
+    #[command(alias = "generate-content")]
+    Generate {
+        #[command(flatten)]
+        common: GCPVertexCommonArgs,
+        #[arg(long)]
+        model: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        system: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        temperature: Option<f64>,
+        #[arg(long)]
+        max_output_tokens: Option<u64>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+    },
     #[command(alias = "models")]
     Model {
         #[command(subcommand)]
@@ -25270,8 +25300,13 @@ fn main() -> Result<()> {
                         model_id,
                         model,
                         prompt,
+                        system,
                         body,
                         body_file,
+                        temperature,
+                        top_p,
+                        max_output_tokens,
+                        stop_sequences,
                         trace,
                         account,
                         region,
@@ -25289,8 +25324,13 @@ fn main() -> Result<()> {
                         run_aws_bedrock_runtime_converse(
                             model_id.or(model).unwrap_or_default(),
                             prompt,
+                            system,
                             body,
                             body_file,
+                            temperature,
+                            top_p,
+                            max_output_tokens,
+                            stop_sequences,
                             trace,
                             account,
                             region,
@@ -27312,6 +27352,38 @@ fn main() -> Result<()> {
                 }
             },
             GCPCommand::Vertex { command } => match command {
+                GCPVertexCommand::Generate {
+                    common,
+                    model,
+                    resource,
+                    prompt,
+                    system,
+                    json_body,
+                    temperature,
+                    max_output_tokens,
+                    params,
+                } => {
+                    let format = if common.json { OutputFormat::Json } else { common.format };
+                    run_gcp_vertex_generate(
+                        common.account,
+                        common.env,
+                        common.project,
+                        common.base_url,
+                        common.access_token,
+                        common.location,
+                        model.or(resource),
+                        prompt,
+                        system,
+                        json_body,
+                        temperature,
+                        max_output_tokens,
+                        params,
+                        common.home,
+                        common.settings_file,
+                        format,
+                        common.raw,
+                    )?
+                }
                 GCPVertexCommand::Model { command } => match command {
                     GCPVertexModelCommand::List { common, limit, params } => {
                         let format = if common.json { OutputFormat::Json } else { common.format };
@@ -45934,8 +46006,13 @@ fn run_aws_bedrock_runtime_invoke(
 fn run_aws_bedrock_runtime_converse(
     model_id: String,
     prompt: Option<String>,
+    system: Option<String>,
     body: Option<String>,
     body_file: Option<PathBuf>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
+    max_output_tokens: Option<u64>,
+    stop_sequences: Vec<String>,
     trace: Option<String>,
     account: Option<String>,
     region: Option<String>,
@@ -45948,18 +46025,15 @@ fn run_aws_bedrock_runtime_converse(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let payload = resolve_aws_json_body(
-        body,
-        body_file,
-        prompt.filter(|value| !value.trim().is_empty()).map(|value| {
-            serde_json::json!({
-                "messages": [{
-                    "role": "user",
-                    "content": [{"text": value}],
-                }]
-            })
-        }),
+    let fallback = build_aws_bedrock_converse_payload(
+        prompt,
+        system,
+        temperature,
+        top_p,
+        max_output_tokens,
+        stop_sequences,
     )?;
+    let payload = resolve_aws_json_body(body, body_file, Some(fallback))?;
     let mut headers = BTreeMap::new();
     if let Some(trace) = trace.filter(|value| !value.trim().is_empty()) {
         headers.insert("x-amzn-bedrock-trace".to_owned(), trace.trim().to_owned());
@@ -45991,6 +46065,56 @@ fn run_aws_bedrock_runtime_converse(
         },
     )?;
     print_aws_api_response(&response, format, raw)
+}
+
+fn build_aws_bedrock_converse_payload(
+    prompt: Option<String>,
+    system: Option<String>,
+    temperature: Option<f64>,
+    top_p: Option<f64>,
+    max_output_tokens: Option<u64>,
+    stop_sequences: Vec<String>,
+) -> Result<Value> {
+    let prompt = prompt.unwrap_or_default();
+    if prompt.trim().is_empty() {
+        anyhow::bail!("provide --prompt, --body, or --body-file");
+    }
+    let mut body = serde_json::json!({
+        "messages": [{
+            "role": "user",
+            "content": [{"text": prompt.trim()}],
+        }]
+    });
+    if let Some(system) =
+        system.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body["system"] = serde_json::json!([{ "text": system }]);
+    }
+    let stop_sequences: Vec<String> = stop_sequences
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect();
+    let mut inference_config = serde_json::Map::new();
+    if let Some(temperature) = temperature {
+        inference_config.insert("temperature".to_owned(), Value::from(temperature));
+    }
+    if let Some(top_p) = top_p {
+        inference_config.insert("topP".to_owned(), Value::from(top_p));
+    }
+    if let Some(max_output_tokens) = max_output_tokens.filter(|value| *value > 0) {
+        inference_config.insert("maxTokens".to_owned(), Value::from(max_output_tokens));
+    }
+    if !stop_sequences.is_empty() {
+        inference_config.insert(
+            "stopSequences".to_owned(),
+            Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+        );
+    }
+    if !inference_config.is_empty() {
+        body["inferenceConfig"] = Value::Object(inference_config);
+    }
+    Ok(body)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -49357,6 +49481,33 @@ fn normalize_gcp_vertex_resource_name(
     }
 }
 
+fn normalize_gcp_vertex_publisher_model_name(
+    project_id: &str,
+    location: &str,
+    value: &str,
+) -> String {
+    let value = value.trim().trim_matches('/');
+    if value.starts_with("projects/") {
+        value.to_owned()
+    } else if value.starts_with("publishers/") {
+        format!("projects/{}/locations/{}/{}", project_id.trim(), location.trim(), value)
+    } else if value.starts_with("models/") {
+        format!(
+            "projects/{}/locations/{}/publishers/google/{}",
+            project_id.trim(),
+            location.trim(),
+            value
+        )
+    } else {
+        format!(
+            "projects/{}/locations/{}/publishers/google/models/{}",
+            project_id.trim(),
+            location.trim(),
+            value
+        )
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn load_gcp_vertex_runtime(
     account: Option<String>,
@@ -49642,6 +49793,86 @@ fn run_gcp_vertex_predict(
         }
     };
     let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_generate(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    model: Option<String>,
+    prompt: Option<String>,
+    system: Option<String>,
+    json_body: Option<String>,
+    temperature: Option<f64>,
+    max_output_tokens: Option<u64>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, location) = load_gcp_vertex_runtime(
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        location,
+        home,
+        settings_file,
+    )?;
+    let model = model.unwrap_or_default();
+    if model.trim().is_empty() {
+        anyhow::bail!("publisher model id is required");
+    }
+    let request_body = if let Some(json_body) =
+        parse_gcp_json_body_required(json_body, "--json-body")?
+    {
+        json_body
+    } else {
+        let prompt = prompt.unwrap_or_default();
+        if prompt.trim().is_empty() {
+            anyhow::bail!("--prompt or --json-body is required");
+        }
+        let mut body = serde_json::json!({
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": prompt.trim()}]
+            }]
+        });
+        if let Some(system) = system.filter(|value| !value.trim().is_empty()) {
+            body["systemInstruction"] = serde_json::json!({"parts": [{"text": system.trim()}]});
+        }
+        let mut generation_config = serde_json::Map::new();
+        if let Some(temperature) = temperature {
+            generation_config.insert("temperature".to_owned(), Value::from(temperature));
+        }
+        if let Some(max_output_tokens) = max_output_tokens.filter(|value| *value > 0) {
+            generation_config.insert("maxOutputTokens".to_owned(), Value::from(max_output_tokens));
+        }
+        if !generation_config.is_empty() {
+            body["generationConfig"] = Value::Object(generation_config);
+        }
+        body
+    };
+    let model_name =
+        normalize_gcp_vertex_publisher_model_name(&runtime.project_id, &location, &model);
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{model_name}:generateContent"),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
     print_gcp_api_response(&response, format, raw)
 }
 
@@ -72138,6 +72369,42 @@ mod tests {
         .to_string();
 
         assert!(error.contains("not accepted in secret override flags"));
+    }
+
+    #[test]
+    fn aws_bedrock_converse_payload_includes_system_and_inference_config() {
+        let payload = build_aws_bedrock_converse_payload(
+            Some("hello".to_owned()),
+            Some("You are precise.".to_owned()),
+            Some(0.2),
+            Some(0.9),
+            Some(512),
+            vec!["STOP".to_owned()],
+        )
+        .expect("payload");
+
+        assert_eq!(payload["messages"][0]["content"][0]["text"], "hello");
+        assert_eq!(payload["system"][0]["text"], "You are precise.");
+        assert_eq!(payload["inferenceConfig"]["temperature"], 0.2);
+        assert_eq!(payload["inferenceConfig"]["topP"], 0.9);
+        assert_eq!(payload["inferenceConfig"]["maxTokens"], 512);
+        assert_eq!(payload["inferenceConfig"]["stopSequences"][0], "STOP");
+    }
+
+    #[test]
+    fn normalize_gcp_vertex_publisher_model_name_supports_shorthand() {
+        assert_eq!(
+            normalize_gcp_vertex_publisher_model_name("proj-1", "us-central1", "gemini-2.5-pro"),
+            "projects/proj-1/locations/us-central1/publishers/google/models/gemini-2.5-pro"
+        );
+        assert_eq!(
+            normalize_gcp_vertex_publisher_model_name(
+                "proj-1",
+                "us-central1",
+                "publishers/google/models/gemini-2.5-flash"
+            ),
+            "projects/proj-1/locations/us-central1/publishers/google/models/gemini-2.5-flash"
+        );
     }
 
     #[test]

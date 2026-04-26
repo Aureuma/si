@@ -90,6 +90,7 @@ si orbit aws cloudwatch metric list --namespace AWS/EC2 --json
 si orbit aws logs group list --json
 si orbit aws logs events --group /aws/lambda/my-fn --limit 50 --json
 si orbit aws bedrock model list --json
+si orbit aws bedrock runtime converse --model-id anthropic.claude-3-7-sonnet-20250219-v1:0 --system "You are a careful research assistant." --prompt "Summarize the benchmark design." --max-output-tokens 1200
 ```
 
 ## Raw API mode

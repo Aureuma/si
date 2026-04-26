@@ -79,12 +79,15 @@ Notes:
 
 ```bash
 si orbit gcp vertex model list --project <project_id> --location us-central1
+si orbit gcp vertex generate --project <project_id> --location us-central1 --model gemini-2.5-pro --prompt "Summarize this paper"
 si orbit gcp vertex endpoint list --project <project_id> --location us-central1
 si orbit gcp vertex endpoint predict <endpoint_id> --project <project_id> --location us-central1 --instances-json '[{"content":"hello"}]'
 si orbit gcp vertex batch list --project <project_id> --location us-central1
 si orbit gcp vertex pipeline list --project <project_id> --location us-central1
 si orbit gcp vertex operation list --project <project_id> --location us-central1
 ```
+
+`si orbit gcp vertex generate` targets Vertex AI publisher models and accepts either a shorthand Gemini model id such as `gemini-2.5-pro` or a fully qualified publisher-model resource name.
 
 ## AI umbrella alias
 
