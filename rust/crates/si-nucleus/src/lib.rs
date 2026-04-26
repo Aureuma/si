@@ -52,6 +52,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:4747";
+const DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS: u64 = 900;
 const WS_PATH: &str = "/ws";
 const OPENAPI_PATH: &str = "/openapi.json";
 const REST_STATUS_PATH: &str = "/status";
@@ -3236,6 +3237,9 @@ impl NucleusService {
         if input.instructions.trim().is_empty() {
             anyhow::bail!("task instructions cannot be empty");
         }
+        if matches!(input.timeout_seconds, Some(0)) {
+            anyhow::bail!("task timeout_seconds must be at least 1 when provided");
+        }
         Ok(())
     }
 
@@ -5626,7 +5630,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "darmstada" },
                         "session_id": { "type": ["string", "null"], "description": "Optional existing SI session id to reuse for continuity.", "pattern": "^si-session-.+", "default": null, "example": "si-session-0123456789abcdef00000001" },
                         "max_retries": { "type": ["integer", "null"], "description": "Optional maximum retry attempts after failed execution.", "minimum": 0, "default": null, "example": 0 },
-                        "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task.", "minimum": 0, "default": null, "example": 900 }
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task. REST requests default to 900 seconds when omitted.", "minimum": 1, "default": 900, "example": 900 }
                     }
                 },
                 "TaskRecord": {
@@ -5660,7 +5664,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         "attempt_count": { "type": "integer", "description": "How many execution attempts Nucleus has already started for this task.", "minimum": 0, "example": 1, "readOnly": true },
                         "max_retries": { "type": ["integer", "null"], "description": "Maximum retry attempts configured for this task after a failed run.", "minimum": 0, "example": 0 },
                         "session_binding_locked": { "type": "boolean", "description": "True when the task was created against an explicit existing session and retries must preserve that session binding.", "example": false, "readOnly": true },
-                        "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 0, "example": 900 }
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 1, "example": 900 }
                     }
                 },
                 "WorkerRecord": {
@@ -5792,8 +5796,11 @@ async fn rest_status_handler(
 async fn rest_create_task_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
-    Json(request): Json<TaskCreateParams>,
+    Json(mut request): Json<TaskCreateParams>,
 ) -> Response {
+    if request.timeout_seconds.is_none() {
+        request.timeout_seconds = Some(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS);
+    }
     rest_gateway_response(
         service
             .dispatch_request_authorized(
@@ -6009,6 +6016,7 @@ fn infer_error_code(error: &anyhow::Error) -> &'static str {
         "unauthorized"
     } else if message.contains("must match")
         || message.contains("parse ")
+        || message.contains("must be at least")
         || message.contains("cannot be empty")
     {
         "invalid_params"
@@ -6273,7 +6281,8 @@ mod tests {
 
     use super::{
         BACKGROUND_WARNING_THROTTLE_WINDOW, CreateTaskInput, CronRuleRecord, CronScheduleKind,
-        GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest, HookRuleRecord,
+        DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS, GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest,
+        HookRuleRecord,
         MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
         append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
         load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
@@ -7630,6 +7639,11 @@ mod tests {
         assert_eq!(create_params["additionalProperties"], json!(false));
         assert_eq!(create_params["properties"]["source"]["default"], json!("websocket"));
         assert_eq!(create_params["properties"]["session_id"]["pattern"], json!("^si-session-.+"));
+        assert_eq!(
+            create_params["properties"]["timeout_seconds"]["default"],
+            json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS)
+        );
+        assert_eq!(create_params["properties"]["timeout_seconds"]["minimum"], json!(1));
         assert!(create_params["properties"]["instructions"]["description"].is_string());
         assert_eq!(
             body["paths"]["/tasks"]["post"]["requestBody"]["content"]["application/json"]["example"]
@@ -8654,6 +8668,81 @@ mod tests {
             body["error"]["message"]
                 .as_str()
                 .map(|value| value.contains("cannot be empty"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_applies_default_timeout_when_omitted() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST bounded timeout task",
+                            "instructions": "Create the task without an explicit timeout.",
+                            "profile": "america",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = response_json(response).await;
+        assert_eq!(body["timeout_seconds"], json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS));
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_rejects_zero_timeout_seconds() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST invalid timeout task",
+                            "instructions": "Reject zero-second runtime budgets.",
+                            "timeout_seconds": 0,
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], json!("invalid_params"));
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("timeout_seconds must be at least 1"))
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
