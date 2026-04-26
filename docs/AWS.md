@@ -12,7 +12,6 @@ description: AWS integration workflows in SI for IAM, STS, S3, EC2, Lambda, ECR,
 ## Related docs
 
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [LLM Research Workflows](./LLM_RESEARCH_WORKFLOWS.md)
 - [Vault](./VAULT)
 - [Providers](./PROVIDERS)
 
