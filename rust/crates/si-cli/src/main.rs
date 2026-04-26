@@ -62503,9 +62503,8 @@ fn collect_cloudflare_resource_list(
                 ..CloudflareAPIRequest::default()
             },
         )?;
-        if let Some(mut page_items) = response.list.clone() {
-            items.append(&mut page_items);
-        }
+        let mut page_items = cloudflare_list_items_from_response(&response);
+        items.append(&mut page_items);
         let done_for_limit = limit >= 0 && items.len() >= limit as usize;
         let total_pages = cloudflare_total_pages_from_body(&response.body);
         if explicit_page || page >= total_pages || page >= max_pages || done_for_limit {
@@ -62517,6 +62516,21 @@ fn collect_cloudflare_resource_list(
         items.truncate(limit as usize);
     }
     Ok(items)
+}
+
+fn cloudflare_list_items_from_response(response: &CloudflareAPIResponse) -> Vec<Value> {
+    if let Some(list) = &response.list {
+        return list.clone();
+    }
+    let Some(data) = &response.data else {
+        return Vec::new();
+    };
+    for key in ["buckets", "result", "items"] {
+        if let Some(list) = data.get(key).and_then(Value::as_array) {
+            return list.clone();
+        }
+    }
+    Vec::new()
 }
 
 #[allow(clippy::too_many_arguments)]
