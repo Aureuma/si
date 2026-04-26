@@ -14316,6 +14316,57 @@ fn releasemind_doctor_checks_repo_billing_and_usage() {
 }
 
 #[test]
+fn releasemind_doctor_uses_saved_session_without_automation_token() {
+    let home = tempdir().expect("tempdir");
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server_with_body(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /api/cli/auth/session HTTP/1.1\r\n"));
+                assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_session")],
+                    r#"{"ok":true,"user":{"github_username":"SHi-ON","email":"shi-on@example.com"}}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with("POST /api/cli/repos/ensure-link HTTP/1.1\r\n"));
+                assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+                assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+                http_json_response(
+                    "200 OK",
+                    &[("x-request-id", "req_rm_link")],
+                    r#"{"ok":true,"repo_id":"repo-1","repo_url":"https://github.com/Aureuma/si","default_branch":"main","already_linked":true}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env_remove("RELEASEMIND_AUTOMATION_TOKEN")
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "doctor", "Aureuma/si", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["token_source"], "session");
+    assert_eq!(parsed["auth_session"]["data"]["user"]["github_username"], "SHi-ON");
+    assert_eq!(parsed["repo_link"]["data"]["repo_id"], "repo-1");
+    server.join();
+}
+
+#[test]
 fn releasemind_doctor_infers_repo_from_git_origin() {
     let repo = tempdir().expect("repo tempdir");
     run_git(repo.path(), &["init"]);

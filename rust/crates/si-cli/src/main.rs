@@ -36795,7 +36795,55 @@ fn run_releasemind_doctor(
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let (base_url, base_url_source) = releasemind_base_url();
-    let (token, token_source) = releasemind_token(token.as_deref())?;
+    let token = releasemind_token(token.as_deref());
+    let Ok((token, token_source)) = token else {
+        let state = require_releasemind_auth_state()?;
+        let session = releasemind_request(
+            Method::GET,
+            "/api/cli/auth/session",
+            None,
+            &base_url,
+            Some(state.session_token.as_str()),
+        )?;
+        let repo_link = releasemind_request(
+            Method::POST,
+            "/api/cli/repos/ensure-link",
+            Some(json!({
+                "repo_full_name": repo_ref.clone(),
+            })),
+            &base_url,
+            Some(state.session_token.as_str()),
+        )?;
+
+        if json {
+            let payload = json!({
+                "ok": true,
+                "base_url": base_url,
+                "base_url_source": base_url_source,
+                "token_source": "session",
+                "repo_ref": repo_ref,
+                "auth_session": releasemind_response_json(&session),
+                "repo_link": releasemind_response_json(&repo_link),
+            });
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+            return Ok(());
+        }
+
+        println!("releasemind doctor ok");
+        print_cli_kv("repo_ref", &repo_ref);
+        print_cli_kv("token_source", "session");
+        print_cli_kv("repo_id", json_string_field(&repo_link.2, "repo_id").unwrap_or("(none)"));
+        print_cli_kv("repo_url", json_string_field(&repo_link.2, "repo_url").unwrap_or("(none)"));
+        print_cli_kv(
+            "github_username",
+            session
+                .2
+                .get("user")
+                .and_then(|user| json_string_field(user, "github_username"))
+                .unwrap_or("(none)"),
+        );
+        return Ok(());
+    };
     let verify = releasemind_request(
         Method::GET,
         &format!("/api/automation/verify?repo_full_name={}", encode_query_value(&repo_ref)),
