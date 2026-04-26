@@ -1260,6 +1260,7 @@ impl NucleusStore {
             }
             CanonicalEventType::RunFailed => {
                 let retry_plan = self.task_retry_plan_for_run_failure_locked(&primary)?;
+                self.apply_run_failure_consequences_locked(&primary, &mut events)?;
                 self.finish_run_locked(
                     &primary,
                     RunStatus::Failed,
@@ -1268,7 +1269,6 @@ impl NucleusStore {
                     None,
                     &mut events,
                 )?;
-                self.apply_run_failure_consequences_locked(&primary, &mut events)?;
                 if let Some(retry_plan) = retry_plan {
                     if let Some(task_id) = primary.data.task_id.as_ref() {
                         if let Some(event) = self.retry_failed_task_locked(task_id, &retry_plan)? {
@@ -1331,14 +1331,26 @@ impl NucleusStore {
             return Ok(());
         };
 
-        if run_failure_requires_session_quarantine(error) {
+        let quarantine_worker = event
+            .data
+            .payload
+            .get("worker_quarantine")
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| runtime_error_requires_worker_quarantine(error));
+        let quarantine_session = event
+            .data
+            .payload
+            .get("session_quarantine")
+            .and_then(Value::as_bool)
+            .unwrap_or_else(|| run_failure_requires_session_quarantine(error) || quarantine_worker);
+        if quarantine_session {
             if let Some(session_id) = event.data.session_id.as_ref() {
                 if let Some(appended) = self.mark_session_broken_locked(session_id, error)? {
                     events.push(appended);
                 }
             }
         }
-        if runtime_error_requires_worker_quarantine(error) {
+        if quarantine_worker {
             if let Some(worker_id) = event.data.worker_id.as_ref() {
                 if let Some(appended) = self.mark_worker_failed_locked(worker_id, error)? {
                     events.push(appended);
@@ -4124,23 +4136,13 @@ impl NucleusService {
                             "thread_id": run_spec.thread_id,
                             "turn_id": Value::Null,
                             "error": error_message,
+                            "session_quarantine": true,
+                            "worker_quarantine": runtime_error_requires_worker_quarantine(&error_message),
                         }),
                     },
                 };
                 if let Ok(appended) = store.apply_runtime_event(failure) {
                     for event in appended {
-                        let _ = events.send(event);
-                    }
-                }
-                if let Ok(Some(event)) =
-                    store.mark_session_broken(&run_spec.session_id, &error_message)
-                {
-                    let _ = events.send(event);
-                }
-                if runtime_error_requires_worker_quarantine(&error_message) {
-                    if let Ok(Some(event)) =
-                        store.mark_worker_failed(&run_spec.worker_id, &error_message)
-                    {
                         let _ = events.send(event);
                     }
                 }
@@ -14498,6 +14500,18 @@ mod tests {
         assert!(!queued.session_binding_locked);
         let first_run_id = queued.latest_run_id.clone().expect("first run id");
         let first_session_id = queued.session_id.clone().expect("reused session id");
+        let first_session = service
+            .store
+            .inspect_session(&first_session_id)
+            .expect("inspect session")
+            .expect("session exists");
+        assert_eq!(first_session.lifecycle_state, SessionLifecycleState::Ready);
+        let first_worker = service
+            .store
+            .inspect_worker(&first_session.worker_id)
+            .expect("inspect worker")
+            .expect("worker exists");
+        assert_eq!(first_worker.status, WorkerStatus::Ready);
 
         for _ in 0..20 {
             service.reconcile_and_dispatch_once().expect("dispatch retry attempt");
