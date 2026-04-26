@@ -6,6 +6,7 @@
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [LLM Research Workflows](./LLM_RESEARCH_WORKFLOWS.md)
 - [Providers](./PROVIDERS)
 
 ## Auth and context

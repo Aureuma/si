@@ -11,7 +11,11 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added a dedicated LLM research workflow guide for Orbit-backed Gemini, Vertex, and AWS Bedrock usage so internal paper/research loops can stay on the supported SI + Fort path.
+
 ### Changed
+- Bumped the working version to `0.59.25` after documenting the supported LLM research workflow through SI Orbit and Fort.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
 - Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
