@@ -44,7 +44,10 @@ use si_rs_command_manifest::{
 use si_rs_config::paths::SiPaths;
 use si_rs_config::runtime::git_repo_root_from;
 use si_rs_config::settings::{
-    CloudflareAccountEntry, CodexProfileEntry, FortSettings, Settings, SurfSettings, VivaSettings,
+    AWSAccountEntry, AppleAppStoreAccountEntry, CloudflareAccountEntry, CodexProfileEntry,
+    FortSettings, GCPAccountEntry, GitHubAccountEntry, GoogleAccountEntry, GooglePlayAccountEntry,
+    GoogleYouTubeAccountEntry, OCIAccountEntry, OpenAIAccountEntry, Settings, StripeAccountEntry,
+    SurfSettings, VivaSettings, WorkOSAccountEntry,
 };
 use si_rs_fort::{
     BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
@@ -38073,6 +38076,912 @@ struct FortSecretSource {
     key: String,
 }
 
+trait OrbitSecretAccountConfig {
+    fn vault_prefix(&self) -> Option<&str>;
+    fn fort_repo(&self) -> Option<&str>;
+    fn fort_env(&self) -> Option<&str>;
+    fn fort_prefix(&self) -> Option<&str>;
+    fn secrets(&self) -> &BTreeMap<String, String>;
+}
+
+macro_rules! impl_orbit_secret_account_config {
+    ($ty:ty) => {
+        impl OrbitSecretAccountConfig for $ty {
+            fn vault_prefix(&self) -> Option<&str> {
+                self.vault_prefix.as_deref()
+            }
+
+            fn fort_repo(&self) -> Option<&str> {
+                self.fort_repo.as_deref()
+            }
+
+            fn fort_env(&self) -> Option<&str> {
+                self.fort_env.as_deref()
+            }
+
+            fn fort_prefix(&self) -> Option<&str> {
+                self.fort_prefix.as_deref()
+            }
+
+            fn secrets(&self) -> &BTreeMap<String, String> {
+                &self.secrets
+            }
+        }
+    };
+}
+
+impl OrbitSecretAccountConfig for StripeAccountEntry {
+    fn vault_prefix(&self) -> Option<&str> {
+        None
+    }
+
+    fn fort_repo(&self) -> Option<&str> {
+        self.fort_repo.as_deref()
+    }
+
+    fn fort_env(&self) -> Option<&str> {
+        self.fort_env.as_deref()
+    }
+
+    fn fort_prefix(&self) -> Option<&str> {
+        self.fort_prefix.as_deref()
+    }
+
+    fn secrets(&self) -> &BTreeMap<String, String> {
+        &self.secrets
+    }
+}
+
+impl_orbit_secret_account_config!(AWSAccountEntry);
+impl_orbit_secret_account_config!(GCPAccountEntry);
+impl_orbit_secret_account_config!(GooglePlayAccountEntry);
+impl_orbit_secret_account_config!(GoogleYouTubeAccountEntry);
+impl_orbit_secret_account_config!(GoogleAccountEntry);
+impl_orbit_secret_account_config!(CloudflareAccountEntry);
+impl_orbit_secret_account_config!(OpenAIAccountEntry);
+impl_orbit_secret_account_config!(OCIAccountEntry);
+impl_orbit_secret_account_config!(AppleAppStoreAccountEntry);
+impl_orbit_secret_account_config!(GitHubAccountEntry);
+impl_orbit_secret_account_config!(WorkOSAccountEntry);
+
+#[derive(Debug, Default)]
+struct OrbitSecretMaterialization {
+    sources: BTreeMap<String, String>,
+    temp_files: Vec<tempfile::TempPath>,
+}
+
+impl OrbitSecretMaterialization {
+    fn record_env(&mut self, env_key: &str, source: &FortSecretSource) {
+        self.sources.insert(env_key.to_owned(), format_fort_secret_source(source));
+    }
+}
+
+fn format_fort_secret_source(source: &FortSecretSource) -> String {
+    format!("fort://{}/{}/{}", source.repo, source.env_name, source.key)
+}
+
+fn orbit_default_account<'a, T>(
+    accounts: &'a BTreeMap<String, T>,
+    default_account: Option<&str>,
+    override_account: Option<&str>,
+) -> Option<(&'a str, &'a T)> {
+    let selected = override_account
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| default_account.map(str::trim).filter(|value| !value.is_empty()));
+    if let Some(alias) = selected
+        && let Some((alias, entry)) = accounts.get_key_value(alias)
+    {
+        return Some((alias.as_str(), entry));
+    }
+    if accounts.len() == 1 {
+        return accounts.iter().next().map(|(alias, entry)| (alias.as_str(), entry));
+    }
+    None
+}
+
+fn orbit_environment<'a>(
+    override_env: Option<&'a str>,
+    default_env: Option<&'a str>,
+    fallback: &'static str,
+) -> String {
+    override_env
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| default_env.map(str::trim).filter(|value| !value.is_empty()))
+        .unwrap_or(fallback)
+        .to_owned()
+}
+
+fn orbit_secret_env_key(
+    account: &impl OrbitSecretAccountConfig,
+    alias: &str,
+    provider: &str,
+    suffix: &str,
+    explicit_env: Option<&str>,
+) -> String {
+    if let Some(value) = explicit_env.map(str::trim).filter(|value| !value.is_empty()) {
+        return value.to_owned();
+    }
+    let prefix = account
+        .fort_prefix()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| account.vault_prefix().map(str::trim).filter(|value| !value.is_empty()))
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| format!("{}_{}", provider, alias).to_ascii_uppercase());
+    let prefix = prefix.trim_end_matches('_');
+    format!("{}_{}", prefix, suffix)
+}
+
+fn orbit_account_has_fort_config(
+    account: &impl OrbitSecretAccountConfig,
+    logical_name: &str,
+) -> bool {
+    account.secrets().contains_key(logical_name)
+        || account.fort_repo().map(str::trim).is_some_and(|value| !value.is_empty())
+        || account.fort_env().map(str::trim).is_some_and(|value| !value.is_empty())
+        || account.fort_prefix().map(str::trim).is_some_and(|value| !value.is_empty())
+}
+
+fn orbit_secret_ref_from_binding(
+    account: &impl OrbitSecretAccountConfig,
+    provider: &str,
+    environment: &str,
+    logical_name: &str,
+    default_key: &str,
+) -> Result<FortSecretSource> {
+    let binding = account.secrets().get(logical_name).map(String::as_str).unwrap_or(default_key);
+    if let Some(source) = parse_fort_secret_reference(binding)? {
+        return Ok(source);
+    }
+    let key = binding.trim();
+    if key.is_empty() {
+        anyhow::bail!("orbit secret binding {logical_name} is empty");
+    }
+    let repo =
+        account.fort_repo().map(str::trim).filter(|value| !value.is_empty()).unwrap_or(provider);
+    let env_name =
+        account.fort_env().map(str::trim).filter(|value| !value.is_empty()).unwrap_or(environment);
+    Ok(FortSecretSource {
+        repo: repo.to_owned(),
+        env_name: env_name.to_owned(),
+        key: key.to_owned(),
+    })
+}
+
+fn materialize_orbit_secret_into_env(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    materialization: &mut OrbitSecretMaterialization,
+    provider: &str,
+    alias: &str,
+    environment: &str,
+    account: &impl OrbitSecretAccountConfig,
+    logical_name: &str,
+    suffix: &str,
+    explicit_env: Option<&str>,
+) -> Result<()> {
+    let env_key = orbit_secret_env_key(account, alias, provider, suffix, explicit_env);
+    if env
+        .get(&env_key)
+        .map(String::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty() && !value.starts_with("fort://"))
+    {
+        return Ok(());
+    }
+    let source =
+        orbit_secret_ref_from_binding(account, provider, environment, logical_name, &env_key)?;
+    let value = get_non_empty_fort_secret(settings, home, &source)?;
+    env.insert(env_key.clone(), value);
+    materialization.record_env(&env_key, &source);
+    Ok(())
+}
+
+fn materialize_orbit_secret_file_into_env(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    materialization: &mut OrbitSecretMaterialization,
+    provider: &str,
+    alias: &str,
+    environment: &str,
+    account: &impl OrbitSecretAccountConfig,
+    logical_name: &str,
+    suffix: &str,
+    explicit_env: Option<&str>,
+) -> Result<()> {
+    let env_key = orbit_secret_env_key(account, alias, provider, suffix, explicit_env);
+    if env
+        .get(&env_key)
+        .map(String::as_str)
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty() && !value.starts_with("fort://"))
+    {
+        return Ok(());
+    }
+    let source =
+        orbit_secret_ref_from_binding(account, provider, environment, logical_name, &env_key)?;
+    let value = get_non_empty_fort_secret(settings, home, &source)?;
+    let mut file = tempfile::Builder::new()
+        .prefix("si-orbit-fort-")
+        .suffix(".secret")
+        .tempfile()
+        .context("create temporary Fort materialized secret file")?;
+    file.write_all(value.as_bytes()).context("write temporary Fort materialized secret file")?;
+    let path = file.path().display().to_string();
+    env.insert(env_key.clone(), path);
+    materialization.temp_files.push(file.into_temp_path());
+    materialization.record_env(&env_key, &source);
+    Ok(())
+}
+
+fn materialize_orbit_secret_override(
+    settings: &Settings,
+    home: &Path,
+    raw: Option<&str>,
+) -> Result<Option<String>> {
+    let Some(raw) = raw.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let Some(source) = parse_fort_secret_reference(raw)? else {
+        return Ok(Some(raw.to_owned()));
+    };
+    get_non_empty_fort_secret(settings, home, &source).map(Some)
+}
+
+fn materialize_stripe_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    api_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    if !api_key_override.trim().is_empty() {
+        return Ok(materialization);
+    }
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.stripe.accounts,
+        settings.stripe.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment =
+        orbit_environment(environment, settings.stripe.default_env.as_deref(), "live");
+    let (logical, suffix, explicit_env) = if environment == "sandbox" {
+        ("sandbox_key", "SANDBOX_API_KEY", entry.sandbox_key_env.as_deref())
+    } else {
+        ("live_key", "LIVE_API_KEY", entry.live_key_env.as_deref())
+    };
+    if orbit_account_has_fort_config(entry, logical) {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "stripe",
+            alias,
+            &environment,
+            entry,
+            logical,
+            suffix,
+            explicit_env,
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_openai_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    api_key_override: &str,
+    admin_api_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.openai.accounts,
+        settings.openai.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    if api_key_override.trim().is_empty() && orbit_account_has_fort_config(entry, "api_key") {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "openai",
+            alias,
+            "prod",
+            entry,
+            "api_key",
+            "API_KEY",
+            entry.api_key_env.as_deref(),
+        )?;
+    }
+    if admin_api_key_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "admin_api_key")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "openai",
+            alias,
+            "prod",
+            entry,
+            "admin_api_key",
+            "ADMIN_API_KEY",
+            entry.admin_api_key_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_workos_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    api_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    if !api_key_override.trim().is_empty() {
+        return Ok(materialization);
+    }
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.workos.accounts,
+        settings.workos.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment =
+        orbit_environment(environment, settings.workos.default_env.as_deref(), "prod");
+    let (logical, suffix, explicit_env) = match environment.as_str() {
+        "dev" => ("dev_api_key", "DEV_API_KEY", entry.dev_api_key_env.as_deref()),
+        "staging" => ("staging_api_key", "STAGING_API_KEY", entry.staging_api_key_env.as_deref()),
+        _ => ("prod_api_key", "PROD_API_KEY", entry.prod_api_key_env.as_deref()),
+    };
+    if orbit_account_has_fort_config(entry, logical)
+        || orbit_account_has_fort_config(entry, "api_key")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "workos",
+            alias,
+            &environment,
+            entry,
+            logical,
+            suffix,
+            explicit_env.or(entry.api_key_env.as_deref()),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_aws_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    access_key_override: &str,
+    secret_key_override: &str,
+    session_token_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.aws.accounts,
+        settings.aws.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    if access_key_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "access_key_id")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "aws",
+            alias,
+            "prod",
+            entry,
+            "access_key_id",
+            "ACCESS_KEY_ID",
+            entry.access_key_id_env.as_deref(),
+        )?;
+    }
+    if secret_key_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "secret_access_key")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "aws",
+            alias,
+            "prod",
+            entry,
+            "secret_access_key",
+            "SECRET_ACCESS_KEY",
+            entry.secret_access_key_env.as_deref(),
+        )?;
+    }
+    if session_token_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "session_token")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "aws",
+            alias,
+            "prod",
+            entry,
+            "session_token",
+            "SESSION_TOKEN",
+            entry.session_token_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_github_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    token_override: &str,
+    app_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.github.accounts,
+        settings.github.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    if token_override.trim().is_empty() && orbit_account_has_fort_config(entry, "oauth_token") {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "github",
+            alias,
+            "prod",
+            entry,
+            "oauth_token",
+            "OAUTH_ACCESS_TOKEN",
+            entry.oauth_token_env.as_deref(),
+        )?;
+    }
+    if app_key_override.trim().is_empty() && orbit_account_has_fort_config(entry, "app_private_key")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "github",
+            alias,
+            "prod",
+            entry,
+            "app_private_key",
+            "APP_PRIVATE_KEY_PEM",
+            entry.app_private_key_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_cloudflare_account_secret_source(
+    account: &CloudflareAccountEntry,
+    current_environment: &str,
+) -> Result<Option<FortSecretSource>> {
+    if orbit_account_has_fort_config(account, "api_token") {
+        let key = orbit_secret_env_key(
+            account,
+            "cloudflare",
+            "cloudflare",
+            "API_TOKEN",
+            account.api_token_env.as_deref(),
+        );
+        return orbit_secret_ref_from_binding(
+            account,
+            "cloudflare",
+            current_environment,
+            "api_token",
+            &key,
+        )
+        .map(Some);
+    }
+    Ok(cloudflare_account_legacy_fort_token_source(account, current_environment))
+}
+
+fn materialize_google_places_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    api_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    if !api_key_override.trim().is_empty() {
+        return Ok(materialization);
+    }
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.google.accounts,
+        settings.google.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment =
+        orbit_environment(environment, settings.google.default_env.as_deref(), "prod");
+    let (logical, suffix, explicit_env) = match environment.as_str() {
+        "dev" => {
+            ("dev_places_api_key", "DEV_PLACES_API_KEY", entry.dev_places_api_key_env.as_deref())
+        }
+        "staging" => (
+            "staging_places_api_key",
+            "STAGING_PLACES_API_KEY",
+            entry.staging_places_api_key_env.as_deref(),
+        ),
+        _ => {
+            ("prod_places_api_key", "PROD_PLACES_API_KEY", entry.prod_places_api_key_env.as_deref())
+        }
+    };
+    if orbit_account_has_fort_config(entry, logical)
+        || orbit_account_has_fort_config(entry, "places_api_key")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "google",
+            alias,
+            &environment,
+            entry,
+            logical,
+            suffix,
+            explicit_env.or(entry.places_api_key_env.as_deref()),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_gcp_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    access_token_override: &str,
+    api_key_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.gcp.accounts,
+        settings.gcp.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment = orbit_environment(environment, settings.gcp.default_env.as_deref(), "prod");
+    if access_token_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "access_token")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "gcp",
+            alias,
+            &environment,
+            entry,
+            "access_token",
+            "ACCESS_TOKEN",
+            entry.access_token_env.as_deref(),
+        )?;
+    }
+    if api_key_override.trim().is_empty() && orbit_account_has_fort_config(entry, "api_key") {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "gcp",
+            alias,
+            &environment,
+            entry,
+            "api_key",
+            "API_KEY",
+            entry.api_key_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_google_play_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    service_account_json_override: &str,
+    service_account_file_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    if !service_account_json_override.trim().is_empty()
+        || !service_account_file_override.trim().is_empty()
+    {
+        return Ok(materialization);
+    }
+    let default_account = settings.google.default_account.as_deref();
+    let Some((alias, entry)) =
+        orbit_default_account(&settings.google.play.accounts, default_account, account)
+    else {
+        return Ok(materialization);
+    };
+    let environment =
+        orbit_environment(environment, settings.google.default_env.as_deref(), "prod");
+    let (logical, suffix, explicit_env) = match environment.as_str() {
+        "dev" => (
+            "dev_service_account_json",
+            "DEV_PLAY_SERVICE_ACCOUNT_JSON",
+            entry.dev_service_account_json_env.as_deref(),
+        ),
+        "staging" => (
+            "staging_service_account_json",
+            "STAGING_PLAY_SERVICE_ACCOUNT_JSON",
+            entry.staging_service_account_json_env.as_deref(),
+        ),
+        _ => (
+            "prod_service_account_json",
+            "PROD_PLAY_SERVICE_ACCOUNT_JSON",
+            entry.prod_service_account_json_env.as_deref(),
+        ),
+    };
+    if orbit_account_has_fort_config(entry, logical)
+        || orbit_account_has_fort_config(entry, "service_account_json")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "google",
+            alias,
+            &environment,
+            entry,
+            logical,
+            suffix,
+            explicit_env.or(entry.service_account_json_env.as_deref()),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_google_youtube_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    api_key_override: &str,
+    client_secret_override: &str,
+    access_token_override: &str,
+    refresh_token_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.google.youtube.accounts,
+        settings.google.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment =
+        orbit_environment(environment, settings.google.default_env.as_deref(), "prod");
+    if api_key_override.trim().is_empty() {
+        let (logical, suffix, explicit_env) = match environment.as_str() {
+            "dev" => (
+                "dev_youtube_api_key",
+                "DEV_YOUTUBE_API_KEY",
+                entry.dev_youtube_api_key_env.as_deref(),
+            ),
+            "staging" => (
+                "staging_youtube_api_key",
+                "STAGING_YOUTUBE_API_KEY",
+                entry.staging_youtube_api_key_env.as_deref(),
+            ),
+            _ => (
+                "prod_youtube_api_key",
+                "PROD_YOUTUBE_API_KEY",
+                entry.prod_youtube_api_key_env.as_deref(),
+            ),
+        };
+        if orbit_account_has_fort_config(entry, logical)
+            || orbit_account_has_fort_config(entry, "youtube_api_key")
+        {
+            materialize_orbit_secret_into_env(
+                settings,
+                home,
+                env,
+                &mut materialization,
+                "google",
+                alias,
+                &environment,
+                entry,
+                logical,
+                suffix,
+                explicit_env.or(entry.youtube_api_key_env.as_deref()),
+            )?;
+        }
+    }
+    if client_secret_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "youtube_client_secret")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "google",
+            alias,
+            &environment,
+            entry,
+            "youtube_client_secret",
+            "YOUTUBE_CLIENT_SECRET",
+            entry.youtube_client_secret_env.as_deref(),
+        )?;
+    }
+    if access_token_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "youtube_access_token")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "google",
+            alias,
+            &environment,
+            entry,
+            "youtube_access_token",
+            "YOUTUBE_ACCESS_TOKEN",
+            None,
+        )?;
+    }
+    if refresh_token_override.trim().is_empty()
+        && orbit_account_has_fort_config(entry, "youtube_refresh_token")
+    {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "google",
+            alias,
+            &environment,
+            entry,
+            "youtube_refresh_token",
+            "YOUTUBE_REFRESH_TOKEN",
+            entry.youtube_refresh_token_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_apple_appstore_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+    environment: Option<&str>,
+    private_key_override: &str,
+    private_key_file_override: &str,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    if !private_key_override.trim().is_empty() || !private_key_file_override.trim().is_empty() {
+        return Ok(materialization);
+    }
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.apple.appstore.accounts,
+        settings.apple.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    let environment = orbit_environment(environment, settings.apple.default_env.as_deref(), "prod");
+    if orbit_account_has_fort_config(entry, "private_key") {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "apple",
+            alias,
+            &environment,
+            entry,
+            "private_key",
+            "APPSTORE_PRIVATE_KEY_PEM",
+            entry.private_key_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
+fn materialize_oci_secrets(
+    settings: &Settings,
+    home: &Path,
+    env: &mut BTreeMap<String, String>,
+    account: Option<&str>,
+) -> Result<OrbitSecretMaterialization> {
+    let mut materialization = OrbitSecretMaterialization::default();
+    let Some((alias, entry)) = orbit_default_account(
+        &settings.oci.accounts,
+        settings.oci.default_account.as_deref(),
+        account,
+    ) else {
+        return Ok(materialization);
+    };
+    if orbit_account_has_fort_config(entry, "private_key") {
+        materialize_orbit_secret_file_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "oci",
+            alias,
+            "prod",
+            entry,
+            "private_key",
+            "PRIVATE_KEY_FILE",
+            entry.private_key_path_env.as_deref(),
+        )?;
+    }
+    if orbit_account_has_fort_config(entry, "passphrase") {
+        materialize_orbit_secret_into_env(
+            settings,
+            home,
+            env,
+            &mut materialization,
+            "oci",
+            alias,
+            "prod",
+            entry,
+            "passphrase",
+            "PASSPHRASE",
+            entry.passphrase_env.as_deref(),
+        )?;
+    }
+    Ok(materialization)
+}
+
 fn run_surf_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -41778,7 +42687,18 @@ fn load_apple_appstore_runtime(
 ) -> Result<AppleAppStoreRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let private_key = materialize_orbit_secret_override(&settings, &home, private_key.as_deref())?
+        .unwrap_or_else(|| private_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_apple_appstore_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &private_key,
+        private_key_file.as_deref().unwrap_or_default(),
+    )?;
     resolve_apple_appstore_runtime(
         &settings.apple,
         &env,
@@ -41790,7 +42710,7 @@ fn load_apple_appstore_runtime(
             platform: platform.unwrap_or_default(),
             issuer_id: issuer_id.unwrap_or_default(),
             key_id: key_id.unwrap_or_default(),
-            private_key: private_key.unwrap_or_default(),
+            private_key,
             private_key_file: private_key_file.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
@@ -42966,7 +43886,23 @@ where
 {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let access_key = materialize_orbit_secret_override(&settings, &home, access_key.as_deref())?
+        .unwrap_or_else(|| access_key.unwrap_or_default());
+    let secret_key = materialize_orbit_secret_override(&settings, &home, secret_key.as_deref())?
+        .unwrap_or_else(|| secret_key.unwrap_or_default());
+    let session_token =
+        materialize_orbit_secret_override(&settings, &home, session_token.as_deref())?
+            .unwrap_or_else(|| session_token.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_aws_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        &access_key,
+        &secret_key,
+        &session_token,
+    )?;
     let runtime = resolve_aws_runtime(
         &settings.aws,
         &env,
@@ -42974,9 +43910,9 @@ where
             account: account.unwrap_or_default(),
             region: region.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
-            access_key: access_key.unwrap_or_default(),
-            secret_key: secret_key.unwrap_or_default(),
-            session_token: session_token.unwrap_or_default(),
+            access_key,
+            secret_key,
+            session_token,
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -46310,7 +47246,19 @@ fn show_gcp_auth_status(
 
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let access_token =
+        materialize_orbit_secret_override(&settings, &home, access_token.as_deref())?
+            .unwrap_or_else(|| access_token.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_gcp_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &access_token,
+        "",
+    )?;
     let payload = GCPAuthStatusPayload::from(
         resolve_gcp_auth_status(
             &settings.gcp,
@@ -46320,7 +47268,7 @@ fn show_gcp_auth_status(
                 environment: environment.unwrap_or_default(),
                 project_id: project.unwrap_or_default(),
                 base_url: base_url.unwrap_or_default(),
-                access_token: access_token.unwrap_or_default(),
+                access_token,
             },
         )
         .map_err(anyhow::Error::msg)?,
@@ -46358,7 +47306,19 @@ fn load_gcp_runtime(
 ) -> Result<GCPRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let access_token =
+        materialize_orbit_secret_override(&settings, &home, access_token.as_deref())?
+            .unwrap_or_else(|| access_token.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_gcp_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &access_token,
+        "",
+    )?;
     resolve_gcp_runtime(
         &settings.gcp,
         &env,
@@ -46367,7 +47327,7 @@ fn load_gcp_runtime(
             environment: environment.unwrap_or_default(),
             project_id: project.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
-            access_token: access_token.unwrap_or_default(),
+            access_token,
         },
         require_token,
     )
@@ -47806,7 +48766,21 @@ fn load_gcp_gemini_runtime(
 ) -> Result<(GCPRuntime, String)> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env_vars: BTreeMap<String, String> = std::env::vars().collect();
+    let access_token =
+        materialize_orbit_secret_override(&settings, &home, access_token.as_deref())?
+            .unwrap_or_else(|| access_token.unwrap_or_default());
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let mut env_vars: BTreeMap<String, String> = std::env::vars().collect();
+    let _materialization = materialize_gcp_secrets(
+        &settings,
+        &home,
+        &mut env_vars,
+        account.as_deref(),
+        environment.as_deref(),
+        &access_token,
+        &api_key,
+    )?;
     let runtime = resolve_gcp_runtime(
         &settings.gcp,
         &env_vars,
@@ -47815,13 +48789,17 @@ fn load_gcp_gemini_runtime(
             environment: environment.unwrap_or_default(),
             project_id: project.unwrap_or_else(|| "_".to_owned()),
             base_url: gcp_gemini_base_url(base_url).unwrap_or_default(),
-            access_token: access_token.unwrap_or_default(),
+            access_token,
         },
         false,
     )
     .map_err(anyhow::Error::msg)?;
-    let api_key =
-        resolve_gcp_api_key_for_runtime(&settings, &env_vars, &runtime.account_alias, api_key);
+    let api_key = resolve_gcp_api_key_for_runtime(
+        &settings,
+        &env_vars,
+        &runtime.account_alias,
+        Some(api_key),
+    );
     if runtime.access_token.trim().is_empty() && api_key.trim().is_empty() {
         anyhow::bail!(
             "gemini auth requires --api-key, GCP_<ACCOUNT>_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY, or OAuth access token"
@@ -48765,7 +49743,19 @@ fn load_google_play_runtime(
 ) -> Result<GooglePlayRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let service_account_json =
+        materialize_orbit_secret_override(&settings, &home, service_account_json.as_deref())?
+            .unwrap_or_else(|| service_account_json.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_play_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &service_account_json,
+        service_account_file.as_deref().unwrap_or_default(),
+    )?;
     resolve_play_runtime(
         &settings.google,
         &env,
@@ -48776,7 +49766,7 @@ fn load_google_play_runtime(
             language: language.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
             developer_account: developer_account.unwrap_or_default(),
-            service_account_json: service_account_json.unwrap_or_default(),
+            service_account_json,
             service_account_file: service_account_file.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
             upload_base_url: upload_base_url.unwrap_or_default(),
@@ -48808,7 +49798,19 @@ fn show_google_play_context_current(
     }
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let service_account_json =
+        materialize_orbit_secret_override(&settings, &home, service_account_json.as_deref())?
+            .unwrap_or_else(|| service_account_json.clone().unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_play_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &service_account_json,
+        service_account_file.as_deref().unwrap_or_default(),
+    )?;
     let payload = resolve_play_current_context(
         &settings.google,
         &env,
@@ -48819,7 +49821,7 @@ fn show_google_play_context_current(
             language: language.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
             developer_account: developer_account.unwrap_or_default(),
-            service_account_json: service_account_json.unwrap_or_default(),
+            service_account_json,
             service_account_file: service_account_file.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
             upload_base_url: upload_base_url.unwrap_or_default(),
@@ -48874,7 +49876,19 @@ fn show_google_play_auth_status(
     }
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let service_account_json =
+        materialize_orbit_secret_override(&settings, &home, service_account_json.as_deref())?
+            .unwrap_or_else(|| service_account_json.clone().unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_play_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &service_account_json,
+        service_account_file.as_deref().unwrap_or_default(),
+    )?;
     let mut payload = resolve_play_auth_status(
         &settings.google,
         &env,
@@ -48885,7 +49899,7 @@ fn show_google_play_auth_status(
             language: language.clone().unwrap_or_default(),
             project_id: project_id.clone().unwrap_or_default(),
             developer_account: developer_account.clone().unwrap_or_default(),
-            service_account_json: service_account_json.clone().unwrap_or_default(),
+            service_account_json: service_account_json.clone(),
             service_account_file: service_account_file.clone().unwrap_or_default(),
             base_url: base_url.clone().unwrap_or_default(),
             upload_base_url: upload_base_url.clone().unwrap_or_default(),
@@ -48900,7 +49914,7 @@ fn show_google_play_auth_status(
         language,
         project_id,
         developer_account,
-        service_account_json,
+        Some(service_account_json),
         service_account_file,
         base_url,
         upload_base_url,
@@ -51255,7 +52269,18 @@ fn load_google_youtube_current_context(
 ) -> Result<GoogleYouTubeCurrentContext> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_youtube_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        api_key.as_deref().unwrap_or_default(),
+        client_secret.as_deref().unwrap_or_default(),
+        access_token.as_deref().unwrap_or_default(),
+        refresh_token.as_deref().unwrap_or_default(),
+    )?;
     resolve_youtube_current_context(
         &settings.google,
         &env,
@@ -51300,7 +52325,18 @@ fn resolve_google_youtube_auth_payload(
 ) -> Result<GoogleYouTubeAuthStatus> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_youtube_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        api_key.as_deref().unwrap_or_default(),
+        client_secret.as_deref().unwrap_or_default(),
+        access_token.as_deref().unwrap_or_default(),
+        refresh_token.as_deref().unwrap_or_default(),
+    )?;
     resolve_youtube_auth_status(
         &settings.google,
         &env,
@@ -51345,7 +52381,29 @@ fn load_google_youtube_runtime(
 ) -> Result<GoogleYouTubeRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let client_secret =
+        materialize_orbit_secret_override(&settings, &home, client_secret.as_deref())?
+            .unwrap_or_else(|| client_secret.unwrap_or_default());
+    let access_token =
+        materialize_orbit_secret_override(&settings, &home, access_token.as_deref())?
+            .unwrap_or_else(|| access_token.unwrap_or_default());
+    let refresh_token =
+        materialize_orbit_secret_override(&settings, &home, refresh_token.as_deref())?
+            .unwrap_or_else(|| refresh_token.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_youtube_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &api_key,
+        &client_secret,
+        &access_token,
+        &refresh_token,
+    )?;
     resolve_youtube_runtime(
         &settings.google,
         &env,
@@ -51353,17 +52411,17 @@ fn load_google_youtube_runtime(
             account: account.unwrap_or_default(),
             environment: environment.unwrap_or_default(),
             auth_mode: auth_mode.unwrap_or_default(),
-            api_key: api_key.unwrap_or_default(),
+            api_key,
             base_url: base_url.unwrap_or_default(),
             upload_base_url: upload_base_url.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
             language: language.unwrap_or_default(),
             region: region.unwrap_or_default(),
             client_id: client_id.unwrap_or_default(),
-            client_secret: client_secret.unwrap_or_default(),
+            client_secret,
             redirect_uri: redirect_uri.unwrap_or_default(),
-            access_token: access_token.unwrap_or_default(),
-            refresh_token: refresh_token.unwrap_or_default(),
+            access_token,
+            refresh_token,
         },
     )
     .map_err(anyhow::Error::msg)
@@ -54023,14 +55081,24 @@ fn load_google_places_runtime(
 ) -> Result<GooglePlacesRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_google_places_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &api_key,
+    )?;
     resolve_places_runtime(
         &settings.google,
         &env,
         &GooglePlacesOverrides {
             account: account.unwrap_or_default(),
             environment: environment.unwrap_or_default(),
-            api_key: api_key.unwrap_or_default(),
+            api_key,
             base_url: base_url.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
             language: language.unwrap_or_default(),
@@ -56847,15 +57915,28 @@ where
 {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let admin_api_key =
+        materialize_orbit_secret_override(&settings, &home, admin_api_key.as_deref())?
+            .unwrap_or_else(|| admin_api_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_openai_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        &api_key,
+        &admin_api_key,
+    )?;
     let runtime = resolve_openai_runtime(
         &settings.openai,
         &env,
         &OpenAIContextOverrides {
             account: account.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
-            api_key: api_key.unwrap_or_default(),
-            admin_api_key: admin_api_key.unwrap_or_default(),
+            api_key,
+            admin_api_key,
             org_id: org_id.unwrap_or_default(),
             project_id: project_id.unwrap_or_default(),
         },
@@ -57004,7 +58085,8 @@ fn show_oci_auth_status(
 
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let account_value = account.clone().unwrap_or_default();
     let profile_value = profile.clone().unwrap_or_default();
     let config_file_value = config_file.clone().unwrap_or_default();
@@ -57134,7 +58216,8 @@ fn show_oci_doctor(
 
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let account_value = account.unwrap_or_default();
     let profile_value = profile.unwrap_or_default();
     let config_file_value = config_file.unwrap_or_default();
@@ -57337,7 +58420,8 @@ fn show_oci_context_current(
 
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let payload = OCICurrentContextPayload::from(
         resolve_oci_current_context(
             &settings.oci,
@@ -57438,7 +58522,8 @@ fn execute_oci_api_command(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let payload = execute_oci_api_request(
         &settings.oci,
         &env,
@@ -57469,7 +58554,8 @@ fn resolve_oci_default_tenancy(
 ) -> Result<String> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let payload = resolve_oci_auth_status(
         &settings.oci,
         &env,
@@ -58643,14 +59729,24 @@ fn load_stripe_runtime(
 ) -> Result<StripeRuntimeContext> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_stripe_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &api_key,
+    )?;
     resolve_stripe_runtime(
         &settings.stripe,
         &env,
         &StripeAuthOverrides {
             account: account.unwrap_or_default(),
             environment: environment.unwrap_or_default(),
-            api_key: api_key.unwrap_or_default(),
+            api_key,
             base_url: base_url.unwrap_or_default(),
         },
     )
@@ -60181,10 +61277,10 @@ fn resolve_cloudflare_account_fort_token_source(
     let Some(account) = settings.cloudflare.accounts.get(&current.account_alias) else {
         return Ok(None);
     };
-    Ok(cloudflare_account_fort_token_source(account, &current.environment))
+    materialize_cloudflare_account_secret_source(account, &current.environment)
 }
 
-fn cloudflare_account_fort_token_source(
+fn cloudflare_account_legacy_fort_token_source(
     account: &CloudflareAccountEntry,
     current_environment: &str,
 ) -> Option<FortSecretSource> {
@@ -63439,7 +64535,8 @@ fn run_oci_raw(
     };
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_oci_secrets(&settings, &home, &mut env, account.as_deref())?;
     let auth_style = auth.clone().unwrap_or_default();
     let response = execute_oci_api_request_with_auth(
         &settings.oci,
@@ -63768,7 +64865,17 @@ where
 {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let api_key = materialize_orbit_secret_override(&settings, &home, api_key.as_deref())?
+        .unwrap_or_else(|| api_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_workos_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        environment.as_deref(),
+        &api_key,
+    )?;
     let runtime = resolve_workos_runtime(
         &settings.workos,
         &env,
@@ -63776,7 +64883,7 @@ where
             account: account.unwrap_or_default(),
             environment: environment.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
-            api_key: api_key.unwrap_or_default(),
+            api_key,
             client_id: client_id.unwrap_or_default(),
             organization_id: organization_id.unwrap_or_default(),
         },
@@ -64928,7 +66035,19 @@ fn load_github_runtime(
 ) -> Result<si_rs_provider_github::GitHubRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
+    let token = materialize_orbit_secret_override(&settings, &home, token.as_deref())?
+        .unwrap_or_else(|| token.unwrap_or_default());
+    let app_key = materialize_orbit_secret_override(&settings, &home, app_key.as_deref())?
+        .unwrap_or_else(|| app_key.unwrap_or_default());
+    let mut env = std::env::vars().collect();
+    let _materialization = materialize_github_secrets(
+        &settings,
+        &home,
+        &mut env,
+        account.as_deref(),
+        &token,
+        &app_key,
+    )?;
     resolve_github_runtime(
         &settings.github,
         &env,
@@ -64937,9 +66056,9 @@ fn load_github_runtime(
             owner: owner.unwrap_or_default(),
             base_url: base_url.unwrap_or_default(),
             auth_mode: auth_mode.unwrap_or_default(),
-            token: token.unwrap_or_default(),
+            token,
             app_id,
-            app_key: app_key.unwrap_or_default(),
+            app_key,
             installation_id,
         },
     )
@@ -68390,9 +69509,9 @@ fn build_github_credential_helper_command(
     owner: &str,
     base_url: &str,
     auth_mode: &str,
-    access_token: &str,
+    _access_token: &str,
     app_id: i64,
-    app_key: &str,
+    _app_key: &str,
     installation_id: i64,
 ) -> String {
     let mut parts = vec!["!si".to_owned()];
@@ -68413,11 +69532,9 @@ fn build_github_credential_helper_command(
     append_helper_arg(&mut parts, "--owner", owner);
     append_helper_arg(&mut parts, "--base-url", base_url);
     append_helper_arg(&mut parts, "--auth-mode", auth_mode);
-    append_helper_arg(&mut parts, "--token", access_token);
     if app_id > 0 {
         parts.extend(["--app-id".to_owned(), app_id.to_string()]);
     }
-    append_helper_arg(&mut parts, "--app-key", app_key);
     if installation_id > 0 {
         parts.extend(["--installation-id".to_owned(), installation_id.to_string()]);
     }

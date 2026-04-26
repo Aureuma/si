@@ -384,6 +384,11 @@ impl StripeSettings {
 pub struct StripeAccountEntry {
     pub id: Option<String>,
     pub name: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub live_key: Option<String>,
     pub sandbox_key: Option<String>,
     pub live_key_env: Option<String>,
@@ -394,6 +399,10 @@ impl StripeAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.id);
         normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.live_key);
         normalize_option_string(&mut self.sandbox_key);
         normalize_option_string(&mut self.live_key_env);
@@ -434,6 +443,11 @@ impl AWSSettings {
 pub struct AWSAccountEntry {
     pub name: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub region: Option<String>,
     pub access_key_id_env: Option<String>,
     pub secret_access_key_env: Option<String>,
@@ -444,6 +458,10 @@ impl AWSAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.name);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.region);
         normalize_option_string(&mut self.access_key_id_env);
         normalize_option_string(&mut self.secret_access_key_env);
@@ -484,6 +502,11 @@ impl GCPSettings {
 pub struct GCPAccountEntry {
     pub name: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub project_id: Option<String>,
     pub project_id_env: Option<String>,
     pub access_token_env: Option<String>,
@@ -495,6 +518,10 @@ impl GCPAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.name);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.project_id);
         normalize_option_string(&mut self.project_id_env);
         normalize_option_string(&mut self.access_token_env);
@@ -573,6 +600,11 @@ pub struct GooglePlayAccountEntry {
     pub project_id: Option<String>,
     pub project_id_env: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub developer_account_id: Option<String>,
     pub default_package_name: Option<String>,
     pub default_language_code: Option<String>,
@@ -590,6 +622,10 @@ impl GooglePlayAccountEntry {
         normalize_option_string(&mut self.project_id);
         normalize_option_string(&mut self.project_id_env);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.developer_account_id);
         normalize_option_string(&mut self.default_package_name);
         normalize_option_string(&mut self.default_language_code);
@@ -636,6 +672,11 @@ pub struct GoogleYouTubeAccountEntry {
     pub project_id: Option<String>,
     pub project_id_env: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub youtube_api_key_env: Option<String>,
     pub prod_youtube_api_key_env: Option<String>,
     pub staging_youtube_api_key_env: Option<String>,
@@ -654,6 +695,10 @@ impl GoogleYouTubeAccountEntry {
         normalize_option_string(&mut self.project_id);
         normalize_option_string(&mut self.project_id_env);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.youtube_api_key_env);
         normalize_option_string(&mut self.prod_youtube_api_key_env);
         normalize_option_string(&mut self.staging_youtube_api_key_env);
@@ -674,6 +719,11 @@ pub struct GoogleAccountEntry {
     pub project_id_env: Option<String>,
     pub api_base_url: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub places_api_key_env: Option<String>,
     pub prod_places_api_key_env: Option<String>,
     pub staging_places_api_key_env: Option<String>,
@@ -689,6 +739,10 @@ impl GoogleAccountEntry {
         normalize_option_string(&mut self.project_id_env);
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.places_api_key_env);
         normalize_option_string(&mut self.prod_places_api_key_env);
         normalize_option_string(&mut self.staging_places_api_key_env);
@@ -736,6 +790,11 @@ pub struct CloudflareAccountEntry {
     pub account_id_env: Option<String>,
     pub api_base_url: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub default_zone_id: Option<String>,
     pub default_zone_name: Option<String>,
     pub prod_zone_id: Option<String>,
@@ -754,6 +813,10 @@ impl CloudflareAccountEntry {
         normalize_option_string(&mut self.account_id_env);
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.default_zone_id);
         normalize_option_string(&mut self.default_zone_name);
         normalize_option_string(&mut self.prod_zone_id);
@@ -821,6 +884,11 @@ impl OpenAISettings {
 pub struct OpenAIAccountEntry {
     pub name: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub api_base_url: Option<String>,
     pub api_key_env: Option<String>,
     pub admin_api_key_env: Option<String>,
@@ -834,6 +902,10 @@ impl OpenAIAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.name);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.api_key_env);
         normalize_option_string(&mut self.admin_api_key_env);
@@ -881,6 +953,11 @@ impl OCISettings {
 pub struct OCIAccountEntry {
     pub name: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub profile: Option<String>,
     pub config_file: Option<String>,
     pub region: Option<String>,
@@ -901,6 +978,10 @@ impl OCIAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.name);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.profile);
         normalize_option_string(&mut self.config_file);
         normalize_option_string(&mut self.region);
@@ -947,6 +1028,11 @@ pub struct AppleAppStoreAccountEntry {
     pub project_id: Option<String>,
     pub project_id_env: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub issuer_id: Option<String>,
     pub issuer_id_env: Option<String>,
     pub key_id: Option<String>,
@@ -966,6 +1052,10 @@ impl AppleAppStoreAccountEntry {
         normalize_option_string(&mut self.project_id);
         normalize_option_string(&mut self.project_id_env);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.issuer_id);
         normalize_option_string(&mut self.issuer_id_env);
         normalize_option_string(&mut self.key_id);
@@ -1016,6 +1106,11 @@ pub struct GitHubAccountEntry {
     pub api_base_url: Option<String>,
     pub auth_mode: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub oauth_access_token: Option<String>,
     pub oauth_token_env: Option<String>,
     pub app_id: Option<i64>,
@@ -1033,6 +1128,10 @@ impl GitHubAccountEntry {
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.auth_mode);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.oauth_access_token);
         normalize_option_string(&mut self.oauth_token_env);
         normalize_option_string(&mut self.app_id_env);
@@ -1077,6 +1176,11 @@ impl WorkOSSettings {
 pub struct WorkOSAccountEntry {
     pub name: Option<String>,
     pub vault_prefix: Option<String>,
+    pub fort_repo: Option<String>,
+    pub fort_env: Option<String>,
+    pub fort_prefix: Option<String>,
+    #[serde(default)]
+    pub secrets: BTreeMap<String, String>,
     pub api_base_url: Option<String>,
     pub api_key_env: Option<String>,
     pub prod_api_key_env: Option<String>,
@@ -1090,6 +1194,10 @@ impl WorkOSAccountEntry {
     fn normalize(&mut self) {
         normalize_option_string(&mut self.name);
         normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.fort_repo);
+        normalize_option_string(&mut self.fort_env);
+        normalize_option_string(&mut self.fort_prefix);
+        normalize_string_map(&mut self.secrets);
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.api_key_env);
         normalize_option_string(&mut self.prod_api_key_env);
@@ -1561,6 +1669,19 @@ fn normalize_option_string(value: &mut Option<String>) {
             *current = trimmed.to_owned();
         }
     }
+}
+
+fn normalize_string_map(values: &mut BTreeMap<String, String>) {
+    let mut normalized = BTreeMap::new();
+    for (key, value) in std::mem::take(values) {
+        let key = key.trim();
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+        normalized.insert(key.to_owned(), value.to_owned());
+    }
+    *values = normalized;
 }
 
 fn trim_string(value: &mut String) {
