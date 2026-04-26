@@ -9805,6 +9805,21 @@ mod tests {
                 .to_owned(),
         )
         .expect("worker id");
+        let britain_profile = ProfileRecord {
+            profile: ProfileName::new("britain".to_owned()).expect("profile"),
+            account_identity: Some("britain@example.com".to_owned()),
+            codex_home: temp.path().join("home/.si/codex/profiles/britain").display().to_string(),
+            auth_mode: None,
+            preferred_model: Some("gpt-5.4".to_owned()),
+            runtime_defaults: BTreeMap::new(),
+        };
+        assert!(
+            service
+                .store
+                .persist_profile_locked(britain_profile, CanonicalEventSource::System)
+                .expect("persist britain profile")
+                .is_some()
+        );
 
         let created = service
             .dispatch_request(GatewayRequest {
