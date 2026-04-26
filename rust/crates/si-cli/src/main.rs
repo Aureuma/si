@@ -38319,17 +38319,19 @@ fn materialize_orbit_secret_file_into_env(
 }
 
 fn materialize_orbit_secret_override(
-    settings: &Settings,
-    home: &Path,
+    _settings: &Settings,
+    _home: &Path,
     raw: Option<&str>,
 ) -> Result<Option<String>> {
     let Some(raw) = raw.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
     };
-    let Some(source) = parse_fort_secret_reference(raw)? else {
-        return Ok(Some(raw.to_owned()));
-    };
-    get_non_empty_fort_secret(settings, home, &source).map(Some)
+    if parse_fort_secret_reference(raw)?.is_some() {
+        anyhow::bail!(
+            "Fort secret references are not accepted in secret override flags; configure the selected account's Fort secret binding in settings"
+        );
+    }
+    Ok(Some(raw.to_owned()))
 }
 
 fn materialize_stripe_secrets(
@@ -61211,8 +61213,10 @@ fn materialize_cloudflare_api_token(
     api_token: Option<&str>,
 ) -> Result<String> {
     if let Some(value) = api_token.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(source) = parse_fort_secret_reference(value)? {
-            return get_non_empty_fort_secret(settings, home, &source);
+        if parse_fort_secret_reference(value)?.is_some() {
+            anyhow::bail!(
+                "Fort secret references are not accepted in --api-token; configure cloudflare.accounts.<alias>.secrets.api_token in settings"
+            );
         }
         return Ok(value.to_owned());
     }
@@ -72121,6 +72125,19 @@ mod tests {
             format_fort_secret_source(&source),
             "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN"
         );
+    }
+
+    #[test]
+    fn secret_override_flags_reject_fort_references() {
+        let error = materialize_orbit_secret_override(
+            &Settings::default(),
+            Path::new("/tmp"),
+            Some("fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN"),
+        )
+        .expect_err("fort refs in secret flags should fail")
+        .to_string();
+
+        assert!(error.contains("not accepted in secret override flags"));
     }
 
     #[test]
