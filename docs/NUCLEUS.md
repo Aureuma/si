@@ -115,6 +115,30 @@ If a candidate is unavailable because its worker cannot start, Fort authenticati
 
 When Nucleus selects a candidate, it writes that profile back to the task record so later inspection shows which profile actually owns execution.
 
+## External Task Failure Modes
+
+For GPT Actions and other REST clients, the main failure and blocking scenarios are:
+
+1. Invalid intake requests:
+   blank `title` or `instructions`, non-slug profile names, invalid session ids, or `timeout_seconds: 0` are rejected as `400 invalid_params`.
+2. Missing or unusable profile resolution:
+   if Nucleus cannot resolve any usable profile candidate, the task is blocked as `profile_unavailable`.
+3. Worker or auth unavailability:
+   if the selected worker cannot start, loses its runtime attachment, or lacks required Fort auth, the task is blocked as `worker_unavailable`, `auth_required`, or `fort_unavailable`.
+4. Broken session affinity:
+   if a task references a missing, mismatched, closed, or threadless session, the task is blocked as `session_broken`.
+5. Runtime execution failures:
+   worker channel loss, request timeout, or worker shutdown can fail a run and may quarantine the worker or session.
+6. Oversized bounded work:
+   broad repository audits or long-form reporting can exceed the runtime turn budget and fail with messages such as `turn exceeded max duration ...`.
+
+External client guidance:
+
+1. REST task creation defaults `timeout_seconds` to `900` when callers omit it.
+2. Large audits should be split into smaller repo- or subsystem-scoped tasks instead of one repo-wide pass.
+3. If continuity matters, inspect the task's `profile`, `session_id`, `latest_run_id`, and `blocked_reason` before retrying.
+4. Treat `blocked` tasks as operator-actionable state, not silent transient failure.
+
 ## GPT Actions OpenAPI rules
 
 For any Nucleus REST endpoint that is exposed through `/openapi.json` or `docs/gpt-actions-openapi.yaml`:
