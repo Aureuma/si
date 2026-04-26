@@ -18011,6 +18011,96 @@ fn cloudflare_raw_json_fetches_with_query_params() {
 }
 
 #[test]
+fn cloudflare_raw_materializes_api_token_from_fort_reference() {
+    let home = tempdir().expect("home tempdir");
+    let codex_home = tempdir().expect("codex home tempdir");
+    let access_token = fake_jwt(json!({ "exp": Utc::now().timestamp() + 3600 }));
+
+    let expected_access_token = access_token.clone();
+    let fort_server = start_http_server_with_body(1, move |request| {
+        assert!(request.starts_with("POST /v1/secrets/get HTTP/1.1\r\n"));
+        assert!(request.contains(&format!("authorization: Bearer {expected_access_token}\r\n")));
+        assert!(request.contains(r#""repo":"viva""#));
+        assert!(request.contains(r#""env":"prod""#));
+        assert!(request.contains(r#""key":"VIVA_CLOUDFLARE_USER_API_TOKEN""#));
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"value":"cf-fort-token","ttl_seconds":60,"version":1}"#,
+        )
+    });
+
+    let fort_dir = codex_home.path().join("fort");
+    fs::create_dir_all(&fort_dir).expect("mkdir fort dir");
+    let access_token_path = fort_dir.join("access.token");
+    let refresh_token_path = fort_dir.join("refresh.token");
+    fs::write(&access_token_path, format!("{access_token}\n")).expect("write access token");
+    fs::write(&refresh_token_path, "refresh-token\n").expect("write refresh token");
+    let session_path = fort_dir.join("session.json");
+    fs::write(
+        &session_path,
+        serde_json::to_vec_pretty(&json!({
+            "profile_id": "test",
+            "agent_id": "si-codex-test",
+            "session_id": "fort-session-test",
+            "host": fort_server.base_url.clone(),
+            "runtime_host": fort_server.base_url.clone(),
+            "access_token_path": access_token_path,
+            "refresh_token_path": refresh_token_path,
+            "access_expires_at": (Utc::now() + chrono::Duration::hours(1)).to_rfc3339(),
+            "refresh_expires_at": (Utc::now() + chrono::Duration::days(1)).to_rfc3339(),
+            "updated_at": Utc::now().to_rfc3339(),
+        }))
+        .expect("serialize session"),
+    )
+    .expect("write session");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&access_token_path, &refresh_token_path, &session_path] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+                .expect("chmod fort session file");
+        }
+    }
+
+    let cloudflare_server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-fort-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_fort")],
+            r#"{"success":true,"result":[{"id":"zone_123","name":"example.com"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["orbit", "cloudflare", "raw"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--api-token",
+            "fort://viva/prod/VIVA_CLOUDFLARE_USER_API_TOKEN",
+            "--base-url",
+            &cloudflare_server.base_url,
+            "--path",
+            "/zones",
+            "--json",
+        ])
+        .env("CODEX_HOME", codex_home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_fort");
+    assert_eq!(parsed["list"][0]["id"], "zone_123");
+    fort_server.join();
+    cloudflare_server.join();
+}
+
+#[test]
 fn cloudflare_raw_text_prints_body_for_raw_mode() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /zones HTTP/1.1\r\n"));

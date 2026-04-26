@@ -44,7 +44,7 @@ use si_rs_command_manifest::{
 use si_rs_config::paths::SiPaths;
 use si_rs_config::runtime::git_repo_root_from;
 use si_rs_config::settings::{
-    CodexProfileEntry, FortSettings, Settings, SurfSettings, VivaSettings,
+    CloudflareAccountEntry, CodexProfileEntry, FortSettings, Settings, SurfSettings, VivaSettings,
 };
 use si_rs_fort::{
     BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
@@ -38066,6 +38066,13 @@ struct SurfVncPasswordFortSource {
     env_name: String,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct FortSecretSource {
+    repo: String,
+    env_name: String,
+    key: String,
+}
+
 fn run_surf_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -38278,6 +38285,111 @@ fn run_fort_get_secret(
         }
         Err(error) => Err(error).with_context(|| format!("run fort get via {}", program.display())),
     }
+}
+
+fn run_fort_get_secret_direct(
+    settings: &Settings,
+    home: &Path,
+    source: &FortSecretSource,
+) -> Result<String> {
+    let (host, access_token) = resolve_fort_runtime_access_token_direct(settings, home)?;
+    let client = FortApiClient::new(host)?;
+    let (status, response) = client.request(
+        Method::POST,
+        "/v1/secrets/get",
+        Some(json!({
+            "repo": source.repo,
+            "env": source.env_name,
+            "key": source.key,
+        })),
+        Some(&access_token),
+    )?;
+    ensure_fort_api_status(status, 200, &response, "get Fort secret")?;
+    let value = response["value"]
+        .as_str()
+        .ok_or_else(|| anyhow!("Fort secret get response is missing value"))?;
+    Ok(value.to_owned())
+}
+
+fn resolve_fort_runtime_access_token_direct(
+    settings: &Settings,
+    home: &Path,
+) -> Result<(String, String)> {
+    let codex_home = std::env::var_os("CODEX_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+        .ok_or_else(|| {
+            anyhow!(
+                "Fort runtime session is required; set CODEX_HOME to a managed Codex profile home"
+            )
+        })?;
+    let profile_dir = codex_home.join("fort");
+    let auth = resolve_fort_runtime_auth_from_dir(profile_dir.clone(), "CODEX_HOME Fort session")
+        .ok_or_else(|| {
+        anyhow!(
+            "Fort runtime session is required, but no usable session files were found at {}",
+            profile_dir.display()
+        )
+    })?;
+    let session_path = profile_dir.join("session.json");
+    let session_state = load_persisted_session_state(&session_path)
+        .with_context(|| format!("load Fort session state {}", session_path.display()))?;
+    let mut host = session_state.runtime_host.trim().to_owned();
+    if host.is_empty() {
+        host = resolve_configured_fort_runtime_host(settings, "")?;
+    }
+    if host.is_empty() {
+        host = resolve_configured_fort_public_host(settings, home)?.unwrap_or_default();
+    }
+    if host.trim().is_empty() {
+        anyhow::bail!("Fort runtime host is missing from {} and settings", session_path.display());
+    }
+    refresh_fort_access_token_direct(&host, &auth)?;
+    let access_token = read_fort_token_file(&auth.token_path, "Fort runtime access token")?;
+    Ok((host, access_token))
+}
+
+fn refresh_fort_access_token_direct(host: &str, auth: &FortTokenFileAuth) -> Result<()> {
+    if fort_access_token_is_fresh(&auth.token_path) {
+        return Ok(());
+    }
+    let Some(refresh_token_path) = auth.refresh_token_path.as_ref() else {
+        return Ok(());
+    };
+    if !refresh_token_path.is_file() {
+        return Ok(());
+    }
+    let client = FortApiClient::new(host.trim().to_owned())?;
+    with_fort_bootstrap_refresh_lock(&auth.refresh_lock_path, || {
+        if fort_access_token_is_fresh(&auth.token_path) {
+            return Ok(());
+        }
+        let refresh_token = read_fort_token_file(refresh_token_path, "Fort runtime refresh token")?;
+        let (status, response) = client.request(
+            Method::POST,
+            "/v1/auth/session/refresh",
+            Some(json!({ "refresh_token": refresh_token })),
+            None,
+        )?;
+        if status != 200 {
+            if matches!(status, 401 | 403) {
+                persist_revoked_fort_runtime_session(auth)
+                    .context("persist revoked Fort runtime session state")?;
+            }
+            return Err(fort_api_status_error(status, &response, "refresh Fort runtime session"));
+        }
+        let access_token = response["access_token"].as_str().unwrap_or_default().trim();
+        if access_token.is_empty() {
+            anyhow::bail!("Fort session refresh response is missing access_token");
+        }
+        write_secret_text_file(&auth.token_path, access_token)?;
+        if let Some(refresh_token) =
+            response["refresh_token"].as_str().map(str::trim).filter(|value| !value.is_empty())
+        {
+            write_secret_text_file(refresh_token_path, refresh_token)?;
+        }
+        Ok(())
+    })
 }
 
 fn run_fort_capture_stdout(
@@ -41326,21 +41438,17 @@ fn show_cloudflare_auth_status(
 
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let runtime = resolve_cloudflare_auth_runtime(
-        &settings.cloudflare,
-        &env,
-        &CloudflareAuthOverrides {
-            account: account.unwrap_or_default(),
-            environment: environment.unwrap_or_default(),
-            zone_id: zone_id.unwrap_or_default(),
-            zone_name: zone.unwrap_or_default(),
-            base_url: base_url.unwrap_or_default(),
-            account_id: account_id.unwrap_or_default(),
-            api_token: api_token.unwrap_or_default(),
-        },
-    )
-    .map_err(anyhow::Error::msg)?;
+    let runtime = resolve_cloudflare_cli_auth_runtime(
+        &settings,
+        &home,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+    )?;
     let mut payload = CloudflareAuthStatusPayload::from(&runtime);
     let verify_error = match verify_cloudflare_auth_status(&runtime) {
         Ok(verify) => {
@@ -59935,6 +60043,172 @@ fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMa
     out
 }
 
+fn parse_fort_secret_reference(raw: &str) -> Result<Option<FortSecretSource>> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    let Some(rest) = raw.strip_prefix("fort://") else {
+        return Ok(None);
+    };
+    let parts = rest.split('/').map(str::trim).collect::<Vec<_>>();
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()) {
+        anyhow::bail!("Fort secret reference must use fort://<repo>/<env>/<key>");
+    }
+    Ok(Some(FortSecretSource {
+        repo: parts[0].to_owned(),
+        env_name: parts[1].to_owned(),
+        key: parts[2].to_owned(),
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_cloudflare_cli_auth_runtime(
+    settings: &Settings,
+    home: &Path,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+) -> Result<CloudflareAuthRuntime> {
+    let api_token = materialize_cloudflare_api_token(
+        settings,
+        home,
+        account.as_deref(),
+        environment.as_deref(),
+        zone_id.as_deref(),
+        zone.as_deref(),
+        base_url.as_deref(),
+        account_id.as_deref(),
+        api_token.as_deref(),
+    )?;
+    let env = std::env::vars().collect();
+    resolve_cloudflare_auth_runtime(
+        &settings.cloudflare,
+        &env,
+        &CloudflareAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            zone_id: zone_id.unwrap_or_default(),
+            zone_name: zone.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            account_id: account_id.unwrap_or_default(),
+            api_token,
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_cloudflare_api_token(
+    settings: &Settings,
+    home: &Path,
+    account: Option<&str>,
+    environment: Option<&str>,
+    zone_id: Option<&str>,
+    zone: Option<&str>,
+    base_url: Option<&str>,
+    account_id: Option<&str>,
+    api_token: Option<&str>,
+) -> Result<String> {
+    if let Some(value) = api_token.map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(source) = parse_fort_secret_reference(value)? {
+            return get_non_empty_fort_secret(settings, home, &source);
+        }
+        return Ok(value.to_owned());
+    }
+
+    let Some(source) = resolve_cloudflare_account_fort_token_source(
+        settings,
+        account,
+        environment,
+        zone_id,
+        zone,
+        base_url,
+        account_id,
+    )?
+    else {
+        return Ok(String::new());
+    };
+    get_non_empty_fort_secret(settings, home, &source)
+}
+
+fn get_non_empty_fort_secret(
+    settings: &Settings,
+    home: &Path,
+    source: &FortSecretSource,
+) -> Result<String> {
+    let value = run_fort_get_secret_direct(settings, home, source)?;
+    let value = value.trim();
+    if value.is_empty() {
+        anyhow::bail!(
+            "Fort secret {}/{}/{} resolved empty",
+            source.repo,
+            source.env_name,
+            source.key
+        );
+    }
+    Ok(value.to_owned())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_cloudflare_account_fort_token_source(
+    settings: &Settings,
+    account: Option<&str>,
+    environment: Option<&str>,
+    zone_id: Option<&str>,
+    zone: Option<&str>,
+    base_url: Option<&str>,
+    account_id: Option<&str>,
+) -> Result<Option<FortSecretSource>> {
+    let env = std::env::vars().collect();
+    let current = resolve_cloudflare_current_context(
+        &settings.cloudflare,
+        &env,
+        &CloudflareContextOverrides {
+            account: account.unwrap_or_default().to_owned(),
+            environment: environment.unwrap_or_default().to_owned(),
+            zone_id: zone_id.unwrap_or_default().to_owned(),
+            zone_name: zone.unwrap_or_default().to_owned(),
+            base_url: base_url.unwrap_or_default().to_owned(),
+            account_id: account_id.unwrap_or_default().to_owned(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let Some(account) = settings.cloudflare.accounts.get(&current.account_alias) else {
+        return Ok(None);
+    };
+    Ok(cloudflare_account_fort_token_source(account, &current.environment))
+}
+
+fn cloudflare_account_fort_token_source(
+    account: &CloudflareAccountEntry,
+    current_environment: &str,
+) -> Option<FortSecretSource> {
+    let key =
+        account.api_token_fort_key.as_deref().map(str::trim).filter(|value| !value.is_empty())?;
+    let repo = account
+        .api_token_fort_repo
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("cloudflare");
+    let env_name = account
+        .api_token_fort_env
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(current_environment);
+    Some(FortSecretSource {
+        repo: repo.to_owned(),
+        env_name: env_name.to_owned(),
+        key: key.to_owned(),
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn execute_cloudflare_request(
     account: Option<String>,
@@ -59950,21 +60224,17 @@ fn execute_cloudflare_request(
 ) -> Result<CloudflareAPIResponse> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let runtime = resolve_cloudflare_auth_runtime(
-        &settings.cloudflare,
-        &env,
-        &CloudflareAuthOverrides {
-            account: account.unwrap_or_default(),
-            environment: environment.unwrap_or_default(),
-            zone_id: zone_id.unwrap_or_default(),
-            zone_name: zone.unwrap_or_default(),
-            base_url: base_url.unwrap_or_default(),
-            account_id: account_id.unwrap_or_default(),
-            api_token: api_token.unwrap_or_default(),
-        },
-    )
-    .map_err(anyhow::Error::msg)?;
+    let runtime = resolve_cloudflare_cli_auth_runtime(
+        &settings,
+        &home,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+    )?;
     let request = CloudflareAPIRequest {
         path: resolve_cloudflare_path_template(&request.path, &runtime)?,
         ..request
@@ -60299,21 +60569,17 @@ fn run_cloudflare_smoke(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let runtime = resolve_cloudflare_auth_runtime(
-        &settings.cloudflare,
-        &env,
-        &CloudflareAuthOverrides {
-            account: account.unwrap_or_default(),
-            environment: environment.unwrap_or_default(),
-            zone_id: zone_id.unwrap_or_default(),
-            zone_name: zone.unwrap_or_default(),
-            base_url: base_url.unwrap_or_default(),
-            account_id: account_id.unwrap_or_default(),
-            api_token: api_token.unwrap_or_default(),
-        },
-    )
-    .map_err(anyhow::Error::msg)?;
+    let runtime = resolve_cloudflare_cli_auth_runtime(
+        &settings,
+        &home,
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+    )?;
     let mut results = Vec::new();
     let mut pass_count = 0usize;
     let mut fail_count = 0usize;

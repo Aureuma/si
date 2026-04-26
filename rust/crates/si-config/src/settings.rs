@@ -742,6 +742,9 @@ pub struct CloudflareAccountEntry {
     pub staging_zone_id: Option<String>,
     pub dev_zone_id: Option<String>,
     pub api_token_env: Option<String>,
+    pub api_token_fort_repo: Option<String>,
+    pub api_token_fort_env: Option<String>,
+    pub api_token_fort_key: Option<String>,
 }
 
 impl CloudflareAccountEntry {
@@ -757,6 +760,9 @@ impl CloudflareAccountEntry {
         normalize_option_string(&mut self.staging_zone_id);
         normalize_option_string(&mut self.dev_zone_id);
         normalize_option_string(&mut self.api_token_env);
+        normalize_option_string(&mut self.api_token_fort_repo);
+        normalize_option_string(&mut self.api_token_fort_env);
+        normalize_option_string(&mut self.api_token_fort_key);
     }
 }
 
