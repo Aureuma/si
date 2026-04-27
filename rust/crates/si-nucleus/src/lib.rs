@@ -56,6 +56,7 @@ const DEFAULT_BIND_ADDR: &str = "127.0.0.1:4747";
 const DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS: u64 = 900;
 const WS_PATH: &str = "/ws";
 const OPENAPI_PATH: &str = "/openapi.json";
+const REST_CAPABILITIES_PATH: &str = "/capabilities";
 const REST_STATUS_PATH: &str = "/status";
 const REST_TASKS_PATH: &str = "/tasks";
 const REST_TASK_PATH: &str = "/tasks/{task_id}";
@@ -1338,12 +1339,10 @@ impl NucleusStore {
             .get("worker_quarantine")
             .and_then(Value::as_bool)
             .unwrap_or_else(|| runtime_error_requires_worker_quarantine(error));
-        let quarantine_session = event
-            .data
-            .payload
-            .get("session_quarantine")
-            .and_then(Value::as_bool)
-            .unwrap_or_else(|| run_failure_requires_session_quarantine(error) || quarantine_worker);
+        let quarantine_session =
+            event.data.payload.get("session_quarantine").and_then(Value::as_bool).unwrap_or_else(
+                || run_failure_requires_session_quarantine(error) || quarantine_worker,
+            );
         if quarantine_session {
             if let Some(session_id) = event.data.session_id.as_ref() {
                 if let Some(appended) = self.mark_session_broken_locked(session_id, error)? {
@@ -2832,6 +2831,7 @@ impl NucleusService {
         Router::new()
             .route(WS_PATH, get(ws_handler))
             .route(OPENAPI_PATH, get(rest_openapi_handler))
+            .route(REST_CAPABILITIES_PATH, get(rest_capabilities_handler))
             .route(REST_STATUS_PATH, get(rest_status_handler))
             .route(REST_TASKS_PATH, get(rest_list_tasks_handler).post(rest_create_task_handler))
             .route(REST_TASK_PATH, get(rest_inspect_task_handler))
@@ -5128,6 +5128,21 @@ fn session_record_example() -> Value {
     })
 }
 
+fn rest_capabilities_view() -> Value {
+    json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "rest_task_creation_supported": true,
+        "gpt_actions_text_supported": true,
+        "chatgpt_voice_custom_actions_supported": false,
+        "chatgpt_voice_custom_actions_note": "OpenAI ChatGPT Voice mode does not invoke custom GPT Actions. Use text GPT Actions or a custom Realtime API voice client to call this REST API.",
+        "realtime_voice_clients_supported": true,
+        "recommended_voice_integration": "Build a custom OpenAI Realtime API voice client with function calling, then call POST /tasks from that client.",
+        "default_task_source": "rest",
+        "default_timeout_seconds": DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS,
+        "supported_task_sources": ["cli", "rest", "websocket", "cron", "hook", "system"]
+    })
+}
+
 fn openapi_id_property(description: &str, prefix: &str, example: &str) -> Value {
     let mut schema = openapi_id_schema(prefix, example);
     if let Some(object) = schema.as_object_mut() {
@@ -5299,6 +5314,25 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                                 "run_count": 8,
                                 "next_event_seq": 128
                             }))
+                        },
+                        "500": {
+                            "description": "Request failed.",
+                            "content": openapi_json_content(schema_ref("RestErrorEnvelope"))
+                        }
+                    }
+                }
+            },
+            "/capabilities": {
+                "get": {
+                    "operationId": "getNucleusCapabilities",
+                    "summary": "Inspect REST integration capabilities",
+                    "description": "Read public integration capability metadata, including known ChatGPT Voice and GPT Actions compatibility limits.",
+                    "x-si-purpose": "Use this unauthenticated endpoint to diagnose client compatibility before creating or polling tasks.",
+                    "security": [],
+                    "responses": {
+                        "200": {
+                            "description": "Current REST integration capabilities.",
+                            "content": openapi_json_content_example(schema_ref("NucleusCapabilitiesView"), rest_capabilities_view())
                         },
                         "500": {
                             "description": "Request failed.",
@@ -5603,6 +5637,35 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
             },
             "schemas": {
                 "OpenApiDocumentView": openapi_document_schema(),
+                "NucleusCapabilitiesView": {
+                    "type": "object",
+                    "description": "Public compatibility metadata for external Nucleus REST clients.",
+                    "additionalProperties": false,
+                    "required": [
+                        "version",
+                        "rest_task_creation_supported",
+                        "gpt_actions_text_supported",
+                        "chatgpt_voice_custom_actions_supported",
+                        "chatgpt_voice_custom_actions_note",
+                        "realtime_voice_clients_supported",
+                        "recommended_voice_integration",
+                        "default_task_source",
+                        "default_timeout_seconds",
+                        "supported_task_sources"
+                    ],
+                    "properties": {
+                        "version": { "type": "string", "description": "Running SI Nucleus package version.", "example": env!("CARGO_PKG_VERSION"), "readOnly": true },
+                        "rest_task_creation_supported": { "type": "boolean", "description": "True when this REST surface supports direct task creation.", "example": true, "readOnly": true },
+                        "gpt_actions_text_supported": { "type": "boolean", "description": "True when text-mode GPT Actions can call this REST surface.", "example": true, "readOnly": true },
+                        "chatgpt_voice_custom_actions_supported": { "type": "boolean", "description": "False because OpenAI ChatGPT Voice mode does not currently invoke custom GPT Actions.", "example": false, "readOnly": true },
+                        "chatgpt_voice_custom_actions_note": { "type": "string", "description": "Human-readable compatibility note for ChatGPT Voice and custom GPT Actions.", "example": "OpenAI ChatGPT Voice mode does not invoke custom GPT Actions. Use text GPT Actions or a custom Realtime API voice client to call this REST API.", "readOnly": true },
+                        "realtime_voice_clients_supported": { "type": "boolean", "description": "True when custom voice clients can call this REST surface from their own tool/function handler.", "example": true, "readOnly": true },
+                        "recommended_voice_integration": { "type": "string", "description": "Recommended integration path for voice workflows that need Nucleus task creation.", "example": "Build a custom OpenAI Realtime API voice client with function calling, then call POST /tasks from that client.", "readOnly": true },
+                        "default_task_source": { "type": "string", "description": "Default task source assigned to HTTP-created tasks when omitted.", "enum": ["rest"], "example": "rest", "readOnly": true },
+                        "default_timeout_seconds": { "type": "integer", "description": "Default execution timeout applied to REST-created tasks when omitted.", "minimum": 1, "example": 900, "readOnly": true },
+                        "supported_task_sources": { "type": "array", "description": "Task source values accepted by task creation.", "items": { "type": "string", "enum": ["cli", "rest", "websocket", "cron", "hook", "system"] }, "example": ["cli", "rest", "websocket", "cron", "hook", "system"], "readOnly": true }
+                    }
+                },
                 "RestErrorEnvelope": {
                     "type": "object",
                     "description": "Standard REST error envelope returned when a Nucleus request fails.",
@@ -5799,6 +5862,10 @@ async fn rest_openapi_handler(
     (StatusCode::OK, Json(openapi_document(&service.config, &headers))).into_response()
 }
 
+async fn rest_capabilities_handler() -> impl IntoResponse {
+    (StatusCode::OK, Json(rest_capabilities_view())).into_response()
+}
+
 async fn rest_status_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
@@ -5819,11 +5886,11 @@ async fn rest_create_task_handler(
     headers: HeaderMap,
     request: Result<Json<RestTaskCreateParams>, JsonRejection>,
 ) -> Response {
-    let mut request: TaskCreateParams = match rest_parse_json_body(request, "parse create task body")
-    {
-        Ok(value) => value.into(),
-        Err(response) => return response,
-    };
+    let mut request: TaskCreateParams =
+        match rest_parse_json_body(request, "parse create task body") {
+            Ok(value) => value.into(),
+            Err(response) => return response,
+        };
     if request.timeout_seconds.is_none() {
         request.timeout_seconds = Some(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS);
     }
@@ -6341,11 +6408,10 @@ mod tests {
     use super::{
         BACKGROUND_WARNING_THROTTLE_WINDOW, CreateTaskInput, CronRuleRecord, CronScheduleKind,
         DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS, GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest,
-        HookRuleRecord,
-        MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService, NucleusStore,
-        append_jsonl_with_rotation, cron_due_key, current_persisted_version, hook_event_key,
-        load_canonical_events, load_canonical_events_for_live_iteration, load_last_event_seq,
-        public_openapi_document, run_failure_requires_session_quarantine,
+        HookRuleRecord, MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService,
+        NucleusStore, append_jsonl_with_rotation, cron_due_key, current_persisted_version,
+        hook_event_key, load_canonical_events, load_canonical_events_for_live_iteration,
+        load_last_event_seq, public_openapi_document, run_failure_requires_session_quarantine,
         runtime_error_requires_worker_quarantine, stable_workdir_from, write_json_atomic,
     };
     use anyhow::{Result, anyhow};
@@ -7614,6 +7680,7 @@ mod tests {
             json!("opaque token")
         );
         for (path, method, expected_response) in [
+            ("/capabilities", "get", "200"),
             ("/status", "get", "200"),
             ("/tasks", "get", "200"),
             ("/tasks", "post", "201"),
@@ -7648,7 +7715,8 @@ mod tests {
                     || operation.get("parameters").map(|value| value.is_array()).unwrap_or(false)
                     || matches!(
                         (path, method),
-                        ("/status", "get")
+                        ("/capabilities", "get")
+                            | ("/status", "get")
                             | ("/tasks", "get")
                             | ("/workers", "get")
                             | ("/openapi.json", "get")
@@ -7657,6 +7725,7 @@ mod tests {
             );
         }
         for (path, method, operation_id) in [
+            ("/capabilities", "get", "getNucleusCapabilities"),
             ("/status", "get", "getNucleusStatus"),
             ("/tasks", "get", "listTasks"),
             ("/tasks", "post", "createTask"),
@@ -7727,6 +7796,7 @@ mod tests {
         );
         for schema_name in [
             "RestErrorEnvelope",
+            "NucleusCapabilitiesView",
             "NucleusStatusView",
             "TaskCreateParams",
             "TaskRecord",
@@ -8018,7 +8088,23 @@ mod tests {
                 "OpenAPI security must require bearer auth for {method} {path}"
             );
         }
+        assert_eq!(body["paths"]["/capabilities"]["get"]["security"], json!([]));
         assert_eq!(body["paths"]["/openapi.json"]["get"]["security"], json!([]));
+        assert_eq!(
+            body["paths"]["/capabilities"]["get"]["responses"]["200"]["content"]
+                ["application/json"]["schema"]["$ref"],
+            json!("#/components/schemas/NucleusCapabilitiesView")
+        );
+        assert_eq!(
+            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]
+                ["chatgpt_voice_custom_actions_supported"]["example"],
+            json!(false)
+        );
+        assert_eq!(
+            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]
+                ["default_timeout_seconds"]["example"],
+            json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS)
+        );
         assert_eq!(
             body["components"]["schemas"]["TaskCancelResultView"]["required"],
             json!(["task", "cancellation_requested"])
@@ -8193,6 +8279,37 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = response_json(response).await;
         assert_eq!(body["openapi"], json!("3.1.0"));
+    }
+
+    #[tokio::test]
+    async fn rest_capabilities_remains_public_and_reports_voice_limits() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "0.0.0.0:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: Some("secret-token".to_owned()),
+        })
+        .expect("service")
+        .router();
+
+        let response = app
+            .oneshot(Request::builder().uri("/capabilities").body(Body::empty()).expect("request"))
+            .await
+            .expect("capabilities response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        assert_eq!(body["rest_task_creation_supported"], json!(true));
+        assert_eq!(body["gpt_actions_text_supported"], json!(true));
+        assert_eq!(body["chatgpt_voice_custom_actions_supported"], json!(false));
+        assert_eq!(body["realtime_voice_clients_supported"], json!(true));
+        assert_eq!(body["default_task_source"], json!("rest"));
+        assert_eq!(body["default_timeout_seconds"], json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS));
+        assert!(
+            body["chatgpt_voice_custom_actions_note"]
+                .as_str()
+                .map(|value| value.contains("Voice mode does not invoke custom GPT Actions"))
+                .unwrap_or(false)
+        );
     }
 
     #[tokio::test]

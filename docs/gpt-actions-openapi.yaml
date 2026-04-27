@@ -1,5 +1,89 @@
 components:
   schemas:
+    NucleusCapabilitiesView:
+      additionalProperties: false
+      description: Public compatibility metadata for external Nucleus REST clients.
+      properties:
+        chatgpt_voice_custom_actions_note:
+          description: Human-readable compatibility note for ChatGPT Voice and custom GPT Actions.
+          example: OpenAI ChatGPT Voice mode does not invoke custom GPT Actions. Use text GPT Actions or a custom Realtime API voice client to call this REST API.
+          readOnly: true
+          type: string
+        chatgpt_voice_custom_actions_supported:
+          description: False because OpenAI ChatGPT Voice mode does not currently invoke custom GPT Actions.
+          example: false
+          readOnly: true
+          type: boolean
+        default_task_source:
+          description: Default task source assigned to HTTP-created tasks when omitted.
+          enum:
+          - rest
+          example: rest
+          readOnly: true
+          type: string
+        default_timeout_seconds:
+          description: Default execution timeout applied to REST-created tasks when omitted.
+          example: 900
+          minimum: 1
+          readOnly: true
+          type: integer
+        gpt_actions_text_supported:
+          description: True when text-mode GPT Actions can call this REST surface.
+          example: true
+          readOnly: true
+          type: boolean
+        realtime_voice_clients_supported:
+          description: True when custom voice clients can call this REST surface from their own tool/function handler.
+          example: true
+          readOnly: true
+          type: boolean
+        recommended_voice_integration:
+          description: Recommended integration path for voice workflows that need Nucleus task creation.
+          example: Build a custom OpenAI Realtime API voice client with function calling, then call POST /tasks from that client.
+          readOnly: true
+          type: string
+        rest_task_creation_supported:
+          description: True when this REST surface supports direct task creation.
+          example: true
+          readOnly: true
+          type: boolean
+        supported_task_sources:
+          description: Task source values accepted by task creation.
+          example:
+          - cli
+          - rest
+          - websocket
+          - cron
+          - hook
+          - system
+          items:
+            enum:
+            - cli
+            - rest
+            - websocket
+            - cron
+            - hook
+            - system
+            type: string
+          readOnly: true
+          type: array
+        version:
+          description: Running SI Nucleus package version.
+          example: 0.59.34
+          readOnly: true
+          type: string
+      required:
+      - version
+      - rest_task_creation_supported
+      - gpt_actions_text_supported
+      - chatgpt_voice_custom_actions_supported
+      - chatgpt_voice_custom_actions_note
+      - realtime_voice_clients_supported
+      - recommended_voice_integration
+      - default_task_source
+      - default_timeout_seconds
+      - supported_task_sources
+      type: object
     NucleusStatusView:
       additionalProperties: false
       description: Current Nucleus status projection and durable object counts.
@@ -40,7 +124,7 @@ components:
           type: integer
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.32
+          example: 0.59.34
           readOnly: true
           type: string
         worker_count:
@@ -87,7 +171,7 @@ components:
               type: string
             version:
               description: API package version.
-              example: 0.59.32
+              example: 0.59.34
               type: string
           required:
           - title
@@ -568,7 +652,7 @@ components:
       properties:
         capability_version:
           description: Worker capability or package version when reported.
-          example: 0.59.32
+          example: 0.59.34
           type:
           - string
           - 'null'
@@ -687,9 +771,46 @@ components:
 info:
   description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
   title: SI Nucleus REST API
-  version: 0.59.32
+  version: 0.59.34
 openapi: 3.1.0
 paths:
+  /capabilities:
+    get:
+      description: Read public integration capability metadata, including known ChatGPT Voice and GPT Actions compatibility limits.
+      operationId: getNucleusCapabilities
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                chatgpt_voice_custom_actions_note: OpenAI ChatGPT Voice mode does not invoke custom GPT Actions. Use text GPT Actions or a custom Realtime API voice client to call this REST API.
+                chatgpt_voice_custom_actions_supported: false
+                default_task_source: rest
+                default_timeout_seconds: 900
+                gpt_actions_text_supported: true
+                realtime_voice_clients_supported: true
+                recommended_voice_integration: Build a custom OpenAI Realtime API voice client with function calling, then call POST /tasks from that client.
+                rest_task_creation_supported: true
+                supported_task_sources:
+                - cli
+                - rest
+                - websocket
+                - cron
+                - hook
+                - system
+                version: 0.59.34
+              schema:
+                $ref: '#/components/schemas/NucleusCapabilitiesView'
+          description: Current REST integration capabilities.
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorEnvelope'
+          description: Request failed.
+      security: []
+      summary: Inspect REST integration capabilities
+      x-si-purpose: Use this unauthenticated endpoint to diagnose client compatibility before creating or polling tasks.
   /openapi.json:
     get:
       description: Read the public OpenAPI-compatible REST description for bounded external integrations.
@@ -818,7 +939,7 @@ paths:
                 session_count: 2
                 state_dir: /home/si/.local/state/si/nucleus
                 task_count: 12
-                version: 0.59.32
+                version: 0.59.34
                 worker_count: 2
                 ws_url: ws://0.0.0.0:4747/ws
               schema:
@@ -1100,7 +1221,7 @@ paths:
           content:
             application/json:
               example:
-              - capability_version: 0.59.32
+              - capability_version: 0.59.34
                 codex_home: /home/si/.codex
                 effective_account_state: authenticated
                 extra_env: {}
@@ -1151,7 +1272,7 @@ paths:
                   started_at: 2026-04-17T00:00:00Z
                   worker_id: si-worker-0123456789abcdef00000001
                 worker:
-                  capability_version: 0.59.32
+                  capability_version: 0.59.34
                   codex_home: /home/si/.codex
                   effective_account_state: authenticated
                   extra_env: {}
