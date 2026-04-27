@@ -15,12 +15,17 @@ All notable changes to this project will be documented in this file.
 - Added a first-class Vertex Gemini generation command under `si orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
 
 ### Changed
+- Bumped the working version to `0.59.33` after fixing Vertex global endpoint selection and Bedrock runtime request handling.
 - Bumped the working version to `0.59.25` after adding Vertex Gemini generation and stronger Bedrock runtime converse controls for LLM usage.
 - Expanded `si orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
 - Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
 ### Fixed
+- Fixed `si orbit gcp vertex generate` so `--location global` now uses the documented global Vertex host instead of an invalid regionalized hostname.
+- Fixed `si orbit gcp vertex generate` to accept `--json-body-file`, allowing large prompt payloads to bypass local argv limits.
+- Fixed Bedrock runtime SigV4 request scope so `invoke`, `converse`, and `count-tokens` sign against the service name AWS expects at runtime.
+- Fixed `si orbit aws bedrock runtime converse` so explicit `--body` and `--body-file` inputs work without also requiring `--prompt`.
 - Fixed Nucleus hardening regression coverage so worker-restart scope tests seed the intended profile lane and direct-run failure smokes no longer assert unrelated concurrent task completion.
 - Fixed Nucleus task execution so the default task ceiling is the real runtime ceiling again; deep tasks no longer fail after a hidden 900-second idle cutoff when they did not ask for one.
 - Fixed Nucleus run-failure projection so runtime-emitted `run.failed` events now quarantine timed-out sessions and worker transport failures the same way direct runtime errors already do.
