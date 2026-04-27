@@ -2092,15 +2092,14 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
     let systemd_unit =
         fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
     assert!(systemd_unit.contains("Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\""));
-    assert!(systemd_unit.contains(&format!(
-        "Environment=\"SI_NUCLEUS_STATE_DIR={}\"",
-        state_dir.display()
-    )));
+    assert!(
+        systemd_unit
+            .contains(&format!("Environment=\"SI_NUCLEUS_STATE_DIR={}\"", state_dir.display()))
+    );
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_BIND_ADDR=127.0.0.1:4747\""));
-    assert!(systemd_unit.contains(&format!(
-        "Environment=\"SI_NUCLEUS_BIN={}\"",
-        nucleus_bin.display()
-    )));
+    assert!(
+        systemd_unit.contains(&format!("Environment=\"SI_NUCLEUS_BIN={}\"", nucleus_bin.display()))
+    );
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_AUTH_TOKEN=secret-token\""));
     assert!(
         systemd_unit.contains("Environment=\"SI_NUCLEUS_PUBLIC_URL=https://nucleus.example.test\"")
@@ -2177,10 +2176,10 @@ fn nucleus_service_install_uses_state_and_bind_env_defaults() {
 
     let systemd_unit =
         fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
-    assert!(systemd_unit.contains(&format!(
-        "Environment=\"SI_NUCLEUS_STATE_DIR={}\"",
-        state_dir.display()
-    )));
+    assert!(
+        systemd_unit
+            .contains(&format!("Environment=\"SI_NUCLEUS_STATE_DIR={}\"", state_dir.display()))
+    );
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_BIND_ADDR=0.0.0.0:4747\""));
     assert!(systemd_unit.contains(&format!("\"{}\"", state_dir.display())));
     assert!(systemd_unit.contains("\"0.0.0.0:4747\""));
@@ -2196,12 +2195,8 @@ fn nucleus_service_install_sanitizes_transient_path_entries() {
     fs::create_dir_all(&unstable_dir).expect("mkdir unstable dir");
     fs::create_dir_all(&stable_dir).expect("mkdir stable dir");
     write_executable_shell_script(&systemctl_path, "#!/bin/sh\nexit 0\n");
-    let path_value = format!(
-        "{}:{}:{}",
-        unstable_dir.display(),
-        stable_dir.display(),
-        stable_dir.display()
-    );
+    let path_value =
+        format!("{}:{}:{}", unstable_dir.display(), stable_dir.display(), stable_dir.display());
 
     cargo_bin()
         .args([
@@ -21171,6 +21166,7 @@ fn aws_bedrock_runtime_invoke_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /model/m-1/invoke HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("/us-west-2/bedrock/aws4_request"));
         assert!(request.contains("x-amzn-bedrock-trace: ENABLED\r\n"));
         assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
         http_json_response(
@@ -21220,10 +21216,71 @@ fn aws_bedrock_runtime_invoke_json_executes_signed_rest_request() {
 }
 
 #[test]
+fn aws_bedrock_runtime_converse_json_accepts_body_file() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /model/m-1/converse HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("/us-west-2/bedrock/aws4_request"));
+        assert!(request.contains(
+            "\r\n\r\n{\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"hello\"}]}]}"
+        ));
+        http_json_response(
+            "200 OK",
+            &[("x-amzn-requestid", "req_aws_bedrock_converse")],
+            r#"{"output":{"message":{"content":[{"text":"ok"}]}}}"#,
+        )
+    });
+
+    let temp = tempdir().expect("tempdir");
+    let body_path = temp.path().join("body.json");
+    fs::write(&body_path, r#"{"messages":[{"role":"user","content":[{"text":"hello"}]}]}"#)
+        .expect("write body");
+
+    let output = cargo_bin()
+        .args([
+            "orbit",
+            "aws",
+            "bedrock",
+            "runtime",
+            "converse",
+            "--model-id",
+            "m-1",
+            "--body-file",
+        ])
+        .arg(&body_path)
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_converse");
+    assert_eq!(parsed["data"]["output"]["message"]["content"][0]["text"], "ok");
+    server.join();
+}
+
+#[test]
 fn aws_bedrock_runtime_count_tokens_json_executes_signed_rest_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /model/m-1/count-tokens HTTP/1.1\r\n"));
         assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("/us-west-2/bedrock/aws4_request"));
         assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
         http_json_response(
             "200 OK",
@@ -22469,6 +22526,54 @@ fn gcp_vertex_model_list_json_fetches_models() {
     assert!(
         parsed["data"]["models"][0]["name"].as_str().unwrap_or_default().ends_with("/models/m1")
     );
+    server.join();
+}
+
+#[test]
+fn gcp_vertex_generate_json_body_file_posts_body() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /v1/projects/proj_core/locations/global/publishers/google/models/gemini-2.5-pro:generateContent HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("\"contents\""));
+        assert!(request.contains("\"role\":\"user\""));
+        assert!(request.contains("\"text\":\"hello\""));
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"#,
+        )
+    });
+    let body_dir = tempdir().expect("body tempdir");
+    let body_path = body_dir.path().join("body.json");
+    fs::write(&body_path, r#"{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}"#)
+        .expect("write body");
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["orbit", "gcp", "vertex", "generate", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--location",
+            "global",
+            "--model",
+            "gemini-2.5-pro",
+            "--json-body-file",
+        ])
+        .arg(&body_path)
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["candidates"][0]["content"]["parts"][0]["text"], "ok");
     server.join();
 }
 

@@ -7530,6 +7530,8 @@ enum GCPVertexCommand {
         #[arg(long)]
         json_body: Option<String>,
         #[arg(long)]
+        json_body_file: Option<PathBuf>,
+        #[arg(long)]
         temperature: Option<f64>,
         #[arg(long)]
         max_output_tokens: Option<u64>,
@@ -27480,6 +27482,7 @@ fn main() -> Result<()> {
                     prompt,
                     system,
                     json_body,
+                    json_body_file,
                     temperature,
                     max_output_tokens,
                     params,
@@ -27496,6 +27499,7 @@ fn main() -> Result<()> {
                         prompt,
                         system,
                         json_body,
+                        json_body_file,
                         temperature,
                         max_output_tokens,
                         params,
@@ -46158,7 +46162,7 @@ fn run_aws_bedrock_runtime_invoke(
                 &AWSAPIRequest {
                     method: "POST".to_owned(),
                     path: format!("/model/{}/invoke", aws_path_escape(model_id.trim())),
-                    service: "bedrock-runtime".to_owned(),
+                    service: "bedrock".to_owned(),
                     headers,
                     body: payload,
                     content_type,
@@ -46194,15 +46198,20 @@ fn run_aws_bedrock_runtime_converse(
     format: OutputFormat,
     raw: bool,
 ) -> Result<()> {
-    let fallback = build_aws_bedrock_converse_payload(
-        prompt,
-        system,
-        temperature,
-        top_p,
-        max_output_tokens,
-        stop_sequences,
-    )?;
-    let payload = resolve_aws_json_body(body, body_file, Some(fallback))?;
+    let fallback =
+        if body.as_deref().is_some_and(|value| !value.trim().is_empty()) || body_file.is_some() {
+            None
+        } else {
+            Some(build_aws_bedrock_converse_payload(
+                prompt,
+                system,
+                temperature,
+                top_p,
+                max_output_tokens,
+                stop_sequences,
+            )?)
+        };
+    let payload = resolve_aws_json_body(body, body_file, fallback)?;
     let mut headers = BTreeMap::new();
     if let Some(trace) = trace.filter(|value| !value.trim().is_empty()) {
         headers.insert("x-amzn-bedrock-trace".to_owned(), trace.trim().to_owned());
@@ -46223,7 +46232,7 @@ fn run_aws_bedrock_runtime_converse(
                 &AWSAPIRequest {
                     method: "POST".to_owned(),
                     path: format!("/model/{}/converse", aws_path_escape(model_id.trim())),
-                    service: "bedrock-runtime".to_owned(),
+                    service: "bedrock".to_owned(),
                     headers,
                     body: payload,
                     content_type: "application/json".to_owned(),
@@ -46326,7 +46335,7 @@ fn run_aws_bedrock_runtime_count_tokens(
                 &AWSAPIRequest {
                     method: "POST".to_owned(),
                     path: format!("/model/{}/count-tokens", aws_path_escape(model_id.trim())),
-                    service: "bedrock-runtime".to_owned(),
+                    service: "bedrock".to_owned(),
                     body: payload,
                     content_type: "application/json".to_owned(),
                     accept: "application/json".to_owned(),
@@ -49132,6 +49141,23 @@ fn parse_gcp_json_body_required(
     }
 }
 
+fn parse_gcp_json_body_input(
+    json_body: Option<String>,
+    json_body_file: Option<PathBuf>,
+    flag_name: &str,
+) -> Result<Option<Value>> {
+    if let Some(value) = parse_gcp_json_body_required(json_body, flag_name)? {
+        return Ok(Some(value));
+    }
+    if let Some(path) = json_body_file {
+        let raw = std::fs::read_to_string(path)?;
+        if !raw.trim().is_empty() {
+            return Ok(Some(parse_gcp_json_value(&raw, flag_name)?));
+        }
+    }
+    Ok(None)
+}
+
 fn extract_gcp_gemini_inline_image(response: &GCPAPIResponse) -> Result<(String, String, String)> {
     let data = response
         .data
@@ -49630,6 +49656,19 @@ fn resolve_gcp_vertex_location(location: Option<String>) -> String {
         .unwrap_or_else(|| "us-central1".to_owned())
 }
 
+fn gcp_vertex_base_url(base_url: Option<String>, location: &str) -> String {
+    if let Some(base_url) =
+        base_url.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        return base_url;
+    }
+    if location.trim().eq_ignore_ascii_case("global") {
+        "https://aiplatform.googleapis.com".to_owned()
+    } else {
+        format!("https://{}-aiplatform.googleapis.com", location.trim())
+    }
+}
+
 fn normalize_gcp_vertex_resource_name(
     project_id: &str,
     location: &str,
@@ -49689,11 +49728,7 @@ fn load_gcp_vertex_runtime(
     settings_file: Option<PathBuf>,
 ) -> Result<(GCPRuntime, String)> {
     let location = resolve_gcp_vertex_location(location);
-    let base_url = Some(
-        base_url
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| format!("https://{location}-aiplatform.googleapis.com")),
-    );
+    let base_url = Some(gcp_vertex_base_url(base_url, &location));
     let runtime = load_gcp_runtime(
         account,
         environment,
@@ -49977,6 +50012,7 @@ fn run_gcp_vertex_generate(
     prompt: Option<String>,
     system: Option<String>,
     json_body: Option<String>,
+    json_body_file: Option<PathBuf>,
     temperature: Option<f64>,
     max_output_tokens: Option<u64>,
     params: Vec<String>,
@@ -50000,13 +50036,13 @@ fn run_gcp_vertex_generate(
         anyhow::bail!("publisher model id is required");
     }
     let request_body = if let Some(json_body) =
-        parse_gcp_json_body_required(json_body, "--json-body")?
+        parse_gcp_json_body_input(json_body, json_body_file, "--json-body/--json-body-file")?
     {
         json_body
     } else {
         let prompt = prompt.unwrap_or_default();
         if prompt.trim().is_empty() {
-            anyhow::bail!("--prompt or --json-body is required");
+            anyhow::bail!("--prompt, --json-body, or --json-body-file is required");
         }
         let mut body = serde_json::json!({
             "contents": [{
@@ -72587,6 +72623,19 @@ mod tests {
                 "publishers/google/models/gemini-2.5-flash"
             ),
             "projects/proj-1/locations/us-central1/publishers/google/models/gemini-2.5-flash"
+        );
+    }
+
+    #[test]
+    fn gcp_vertex_base_url_uses_global_host_for_global_location() {
+        assert_eq!(gcp_vertex_base_url(None, "global"), "https://aiplatform.googleapis.com");
+        assert_eq!(
+            gcp_vertex_base_url(None, "us-central1"),
+            "https://us-central1-aiplatform.googleapis.com"
+        );
+        assert_eq!(
+            gcp_vertex_base_url(Some("https://example.test".to_owned()), "global"),
+            "https://example.test"
         );
     }
 
