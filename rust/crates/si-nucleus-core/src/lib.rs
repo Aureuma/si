@@ -118,6 +118,7 @@ pub enum ProfileNameError {
 #[serde(rename_all = "snake_case")]
 pub enum TaskSource {
     Cli,
+    Rest,
     Websocket,
     Cron,
     Hook,

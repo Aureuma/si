@@ -20,6 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow};
 use axum::Json;
 use axum::Router;
+use axum::extract::rejection::JsonRejection;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, State};
 use axum::http::header::AUTHORIZATION;
@@ -2463,6 +2464,7 @@ fn load_canonical_events_with_mode(
 fn source_from_task_source(source: TaskSource) -> CanonicalEventSource {
     match source {
         TaskSource::Cli => CanonicalEventSource::Cli,
+        TaskSource::Rest => CanonicalEventSource::AppServer,
         TaskSource::Websocket => CanonicalEventSource::Websocket,
         TaskSource::Cron => CanonicalEventSource::Cron,
         TaskSource::Hook => CanonicalEventSource::Hook,
@@ -5010,6 +5012,23 @@ fn rest_gateway_response(response: GatewayResponse, success_status: StatusCode) 
         .into_response()
 }
 
+fn rest_invalid_params_response(message: impl Into<String>) -> Response {
+    rest_gateway_response(
+        GatewayResponse::err(Value::Null, "invalid_params", message.into(), None),
+        StatusCode::BAD_REQUEST,
+    )
+}
+
+fn rest_parse_json_body<T>(
+    body: Result<Json<T>, JsonRejection>,
+    context: &str,
+) -> Result<T, Response> {
+    match body {
+        Ok(Json(value)) => Ok(value),
+        Err(error) => Err(rest_invalid_params_response(format!("{context}: {error}"))),
+    }
+}
+
 fn schema_ref(name: &str) -> Value {
     json!({ "$ref": format!("#/components/schemas/{name}") })
 }
@@ -5044,7 +5063,7 @@ fn openapi_path_id_parameter(name: &str, description: &str, prefix: &str, exampl
 fn task_record_example() -> Value {
     json!({
         "task_id": "si-task-0123456789abcdef00000001",
-        "source": "websocket",
+        "source": "rest",
         "title": "Audit Nucleus tasks",
         "instructions": "Inspect queued and running tasks and report any items that are stuck.",
         "status": "queued",
@@ -5325,7 +5344,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                                 "example": {
                                     "title": "Audit Nucleus tasks",
                                     "instructions": "Inspect queued and running tasks and report any items that are stuck.",
-                                    "source": "websocket",
+                                    "source": "rest",
                                     "profile": "darmstada",
                                     "session_id": null,
                                     "max_retries": 0,
@@ -5628,7 +5647,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                     "properties": {
                         "title": { "type": "string", "description": "Short operator-facing summary of the work to perform.", "minLength": 1, "example": "Audit Nucleus tasks" },
                         "instructions": { "type": "string", "description": "Complete task instructions for the assigned worker.", "minLength": 1, "example": "Inspect queued and running tasks and report any items that are stuck." },
-                        "source": { "type": "string", "description": "Source category for the task intake request. External GPT Actions should normally use websocket.", "enum": ["cli", "websocket", "cron", "hook", "system"], "default": "websocket", "example": "websocket" },
+                        "source": { "type": "string", "description": "Source category for the task intake request. REST clients should use rest, which is also the default when omitted on HTTP task creation.", "enum": ["cli", "rest", "websocket", "cron", "hook", "system"], "default": "rest", "example": "rest" },
                         "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "darmstada" },
                         "session_id": { "type": ["string", "null"], "description": "Optional existing SI session id to reuse for continuity.", "pattern": "^si-session-.+", "default": null, "example": "si-session-0123456789abcdef00000001" },
                         "max_retries": { "type": ["integer", "null"], "description": "Optional maximum retry attempts after failed execution.", "minimum": 0, "default": null, "example": 0 },
@@ -5642,7 +5661,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                     "required": ["task_id", "source", "title", "instructions", "status", "created_at", "updated_at"],
                     "properties": {
                         "task_id": openapi_id_property("Canonical SI task id.", "si-task-", "si-task-0123456789abcdef00000001"),
-                        "source": { "type": "string", "description": "Source category that created the task.", "enum": ["cli", "websocket", "cron", "hook", "system"], "example": "websocket", "readOnly": true },
+                        "source": { "type": "string", "description": "Source category that created the task.", "enum": ["cli", "rest", "websocket", "cron", "hook", "system"], "example": "rest", "readOnly": true },
                         "title": { "type": "string", "description": "Short operator-facing summary of the task.", "example": "Audit Nucleus tasks" },
                         "instructions": { "type": "string", "description": "Full worker instructions captured at intake.", "example": "Inspect queued and running tasks and report any items that are stuck." },
                         "status": { "type": "string", "description": "Current task lifecycle status.", "enum": ["queued", "running", "blocked", "done", "failed", "cancelled"], "example": "queued", "readOnly": true },
@@ -5798,8 +5817,13 @@ async fn rest_status_handler(
 async fn rest_create_task_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
-    Json(mut request): Json<TaskCreateParams>,
+    request: Result<Json<RestTaskCreateParams>, JsonRejection>,
 ) -> Response {
+    let mut request: TaskCreateParams = match rest_parse_json_body(request, "parse create task body")
+    {
+        Ok(value) => value.into(),
+        Err(response) => return response,
+    };
     if request.timeout_seconds.is_none() {
         request.timeout_seconds = Some(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS);
     }
@@ -5867,8 +5891,12 @@ async fn rest_cancel_task_handler(
 async fn rest_ingest_event_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
-    Json(request): Json<EventIngestParams>,
+    request: Result<Json<EventIngestParams>, JsonRejection>,
 ) -> Response {
+    let request = match rest_parse_json_body(request, "parse ingest event body") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     rest_gateway_response(
         service
             .dispatch_request_authorized(
@@ -5916,8 +5944,12 @@ async fn rest_list_hook_rules_handler(
 async fn rest_upsert_hook_rule_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
-    Json(request): Json<HookRuleUpsertParams>,
+    request: Result<Json<HookRuleUpsertParams>, JsonRejection>,
 ) -> Response {
+    let request = match rest_parse_json_body(request, "parse hook rule body") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     rest_gateway_response(
         service
             .dispatch_request_authorized(
@@ -6104,6 +6136,31 @@ struct TaskCreateParams {
 
 fn default_request_task_source() -> TaskSource {
     TaskSource::Websocket
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct RestTaskCreateParams {
+    title: String,
+    instructions: String,
+    source: Option<TaskSource>,
+    profile: Option<String>,
+    session_id: Option<String>,
+    max_retries: Option<u32>,
+    timeout_seconds: Option<u64>,
+}
+
+impl From<RestTaskCreateParams> for TaskCreateParams {
+    fn from(value: RestTaskCreateParams) -> Self {
+        Self {
+            title: value.title,
+            instructions: value.instructions,
+            source: value.source.unwrap_or(TaskSource::Rest),
+            profile: value.profile,
+            session_id: value.session_id,
+            max_retries: value.max_retries,
+            timeout_seconds: value.timeout_seconds,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -7639,7 +7696,7 @@ mod tests {
         }
         let create_params = &body["components"]["schemas"]["TaskCreateParams"];
         assert_eq!(create_params["additionalProperties"], json!(false));
-        assert_eq!(create_params["properties"]["source"]["default"], json!("websocket"));
+        assert_eq!(create_params["properties"]["source"]["default"], json!("rest"));
         assert_eq!(create_params["properties"]["session_id"]["pattern"], json!("^si-session-.+"));
         assert_eq!(
             create_params["properties"]["timeout_seconds"]["default"],
@@ -8706,7 +8763,58 @@ mod tests {
             .expect("create response");
         assert_eq!(response.status(), StatusCode::CREATED);
         let body = response_json(response).await;
+        assert_eq!(body["source"], json!("rest"));
         assert_eq!(body["timeout_seconds"], json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS));
+        let stored = service.store.list_tasks().expect("list tasks");
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].source, TaskSource::Rest);
+    }
+
+    #[tokio::test]
+    async fn rest_task_create_normalizes_body_deserialization_errors() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tasks")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "title": "REST invalid source task",
+                            "instructions": "Reject unsupported source names",
+                            "source": "bogus",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], json!("invalid_params"));
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("parse create task body"))
+                .unwrap_or(false)
+        );
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .map(|value| value.contains("unknown variant"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 0);
     }
 
     #[tokio::test]

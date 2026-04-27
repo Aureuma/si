@@ -40,7 +40,7 @@ components:
           type: integer
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.31
+          example: 0.59.32
           readOnly: true
           type: string
         worker_count:
@@ -87,7 +87,7 @@ components:
               type: string
             version:
               description: API package version.
-              example: 0.59.31
+              example: 0.59.32
               type: string
           required:
           - title
@@ -353,15 +353,16 @@ components:
           - string
           - 'null'
         source:
-          default: websocket
-          description: Source category for the task intake request. External GPT Actions should normally use websocket.
+          default: rest
+          description: Source category for the task intake request. REST clients should use rest, which is also the default when omitted on HTTP task creation.
           enum:
           - cli
+          - rest
           - websocket
           - cron
           - hook
           - system
-          example: websocket
+          example: rest
           type: string
         timeout_seconds:
           default: 900
@@ -493,11 +494,12 @@ components:
           description: Source category that created the task.
           enum:
           - cli
+          - rest
           - websocket
           - cron
           - hook
           - system
-          example: websocket
+          example: rest
           readOnly: true
           type: string
         status:
@@ -566,7 +568,7 @@ components:
       properties:
         capability_version:
           description: Worker capability or package version when reported.
-          example: 0.59.31
+          example: 0.59.32
           type:
           - string
           - 'null'
@@ -685,7 +687,7 @@ components:
 info:
   description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
   title: SI Nucleus REST API
-  version: 0.59.31
+  version: 0.59.32
 openapi: 3.1.0
 paths:
   /openapi.json:
@@ -816,7 +818,7 @@ paths:
                 session_count: 2
                 state_dir: /home/si/.local/state/si/nucleus
                 task_count: 12
-                version: 0.59.31
+                version: 0.59.32
                 worker_count: 2
                 ws_url: ws://0.0.0.0:4747/ws
               schema:
@@ -856,7 +858,7 @@ paths:
                 profile: darmstada
                 session_binding_locked: false
                 session_id: null
-                source: websocket
+                source: rest
                 status: queued
                 task_id: si-task-0123456789abcdef00000001
                 timeout_seconds: 900
@@ -888,7 +890,7 @@ paths:
               max_retries: 0
               profile: darmstada
               session_id: null
-              source: websocket
+              source: rest
               timeout_seconds: 900
               title: Audit Nucleus tasks
             schema:
@@ -915,7 +917,7 @@ paths:
                 profile: darmstada
                 session_binding_locked: false
                 session_id: null
-                source: websocket
+                source: rest
                 status: queued
                 task_id: si-task-0123456789abcdef00000001
                 timeout_seconds: 900
@@ -981,7 +983,7 @@ paths:
                 profile: darmstada
                 session_binding_locked: false
                 session_id: null
-                source: websocket
+                source: rest
                 status: queued
                 task_id: si-task-0123456789abcdef00000001
                 timeout_seconds: 900
@@ -1051,7 +1053,7 @@ paths:
                   profile: darmstada
                   session_binding_locked: false
                   session_id: null
-                  source: websocket
+                  source: rest
                   status: queued
                   task_id: si-task-0123456789abcdef00000001
                   timeout_seconds: 900
@@ -1098,7 +1100,7 @@ paths:
           content:
             application/json:
               example:
-              - capability_version: 0.59.31
+              - capability_version: 0.59.32
                 codex_home: /home/si/.codex
                 effective_account_state: authenticated
                 extra_env: {}
@@ -1149,7 +1151,7 @@ paths:
                   started_at: 2026-04-17T00:00:00Z
                   worker_id: si-worker-0123456789abcdef00000001
                 worker:
-                  capability_version: 0.59.31
+                  capability_version: 0.59.32
                   codex_home: /home/si/.codex
                   effective_account_state: authenticated
                   extra_env: {}

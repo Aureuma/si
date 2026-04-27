@@ -17286,14 +17286,88 @@ fn default_nucleus_service_path() -> &'static str {
     }
 }
 
-fn nucleus_service_environment() -> BTreeMap<String, String> {
-    let mut env_vars = BTreeMap::new();
-    let path = env::var("PATH")
+fn unstable_service_path_entry(path: &Path) -> bool {
+    let value = path.to_string_lossy();
+    value.contains("/tmp/arg0/") || value.contains("\\tmp\\arg0\\")
+}
+
+fn sanitized_nucleus_service_path() -> String {
+    let raw_path = env::var_os("PATH").unwrap_or_default();
+    let mut sanitized = Vec::new();
+    for dir in env::split_paths(&raw_path) {
+        if dir.as_os_str().is_empty() || !dir.is_dir() || unstable_service_path_entry(&dir) {
+            continue;
+        }
+        if !sanitized.iter().any(|existing| existing == &dir) {
+            sanitized.push(dir);
+        }
+    }
+    if sanitized.is_empty() {
+        return default_nucleus_service_path().to_owned();
+    }
+    env::join_paths(sanitized)
         .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| default_nucleus_service_path().to_owned());
-    env_vars.insert("PATH".to_owned(), path);
+        .and_then(|joined| {
+            let value = joined.to_string_lossy().trim().to_owned();
+            (!value.is_empty()).then_some(value)
+        })
+        .unwrap_or_else(|| default_nucleus_service_path().to_owned())
+}
+
+fn find_executable_in_path(program: &str) -> Option<PathBuf> {
+    if program.trim().is_empty() {
+        return None;
+    }
+    let candidate = PathBuf::from(program);
+    if candidate.components().count() > 1 {
+        return candidate.is_file().then_some(candidate);
+    }
+    let path = env::var_os("PATH")?;
+    for dir in env::split_paths(&path) {
+        let full = dir.join(program);
+        if full.is_file() {
+            return Some(full);
+        }
+    }
+    None
+}
+
+fn unstable_service_binary_path(path: &Path) -> bool {
+    path.components().any(|component| {
+        let value = component.as_os_str().to_string_lossy();
+        value == "target" || value == ".artifacts"
+    })
+}
+
+fn resolve_nucleus_service_launcher() -> Result<PathBuf> {
+    if let Ok(value) = env::var("SI_NUCLEUS_SERVICE_SI_BIN") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(PathBuf::from(trimmed));
+        }
+    }
+    let current = env::current_exe().context("resolve current si executable")?;
+    if unstable_service_binary_path(&current)
+        && let Some(path_binary) = find_executable_in_path("si")
+        && path_binary != current
+    {
+        return Ok(path_binary);
+    }
+    Ok(current)
+}
+
+fn nucleus_service_environment(
+    state_dir: &Path,
+    bind_addr: &str,
+    nucleus_bin: Option<&Path>,
+) -> BTreeMap<String, String> {
+    let mut env_vars = BTreeMap::new();
+    env_vars.insert("PATH".to_owned(), sanitized_nucleus_service_path());
+    env_vars.insert("SI_NUCLEUS_STATE_DIR".to_owned(), state_dir.display().to_string());
+    env_vars.insert("SI_NUCLEUS_BIND_ADDR".to_owned(), bind_addr.to_owned());
+    if let Some(nucleus_bin) = nucleus_bin {
+        env_vars.insert("SI_NUCLEUS_BIN".to_owned(), nucleus_bin.display().to_string());
+    }
     for key in ["SI_NUCLEUS_AUTH_TOKEN", "SI_NUCLEUS_PUBLIC_URL"] {
         if let Ok(value) = env::var(key) {
             let value = value.trim().to_owned();
@@ -17357,6 +17431,29 @@ fn print_nucleus_service_view(format: OutputFormat, view: &NucleusServiceActionV
     print_nucleus_output(format, &serde_json::to_value(view)?)
 }
 
+fn resolve_nucleus_service_state_dir(state_dir: Option<PathBuf>) -> PathBuf {
+    state_dir
+        .or_else(|| {
+            env::var("SI_NUCLEUS_STATE_DIR")
+                .ok()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(default_nucleus_state_dir)
+}
+
+fn resolve_nucleus_service_bind_addr(bind_addr: Option<String>) -> String {
+    bind_addr
+        .or_else(|| {
+            env::var("SI_NUCLEUS_BIND_ADDR")
+                .ok()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or_else(|| default_nucleus_bind_addr().to_owned())
+}
+
 fn run_nucleus_service_install(
     state_dir: Option<PathBuf>,
     bind_addr: Option<String>,
@@ -17364,11 +17461,12 @@ fn run_nucleus_service_install(
     format: OutputFormat,
 ) -> Result<()> {
     let platform = resolve_nucleus_service_platform()?;
-    let state_dir = state_dir.unwrap_or_else(default_nucleus_state_dir);
-    let bind_addr = bind_addr.unwrap_or_else(|| default_nucleus_bind_addr().to_owned());
-    let service_env = nucleus_service_environment();
+    let state_dir = resolve_nucleus_service_state_dir(state_dir);
+    let bind_addr = resolve_nucleus_service_bind_addr(bind_addr);
+    let nucleus_bin = resolve_nucleus_service_binary(None).ok();
+    let service_env = nucleus_service_environment(&state_dir, &bind_addr, nucleus_bin.as_deref());
     let definition_path = nucleus_service_definition_path(platform, service_dir);
-    let si_binary = env::current_exe().context("resolve current si executable")?;
+    let si_binary = resolve_nucleus_service_launcher()?;
     let definition = match platform {
         NucleusServicePlatform::SystemdUser => {
             render_nucleus_systemd_unit(&si_binary, &state_dir, &bind_addr, &service_env)
@@ -17550,6 +17648,29 @@ fn resolve_nucleus_service_binary(explicit: Option<PathBuf>) -> Result<PathBuf> 
         if sibling.is_file() {
             return Ok(sibling);
         }
+        for candidate in [
+            parent.join("cargo-target-nucleus-public").join("release").join("si-nucleus"),
+            parent.join("cargo-target").join("release").join("si-nucleus"),
+        ] {
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    if let Ok(current_dir) = env::current_dir() {
+        for ancestor in current_dir.ancestors() {
+            let candidate = ancestor
+                .join(".artifacts")
+                .join("cargo-target-nucleus-public")
+                .join("release")
+                .join("si-nucleus");
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    if let Some(path_binary) = find_executable_in_path("si-nucleus") {
+        return Ok(path_binary);
     }
     Ok(PathBuf::from("si-nucleus"))
 }

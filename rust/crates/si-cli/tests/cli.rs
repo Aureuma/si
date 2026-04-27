@@ -2024,10 +2024,48 @@ fn nucleus_service_run_execs_nucleus_binary_with_requested_env() {
 }
 
 #[test]
+fn nucleus_service_run_prefers_si_nucleus_bin_env_override() {
+    let temp = tempdir().expect("tempdir");
+    let marker_file = temp.path().join("marker.txt");
+    let env_file = temp.path().join("env.txt");
+    let nucleus_path = temp.path().join("si-nucleus-custom");
+    write_executable_shell_script(
+        &nucleus_path,
+        &format!(
+            "#!/bin/sh\nprintf 'custom\\n' > {}\nprintf 'SI_NUCLEUS_STATE_DIR=%s\\nSI_NUCLEUS_BIND_ADDR=%s\\n' \"${{SI_NUCLEUS_STATE_DIR:-}}\" \"${{SI_NUCLEUS_BIND_ADDR:-}}\" > {}\n",
+            shell_escape_for_test(&marker_file),
+            shell_escape_for_test(&env_file),
+        ),
+    );
+    let state_dir = temp.path().join("state");
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "run",
+            "--state-dir",
+            state_dir.to_str().expect("state dir"),
+            "--bind-addr",
+            "0.0.0.0:4747",
+        ])
+        .env("SI_NUCLEUS_BIN", nucleus_path.to_str().expect("nucleus path"))
+        .assert()
+        .success();
+
+    assert_eq!(fs::read_to_string(&marker_file).expect("read marker"), "custom\n");
+    let env = fs::read_to_string(&env_file).expect("read env");
+    assert!(env.contains(&format!("SI_NUCLEUS_STATE_DIR={}\n", state_dir.display())));
+    assert!(env.contains("SI_NUCLEUS_BIND_ADDR=0.0.0.0:4747\n"));
+}
+
+#[test]
 fn nucleus_service_install_persists_auth_token_in_definitions() {
     let temp = tempdir().expect("tempdir");
     let state_dir = temp.path().join("state");
     let service_dir = temp.path().join("service-dir");
+    let nucleus_bin = temp.path().join("si-nucleus-public");
+    fs::write(&nucleus_bin, "").expect("write nucleus bin placeholder");
 
     let systemd_output = cargo_bin()
         .args([
@@ -2044,6 +2082,7 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
         .env("SI_NUCLEUS_SYSTEMCTL_EXEC", "/bin/true")
         .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .env("SI_NUCLEUS_BIN", nucleus_bin.to_str().expect("nucleus bin"))
         .env("SI_NUCLEUS_PUBLIC_URL", "https://nucleus.example.test")
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .assert()
@@ -2053,6 +2092,15 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
     let systemd_unit =
         fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
     assert!(systemd_unit.contains("Environment=\"PATH=/usr/local/bin:/usr/bin:/bin\""));
+    assert!(systemd_unit.contains(&format!(
+        "Environment=\"SI_NUCLEUS_STATE_DIR={}\"",
+        state_dir.display()
+    )));
+    assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_BIND_ADDR=127.0.0.1:4747\""));
+    assert!(systemd_unit.contains(&format!(
+        "Environment=\"SI_NUCLEUS_BIN={}\"",
+        nucleus_bin.display()
+    )));
     assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_AUTH_TOKEN=secret-token\""));
     assert!(
         systemd_unit.contains("Environment=\"SI_NUCLEUS_PUBLIC_URL=https://nucleus.example.test\"")
@@ -2073,6 +2121,7 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         ])
         .env("SI_NUCLEUS_SERVICE_PLATFORM", "launchd-agent")
         .env("SI_NUCLEUS_AUTH_TOKEN", "secret-token")
+        .env("SI_NUCLEUS_BIN", nucleus_bin.to_str().expect("nucleus bin"))
         .env("SI_NUCLEUS_PUBLIC_URL", "https://nucleus.example.test")
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .assert()
@@ -2083,10 +2132,97 @@ fn nucleus_service_install_persists_auth_token_in_definitions() {
         .expect("read launchd plist");
     assert!(plist.contains("<key>PATH</key>"));
     assert!(plist.contains("<string>/usr/local/bin:/usr/bin:/bin</string>"));
+    assert!(plist.contains("<key>SI_NUCLEUS_STATE_DIR</key>"));
+    assert!(plist.contains(&format!("<string>{}</string>", state_dir.display())));
+    assert!(plist.contains("<key>SI_NUCLEUS_BIND_ADDR</key>"));
+    assert!(plist.contains("<string>127.0.0.1:4747</string>"));
+    assert!(plist.contains("<key>SI_NUCLEUS_BIN</key>"));
+    assert!(plist.contains(&format!("<string>{}</string>", nucleus_bin.display())));
     assert!(plist.contains("<key>SI_NUCLEUS_AUTH_TOKEN</key>"));
     assert!(plist.contains("<string>secret-token</string>"));
     assert!(plist.contains("<key>SI_NUCLEUS_PUBLIC_URL</key>"));
     assert!(plist.contains("<string>https://nucleus.example.test</string>"));
+}
+
+#[test]
+fn nucleus_service_install_uses_state_and_bind_env_defaults() {
+    let temp = tempdir().expect("tempdir");
+    let state_dir = temp.path().join("custom-state");
+    let service_dir = temp.path().join("service-dir");
+    let systemctl_path = temp.path().join("systemctl");
+    write_executable_shell_script(&systemctl_path, "#!/bin/sh\nexit 0\n");
+
+    let output = cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .env("SI_NUCLEUS_STATE_DIR", state_dir.to_str().expect("state dir"))
+        .env("SI_NUCLEUS_BIND_ADDR", "0.0.0.0:4747")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse json");
+    assert_eq!(payload["state_dir"], state_dir.display().to_string());
+    assert_eq!(payload["bind_addr"], "0.0.0.0:4747");
+
+    let systemd_unit =
+        fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
+    assert!(systemd_unit.contains(&format!(
+        "Environment=\"SI_NUCLEUS_STATE_DIR={}\"",
+        state_dir.display()
+    )));
+    assert!(systemd_unit.contains("Environment=\"SI_NUCLEUS_BIND_ADDR=0.0.0.0:4747\""));
+    assert!(systemd_unit.contains(&format!("\"{}\"", state_dir.display())));
+    assert!(systemd_unit.contains("\"0.0.0.0:4747\""));
+}
+
+#[test]
+fn nucleus_service_install_sanitizes_transient_path_entries() {
+    let temp = tempdir().expect("tempdir");
+    let service_dir = temp.path().join("service-dir");
+    let systemctl_path = temp.path().join("systemctl");
+    let unstable_dir = temp.path().join("tmp").join("arg0").join("codex-arg0demo");
+    let stable_dir = temp.path().join("stable-bin");
+    fs::create_dir_all(&unstable_dir).expect("mkdir unstable dir");
+    fs::create_dir_all(&stable_dir).expect("mkdir stable dir");
+    write_executable_shell_script(&systemctl_path, "#!/bin/sh\nexit 0\n");
+    let path_value = format!(
+        "{}:{}:{}",
+        unstable_dir.display(),
+        stable_dir.display(),
+        stable_dir.display()
+    );
+
+    cargo_bin()
+        .args([
+            "nucleus",
+            "service",
+            "install",
+            "--service-dir",
+            service_dir.to_str().expect("service dir"),
+            "--format",
+            "json",
+        ])
+        .env("SI_NUCLEUS_SERVICE_PLATFORM", "systemd-user")
+        .env("SI_NUCLEUS_SYSTEMCTL_EXEC", systemctl_path.to_str().expect("systemctl path"))
+        .env("PATH", path_value)
+        .assert()
+        .success();
+
+    let systemd_unit =
+        fs::read_to_string(service_dir.join("si-nucleus.service")).expect("read systemd unit");
+    assert!(systemd_unit.contains(&format!("Environment=\"PATH={}\"", stable_dir.display())));
+    assert!(!systemd_unit.contains(&unstable_dir.display().to_string()));
 }
 
 #[test]
