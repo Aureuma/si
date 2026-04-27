@@ -67,14 +67,21 @@ Relevant env vars:
 
 - `SI_NUCLEUS_STATE_DIR`: override the Nucleus state root
 - `SI_NUCLEUS_BIND_ADDR`: override the local bind address
+- `SI_NUCLEUS_BIN`: override the concrete `si-nucleus` runtime binary used by `si nucleus service run`
 - `SI_NUCLEUS_PUBLIC_URL`: override the absolute OpenAPI `servers[0].url` value for GPT Actions import
 - `SI_NUCLEUS_SERVICE_PLATFORM`: force `systemd-user` or `launchd-agent`
 
-Service install records the current `PATH`, `SI_NUCLEUS_AUTH_TOKEN`, and
-`SI_NUCLEUS_PUBLIC_URL` values in the generated user service so launchd/systemd
-can run Nucleus without inheriting an interactive shell. Re-run
-`si nucleus service install` after changing those values or after installing SI
-through a different binary path.
+Service install records the current `PATH`, `SI_NUCLEUS_STATE_DIR`,
+`SI_NUCLEUS_BIND_ADDR`, `SI_NUCLEUS_BIN`, `SI_NUCLEUS_AUTH_TOKEN`, and
+`SI_NUCLEUS_PUBLIC_URL` values in the generated user service so
+launchd/systemd can run Nucleus without inheriting an interactive shell.
+When the current `si` executable lives under a transient build path such as
+`target/` or `.artifacts/`, install prefers a stable `si` from `PATH` for the
+service launcher when available. Re-run `si nucleus service install` after
+changing those values or after installing SI through a different binary path.
+If you omit `--state-dir` or `--bind-addr`, install now takes those defaults
+from `SI_NUCLEUS_STATE_DIR` and `SI_NUCLEUS_BIND_ADDR` before falling back to
+the built-in loopback defaults.
 
 ## Gateway discovery
 
@@ -120,7 +127,7 @@ When Nucleus selects a candidate, it writes that profile back to the task record
 For GPT Actions and other REST clients, the main failure and blocking scenarios are:
 
 1. Invalid intake requests:
-   blank `title` or `instructions`, non-slug profile names, invalid session ids, or `timeout_seconds: 0` are rejected as `400 invalid_params`.
+   blank `title` or `instructions`, malformed JSON bodies, unsupported `source` values, non-slug profile names, invalid session ids, or `timeout_seconds: 0` are rejected as `400 invalid_params`.
 2. Missing or unusable profile resolution:
    if Nucleus cannot resolve any usable profile candidate, the task is blocked as `profile_unavailable`.
 3. Worker or auth unavailability:
@@ -134,7 +141,7 @@ For GPT Actions and other REST clients, the main failure and blocking scenarios 
 
 External client guidance:
 
-1. REST task creation defaults `timeout_seconds` to `900` when callers omit it.
+1. REST task creation defaults `source` to `rest` and `timeout_seconds` to `900` when callers omit them.
 2. Large audits should be split into smaller repo- or subsystem-scoped tasks instead of one repo-wide pass.
 3. If continuity matters, inspect the task's `profile`, `session_id`, `latest_run_id`, and `blocked_reason` before retrying.
 4. Treat `blocked` tasks as operator-actionable state, not silent transient failure.
