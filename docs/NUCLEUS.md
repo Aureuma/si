@@ -104,6 +104,8 @@ The main control-plane transport is WebSocket:
 
 The external REST contract is the generated `docs/gpt-actions-openapi.yaml` artifact and the live `GET /openapi.json` response from the same Nucleus source of truth. Treat those generated OpenAPI surfaces as canonical for GPT Actions and other bounded external clients.
 
+Use `GET /capabilities` as the public compatibility probe for external clients. It reports whether REST task creation is available, whether text-mode GPT Actions are expected to work, and whether ChatGPT Voice can invoke custom GPT Actions. OpenAI's ChatGPT Voice mode does not currently invoke custom GPT Actions, so voice workflows that need Nucleus task creation must use a custom voice client, such as an OpenAI Realtime API client with function calling that calls `POST /tasks`.
+
 Additional local service routes such as `/events` and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
 
 ## Task Profile Assignment
@@ -145,6 +147,7 @@ External client guidance:
 2. Large audits should be split into smaller repo- or subsystem-scoped tasks instead of one repo-wide pass.
 3. If continuity matters, inspect the task's `profile`, `session_id`, `latest_run_id`, and `blocked_reason` before retrying.
 4. Treat `blocked` tasks as operator-actionable state, not silent transient failure.
+5. Treat ChatGPT Voice failures differently from REST failures: ChatGPT Voice may never call Nucleus because custom GPT Actions are unavailable in Voice mode. Check `GET /capabilities` and the Nucleus access logs before debugging task dispatch.
 
 ## GPT Actions OpenAPI rules
 
