@@ -45,6 +45,9 @@ si-rs-provider-cloudflare = { path = "../si-provider-cloudflare" }
 si-rs-provider-apple = { path = "../si-provider-apple" }
 si-rs-vault = { path = "../si-vault" }
 si-rs-warmup = { path = "../si-warmup" }
+si-nucleus-core = { path = "../si-nucleus-core" }
+si-nucleus-runtime = { path = "../si-nucleus-runtime" }
+si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }
 
 [dev-dependencies]
 assert_cmd.workspace = true
@@ -53,8 +56,6 @@ serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 si-nucleus = { path = "../si-nucleus" }
-si-nucleus-core = { path = "../si-nucleus-core" }
-si-nucleus-runtime = { path = "../si-nucleus-runtime" }
 
 [[bin]]
 name = "si-rs"
