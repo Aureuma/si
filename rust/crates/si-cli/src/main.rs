@@ -34,6 +34,12 @@ use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use si_nucleus_core::{ProfileName, RunId, RunStatus, SessionId, WorkerId};
+use si_nucleus_runtime::{
+    NucleusRuntime, RunInputItem, RunTurnSpec, RuntimeStatusSnapshot, SessionOpenSpec,
+    WorkerLaunchSpec,
+};
+use si_nucleus_runtime_codex::CodexNucleusRuntime;
 use si_rs_codex::{
     CodexProfileFortSessionPaths, codex_profile_fort_session_paths, codex_tmux_session_name,
     codex_worker_name,
@@ -16769,6 +16775,10 @@ struct WarmupRunArgs {
     settings_file: Option<PathBuf>,
     #[arg(long)]
     workspace: Option<PathBuf>,
+    #[arg(long, default_value_t = CODEX_WARMUP_DEFAULT_MAX_TURNS)]
+    max_turns: u32,
+    #[arg(long, default_value_t = CODEX_WARMUP_DEFAULT_TURN_TIMEOUT_SECONDS)]
+    turn_timeout_seconds: u64,
     #[arg(long, default_value = "json")]
     format: OutputFormat,
 }
@@ -18773,11 +18783,6 @@ struct CodexTmuxCommandView {
     workspace: String,
 }
 
-#[derive(Debug)]
-struct CodexEnsureRunningResult {
-    action: String,
-}
-
 #[derive(Debug, Serialize)]
 struct CodexWarmupRunView {
     updated_at: String,
@@ -18790,6 +18795,7 @@ struct CodexWarmupRunProfileView {
     profile_id: String,
     action: String,
     result: String,
+    turn_count: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -35723,8 +35729,20 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                     workspace,
+                    max_turns,
+                    turn_timeout_seconds,
                     format,
-                }) => run_codex_warmup(profile, all, path, home, settings_file, workspace, format)?,
+                }) => run_codex_warmup(
+                    profile,
+                    all,
+                    path,
+                    home,
+                    settings_file,
+                    workspace,
+                    max_turns,
+                    turn_timeout_seconds,
+                    format,
+                )?,
                 WarmupCommand::Status { path, home, format } => {
                     run_warmup_status(path, home, format)?
                 }
@@ -71661,73 +71679,165 @@ fn read_codex_status_for_profile(
     Ok(status)
 }
 
-fn read_codex_status_with_retry(
-    profile_id: &str,
-    home: &Path,
-    paths: &SiPaths,
-    settings: &Settings,
-    workspace: Option<PathBuf>,
-) -> Result<CodexStatusView> {
-    let mut last_error: Option<anyhow::Error> = None;
-    for attempt in 0..10 {
-        match read_codex_status_for_profile(
-            profile_id,
-            home,
-            paths,
-            settings,
-            workspace.clone(),
-            false,
-        ) {
-            Ok(status) => return Ok(status),
-            Err(err) => {
-                last_error = Some(err);
-                if attempt < 9 {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                }
-            }
-        }
-    }
-    Err(last_error.unwrap_or_else(|| anyhow!("codex status did not become ready")))
-}
-
 const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
-const CODEX_WARMUP_SUCCESS_TIMEOUT: Duration = Duration::from_secs(120);
-const CODEX_WARMUP_SUCCESS_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const CODEX_WARMUP_DEFAULT_MAX_TURNS: u32 = 4;
+const CODEX_WARMUP_DEFAULT_TURN_TIMEOUT_SECONDS: u64 = 180;
+const CODEX_WARMUP_PROMPT: &str = "SI Codex warmup. Reply with exactly: si-codex-warmup-ok. Do not inspect files, read files, write files, run commands, or modify anything.";
 
 fn codex_warmup_weekly_quota_reached(status: &CodexStatusView) -> bool {
     status.weekly_left_pct.is_some_and(|value| value < 100.0)
 }
 
-fn read_codex_status_until_warm(
+fn codex_warmup_weekly_window_started(status: &CodexStatusView) -> bool {
+    codex_warmup_weekly_quota_reached(status)
+        || status.weekly_reset.as_deref().is_some_and(|value| !value.trim().is_empty())
+        || status.weekly_remaining_minutes.is_some_and(|value| value > 0)
+}
+
+fn codex_status_from_runtime_snapshot(snapshot: RuntimeStatusSnapshot) -> CodexStatusView {
+    CodexStatusView {
+        source: Some(snapshot.source),
+        raw: None,
+        model: snapshot.model,
+        reasoning_effort: snapshot.reasoning_effort,
+        account_email: snapshot.account_email,
+        account_plan: snapshot.account_plan,
+        five_hour_left_pct: snapshot.five_hour_left_pct,
+        five_hour_reset: snapshot.five_hour_reset,
+        five_hour_remaining_minutes: snapshot.five_hour_remaining_minutes,
+        weekly_left_pct: snapshot.weekly_left_pct,
+        weekly_reset: snapshot.weekly_reset,
+        weekly_remaining_minutes: snapshot.weekly_remaining_minutes,
+    }
+}
+
+#[derive(Debug)]
+struct CodexWarmupProfileOutcome {
+    action: String,
+    result: String,
+    error: Option<String>,
+    turn_count: u32,
+    status: CodexStatusView,
+}
+
+fn run_nucleus_codex_warmup_profile(
     profile_id: &str,
     home: &Path,
     paths: &SiPaths,
     settings: &Settings,
     workspace: Option<PathBuf>,
-) -> Result<CodexStatusView> {
-    let started_at = Instant::now();
-    let mut last_status: Option<CodexStatusView> = None;
-    let mut last_error: Option<anyhow::Error> = None;
+    max_turns: u32,
+    turn_timeout_seconds: u64,
+) -> Result<CodexWarmupProfileOutcome> {
+    if max_turns == 0 {
+        anyhow::bail!("max_turns must be greater than zero");
+    }
+    if turn_timeout_seconds == 0 {
+        anyhow::bail!("turn_timeout_seconds must be greater than zero");
+    }
 
-    loop {
-        match read_codex_status_with_retry(profile_id, home, paths, settings, workspace.clone()) {
-            Ok(status) if codex_warmup_weekly_quota_reached(&status) => return Ok(status),
-            Ok(status) => last_status = Some(status),
-            Err(err) => last_error = Some(err),
+    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
+    let resolved_workspace = resolve_codex_workspace(workspace, settings)?;
+    let workdir = resolve_codex_workdir(None, &resolved_workspace)?;
+    let worker_id = WorkerId::generate();
+    let profile = ProfileName::new(profile_id.to_owned())?;
+    let launch_spec = WorkerLaunchSpec {
+        worker_id: worker_id.clone(),
+        profile: profile.clone(),
+        home_dir: home.to_path_buf(),
+        codex_home: prepared.codex_home,
+        workdir: workdir.clone(),
+        extra_env: BTreeMap::new(),
+    };
+    let runtime = CodexNucleusRuntime::new();
+
+    let result = (|| {
+        let started = runtime.start_worker(&launch_spec)?;
+        let mut status = codex_status_from_runtime_snapshot(started.probe.snapshot);
+        if codex_warmup_weekly_window_started(&status) {
+            return Ok(CodexWarmupProfileOutcome {
+                action: "already-warm".to_owned(),
+                result: "warmed".to_owned(),
+                error: None,
+                turn_count: 0,
+                status,
+            });
         }
 
-        if started_at.elapsed() >= CODEX_WARMUP_SUCCESS_TIMEOUT {
-            if let Some(status) = last_status {
-                anyhow::bail!(
-                    "weekly quota is still {} left; warmup only completes once it drops below 100%",
-                    render_option_percent_value(status.weekly_left_pct)
-                );
+        let session_id = SessionId::generate();
+        let session = runtime.ensure_session(&SessionOpenSpec {
+            session_id: session_id.clone(),
+            worker_id: worker_id.clone(),
+            profile: profile.clone(),
+            workdir,
+            resume_thread_id: None,
+        })?;
+
+        let mut turn_count = 0;
+        for attempt in 1..=max_turns {
+            let input_text = if attempt == 1 {
+                CODEX_WARMUP_PROMPT.to_owned()
+            } else {
+                format!("{CODEX_WARMUP_PROMPT} Warmup attempt {attempt} of {max_turns}.")
+            };
+            let outcome = runtime.execute_turn(
+                &RunTurnSpec {
+                    run_id: RunId::generate(),
+                    task_id: None,
+                    worker_id: worker_id.clone(),
+                    session_id: session_id.clone(),
+                    profile: profile.clone(),
+                    thread_id: session.thread_id.clone(),
+                    timeout_seconds: Some(turn_timeout_seconds),
+                    input: vec![RunInputItem::Text { text: input_text }],
+                },
+                &mut |_| Ok(()),
+            )?;
+            turn_count += 1;
+            if outcome.status != RunStatus::Completed {
+                anyhow::bail!("warmup turn ended with status {:?}", outcome.status);
             }
-            return Err(last_error
-                .unwrap_or_else(|| anyhow!("codex warmup did not reach a live weekly quota")));
+
+            let probe = runtime.probe_worker(&launch_spec)?;
+            status = codex_status_from_runtime_snapshot(probe.snapshot);
+            if codex_warmup_weekly_window_started(&status) {
+                let action = if codex_warmup_weekly_quota_reached(&status) {
+                    "nucleus-burned"
+                } else {
+                    "nucleus-window-started"
+                };
+                return Ok(CodexWarmupProfileOutcome {
+                    action: action.to_owned(),
+                    result: "warmed".to_owned(),
+                    error: None,
+                    turn_count,
+                    status,
+                });
+            }
         }
 
-        std::thread::sleep(CODEX_WARMUP_SUCCESS_POLL_INTERVAL);
+        let error = format!(
+            "weekly reset timer did not start after {} Nucleus warmup turn(s); weekly quota is still {} left",
+            turn_count,
+            render_option_percent_value(status.weekly_left_pct),
+        );
+        Ok(CodexWarmupProfileOutcome {
+            action: "nucleus-exhausted".to_owned(),
+            result: "failed".to_owned(),
+            error: Some(error),
+            turn_count,
+            status,
+        })
+    })();
+
+    let stop_result = runtime.stop_worker(&worker_id);
+    match (result, stop_result) {
+        (Ok(outcome), Ok(())) => Ok(outcome),
+        (Ok(_), Err(err)) => Err(err.context("stop Nucleus warmup worker")),
+        (Err(err), Ok(())) => Err(err),
+        (Err(err), Err(stop_err)) => {
+            Err(err.context(format!("also failed to stop Nucleus warmup worker: {stop_err}")))
+        }
     }
 }
 
@@ -71752,42 +71862,6 @@ fn codex_profile_auth_source_path(
 ) -> PathBuf {
     codex_profile_auth_path_from_settings(paths, settings, profile_id)
         .unwrap_or_else(|| PathBuf::from(default_codex_profile_auth_path(paths, profile_id)))
-}
-
-fn ensure_codex_worker_running(
-    profile_id: &str,
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-    workspace: Option<PathBuf>,
-) -> Result<CodexEnsureRunningResult> {
-    let (settings_home, settings) = load_codex_runtime_settings(home, settings_file)?;
-    let paths = SiPaths::from_settings(&settings_home, &settings);
-    let resolved_workspace = resolve_codex_workspace(workspace, &settings)?;
-    let workdir = resolve_codex_workdir(None, &resolved_workspace)?;
-    let existing = find_codex_worker_state(&paths, profile_id)?;
-    let action = match existing.as_ref() {
-        Some(state) => {
-            let tmux_bin = "tmux";
-            let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-            if tmux_session_exists(tmux_bin, &tmux_term, &state.session_name)? {
-                "already-running"
-            } else {
-                "started"
-            }
-        }
-        None => "spawned",
-    }
-    .to_owned();
-    let _state = ensure_codex_worker_session(
-        &settings_home,
-        &paths,
-        &settings,
-        profile_id,
-        resolved_workspace,
-        workdir,
-        &[],
-    )?;
-    Ok(CodexEnsureRunningResult { action })
 }
 
 fn codex_warmup_profile_jitter_seconds(profile_id: &str) -> i64 {
@@ -71819,6 +71893,8 @@ fn run_codex_warmup(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
     workspace: Option<PathBuf>,
+    max_turns: u32,
+    turn_timeout_seconds: u64,
     format: OutputFormat,
 ) -> Result<()> {
     let (settings_home, settings) =
@@ -71856,68 +71932,51 @@ fn run_codex_warmup(
         entry.profile_id = profile_id.clone();
         entry.last_attempt = updated_at.to_rfc3339();
 
-        match ensure_codex_worker_running(
+        match run_nucleus_codex_warmup_profile(
             &profile_id,
-            Some(settings_home.clone()),
-            settings_file.clone(),
+            &settings_home,
+            &paths,
+            &settings,
             workspace.clone(),
+            max_turns,
+            turn_timeout_seconds,
         ) {
-            Ok(ensure) => match read_codex_status_until_warm(
-                &profile_id,
-                &settings_home,
-                &paths,
-                &settings,
-                workspace.clone(),
-            ) {
-                Ok(status) => {
-                    let weekly_used_pct =
-                        status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
-                    entry.last_result = "warmed".to_owned();
-                    entry.last_error.clear();
-                    entry.last_weekly_used_pct = weekly_used_pct;
-                    entry.last_weekly_used_ok = status.weekly_left_pct.is_some();
-                    entry.last_weekly_reset = status.weekly_reset.clone().unwrap_or_default();
+            Ok(outcome) => {
+                let status = outcome.status;
+                let weekly_used_pct =
+                    status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
+                entry.last_result = outcome.result.clone();
+                entry.last_error = outcome.error.clone().unwrap_or_default();
+                entry.last_weekly_used_pct = weekly_used_pct;
+                entry.last_weekly_used_ok = status.weekly_left_pct.is_some();
+                entry.last_weekly_reset = status.weekly_reset.clone().unwrap_or_default();
+                if outcome.result == "warmed" {
                     entry.last_warmed_reset = status.weekly_reset.clone().unwrap_or_default();
-                    entry.last_usage_delta = if last_weekly_used_ok {
-                        weekly_used_pct - last_weekly_used_pct
-                    } else {
-                        0.0
-                    };
+                }
+                entry.last_usage_delta =
+                    if last_weekly_used_ok { weekly_used_pct - last_weekly_used_pct } else { 0.0 };
+                if outcome.result == "warmed" {
                     entry.next_due = codex_warmup_next_due(&status, &profile_id, updated_at);
                     entry.failure_count = 0;
                     entry.paused = false;
-                    results.push(CodexWarmupRunProfileView {
-                        profile_id,
-                        action: ensure.action,
-                        result: "warmed".to_owned(),
-                        error: None,
-                        account_email: status.account_email,
-                        account_plan: status.account_plan,
-                        five_hour_left_pct: status.five_hour_left_pct,
-                        five_hour_reset: status.five_hour_reset,
-                        weekly_left_pct: status.weekly_left_pct,
-                        weekly_reset: status.weekly_reset,
-                    });
-                }
-                Err(err) => {
-                    entry.last_result = "failed".to_owned();
-                    entry.last_error = err.to_string();
+                } else {
                     entry.next_due.clear();
                     entry.failure_count += 1;
-                    results.push(CodexWarmupRunProfileView {
-                        profile_id,
-                        action: ensure.action,
-                        result: "failed".to_owned(),
-                        error: Some(entry.last_error.clone()),
-                        account_email: None,
-                        account_plan: None,
-                        five_hour_left_pct: None,
-                        five_hour_reset: None,
-                        weekly_left_pct: None,
-                        weekly_reset: None,
-                    });
                 }
-            },
+                results.push(CodexWarmupRunProfileView {
+                    profile_id,
+                    action: outcome.action,
+                    result: outcome.result,
+                    turn_count: outcome.turn_count,
+                    error: outcome.error,
+                    account_email: status.account_email,
+                    account_plan: status.account_plan,
+                    five_hour_left_pct: status.five_hour_left_pct,
+                    five_hour_reset: status.five_hour_reset,
+                    weekly_left_pct: status.weekly_left_pct,
+                    weekly_reset: status.weekly_reset,
+                });
+            }
             Err(err) => {
                 entry.last_result = "failed".to_owned();
                 entry.last_error = err.to_string();
@@ -71925,8 +71984,9 @@ fn run_codex_warmup(
                 entry.failure_count += 1;
                 results.push(CodexWarmupRunProfileView {
                     profile_id,
-                    action: "failed".to_owned(),
+                    action: "nucleus-failed".to_owned(),
                     result: "failed".to_owned(),
+                    turn_count: 0,
                     error: Some(entry.last_error.clone()),
                     account_email: None,
                     account_plan: None,
@@ -71955,13 +72015,14 @@ fn run_codex_warmup(
             print_cli_kv("state_path", &view.state_path);
             for profile in view.profiles {
                 println!(
-                    "{}\taction={}\tresult={}\tfive_hour_left={}\tweekly_left={}\terror={}",
+                    "{}\taction={}\tresult={}\tturns={}\tfive_hour_left={}\tweekly_left={}\terror={}",
                     stdout_text(&profile.profile_id, CliTone::Command),
                     stdout_text(&profile.action, CliTone::Info),
                     stdout_text(
                         &profile.result,
                         if profile.result == "warmed" { CliTone::Success } else { CliTone::Danger },
                     ),
+                    profile.turn_count,
                     render_option_percent_value(profile.five_hour_left_pct),
                     render_option_percent_value(profile.weekly_left_pct),
                     profile
@@ -72688,6 +72749,32 @@ mod tests {
 
         status.weekly_left_pct = None;
         assert!(!codex_warmup_weekly_quota_reached(&status));
+    }
+
+    #[test]
+    fn codex_warmup_weekly_window_starts_when_reset_timer_exists() {
+        let mut status = CodexStatusView {
+            source: None,
+            raw: None,
+            model: None,
+            reasoning_effort: None,
+            account_email: None,
+            account_plan: None,
+            five_hour_left_pct: None,
+            five_hour_reset: None,
+            five_hour_remaining_minutes: None,
+            weekly_left_pct: Some(100.0),
+            weekly_reset: Some("May 5, 2026 6:26 AM".to_owned()),
+            weekly_remaining_minutes: None,
+        };
+
+        assert!(codex_warmup_weekly_window_started(&status));
+
+        status.weekly_reset = None;
+        assert!(!codex_warmup_weekly_window_started(&status));
+
+        status.weekly_remaining_minutes = Some(10080);
+        assert!(codex_warmup_weekly_window_started(&status));
     }
 
     #[test]
