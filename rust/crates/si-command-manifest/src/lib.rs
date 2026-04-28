@@ -104,7 +104,7 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         name: "viva",
         aliases: &[],
         category: CommandCategory::Runtime,
-        summary: "Manage Viva runtime and node helper commands.",
+        summary: "Manage the Viva runtime wrapper.",
         hidden: false,
     },
     CommandSpec {
