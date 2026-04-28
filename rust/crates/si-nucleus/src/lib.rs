@@ -8091,18 +8091,18 @@ mod tests {
         assert_eq!(body["paths"]["/capabilities"]["get"]["security"], json!([]));
         assert_eq!(body["paths"]["/openapi.json"]["get"]["security"], json!([]));
         assert_eq!(
-            body["paths"]["/capabilities"]["get"]["responses"]["200"]["content"]
-                ["application/json"]["schema"]["$ref"],
+            body["paths"]["/capabilities"]["get"]["responses"]["200"]["content"]["application/json"]
+                ["schema"]["$ref"],
             json!("#/components/schemas/NucleusCapabilitiesView")
         );
         assert_eq!(
-            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]
-                ["chatgpt_voice_custom_actions_supported"]["example"],
+            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]["chatgpt_voice_custom_actions_supported"]
+                ["example"],
             json!(false)
         );
         assert_eq!(
-            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]
-                ["default_timeout_seconds"]["example"],
+            body["components"]["schemas"]["NucleusCapabilitiesView"]["properties"]["default_timeout_seconds"]
+                ["example"],
             json!(DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS)
         );
         assert_eq!(
