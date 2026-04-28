@@ -55,7 +55,7 @@ cargo run --quiet --locked -p si-rs-cli -- build installer run --force
 
 Prerequisites:
 
-- Rust `1.88.0` for local source builds (see `rust-toolchain.toml`).
+- Rust `1.94.0` for local source builds (see `rust-toolchain.toml`).
 - Installed `si` for normal usage, or `target/release/si-rs` if you want to run the just-built binary directly from source.
 
 Build the local source binary:
