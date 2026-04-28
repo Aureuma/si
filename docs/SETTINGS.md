@@ -49,7 +49,7 @@ Reference paths for the local `.si` directory layout.
 - `paths.root` (string): default `~/.si`
 - `paths.settings_file` (string): default `~/.si/settings.toml`
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
-- `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si orbit github git ...`, `si remote-control`, and `si viva node bootstrap` when flags are omitted.
+- `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si orbit github git ...` and `si remote-control` when flags are omitted.
 
 Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/state.json` (reconcile state/feedback loop)
