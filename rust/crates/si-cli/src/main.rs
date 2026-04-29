@@ -17782,6 +17782,11 @@ fn resolve_nucleus_service_binary(explicit: Option<PathBuf>) -> Result<PathBuf> 
             if candidate.is_file() {
                 return Ok(candidate);
             }
+            let candidate =
+                ancestor.join(".artifacts").join("cargo-target").join("release").join("si-nucleus");
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
         }
     }
     if let Some(path_binary) = find_executable_in_path("si-nucleus") {
