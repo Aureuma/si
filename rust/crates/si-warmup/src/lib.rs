@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-pub const WARMUP_STATE_VERSION: i32 = 3;
+pub const WARMUP_STATE_VERSION: i32 = 4;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct WarmupState {
@@ -309,6 +309,21 @@ fn normalize_state(raw: RawWarmupState) -> WarmupState {
             {
                 row.last_warmed_reset = row.last_weekly_reset.trim().to_owned();
             }
+            if state.version < 4
+                && row.last_result.eq_ignore_ascii_case("warmed")
+                && (!row.last_weekly_used_ok || row.last_weekly_used_pct <= 0.0)
+            {
+                row.last_result = "pending".to_owned();
+                if row.last_error.trim().is_empty() {
+                    row.last_error = if row.last_weekly_used_ok {
+                        "weekly quota is still 100% left".to_owned()
+                    } else {
+                        "live weekly quota was not reported".to_owned()
+                    };
+                }
+                row.last_warmed_reset.clear();
+                row.next_due.clear();
+            }
         }
         state.version = WARMUP_STATE_VERSION;
     } else {
@@ -507,6 +522,39 @@ mod tests {
         assert_eq!(profile.profile_id, "profile-zeta");
         assert!(profile.last_weekly_used_ok);
         assert_eq!(profile.last_warmed_reset, "2030-03-20T00:00:00Z");
+    }
+
+    #[test]
+    fn load_state_reopens_legacy_warmed_rows_without_usage() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("state.json");
+        fs::write(
+            &path,
+            r#"{
+  "version": 3,
+  "profiles": {
+    "profile-zeta": {
+      "profile_id": "profile-zeta",
+      "last_result": "warmed",
+      "last_weekly_used_ok": true,
+      "last_weekly_used_pct": 0.0,
+      "last_weekly_reset": "2030-03-20T00:00:00Z",
+      "last_warmed_reset": "2030-03-20T00:00:00Z",
+      "next_due": "2030-03-20T12:00:00Z"
+    }
+  }
+}
+"#,
+        )
+        .expect("write state");
+
+        let state = load_state(&path).expect("load state");
+        let profile = state.profiles.get("profile-zeta").expect("profile");
+        assert_eq!(state.version, WARMUP_STATE_VERSION);
+        assert_eq!(profile.last_result, "pending");
+        assert_eq!(profile.last_error, "weekly quota is still 100% left");
+        assert!(profile.last_warmed_reset.is_empty());
+        assert!(profile.next_due.is_empty());
     }
 
     #[test]

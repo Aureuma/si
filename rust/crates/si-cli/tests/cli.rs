@@ -13264,7 +13264,7 @@ fn warmup_status_json_reads_and_upgrades_legacy_state() {
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["version"], 3);
+    assert_eq!(parsed["version"], 4);
     assert_eq!(parsed["profiles"]["profile-zeta"]["profile_id"], "profile-zeta");
     assert_eq!(parsed["profiles"]["profile-zeta"]["last_warmed_reset"], "2030-03-20T00:00:00Z");
     assert_eq!(parsed["profiles"]["profile-zeta"]["last_weekly_used_ok"], true);

@@ -11,9 +11,9 @@ Related:
 Auth policy:
 - `app` mode: GitHub App installation tokens
 - `oauth` mode: OAuth access token / token-based auth (including PAT-style tokens)
-- Credentials should be injected from `si vault` (or compatible env keys).
+- Credentials should be resolved through configured Fort bindings or compatible env keys; use `si fort` for runtime secret access.
 
-## Credential Keys (Vault-Compatible)
+## Credential Keys (Fort/Env-Compatible)
 
 Per account alias `<ACCOUNT>` (uppercase slug):
 
@@ -50,7 +50,7 @@ si orbit github context use --account core --auth-mode oauth --token-env GITHUB_
 
 ## Git Remotes (No PAT URLs)
 
-Use GitHub App tokens through `si vault` as a Git credential helper, then normalize remotes to PAT-free HTTPS URLs:
+For host/admin Git credential-helper setup, use GitHub App tokens through `si vault run`, then normalize remotes to PAT-free HTTPS URLs:
 
 ```bash
 si vault run -- si orbit github git setup --root ~/Development --account core --owner Aureuma

@@ -246,7 +246,7 @@ Per-account Cloudflare context and env-key pointers.
 - `dev_zone_id` (string): zone id used when `env=dev`
 - `api_token_env` (string): env var with API token
 
-Credential resolution for `si orbit cloudflare` is vault-compatible and token-only:
+Credential resolution for `si orbit cloudflare` is Fort-backed, env-compatible, and token-only:
 1. Configured Fort binding for `api_token` or legacy `api_token_fort_*`
 2. Emergency CLI overrides (`--api-token`, `--account-id`, `--zone-id`)
 3. Account settings (`account_id`, env-mapped zone ids, defaults)
@@ -313,7 +313,7 @@ Per-account Google Places context and env-key pointers.
 - `default_region_code` (string): default CLDR region code
 - `default_language_code` (string): default BCP-47 language code
 
-Credential resolution for `si orbit google places` is vault-compatible and API-key based:
+Credential resolution for `si orbit google places` is Fort-backed, env-compatible, and API-key based:
 1. CLI overrides (`--api-key`, `--project-id`)
 2. Account settings (`project_id`)
 3. Account env refs (`project_id_env`, `places_api_key_env`, `prod_places_api_key_env`, `staging_places_api_key_env`, `dev_places_api_key_env`)
@@ -344,7 +344,7 @@ Per-account YouTube context and env-key pointers.
 - `default_region_code` (string): default region code
 - `default_language_code` (string): default language code
 
-Credential resolution for `si orbit google youtube` is vault-compatible and supports both API key and OAuth:
+Credential resolution for `si orbit google youtube` is Fort-backed, env-compatible, and supports both API key and OAuth:
 1. CLI overrides (`--api-key`, `--project-id`, `--client-id`, `--client-secret`, `--redirect-uri`, `--access-token`, `--refresh-token`)
 2. Account settings (`project_id`)
 3. Account env refs (`project_id_env`, `youtube_api_key_env`, env-specific api key refs, OAuth refs)
@@ -381,9 +381,7 @@ Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
 - `metrics_addr` (string): cloudflared metrics bind address.
 - `no_autoupdate` (bool): pass `--no-autoupdate`.
 - `runtime_dir` (string): host runtime directory for generated files.
-- `vault_env_file` (string): encrypted dotenv file path used by `si fort`.
-- `vault_repo` (string): repo argument passed to `si fort` (default: `viva`).
-- `vault_env` (string): env argument passed to `si fort` (default: `dev`).
+- `fort_env_file` (string): encrypted dotenv file path used by `si fort`; Viva infers the repo/env scope from the canonical `/path/to/<repo>/.env.dev|.env.prod` file path.
 
 ##### `[[viva.tunnel.profiles.<name>.routes]]`
 - `hostname` (string, optional): ingress hostname.

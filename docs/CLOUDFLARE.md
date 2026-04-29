@@ -10,10 +10,10 @@ Related:
 
 Auth policy:
 - API token only.
-- Credentials should be injected from `si vault` (or compatible env keys).
+- Credentials should be resolved through configured Fort bindings or compatible env keys; use `si fort` for runtime secret access.
 - Settings should store env references/pointers, not raw secrets.
 
-## Credential Keys (Vault-Compatible)
+## Credential Keys (Fort/Env-Compatible)
 
 Per account alias `<ACCOUNT>` (uppercase slug):
 
