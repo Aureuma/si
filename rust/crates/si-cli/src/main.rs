@@ -14244,6 +14244,11 @@ enum ReleaseMindCommand {
         #[command(subcommand)]
         command: ReleaseMindReleaseCommand,
     },
+    #[command(about = "Inspect and update ReleaseMind release runbooks.", long_about = None)]
+    Runbook {
+        #[command(subcommand)]
+        command: ReleaseMindRunbookCommand,
+    },
     #[command(about = "Plan and publish Google Play releases through ReleaseMind.", long_about = None)]
     Play {
         #[command(subcommand)]
@@ -14426,6 +14431,39 @@ enum ReleaseMindReleaseCommand {
         post_id: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReleaseMindRunbookCommand {
+    #[command(about = "Show the ReleaseMind runbook template for a repo.", long_about = None)]
+    Plan {
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Show the runbook snapshot for a ReleaseMind post.", long_about = None)]
+    Status {
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(help = "ReleaseMind post id.")]
+        post_id: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    #[command(about = "Mark a ReleaseMind runbook gate complete.", long_about = None)]
+    Complete {
+        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        repo_ref: Option<String>,
+        #[arg(help = "ReleaseMind post id.")]
+        post_id: Option<String>,
+        #[arg(help = "Runbook gate id, for example tests or approval.")]
+        gate_id: Option<String>,
+        #[arg(long)]
+        evidence: Option<String>,
         #[arg(long)]
         json: bool,
     },
@@ -35637,6 +35675,21 @@ fn main() -> Result<()> {
                     run_releasemind_release_publish(repo_ref, post_id, token, json)?
                 }
             },
+            ReleaseMindCommand::Runbook { command } => match command {
+                ReleaseMindRunbookCommand::Plan { repo_ref, json } => {
+                    run_releasemind_runbook_plan(repo_ref, json)?
+                }
+                ReleaseMindRunbookCommand::Status { repo_ref, post_id, json } => {
+                    run_releasemind_runbook_status(repo_ref, post_id, json)?
+                }
+                ReleaseMindRunbookCommand::Complete {
+                    repo_ref,
+                    post_id,
+                    gate_id,
+                    evidence,
+                    json,
+                } => run_releasemind_runbook_complete(repo_ref, post_id, gate_id, evidence, json)?,
+            },
             ReleaseMindCommand::Play { command } => match command {
                 ReleaseMindPlayCommand::Plan { repo_ref, base_tag, head_ref, json } => {
                     run_releasemind_play_plan(repo_ref, base_tag, head_ref, json)?
@@ -37620,6 +37673,104 @@ fn run_releasemind_release_publish(
     Ok(())
 }
 
+fn run_releasemind_runbook_plan(repo_ref: Option<String>, json: bool) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/runbook/plan",
+        Some(json!({
+            "repo_full_name": repo_ref,
+        })),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_runbook_response("releasemind runbook plan", &repo_ref, &response.2);
+    Ok(())
+}
+
+fn run_releasemind_runbook_status(
+    repo_ref: Option<String>,
+    post_id: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let post_id = releasemind_post_id_required(post_id)?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let response = releasemind_request(
+        Method::GET,
+        &format!(
+            "/api/cli/runbook/status?repo_full_name={}&post_id={}",
+            encode_query_value(&repo_ref),
+            encode_query_value(&post_id)
+        ),
+        None,
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_runbook_response("releasemind runbook status", &repo_ref, &response.2);
+    Ok(())
+}
+
+fn run_releasemind_runbook_complete(
+    repo_ref: Option<String>,
+    post_id: Option<String>,
+    gate_id: Option<String>,
+    evidence: Option<String>,
+    json: bool,
+) -> Result<()> {
+    let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
+    let post_id = releasemind_post_id_required(post_id)?;
+    let gate_id = gate_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow!("gate id is required"))?;
+    let state = require_releasemind_auth_state()?;
+    let (base_url, _) = releasemind_base_url();
+    let mut body = serde_json::Map::new();
+    body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
+    body.insert("post_id".to_owned(), Value::String(post_id));
+    body.insert("gate_id".to_owned(), Value::String(gate_id));
+    if let Some(value) =
+        evidence.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("evidence".to_owned(), Value::String(value));
+    }
+    let response = releasemind_request(
+        Method::POST,
+        "/api/cli/runbook/gates/complete",
+        Some(Value::Object(body)),
+        &base_url,
+        Some(state.session_token.as_str()),
+    )?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
+        return Ok(());
+    }
+
+    print_releasemind_runbook_response(
+        "releasemind runbook gate completed",
+        &repo_ref,
+        &response.2,
+    );
+    Ok(())
+}
+
 fn run_releasemind_play_plan(
     repo_ref: Option<String>,
     base_tag: Option<String>,
@@ -38110,6 +38261,24 @@ fn print_releasemind_release_response(label: &str, repo_ref: &str, payload: &Val
     print_cli_kv("release_url", json_string_field(payload, "release_url").unwrap_or("(none)"));
     if let Some(message) = json_string_field(payload, "message") {
         print_cli_kv("message", message);
+    }
+}
+
+fn print_releasemind_runbook_response(label: &str, repo_ref: &str, payload: &Value) {
+    println!("{label}");
+    print_cli_kv("repo_ref", repo_ref);
+    let runbook = payload.get("runbook").unwrap_or(payload);
+    print_cli_kv("template_key", json_string_field(runbook, "template_key").unwrap_or("(none)"));
+    if let Some(post_id) = json_string_field(runbook, "post_id") {
+        print_cli_kv("post_id", post_id);
+    }
+    if let Some(gates) = runbook.get("gates").and_then(Value::as_array) {
+        for gate in gates {
+            let id = json_string_field(gate, "id").unwrap_or("(none)");
+            let status = json_string_field(gate, "status").unwrap_or("(none)");
+            let title = json_string_field(gate, "title").unwrap_or("(none)");
+            println!("{id} status={status} title={title}");
+        }
     }
 }
 

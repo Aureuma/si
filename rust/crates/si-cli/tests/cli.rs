@@ -15035,6 +15035,128 @@ fn releasemind_release_publish_infers_repo_from_git_origin() {
 }
 
 #[test]
+fn releasemind_runbook_plan_uses_saved_session_and_git_origin() {
+    let home = tempdir().expect("tempdir");
+    let repo = tempdir().expect("repo tempdir");
+    run_git(repo.path(), &["init"]);
+    run_git(repo.path(), &["remote", "add", "origin", "git@github.com:Aureuma/si.git"]);
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/cli/runbook/plan HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_runbook_plan")],
+            r#"{"ok":true,"runbook":{"template_key":"github_release_standard","template_version":1,"gates":[{"id":"tests","title":"Validation checks","status":"pending","required":true}]}}"#,
+        )
+    });
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
+
+    let output = cargo_bin()
+        .current_dir(repo.path())
+        .env("HOME", home.path())
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args(["orbit", "releasemind", "runbook", "plan", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_runbook_plan");
+    assert_eq!(parsed["data"]["runbook"]["template_key"], "github_release_standard");
+    server.join();
+}
+
+#[test]
+fn releasemind_runbook_status_uses_saved_session() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /api/cli/runbook/status?repo_full_name=Aureuma%2Fsi&post_id=post-1 HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_runbook_status")],
+            r#"{"ok":true,"runbook":{"post_id":"post-1","repo_id":"repo-1","template_key":"github_release_standard","template_version":1,"gates":[{"id":"approval","title":"Human review","status":"pending","required":true}]}}"#,
+        )
+    });
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args([
+            "orbit",
+            "releasemind",
+            "runbook",
+            "status",
+            "--repo",
+            "Aureuma/si",
+            "post-1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_runbook_status");
+    assert_eq!(parsed["data"]["runbook"]["post_id"], "post-1");
+    server.join();
+}
+
+#[test]
+fn releasemind_runbook_complete_posts_gate_evidence() {
+    let home = tempdir().expect("tempdir");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /api/cli/runbook/gates/complete HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer rmses.test.secret\r\n"));
+        assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
+        assert!(request.contains("\"post_id\":\"post-1\""));
+        assert!(request.contains("\"gate_id\":\"tests\""));
+        assert!(request.contains("\"evidence\":\"cargo test -p si-rs-cli releasemind_runbook\""));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rm_runbook_complete")],
+            r#"{"ok":true,"runbook":{"post_id":"post-1","repo_id":"repo-1","template_key":"github_release_standard","template_version":1,"gates":[{"id":"tests","title":"Validation checks","status":"complete","required":true,"evidence":"cargo test -p si-rs-cli releasemind_runbook"}]}}"#,
+        )
+    });
+    write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("RELEASEMIND_API_BASE_URL", &server.base_url)
+        .args([
+            "orbit",
+            "releasemind",
+            "runbook",
+            "complete",
+            "--repo",
+            "Aureuma/si",
+            "post-1",
+            "tests",
+            "--evidence",
+            "cargo test -p si-rs-cli releasemind_runbook",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rm_runbook_complete");
+    assert_eq!(parsed["data"]["runbook"]["gates"][0]["status"], "complete");
+    server.join();
+}
+
+#[test]
 fn releasemind_play_plan_uses_saved_session_and_git_origin() {
     let home = tempdir().expect("tempdir");
     let repo = tempdir().expect("repo tempdir");
@@ -15172,6 +15294,7 @@ fn releasemind_help_hides_automation_only_commands() {
     let root_text = String::from_utf8(root_help).expect("root help utf8");
     assert!(root_text.contains("\n  repo"));
     assert!(root_text.contains("\n  token"));
+    assert!(root_text.contains("\n  runbook"));
     assert!(root_text.contains("\n  play"));
     assert!(!root_text.contains("\n  resolve"));
 }
@@ -15217,6 +15340,20 @@ fn releasemind_repo_token_and_play_help_surface_is_visible() {
     .expect("play help utf8");
     assert!(play_help.contains("plan"));
     assert!(play_help.contains("publish"));
+
+    let runbook_help = String::from_utf8(
+        cargo_bin()
+            .args(["orbit", "releasemind", "runbook", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("runbook help utf8");
+    assert!(runbook_help.contains("plan"));
+    assert!(runbook_help.contains("status"));
+    assert!(runbook_help.contains("complete"));
 }
 
 #[test]
