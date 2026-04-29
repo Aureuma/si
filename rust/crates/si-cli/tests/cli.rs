@@ -4691,6 +4691,100 @@ fn nucleus_hook_rule_cli_round_trips_on_live_service() {
 
 #[test]
 #[allow(clippy::result_large_err)]
+fn nucleus_cron_rule_cli_round_trips_on_live_service() {
+    let temp = tempdir().expect("tempdir");
+    let state_root = temp.path().join("nucleus");
+    let ws_url = format!(
+        "{}/ws",
+        spawn_live_nucleus_service_with_runtime(&state_root, Arc::new(TestRuntime::default()))
+            .replacen("http", "ws", 1)
+    );
+
+    let upsert_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "cron",
+            "upsert",
+            "svelte-docs-nightly",
+            "--schedule-kind",
+            "every",
+            "--schedule",
+            "60s",
+            "--instructions",
+            "Audit Svelte docs and blog readiness",
+            "--reset",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let upserted: Value = serde_json::from_slice(&upsert_output).expect("parse cron upsert");
+    assert_eq!(upserted["name"], json!("svelte-docs-nightly"));
+    assert_eq!(upserted["schedule_kind"], json!("every"));
+    assert_eq!(upserted["schedule"], json!("60s"));
+    assert!(upserted["next_due_at"].is_string());
+
+    let list_output = cargo_bin()
+        .args(["nucleus", "producer", "cron", "list", "--endpoint", &ws_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&list_output).expect("parse cron list");
+    assert_eq!(listed.as_array().map(Vec::len), Some(1));
+    assert_eq!(listed[0]["name"], json!("svelte-docs-nightly"));
+
+    let inspect_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "cron",
+            "inspect",
+            "svelte-docs-nightly",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let inspected: Value = serde_json::from_slice(&inspect_output).expect("parse cron inspect");
+    assert_eq!(inspected["instructions"], json!("Audit Svelte docs and blog readiness"));
+
+    let delete_output = cargo_bin()
+        .args([
+            "nucleus",
+            "producer",
+            "cron",
+            "delete",
+            "svelte-docs-nightly",
+            "--endpoint",
+            &ws_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let deleted: Value = serde_json::from_slice(&delete_output).expect("parse cron delete");
+    assert_eq!(deleted["rule_name"], json!("svelte-docs-nightly"));
+    assert_eq!(deleted["deleted"], json!(true));
+}
+
+#[test]
+#[allow(clippy::result_large_err)]
 fn nucleus_github_notification_event_ingest_routes_hook_task_and_logs_event() {
     let temp = tempdir().expect("tempdir");
     let state_root = temp.path().join("nucleus");

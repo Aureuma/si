@@ -461,9 +461,54 @@ enum NucleusProfileCommand {
 
 #[derive(Debug, Subcommand)]
 enum NucleusProducerCommand {
+    Cron {
+        #[command(subcommand)]
+        command: NucleusCronCommand,
+    },
     Hook {
         #[command(subcommand)]
         command: NucleusHookCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum NucleusCronCommand {
+    List {
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Inspect {
+        rule_name: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Upsert {
+        name: String,
+        #[arg(long)]
+        schedule_kind: String,
+        #[arg(long)]
+        schedule: String,
+        #[arg(long)]
+        instructions: String,
+        #[arg(long)]
+        enabled: Option<bool>,
+        #[arg(long, action = ArgAction::SetTrue)]
+        reset: bool,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Delete {
+        rule_name: String,
+        #[arg(long)]
+        endpoint: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
     },
 }
 
@@ -17060,6 +17105,63 @@ fn run_nucleus_profile_list(endpoint: Option<String>, format: OutputFormat) -> R
 
 fn parse_nucleus_json_arg(value: &str, flag: &str) -> Result<Value> {
     serde_json::from_str(value).with_context(|| format!("parse {flag} as JSON"))
+}
+
+fn run_nucleus_cron_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
+    let payload =
+        run_nucleus_gateway_request(endpoint.as_deref(), "producer.cron.list", json!({}))?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_cron_inspect(
+    endpoint: Option<String>,
+    rule_name: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.cron.inspect",
+        json!({ "rule_name": rule_name }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_cron_upsert(
+    endpoint: Option<String>,
+    name: String,
+    schedule_kind: String,
+    schedule: String,
+    instructions: String,
+    enabled: Option<bool>,
+    reset: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.cron.upsert",
+        json!({
+            "name": name,
+            "schedule_kind": schedule_kind,
+            "schedule": schedule,
+            "instructions": instructions,
+            "enabled": enabled,
+            "reset": reset,
+        }),
+    )?;
+    print_nucleus_output(format, &payload)
+}
+
+fn run_nucleus_cron_delete(
+    endpoint: Option<String>,
+    rule_name: String,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = run_nucleus_gateway_request(
+        endpoint.as_deref(),
+        "producer.cron.delete",
+        json!({ "rule_name": rule_name }),
+    )?;
+    print_nucleus_output(format, &payload)
 }
 
 fn run_nucleus_hook_list(endpoint: Option<String>, format: OutputFormat) -> Result<()> {
@@ -35720,6 +35822,36 @@ fn main() -> Result<()> {
                 }
             },
             NucleusCommand::Producer { command } => match command {
+                NucleusProducerCommand::Cron { command } => match command {
+                    NucleusCronCommand::List { endpoint, format } => {
+                        run_nucleus_cron_list(endpoint, format)?
+                    }
+                    NucleusCronCommand::Inspect { rule_name, endpoint, format } => {
+                        run_nucleus_cron_inspect(endpoint, rule_name, format)?
+                    }
+                    NucleusCronCommand::Upsert {
+                        name,
+                        schedule_kind,
+                        schedule,
+                        instructions,
+                        enabled,
+                        reset,
+                        endpoint,
+                        format,
+                    } => run_nucleus_cron_upsert(
+                        endpoint,
+                        name,
+                        schedule_kind,
+                        schedule,
+                        instructions,
+                        enabled,
+                        reset,
+                        format,
+                    )?,
+                    NucleusCronCommand::Delete { rule_name, endpoint, format } => {
+                        run_nucleus_cron_delete(endpoint, rule_name, format)?
+                    }
+                },
                 NucleusProducerCommand::Hook { command } => match command {
                     NucleusHookCommand::List { endpoint, format } => {
                         run_nucleus_hook_list(endpoint, format)?
@@ -36010,6 +36142,9 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["nucleus", "service", "stop"] => Some("Stop the local SI Nucleus user service."),
         ["nucleus", "service", "restart"] => Some("Restart the local SI Nucleus user service."),
         ["nucleus", "service", "status"] => Some("Show SI Nucleus service status and log hints."),
+        ["nucleus", "producer"] => Some("Manage Nucleus task producers."),
+        ["nucleus", "producer", "cron"] => Some("Manage Nucleus cron task producers."),
+        ["nucleus", "producer", "hook"] => Some("Manage Nucleus event hook task producers."),
         ["codex"] => Some("Manage Codex profiles and worker sessions."),
         ["codex", "profile"] => Some("Manage Codex profiles."),
         ["codex", "spawn"] => Some("Start a Codex worker for a chosen profile."),
