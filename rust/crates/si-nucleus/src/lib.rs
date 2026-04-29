@@ -1621,6 +1621,25 @@ impl NucleusStore {
         Ok(None)
     }
 
+    fn find_active_task_by_producer_rule_locked(
+        &self,
+        source: TaskSource,
+        producer_rule_name: &str,
+    ) -> Result<Option<TaskRecord>> {
+        for task in load_json_records_from_child_dirs::<TaskRecord>(
+            &self.paths.tasks_state_dir,
+            "task.json",
+        )? {
+            if task.source == source
+                && task.producer_rule_name.as_deref() == Some(producer_rule_name)
+                && !is_prunable_task_status(task.status)
+            {
+                return Ok(Some(task));
+            }
+        }
+        Ok(None)
+    }
+
     fn read_worker_locked(&self, worker_id: &WorkerId) -> Result<Option<WorkerRecord>> {
         let path = self.paths.worker_path(worker_id);
         if !path.exists() {
@@ -3060,6 +3079,23 @@ impl NucleusService {
                 break;
             }
             let dedup_key = cron_due_key(&rule.name, due_at);
+            if self
+                .store
+                .find_task_by_producer_dedup_locked(TaskSource::Cron, &rule.name, &dedup_key)?
+                .is_some()
+            {
+                rule.last_emitted_at = Some(due_at);
+                rule.next_due_at = next_cron_due_after(rule, due_at)?;
+                changed = true;
+                continue;
+            }
+            if self
+                .store
+                .find_active_task_by_producer_rule_locked(TaskSource::Cron, &rule.name)?
+                .is_some()
+            {
+                break;
+            }
             let title = format!(
                 "Cron {} @ {}",
                 rule.name,
@@ -3091,6 +3127,7 @@ impl NucleusService {
             rule.last_emitted_at = Some(due_at);
             rule.next_due_at = next_cron_due_after(rule, due_at)?;
             changed = true;
+            break;
         }
         if changed {
             self.write_cron_rule(rule)?;
@@ -6408,7 +6445,9 @@ fn infer_error_code(error: &anyhow::Error) -> &'static str {
     } else if message.contains("must match")
         || message.contains("parse ")
         || message.contains("must be at least")
+        || message.contains("must be positive")
         || message.contains("cannot be empty")
+        || message.contains("unsupported ")
     {
         "invalid_params"
     } else if message.contains("unavailable") {
@@ -9157,6 +9196,43 @@ mod tests {
         assert_eq!(delete_response.status(), StatusCode::OK);
         let deleted = response_json(delete_response).await;
         assert_eq!(deleted["deleted"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn rest_cron_producer_rejects_invalid_schedule_as_bad_request() {
+        let temp = tempdir().expect("tempdir");
+        let app = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service")
+        .router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/producers/cron")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "name": "bad-cron",
+                            "enabled": true,
+                            "schedule_kind": "every",
+                            "schedule": "0s",
+                            "instructions": "invalid schedule",
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response_json(response).await;
+        assert_eq!(body["error"]["code"], json!("invalid_params"));
+        assert!(body["error"]["message"].as_str().unwrap_or_default().contains("positive"));
     }
 
     #[tokio::test]
@@ -14385,6 +14461,70 @@ mod tests {
         let stored = read_cron_rule(&state_root, "nightly");
         assert_eq!(stored.last_emitted_at, Some(due_at));
         assert!(stored.next_due_at.is_some_and(|value| value > now));
+    }
+
+    #[test]
+    fn cron_producer_waits_for_active_rule_task_before_emitting_again() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:4747".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        let now = Utc::now();
+        let due_at = now - ChronoDuration::seconds(30);
+        write_cron_rule(
+            &state_root,
+            &CronRuleRecord {
+                name: "nightly".to_owned(),
+                enabled: true,
+                schedule_kind: CronScheduleKind::Every,
+                schedule: "60s".to_owned(),
+                instructions: "Run nightly maintenance".to_owned(),
+                last_emitted_at: Some(due_at - ChronoDuration::seconds(60)),
+                next_due_at: Some(due_at),
+                version: current_persisted_version().to_owned(),
+            },
+        );
+        let (active_task, _) = service
+            .store
+            .create_producer_task(
+                CreateTaskInput {
+                    title: "Cron nightly @ active".to_owned(),
+                    instructions: "Simulate an active previous cron task".to_owned(),
+                    source: TaskSource::Cron,
+                    profile: None,
+                    session_id: None,
+                    max_retries: None,
+                    timeout_seconds: None,
+                },
+                "nightly",
+                "nightly:previous",
+            )
+            .expect("create active task")
+            .expect("active task");
+
+        service.process_cron_producers_at(now).expect("process cron");
+        assert_eq!(service.store.list_tasks().expect("list tasks").len(), 1);
+        let blocked = read_cron_rule(&state_root, "nightly");
+        assert_eq!(blocked.next_due_at, Some(due_at));
+
+        let mut finished = active_task;
+        finished.transition_to(TaskStatus::Running, None).expect("running");
+        finished.transition_to(TaskStatus::Done, None).expect("done");
+        write_json_atomic(&service.store.paths().task_path(&finished.task_id), &finished)
+            .expect("write finished task");
+
+        service.process_cron_producers_at(now).expect("process cron after finish");
+        let tasks = service.store.list_tasks().expect("list tasks");
+        assert_eq!(tasks.len(), 2);
+        assert!(tasks.iter().any(|task| {
+            task.producer_rule_name.as_deref() == Some("nightly")
+                && task.producer_dedup_key.as_deref()
+                    == Some(cron_due_key("nightly", due_at).as_str())
+        }));
     }
 
     #[test]

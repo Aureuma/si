@@ -120,6 +120,7 @@ Cron producers:
 - `once_at` uses an RFC3339 timestamp, `every` accepts positive `s`, `m`, `h`, or `d` durations such as `30m`, and `cron` accepts the six-field cron format used by the runtime parser.
 - Upserts preserve the next due time when the schedule is unchanged; pass `--reset` to recompute it from now.
 - Each due fire creates at most one task using a producer dedup key, so replay after restart advances the rule without duplicating already-created tasks.
+- Cron producers do not overlap by default: if a previous task for the same rule is still queued, running, or blocked, Nucleus keeps the due time pending instead of creating another task.
 
 Hook producers:
 
