@@ -29,7 +29,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.59.41"
+version = "0.59.42"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/Aureuma/si"
@@ -44,6 +44,7 @@ chrono = { version = "0.4.41", features = ["clock", "serde"] }
 clap = { version = "4.5.39", features = ["derive"] }
 cron = "0.15.0"
 futures-util = "0.3.32"
+hmac = "0.12.1"
 libc = "0.2.172"
 reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 regex = "1.12.2"
