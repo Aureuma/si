@@ -26,6 +26,7 @@ This page is the canonical map of SI integration families.
 | Oracle Cloud Infrastructure | `si orbit oci ...` | [OCI](./OCI) |
 | WorkOS | `si orbit workos ...` | [WorkOS](./WORKOS) |
 | Apple App Store | `si orbit apple store ...` | [Apple App Store](./APPLE_APPSTORE) |
+| ReleaseMind runbooks | `si orbit releasemind runbook ...` | [Release Runbook](./RELEASE_RUNBOOK) |
 | Publish bridge | `si publish ...` | [Publish](./PUBLISH) |
 | Provider orbit inventory | `si orbit list` | [Providers](./PROVIDERS) |
 | Surf browser runtime | `si surf ...` | [Browser Runtime](./BROWSER) |
