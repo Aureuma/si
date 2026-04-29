@@ -95,7 +95,7 @@ For any integration that touches credentials, billing, or production mutation:
 
 1. Propose IA changes in a ticket under `tickets/`.
 2. Update docs page(s) and navigation in `docs.json` together.
-3. Run `si mintlify validate` and `si mintlify broken-links`.
+3. Run the external Mintlify CLI: `mintlify validate` and `mintlify broken-links`.
 4. Keep commits scoped (foundation vs provider docs vs polish).
 
 ## Definition of done for docs PRs

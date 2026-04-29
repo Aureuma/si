@@ -15,9 +15,9 @@ Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[work
    - npm: `mkdir -p "$HOME/.npm-global" && npm config set prefix "$HOME/.npm-global" && export PATH="$HOME/.npm-global/bin:$PATH" && npm install -g @aureuma/si`
    - Homebrew: `brew install aureuma/si/si`
 2. Build and verify your local binary from source when needed: `./.artifacts/cargo-target/release/si-rs build self`
-3. Validate secret setup: `si vault status`
+3. Validate secret setup: `si fort doctor`
 4. Inspect command surface: `si --help`
-5. Validate docs before publishing changes: `si mintlify validate`
+5. Validate docs before publishing changes with the external Mintlify CLI: `mintlify validate`
 
 ## Documentation entry points
 
@@ -51,5 +51,5 @@ Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[work
 
 1. Update or add the relevant page.
 2. Update `docs.json` navigation at the same time.
-3. Run `si mintlify validate`.
-4. Run `si mintlify broken-links` before publishing.
+3. Run `mintlify validate`.
+4. Run `mintlify broken-links` before publishing.

@@ -25,17 +25,15 @@ si orbit openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
 
 ```bash
 si orbit openai auth status --account core --json
-si orbit openai auth status --auth-mode codex --profile main --json
-si orbit openai auth codex-status --profile main --json
+si codex profile show main --format json
 si orbit openai context list --json
 si orbit openai context current --json
 si orbit openai context use --account core --org-id org_xxx --project-id proj_xxx
 si orbit openai doctor --account core --public --json
 ```
 
-`si orbit openai auth` supports two modes:
-- `api` (default): validates OpenAI API-key auth against `api.openai.com`.
-- `codex`: validates ChatGPT/Codex account auth from SI codex profiles (non-API-key flow).
+`si orbit openai auth status` validates OpenAI API-key auth against `api.openai.com`.
+ChatGPT/Codex account quota and profile auth are reported through `si codex profile show|list`.
 
 ## Model and project administration
 

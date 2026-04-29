@@ -23,7 +23,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCL
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
 - Browser runtime: local Playwright browser runtime under `si surf ...`, including optional Fort-backed injection for a stable noVNC viewer password on `si surf start`.
-- Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
+- Docs workflow: Mintlify content under `docs/`, validated with the external Mintlify CLI.
 
 ## Repo layout
 
@@ -129,9 +129,8 @@ then `~/.si/nucleus/gateway/metadata.json`, then `ws://127.0.0.1:4747/ws`.
 Mintlify docs tooling:
 
 ```bash
-si mintlify init --repo . --docs-dir docs --site-url https://docs.si.aureuma.ai --force
-si mintlify validate
-si mintlify dev
+mintlify validate
+mintlify dev
 ```
 
 ## Command map
@@ -141,7 +140,6 @@ si mintlify dev
 - `si vault ...`: secure secret workflows.
 - `si orbit ...`: provider bridges and provider capability inventory.
 - `si surf ...`: Playwright browser runtime.
-- `si mintlify ...`: docs site bootstrap/validation/dev wrappers.
 - `si build ...`: self-build and release workflows.
 
 Full command surface: run `si --help` and command-specific help (`si <command> --help`).

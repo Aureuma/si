@@ -7,8 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use chrono::{DateTime, Local, TimeZone, Utc};
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use si_nucleus_core::{
     CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId, WorkerStatus,
@@ -18,7 +17,11 @@ use si_nucleus_runtime::{
     RuntimeRunOutcome, RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
     WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
-use si_rs_codex::codex_profile_fort_runtime_env;
+use si_rs_codex::{
+    build_codex_app_server_status_input, codex_app_server_status_from_values,
+    codex_profile_fort_runtime_env, parse_codex_app_server_request_id,
+    parse_codex_app_server_status,
+};
 use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -201,7 +204,7 @@ fn stdout_loop(
         let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
             continue;
         };
-        if let Some(id) = value.get("id").and_then(parse_request_id) {
+        if let Some(id) = value.get("id").and_then(parse_codex_app_server_request_id) {
             let tx = {
                 let mut pending = pending.lock().expect("worker pending lock");
                 pending.remove(&id)
@@ -282,7 +285,20 @@ impl CodexNucleusRuntime {
                 "cwd": workdir,
             }),
         )?;
-        let snapshot = runtime_status_snapshot_from_values(&rate_limits, &account, &config)?;
+        let status = codex_app_server_status_from_values(&rate_limits, &account, &config)?;
+        let snapshot = RuntimeStatusSnapshot {
+            source: status.source,
+            model: status.model,
+            reasoning_effort: status.reasoning_effort,
+            account_email: status.account_email,
+            account_plan: status.account_plan,
+            five_hour_left_pct: status.five_hour_left_pct,
+            five_hour_reset: status.five_hour_reset,
+            five_hour_remaining_minutes: status.five_hour_remaining_minutes,
+            weekly_left_pct: status.weekly_left_pct,
+            weekly_reset: status.weekly_reset,
+            weekly_remaining_minutes: status.weekly_remaining_minutes,
+        };
         Ok(WorkerProbeResult { status: WorkerStatus::Ready, snapshot, checked_at: Utc::now() })
     }
 
@@ -687,170 +703,26 @@ fn command_spec_from_runtime(command: &RuntimeCommand) -> CommandSpec {
     spec
 }
 
-fn build_app_server_request(id: i64, method: &str, params: Value) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    })
-}
-
-fn build_app_server_initialize_request(id: i64) -> Value {
-    build_app_server_request(
-        id,
-        "initialize",
-        json!({
-            "clientInfo": {
-                "name": "si-nucleus",
-                "version": si_rs_core::version::current_version(),
-            },
-            "capabilities": {
-                "experimentalApi": false,
-            },
-        }),
-    )
-}
-
-fn serialize_app_server_requests(requests: &[Value]) -> Vec<u8> {
-    let mut payload = Vec::new();
-    for request in requests {
-        payload.extend(serde_json::to_vec(request).expect("app server request json"));
-        payload.push(b'\n');
-    }
-    payload
-}
-
 fn build_app_server_status_input(cwd: Option<String>) -> Vec<u8> {
-    serialize_app_server_requests(&[
-        build_app_server_initialize_request(1),
-        build_app_server_request(2, "account/rateLimits/read", Value::Null),
-        build_app_server_request(3, "account/read", json!({ "refreshToken": false })),
-        build_app_server_request(
-            4,
-            "config/read",
-            json!({
-                "includeLayers": false,
-                "cwd": cwd,
-            }),
-        ),
-    ])
+    build_codex_app_server_status_input("si-nucleus", si_rs_core::version::current_version(), cwd)
 }
 
 fn parse_app_server_status(raw: &str) -> Result<WorkerProbeResult> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        anyhow::bail!("empty app-server output");
-    }
-    let mut rate_resp: Option<Value> = None;
-    let mut account_resp: Option<Value> = None;
-    let mut config_resp: Option<Value> = None;
-    let mut rate_err: Option<String> = None;
-
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(envelope) = serde_json::from_str::<AppServerEnvelope>(line) else {
-            continue;
-        };
-        let Some(id) = parse_request_id(&envelope.id) else {
-            continue;
-        };
-        if let Some(error) = envelope.error {
-            if id == 2 {
-                let message = error.message.trim();
-                rate_err = Some(if message.is_empty() {
-                    "rate limits request failed".to_owned()
-                } else {
-                    message.to_owned()
-                });
-            }
-            continue;
-        }
-        match id {
-            2 => rate_resp = Some(envelope.result),
-            3 => account_resp = Some(envelope.result),
-            4 => config_resp = Some(envelope.result),
-            _ => {}
-        }
-    }
-
-    if let Some(rate_err) = rate_err {
-        anyhow::bail!(rate_err);
-    }
-    let rate_resp = rate_resp.ok_or_else(|| anyhow!("rate limits missing"))?;
-    let account_resp = account_resp.unwrap_or(Value::Null);
-    let config_resp = config_resp.unwrap_or(Value::Null);
-    let snapshot = runtime_status_snapshot_from_values(&rate_resp, &account_resp, &config_resp)?;
+    let status = parse_codex_app_server_status(raw)?;
+    let snapshot = RuntimeStatusSnapshot {
+        source: status.source,
+        model: status.model,
+        reasoning_effort: status.reasoning_effort,
+        account_email: status.account_email,
+        account_plan: status.account_plan,
+        five_hour_left_pct: status.five_hour_left_pct,
+        five_hour_reset: status.five_hour_reset,
+        five_hour_remaining_minutes: status.five_hour_remaining_minutes,
+        weekly_left_pct: status.weekly_left_pct,
+        weekly_reset: status.weekly_reset,
+        weekly_remaining_minutes: status.weekly_remaining_minutes,
+    };
     Ok(WorkerProbeResult { status: WorkerStatus::Ready, snapshot, checked_at: Utc::now() })
-}
-
-fn runtime_status_snapshot_from_values(
-    rate: &Value,
-    account: &Value,
-    config: &Value,
-) -> Result<RuntimeStatusSnapshot> {
-    let rate_resp = serde_json::from_value::<AppRateLimitsResponse>(rate.clone())?;
-    let account_resp =
-        serde_json::from_value::<AppAccountResponse>(account.clone()).unwrap_or_default();
-    let config_resp =
-        serde_json::from_value::<AppConfigResponse>(config.clone()).unwrap_or_default();
-
-    let total_limit_min = std::env::var("CODEX_PLAN_LIMIT_MINUTES")
-        .ok()
-        .and_then(|value| value.trim().parse::<i64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(300);
-    let now = chrono::Local::now();
-    let (five_hour_left_pct, five_hour_remaining_minutes, five_hour_reset) = rate_resp
-        .rate_limits
-        .primary
-        .as_ref()
-        .map(|window| window_usage(window, total_limit_min, now))
-        .unwrap_or((None, None, None));
-    let (weekly_left_pct, weekly_remaining_minutes, weekly_reset) = rate_resp
-        .rate_limits
-        .secondary
-        .as_ref()
-        .map(|window| window_usage(window, 0, now))
-        .unwrap_or((None, None, None));
-
-    Ok(RuntimeStatusSnapshot {
-        source: "app-server".to_owned(),
-        model: config_resp.config.model.filter(|value| !value.trim().is_empty()),
-        reasoning_effort: config_resp
-            .config
-            .model_reasoning_effort
-            .filter(|value| !value.trim().is_empty()),
-        account_email: account_resp
-            .account
-            .as_ref()
-            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
-            .map(|account| account.email.trim().to_owned())
-            .filter(|value| !value.is_empty()),
-        account_plan: account_resp
-            .account
-            .as_ref()
-            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
-            .map(|account| account.plan_type.trim().to_owned())
-            .filter(|value| !value.is_empty()),
-        five_hour_left_pct,
-        five_hour_reset,
-        five_hour_remaining_minutes,
-        weekly_left_pct,
-        weekly_reset,
-        weekly_remaining_minutes,
-    })
-}
-
-fn parse_request_id(value: &Value) -> Option<i64> {
-    match value {
-        Value::Number(number) => number.as_i64(),
-        Value::String(value) => value.trim().parse::<i64>().ok(),
-        _ => None,
-    }
 }
 
 fn matches_turn(params: &Value, thread_id: &str, turn_id: &str) -> bool {
@@ -1030,103 +902,6 @@ fn is_auth_error(turn: &Value) -> bool {
     normalized.contains("auth")
         || normalized.contains("login")
         || normalized.contains("unauthorized")
-}
-
-fn window_usage(
-    window: &AppRateLimitWindow,
-    fallback_minutes: i64,
-    now: chrono::DateTime<Local>,
-) -> (Option<f64>, Option<i32>, Option<String>) {
-    let used = window.used_percent as f64;
-    if !(0.0..=100.0).contains(&used) {
-        return (None, None, None);
-    }
-    let remaining_pct = 100.0 - used;
-    let window_minutes = window.window_duration_mins.unwrap_or(fallback_minutes);
-    let remaining_minutes = window
-        .resets_at
-        .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
-        .filter(|reset_at| *reset_at > now)
-        .map(|reset_at| ((reset_at - now).num_seconds() as f64 / 60.0).ceil() as i32)
-        .filter(|value| *value > 0)
-        .or_else(|| {
-            if window_minutes > 0 {
-                Some(((window_minutes as f64) * remaining_pct / 100.0).round() as i32)
-            } else {
-                None
-            }
-        });
-    let reset = window
-        .resets_at
-        .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
-        .map(format_reset_at);
-    (Some(remaining_pct), remaining_minutes, reset)
-}
-
-fn format_reset_at(time: chrono::DateTime<Local>) -> String {
-    time.format("%b %-d, %Y %-I:%M %p").to_string()
-}
-
-#[derive(Debug, Deserialize)]
-struct AppServerEnvelope {
-    id: Value,
-    #[serde(default)]
-    result: Value,
-    error: Option<AppServerError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppServerError {
-    message: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitsResponse {
-    #[serde(rename = "rateLimits")]
-    rate_limits: AppRateLimitSnapshot,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitSnapshot {
-    primary: Option<AppRateLimitWindow>,
-    secondary: Option<AppRateLimitWindow>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitWindow {
-    #[serde(rename = "usedPercent")]
-    used_percent: i32,
-    #[serde(rename = "windowDurationMins")]
-    window_duration_mins: Option<i64>,
-    #[serde(rename = "resetsAt")]
-    resets_at: Option<i64>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct AppAccountResponse {
-    account: Option<AppAccount>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppAccount {
-    #[serde(rename = "type")]
-    account_type: String,
-    email: String,
-    #[serde(rename = "planType")]
-    plan_type: String,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct AppConfigResponse {
-    #[serde(default)]
-    config: AppConfig,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct AppConfig {
-    model: Option<String>,
-    #[serde(rename = "model_reasoning_effort")]
-    model_reasoning_effort: Option<String>,
 }
 
 #[cfg(test)]

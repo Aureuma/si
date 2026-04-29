@@ -41,8 +41,9 @@ use si_nucleus_runtime::{
 };
 use si_nucleus_runtime_codex::CodexNucleusRuntime;
 use si_rs_codex::{
-    CodexProfileFortSessionPaths, codex_profile_fort_session_paths, codex_tmux_session_name,
-    codex_worker_name,
+    CodexProfileFortSessionPaths, build_codex_app_server_status_input,
+    codex_profile_fort_session_paths, codex_tmux_session_name, codex_worker_name,
+    parse_codex_app_server_status,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -18809,6 +18810,8 @@ struct CodexWarmupRunProfileView {
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_left_pct: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_used_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     weekly_reset: Option<String>,
 }
 
@@ -18823,67 +18826,6 @@ struct VaultTrustLookupView {
     stored_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     trusted_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppServerEnvelope {
-    id: serde_json::Value,
-    #[serde(default)]
-    result: serde_json::Value,
-    error: Option<AppServerError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppServerError {
-    message: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitsResponse {
-    #[serde(rename = "rateLimits")]
-    rate_limits: AppRateLimitSnapshot,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitSnapshot {
-    primary: Option<AppRateLimitWindow>,
-    secondary: Option<AppRateLimitWindow>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppRateLimitWindow {
-    #[serde(rename = "usedPercent")]
-    used_percent: i32,
-    #[serde(rename = "windowDurationMins")]
-    window_duration_mins: Option<i64>,
-    #[serde(rename = "resetsAt")]
-    resets_at: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppAccountResponse {
-    account: Option<AppAccount>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppAccount {
-    #[serde(rename = "type")]
-    account_type: String,
-    email: String,
-    #[serde(rename = "planType")]
-    plan_type: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppConfigResponse {
-    config: AppConfig,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppConfig {
-    model: Option<String>,
-    #[serde(rename = "model_reasoning_effort")]
-    model_reasoning_effort: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -71623,7 +71565,7 @@ fn run_local_codex_app_server_status(
         let stdin =
             child.stdin.as_mut().ok_or_else(|| anyhow!("missing codex app-server stdin"))?;
         stdin
-            .write_all(&build_app_server_status_input())
+            .write_all(&build_app_server_status_input(Some(workdir.display().to_string())))
             .context("write codex app-server input")?;
     }
     let output = child.wait_with_output().context("wait for codex app-server")?;
@@ -71688,10 +71630,8 @@ fn codex_warmup_weekly_quota_reached(status: &CodexStatusView) -> bool {
     status.weekly_left_pct.is_some_and(|value| value < 100.0)
 }
 
-fn codex_warmup_weekly_window_started(status: &CodexStatusView) -> bool {
-    codex_warmup_weekly_quota_reached(status)
-        || status.weekly_reset.as_deref().is_some_and(|value| !value.trim().is_empty())
-        || status.weekly_remaining_minutes.is_some_and(|value| value > 0)
+fn codex_warmup_weekly_used_pct(status: &CodexStatusView) -> Option<f64> {
+    status.weekly_left_pct.map(|value| 100.0 - value)
 }
 
 fn codex_status_from_runtime_snapshot(snapshot: RuntimeStatusSnapshot) -> CodexStatusView {
@@ -71754,7 +71694,7 @@ fn run_nucleus_codex_warmup_profile(
     let result = (|| {
         let started = runtime.start_worker(&launch_spec)?;
         let mut status = codex_status_from_runtime_snapshot(started.probe.snapshot);
-        if codex_warmup_weekly_window_started(&status) {
+        if codex_warmup_weekly_quota_reached(&status) {
             return Ok(CodexWarmupProfileOutcome {
                 action: "already-warm".to_owned(),
                 result: "warmed".to_owned(),
@@ -71800,14 +71740,9 @@ fn run_nucleus_codex_warmup_profile(
 
             let probe = runtime.probe_worker(&launch_spec)?;
             status = codex_status_from_runtime_snapshot(probe.snapshot);
-            if codex_warmup_weekly_window_started(&status) {
-                let action = if codex_warmup_weekly_quota_reached(&status) {
-                    "nucleus-burned"
-                } else {
-                    "nucleus-window-started"
-                };
+            if codex_warmup_weekly_quota_reached(&status) {
                 return Ok(CodexWarmupProfileOutcome {
-                    action: action.to_owned(),
+                    action: "nucleus-burned".to_owned(),
                     result: "warmed".to_owned(),
                     error: None,
                     turn_count,
@@ -71816,13 +71751,20 @@ fn run_nucleus_codex_warmup_profile(
             }
         }
 
-        let error = format!(
-            "weekly reset timer did not start after {} Nucleus warmup turn(s); weekly quota is still {} left",
-            turn_count,
-            render_option_percent_value(status.weekly_left_pct),
-        );
+        let error = match status.weekly_left_pct {
+            Some(value) if value >= 100.0 => {
+                format!("weekly quota is still 100% left after {turn_count} Nucleus warmup turn(s)")
+            }
+            Some(_) => format!(
+                "weekly quota did not drop below 100% after {turn_count} Nucleus warmup turn(s); weekly quota is still {} left",
+                render_option_percent_value(status.weekly_left_pct),
+            ),
+            None => format!(
+                "live weekly quota was not reported after {turn_count} Nucleus warmup turn(s)"
+            ),
+        };
         Ok(CodexWarmupProfileOutcome {
-            action: "nucleus-exhausted".to_owned(),
+            action: "quota-unchanged".to_owned(),
             result: "failed".to_owned(),
             error: Some(error),
             turn_count,
@@ -71943,8 +71885,8 @@ fn run_codex_warmup(
         ) {
             Ok(outcome) => {
                 let status = outcome.status;
-                let weekly_used_pct =
-                    status.weekly_left_pct.map(|value| 100.0 - value).unwrap_or(0.0);
+                let weekly_used_pct_view = codex_warmup_weekly_used_pct(&status);
+                let weekly_used_pct = weekly_used_pct_view.unwrap_or(0.0);
                 entry.last_result = outcome.result.clone();
                 entry.last_error = outcome.error.clone().unwrap_or_default();
                 entry.last_weekly_used_pct = weekly_used_pct;
@@ -71952,6 +71894,8 @@ fn run_codex_warmup(
                 entry.last_weekly_reset = status.weekly_reset.clone().unwrap_or_default();
                 if outcome.result == "warmed" {
                     entry.last_warmed_reset = status.weekly_reset.clone().unwrap_or_default();
+                } else {
+                    entry.last_warmed_reset.clear();
                 }
                 entry.last_usage_delta =
                     if last_weekly_used_ok { weekly_used_pct - last_weekly_used_pct } else { 0.0 };
@@ -71974,12 +71918,14 @@ fn run_codex_warmup(
                     five_hour_left_pct: status.five_hour_left_pct,
                     five_hour_reset: status.five_hour_reset,
                     weekly_left_pct: status.weekly_left_pct,
+                    weekly_used_pct: weekly_used_pct_view,
                     weekly_reset: status.weekly_reset,
                 });
             }
             Err(err) => {
                 entry.last_result = "failed".to_owned();
                 entry.last_error = err.to_string();
+                entry.last_warmed_reset.clear();
                 entry.next_due.clear();
                 entry.failure_count += 1;
                 results.push(CodexWarmupRunProfileView {
@@ -71993,6 +71939,7 @@ fn run_codex_warmup(
                     five_hour_left_pct: None,
                     five_hour_reset: None,
                     weekly_left_pct: None,
+                    weekly_used_pct: None,
                     weekly_reset: None,
                 });
             }
@@ -72015,7 +71962,7 @@ fn run_codex_warmup(
             print_cli_kv("state_path", &view.state_path);
             for profile in view.profiles {
                 println!(
-                    "{}\taction={}\tresult={}\tturns={}\tfive_hour_left={}\tweekly_left={}\terror={}",
+                    "{}\taction={}\tresult={}\tturns={}\tfive_hour_left={}\tweekly_left={}\tweekly_used={}\terror={}",
                     stdout_text(&profile.profile_id, CliTone::Command),
                     stdout_text(&profile.action, CliTone::Info),
                     stdout_text(
@@ -72025,6 +71972,7 @@ fn run_codex_warmup(
                     profile.turn_count,
                     render_option_percent_value(profile.five_hour_left_pct),
                     render_option_percent_value(profile.weekly_left_pct),
+                    render_option_percent_value(profile.weekly_used_pct),
                     profile
                         .error
                         .map(|value| stdout_text(&value, CliTone::Danger))
@@ -72183,196 +72131,26 @@ fn apply_codex_tmux_window_identity(
         .status();
 }
 
-fn build_app_server_request(id: i64, method: &str, params: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    })
-}
-
-fn build_app_server_initialize_request(id: i64) -> serde_json::Value {
-    build_app_server_request(
-        id,
-        "initialize",
-        serde_json::json!({
-            "clientInfo": {
-                "name": "si",
-                "version": si_rs_core::version::current_version(),
-            }
-        }),
-    )
-}
-
-fn serialize_app_server_requests(requests: &[serde_json::Value]) -> Vec<u8> {
-    let mut payload = Vec::new();
-    for request in requests {
-        payload.extend(serde_json::to_vec(request).expect("app server request json"));
-        payload.push(b'\n');
-    }
-    payload
-}
-
-fn build_app_server_status_input() -> Vec<u8> {
-    serialize_app_server_requests(&[
-        build_app_server_initialize_request(1),
-        build_app_server_request(2, "account/rateLimits/read", serde_json::Value::Null),
-        build_app_server_request(3, "account/read", serde_json::json!({})),
-        build_app_server_request(4, "config/read", serde_json::json!({})),
-    ])
+fn build_app_server_status_input(cwd: Option<String>) -> Vec<u8> {
+    build_codex_app_server_status_input("si", si_rs_core::version::current_version(), cwd)
 }
 
 fn parse_app_server_status(raw: &str) -> Result<CodexStatusView> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        anyhow::bail!("empty app-server output");
-    }
-    let mut rate_resp: Option<AppRateLimitsResponse> = None;
-    let mut account_resp: Option<AppAccountResponse> = None;
-    let mut config_resp: Option<AppConfigResponse> = None;
-    let mut rate_err: Option<String> = None;
-
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let Ok(envelope) = serde_json::from_str::<AppServerEnvelope>(line) else {
-            continue;
-        };
-        let Some(id) = parse_app_server_id(&envelope.id) else {
-            continue;
-        };
-        if let Some(error) = envelope.error {
-            if id == 2 {
-                let message = error.message.trim();
-                rate_err = Some(if message.is_empty() {
-                    "rate limits request failed".to_owned()
-                } else {
-                    message.to_owned()
-                });
-            }
-            continue;
-        }
-        match id {
-            2 => {
-                if let Ok(parsed) = serde_json::from_value::<AppRateLimitsResponse>(envelope.result)
-                {
-                    rate_resp = Some(parsed);
-                }
-            }
-            3 => {
-                if let Ok(parsed) = serde_json::from_value::<AppAccountResponse>(envelope.result) {
-                    account_resp = Some(parsed);
-                }
-            }
-            4 => {
-                if let Ok(parsed) = serde_json::from_value::<AppConfigResponse>(envelope.result) {
-                    config_resp = Some(parsed);
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(rate_err) = rate_err {
-        anyhow::bail!(rate_err);
-    }
-    let Some(rate_resp) = rate_resp else {
-        anyhow::bail!("rate limits missing");
-    };
-    let total_limit_min = std::env::var("CODEX_PLAN_LIMIT_MINUTES")
-        .ok()
-        .and_then(|value| value.trim().parse::<i64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(300);
-    let now = chrono::Local::now();
-    let (five_hour_left_pct, five_hour_remaining_minutes, five_hour_reset) = rate_resp
-        .rate_limits
-        .primary
-        .as_ref()
-        .map(|window| window_usage(window, total_limit_min, now))
-        .unwrap_or((None, None, None));
-    let (weekly_left_pct, weekly_remaining_minutes, weekly_reset) = rate_resp
-        .rate_limits
-        .secondary
-        .as_ref()
-        .map(|window| window_usage(window, 0, now))
-        .unwrap_or((None, None, None));
-
+    let status = parse_codex_app_server_status(raw)?;
     Ok(CodexStatusView {
-        source: Some("app-server".to_owned()),
+        source: Some(status.source),
         raw: None,
-        model: config_resp
-            .as_ref()
-            .and_then(|resp| resp.config.model.clone())
-            .filter(|v| !v.trim().is_empty()),
-        reasoning_effort: config_resp
-            .as_ref()
-            .and_then(|resp| resp.config.model_reasoning_effort.clone())
-            .filter(|v| !v.trim().is_empty()),
-        account_email: account_resp
-            .as_ref()
-            .and_then(|resp| resp.account.as_ref())
-            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
-            .map(|account| account.email.trim().to_owned())
-            .filter(|v| !v.is_empty()),
-        account_plan: account_resp
-            .as_ref()
-            .and_then(|resp| resp.account.as_ref())
-            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
-            .map(|account| account.plan_type.trim().to_owned())
-            .filter(|v| !v.is_empty()),
-        five_hour_left_pct,
-        five_hour_reset,
-        five_hour_remaining_minutes,
-        weekly_left_pct,
-        weekly_reset,
-        weekly_remaining_minutes,
+        model: status.model,
+        reasoning_effort: status.reasoning_effort,
+        account_email: status.account_email,
+        account_plan: status.account_plan,
+        five_hour_left_pct: status.five_hour_left_pct,
+        five_hour_reset: status.five_hour_reset,
+        five_hour_remaining_minutes: status.five_hour_remaining_minutes,
+        weekly_left_pct: status.weekly_left_pct,
+        weekly_reset: status.weekly_reset,
+        weekly_remaining_minutes: status.weekly_remaining_minutes,
     })
-}
-
-fn parse_app_server_id(value: &serde_json::Value) -> Option<i64> {
-    match value {
-        serde_json::Value::Number(number) => number.as_i64(),
-        serde_json::Value::String(value) => value.trim().parse::<i64>().ok(),
-        _ => None,
-    }
-}
-
-fn window_usage(
-    window: &AppRateLimitWindow,
-    fallback_minutes: i64,
-    now: chrono::DateTime<chrono::Local>,
-) -> (Option<f64>, Option<i32>, Option<String>) {
-    let used = window.used_percent as f64;
-    if !(0.0..=100.0).contains(&used) {
-        return (None, None, None);
-    }
-    let remaining_pct = 100.0 - used;
-    let window_minutes = window.window_duration_mins.unwrap_or(fallback_minutes);
-    let remaining_minutes = window
-        .resets_at
-        .and_then(|timestamp| chrono::Local.timestamp_opt(timestamp, 0).single())
-        .filter(|reset_at| *reset_at > now)
-        .map(|reset_at| ((reset_at - now).num_seconds() as f64 / 60.0).ceil() as i32)
-        .filter(|value| *value > 0)
-        .or_else(|| {
-            if window_minutes > 0 {
-                Some(((window_minutes as f64) * remaining_pct / 100.0).round() as i32)
-            } else {
-                None
-            }
-        });
-    let reset = window
-        .resets_at
-        .and_then(|timestamp| chrono::Local.timestamp_opt(timestamp, 0).single())
-        .map(format_reset_at);
-    (Some(remaining_pct), remaining_minutes, reset)
-}
-
-fn format_reset_at(time: chrono::DateTime<chrono::Local>) -> String {
-    time.format("%b %-d, %Y %-I:%M %p").to_string()
 }
 
 fn run_warmup_status(
@@ -72752,7 +72530,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_warmup_weekly_window_starts_when_reset_timer_exists() {
+    fn codex_warmup_weekly_quota_ignores_reset_timer_without_usage() {
         let mut status = CodexStatusView {
             source: None,
             raw: None,
@@ -72768,13 +72546,30 @@ mod tests {
             weekly_remaining_minutes: None,
         };
 
-        assert!(codex_warmup_weekly_window_started(&status));
+        assert!(!codex_warmup_weekly_quota_reached(&status));
 
         status.weekly_reset = None;
-        assert!(!codex_warmup_weekly_window_started(&status));
+        assert!(!codex_warmup_weekly_quota_reached(&status));
 
         status.weekly_remaining_minutes = Some(10080);
-        assert!(codex_warmup_weekly_window_started(&status));
+        assert!(!codex_warmup_weekly_quota_reached(&status));
+
+        status.weekly_left_pct = Some(99.0);
+        assert!(codex_warmup_weekly_quota_reached(&status));
+    }
+
+    #[test]
+    fn codex_status_input_uses_low_refresh_live_probe_shape() {
+        let payload =
+            String::from_utf8(build_app_server_status_input(Some("/tmp/si-work".to_owned())))
+                .expect("utf8");
+
+        assert!(payload.contains("\"account/rateLimits/read\""));
+        assert!(payload.contains("\"account/read\""));
+        assert!(payload.contains("\"refreshToken\":false"));
+        assert!(payload.contains("\"config/read\""));
+        assert!(payload.contains("\"includeLayers\":false"));
+        assert!(payload.contains("\"cwd\":\"/tmp/si-work\""));
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 ![YouTube](/docs/images/integrations/youtube.svg)
 
-`si orbit google youtube` provides a YouTube Data API v3 command family with vault-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
+`si orbit google youtube` provides a YouTube Data API v3 command family with Fort-backed and env-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
 `si orbit google youtube-data` is an alias with identical behavior.
 
 Related:

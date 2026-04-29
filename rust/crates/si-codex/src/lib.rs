@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use chrono::{Local, TimeZone};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use thiserror::Error;
+
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 pub const CODEX_PROFILE_FORT_DIR_NAME: &str = "fort";
 pub const CODEX_PROFILE_FORT_SESSION_FILE_NAME: &str = "session.json";
@@ -28,6 +33,33 @@ pub struct PromptSegment {
 pub struct ReportParseResult {
     pub segments: Vec<PromptSegment>,
     pub report: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CodexAppServerStatus {
+    pub source: String,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub account_email: Option<String>,
+    pub account_plan: Option<String>,
+    pub five_hour_left_pct: Option<f64>,
+    pub five_hour_reset: Option<String>,
+    pub five_hour_remaining_minutes: Option<i32>,
+    pub weekly_left_pct: Option<f64>,
+    pub weekly_reset: Option<String>,
+    pub weekly_remaining_minutes: Option<i32>,
+}
+
+#[derive(Debug, Error)]
+pub enum CodexAppServerStatusError {
+    #[error("empty app-server output")]
+    EmptyOutput,
+    #[error("{0}")]
+    RateLimitsRequestFailed(String),
+    #[error("rate limits missing")]
+    RateLimitsMissing,
+    #[error("parse rate limits response: {0}")]
+    ParseRateLimits(serde_json::Error),
 }
 
 pub fn codex_worker_name(profile_id: &str) -> String {
@@ -60,6 +92,213 @@ pub fn codex_profile_fort_runtime_env(codex_home: &Path) -> BTreeMap<String, Str
         ("FORT_TOKEN_PATH".to_owned(), paths.access_token_path.display().to_string()),
         ("FORT_REFRESH_TOKEN_PATH".to_owned(), paths.refresh_token_path.display().to_string()),
     ])
+}
+
+pub fn build_codex_app_server_status_input(
+    client_name: &str,
+    client_version: &str,
+    cwd: Option<String>,
+) -> Vec<u8> {
+    serialize_app_server_requests(&[
+        build_app_server_initialize_request(1, client_name, client_version),
+        build_app_server_request(2, "account/rateLimits/read", Value::Null),
+        build_app_server_request(3, "account/read", json!({ "refreshToken": false })),
+        build_app_server_request(
+            4,
+            "config/read",
+            json!({
+                "includeLayers": false,
+                "cwd": cwd,
+            }),
+        ),
+    ])
+}
+
+pub fn parse_codex_app_server_status(
+    raw: &str,
+) -> Result<CodexAppServerStatus, CodexAppServerStatusError> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err(CodexAppServerStatusError::EmptyOutput);
+    }
+    let mut rate_resp: Option<Value> = None;
+    let mut account_resp: Option<Value> = None;
+    let mut config_resp: Option<Value> = None;
+    let mut rate_err: Option<String> = None;
+
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(envelope) = serde_json::from_str::<AppServerEnvelope>(line) else {
+            continue;
+        };
+        let Some(id) = parse_codex_app_server_request_id(&envelope.id) else {
+            continue;
+        };
+        if let Some(error) = envelope.error {
+            if id == 2 {
+                let message = error.message.trim();
+                rate_err = Some(if message.is_empty() {
+                    "rate limits request failed".to_owned()
+                } else {
+                    message.to_owned()
+                });
+            }
+            continue;
+        }
+        match id {
+            2 => rate_resp = Some(envelope.result),
+            3 => account_resp = Some(envelope.result),
+            4 => config_resp = Some(envelope.result),
+            _ => {}
+        }
+    }
+
+    if let Some(rate_err) = rate_err {
+        return Err(CodexAppServerStatusError::RateLimitsRequestFailed(rate_err));
+    }
+    let rate_resp = rate_resp.ok_or(CodexAppServerStatusError::RateLimitsMissing)?;
+    let account_resp = account_resp.unwrap_or(Value::Null);
+    let config_resp = config_resp.unwrap_or(Value::Null);
+    codex_app_server_status_from_values(&rate_resp, &account_resp, &config_resp)
+}
+
+fn build_app_server_request(id: i64, method: &str, params: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params,
+    })
+}
+
+fn build_app_server_initialize_request(id: i64, client_name: &str, client_version: &str) -> Value {
+    build_app_server_request(
+        id,
+        "initialize",
+        json!({
+            "clientInfo": {
+                "name": client_name,
+                "version": client_version,
+            },
+            "capabilities": {
+                "experimentalApi": false,
+            },
+        }),
+    )
+}
+
+fn serialize_app_server_requests(requests: &[Value]) -> Vec<u8> {
+    let mut payload = Vec::new();
+    for request in requests {
+        payload.extend(serde_json::to_vec(request).expect("app server request json"));
+        payload.push(b'\n');
+    }
+    payload
+}
+
+pub fn codex_app_server_status_from_values(
+    rate: &Value,
+    account: &Value,
+    config: &Value,
+) -> Result<CodexAppServerStatus, CodexAppServerStatusError> {
+    let rate_resp = serde_json::from_value::<AppRateLimitsResponse>(rate.clone())
+        .map_err(CodexAppServerStatusError::ParseRateLimits)?;
+    let account_resp =
+        serde_json::from_value::<AppAccountResponse>(account.clone()).unwrap_or_default();
+    let config_resp =
+        serde_json::from_value::<AppConfigResponse>(config.clone()).unwrap_or_default();
+
+    let total_limit_min = std::env::var("CODEX_PLAN_LIMIT_MINUTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(300);
+    let now = Local::now();
+    let (five_hour_left_pct, five_hour_remaining_minutes, five_hour_reset) = rate_resp
+        .rate_limits
+        .primary
+        .as_ref()
+        .map(|window| window_usage(window, total_limit_min, now))
+        .unwrap_or((None, None, None));
+    let (weekly_left_pct, weekly_remaining_minutes, weekly_reset) = rate_resp
+        .rate_limits
+        .secondary
+        .as_ref()
+        .map(|window| window_usage(window, 0, now))
+        .unwrap_or((None, None, None));
+
+    Ok(CodexAppServerStatus {
+        source: "app-server".to_owned(),
+        model: config_resp.config.model.filter(|value| !value.trim().is_empty()),
+        reasoning_effort: config_resp
+            .config
+            .model_reasoning_effort
+            .filter(|value| !value.trim().is_empty()),
+        account_email: account_resp
+            .account
+            .as_ref()
+            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
+            .map(|account| account.email.trim().to_owned())
+            .filter(|value| !value.is_empty()),
+        account_plan: account_resp
+            .account
+            .as_ref()
+            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
+            .map(|account| account.plan_type.trim().to_owned())
+            .filter(|value| !value.is_empty()),
+        five_hour_left_pct,
+        five_hour_reset,
+        five_hour_remaining_minutes,
+        weekly_left_pct,
+        weekly_reset,
+        weekly_remaining_minutes,
+    })
+}
+
+pub fn parse_codex_app_server_request_id(value: &Value) -> Option<i64> {
+    match value {
+        Value::Number(number) => number.as_i64(),
+        Value::String(value) => value.trim().parse::<i64>().ok(),
+        _ => None,
+    }
+}
+
+fn window_usage(
+    window: &AppRateLimitWindow,
+    fallback_minutes: i64,
+    now: chrono::DateTime<Local>,
+) -> (Option<f64>, Option<i32>, Option<String>) {
+    let used = window.used_percent as f64;
+    if !(0.0..=100.0).contains(&used) {
+        return (None, None, None);
+    }
+    let remaining_pct = 100.0 - used;
+    let window_minutes = window.window_duration_mins.unwrap_or(fallback_minutes);
+    let remaining_minutes = window
+        .resets_at
+        .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
+        .filter(|reset_at| *reset_at > now)
+        .map(|reset_at| ((reset_at - now).num_seconds() as f64 / 60.0).ceil() as i32)
+        .filter(|value| *value > 0)
+        .or_else(|| {
+            if window_minutes > 0 {
+                Some(((window_minutes as f64) * remaining_pct / 100.0).round() as i32)
+            } else {
+                None
+            }
+        });
+    let reset = window
+        .resets_at
+        .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
+        .map(format_reset_at);
+    (Some(remaining_pct), remaining_minutes, reset)
+}
+
+fn format_reset_at(time: chrono::DateTime<Local>) -> String {
+    time.format("%b %-d, %Y %-I:%M %p").to_string()
 }
 
 pub fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> {
@@ -95,6 +334,68 @@ pub fn parse_prompt_segments_dual(clean: &str, raw: &str) -> Vec<PromptSegment> 
         segments.push(segment);
     }
     segments
+}
+
+#[derive(Debug, Deserialize)]
+struct AppServerEnvelope {
+    id: Value,
+    #[serde(default)]
+    result: Value,
+    error: Option<AppServerError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppServerError {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitsResponse {
+    #[serde(rename = "rateLimits")]
+    rate_limits: AppRateLimitSnapshot,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitSnapshot {
+    primary: Option<AppRateLimitWindow>,
+    secondary: Option<AppRateLimitWindow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitWindow {
+    #[serde(rename = "usedPercent")]
+    used_percent: i32,
+    #[serde(rename = "windowDurationMins")]
+    window_duration_mins: Option<i64>,
+    #[serde(rename = "resetsAt")]
+    resets_at: Option<i64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AppAccountResponse {
+    account: Option<AppAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppAccount {
+    #[serde(rename = "type")]
+    account_type: String,
+    email: String,
+    #[serde(rename = "planType")]
+    plan_type: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AppConfigResponse {
+    #[serde(default)]
+    config: AppConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AppConfig {
+    model: Option<String>,
+    #[serde(rename = "model_reasoning_effort")]
+    model_reasoning_effort: Option<String>,
 }
 
 pub fn parse_report_capture(
@@ -210,9 +511,11 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        codex_profile_fort_runtime_env, codex_profile_fort_session_paths, codex_tmux_session_name,
+        build_codex_app_server_status_input, codex_profile_fort_runtime_env,
+        codex_profile_fort_session_paths, codex_tmux_session_name, parse_codex_app_server_status,
         parse_prompt_segments_dual, parse_report_capture,
     };
+    use serde_json::json;
     use std::path::Path;
 
     #[test]
@@ -256,6 +559,46 @@ mod tests {
             env.get("FORT_REFRESH_TOKEN_PATH").map(String::as_str),
             Some("/tmp/home/.si/codex/profiles/cadma/fort/refresh.token")
         );
+    }
+
+    #[test]
+    fn app_server_status_input_uses_low_refresh_protocol_shape() {
+        let payload = String::from_utf8(build_codex_app_server_status_input(
+            "si-test",
+            "v0.0.0",
+            Some("/tmp/work".to_owned()),
+        ))
+        .expect("utf8");
+
+        assert!(payload.contains("\"name\":\"si-test\""));
+        assert!(payload.contains("\"account/rateLimits/read\""));
+        assert!(payload.contains("\"account/read\""));
+        assert!(payload.contains("\"refreshToken\":false"));
+        assert!(payload.contains("\"config/read\""));
+        assert!(payload.contains("\"includeLayers\":false"));
+        assert!(payload.contains("\"cwd\":\"/tmp/work\""));
+    }
+
+    #[test]
+    fn parse_app_server_status_uses_rate_account_and_config_shapes() {
+        let raw = [
+            json!({"id":1,"result":{"userAgent":"si-test/0.0.0"}}),
+            json!({"id":2,"result":{"rateLimits":{"primary":{"usedPercent":20,"windowDurationMins":300,"resetsAt":1775448461},"secondary":{"usedPercent":10,"windowDurationMins":10080,"resetsAt":1775660971}}}}),
+            json!({"id":3,"result":{"account":{"type":"chatgpt","email":"agent@example.com","planType":"plus"},"requiresOpenaiAuth":false}}),
+            json!({"id":4,"result":{"config":{"model":"gpt-5.4","model_reasoning_effort":"high"}}}),
+        ]
+        .into_iter()
+        .map(|item| serde_json::to_string(&item).expect("line"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+        let status = parse_codex_app_server_status(&raw).expect("status");
+        assert_eq!(status.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(status.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(status.account_email.as_deref(), Some("agent@example.com"));
+        assert_eq!(status.account_plan.as_deref(), Some("plus"));
+        assert_eq!(status.five_hour_left_pct, Some(80.0));
+        assert_eq!(status.weekly_left_pct, Some(90.0));
     }
 
     #[test]
