@@ -108,7 +108,7 @@ The external REST contract is the generated `docs/gpt-actions-openapi.yaml` arti
 
 Use `GET /capabilities` as the public compatibility probe for external clients. It reports whether REST task creation is available, whether text-mode GPT Actions are expected to work, and whether ChatGPT Voice can invoke custom GPT Actions. OpenAI's ChatGPT Voice mode does not currently invoke custom GPT Actions, so voice workflows that need Nucleus task creation must use a custom voice client, such as an OpenAI Realtime API client with function calling that calls `POST /tasks`.
 
-Additional local service routes such as `/events`, `/producers/cron...`, and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
+Additional local service routes such as `/events`, `/webhooks/github`, `/producers/cron...`, and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
 
 ## Task Producers
 
@@ -127,6 +127,13 @@ Hook producers:
 - Hooks only process events after the rule was created, so a new rule does not backfill all existing event history.
 - Progress is persisted with `last_processed_event_seq`; replay after restart resumes from the last processed canonical event.
 - Self-triggered hook tasks are ignored to avoid event loops.
+
+GitHub webhooks:
+
+- `POST /webhooks/github` accepts normal GitHub webhook JSON plus `X-GitHub-Event` and `X-GitHub-Delivery` headers.
+- The route normalizes the delivery into a canonical `github.notification` event whose payload includes the GitHub event name, delivery id, action, repository full name, sender login, ref, and original `github_payload`.
+- If `SI_NUCLEUS_GITHUB_WEBHOOK_SECRET` is set, the route requires a valid `X-Hub-Signature-256` HMAC. Without that secret, it uses the same bearer-token policy as other local REST routes.
+- A hook rule matching `github.notification` can turn meaningful GitHub deliveries such as `push`, `pull_request`, `issues`, `workflow_run`, and `release` into durable Nucleus tasks.
 
 ## Task Profile Assignment
 

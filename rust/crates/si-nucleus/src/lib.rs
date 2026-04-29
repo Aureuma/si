@@ -20,6 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow};
 use axum::Json;
 use axum::Router;
+use axum::body::Bytes;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path as AxumPath, State};
@@ -31,9 +32,11 @@ use axum::routing::{get, post};
 use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
 use cron::Schedule;
 use futures_util::{SinkExt, StreamExt};
+use hmac::{Hmac, Mac};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use sha2::Sha256;
 use si_nucleus_core::{
     BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
     EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
@@ -62,6 +65,7 @@ const REST_TASKS_PATH: &str = "/tasks";
 const REST_TASK_PATH: &str = "/tasks/{task_id}";
 const REST_TASK_CANCEL_PATH: &str = "/tasks/{task_id}/cancel";
 const REST_EVENTS_PATH: &str = "/events";
+const REST_GITHUB_WEBHOOK_PATH: &str = "/webhooks/github";
 const REST_WORKERS_PATH: &str = "/workers";
 const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
@@ -2875,6 +2879,7 @@ impl NucleusService {
             .route(REST_TASK_PATH, get(rest_inspect_task_handler))
             .route(REST_TASK_CANCEL_PATH, post(rest_cancel_task_handler))
             .route(REST_EVENTS_PATH, post(rest_ingest_event_handler))
+            .route(REST_GITHUB_WEBHOOK_PATH, post(rest_github_webhook_handler))
             .route(REST_WORKERS_PATH, get(rest_list_workers_handler))
             .route(REST_WORKER_PATH, get(rest_inspect_worker_handler))
             .route(REST_SESSION_PATH, get(rest_show_session_handler))
@@ -5069,6 +5074,75 @@ fn normalize_hook_rule_name(value: &str) -> Result<String> {
     Ok(ProfileName::new(value.trim().to_owned())?.to_string())
 }
 
+fn github_header_value(headers: &HeaderMap, name: &'static str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+fn normalize_github_webhook_payload(
+    event_name: &str,
+    delivery_id: Option<&str>,
+    payload: Value,
+) -> Value {
+    json!({
+        "event": event_name,
+        "delivery_id": delivery_id,
+        "action": payload.get("action").cloned().unwrap_or(Value::Null),
+        "repository": payload
+            .get("repository")
+            .and_then(|repository| repository.get("full_name"))
+            .cloned()
+            .unwrap_or(Value::Null),
+        "sender": payload
+            .get("sender")
+            .and_then(|sender| sender.get("login"))
+            .cloned()
+            .unwrap_or(Value::Null),
+        "ref": payload.get("ref").cloned().unwrap_or(Value::Null),
+        "github_payload": payload,
+    })
+}
+
+fn verify_github_webhook_signature(headers: &HeaderMap, body: &[u8], secret: &str) -> Result<()> {
+    let signature = github_header_value(headers, "x-hub-signature-256")
+        .ok_or_else(|| anyhow!("missing X-Hub-Signature-256 header"))?;
+    let signature = signature
+        .strip_prefix("sha256=")
+        .ok_or_else(|| anyhow!("X-Hub-Signature-256 must use sha256"))?;
+    let expected = decode_hex(signature).context("decode X-Hub-Signature-256")?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .context("initialize GitHub webhook HMAC")?;
+    mac.update(body);
+    mac.verify_slice(&expected).context("invalid GitHub webhook signature")
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>> {
+    let value = value.trim();
+    if !value.len().is_multiple_of(2) {
+        anyhow::bail!("hex string has odd length");
+    }
+    let mut decoded = Vec::with_capacity(value.len() / 2);
+    for chunk in value.as_bytes().chunks_exact(2) {
+        let high = decode_hex_nibble(chunk[0])?;
+        let low = decode_hex_nibble(chunk[1])?;
+        decoded.push((high << 4) | low);
+    }
+    Ok(decoded)
+}
+
+fn decode_hex_nibble(value: u8) -> Result<u8> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => anyhow::bail!("invalid hex digit"),
+    }
+}
+
 fn rest_request(method: &str, params: Value) -> GatewayRequest {
     GatewayRequest { id: json!(method), method: method.to_owned(), params }
 }
@@ -6068,6 +6142,56 @@ async fn rest_ingest_event_handler(
                     serde_json::to_value(request).unwrap_or_else(|_| json!({})),
                 ),
                 extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::CREATED,
+    )
+}
+
+async fn rest_github_webhook_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let event_name = match github_header_value(&headers, "x-github-event") {
+        Some(value) => value,
+        None => return rest_invalid_params_response("missing X-GitHub-Event header"),
+    };
+    let delivery_id = github_header_value(&headers, "x-github-delivery");
+    let payload = match serde_json::from_slice::<Value>(&body) {
+        Ok(value) => value,
+        Err(error) => {
+            return rest_invalid_params_response(format!("parse GitHub payload: {error}"));
+        }
+    };
+    let webhook_secret =
+        env::var("SI_NUCLEUS_GITHUB_WEBHOOK_SECRET").ok().filter(|value| !value.trim().is_empty());
+    let authorized = if let Some(secret) = webhook_secret.as_deref() {
+        match verify_github_webhook_signature(&headers, &body, secret) {
+            Ok(()) => None,
+            Err(error) => {
+                return rest_gateway_response(
+                    GatewayResponse::err(Value::Null, "unauthorized", error.to_string(), None),
+                    StatusCode::CREATED,
+                );
+            }
+        }
+    } else {
+        extract_bearer_token(&headers)
+    };
+    let normalized = normalize_github_webhook_payload(&event_name, delivery_id.as_deref(), payload);
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request(
+                    "events.ingest",
+                    json!({
+                        "type": "github.notification",
+                        "source": "github",
+                        "payload": normalized,
+                    }),
+                ),
+                authorized.as_deref(),
             )
             .await,
         StatusCode::CREATED,
@@ -9033,6 +9157,67 @@ mod tests {
         assert_eq!(delete_response.status(), StatusCode::OK);
         let deleted = response_json(delete_response).await;
         assert_eq!(deleted["deleted"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn rest_github_webhook_ingests_notification_and_routes_hook_task() {
+        let temp = tempdir().expect("tempdir");
+        let state_root = temp.path().join("nucleus");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: state_root.clone(),
+            auth_token: None,
+        })
+        .expect("service");
+        write_hook_rule(
+            &state_root,
+            &HookRuleRecord {
+                name: "github-notify".to_owned(),
+                enabled: true,
+                match_event_type: "github.notification".to_owned(),
+                instructions: "Triage GitHub notifications".to_owned(),
+                last_processed_event_seq: 0,
+                version: current_persisted_version().to_owned(),
+            },
+        );
+        let app = service.clone().router();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhooks/github")
+                    .header("content-type", "application/json")
+                    .header("x-github-event", "pull_request")
+                    .header("x-github-delivery", "delivery-123")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "action": "opened",
+                            "repository": { "full_name": "sveltejs/svelte" },
+                            "sender": { "login": "maintainer" },
+                            "pull_request": {
+                                "number": 42,
+                                "title": "Improve compiler diagnostics"
+                            }
+                        }))
+                        .expect("serialize webhook"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("webhook response");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = response_json(response).await;
+        assert_eq!(body["type"], json!("github.notification"));
+        assert_eq!(body["data"]["payload"]["event"], json!("pull_request"));
+        assert_eq!(body["data"]["payload"]["delivery_id"], json!("delivery-123"));
+        assert_eq!(body["data"]["payload"]["repository"], json!("sveltejs/svelte"));
+
+        let tasks = service.store.list_tasks().expect("list tasks");
+        let hook_task =
+            tasks.iter().find(|task| task.source == TaskSource::Hook).expect("hook task");
+        assert_eq!(hook_task.producer_rule_name.as_deref(), Some("github-notify"));
+        assert!(hook_task.instructions.contains("Canonical event type: github.notification"));
     }
 
     #[tokio::test]

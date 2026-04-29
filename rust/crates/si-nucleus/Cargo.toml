@@ -12,9 +12,11 @@ axum.workspace = true
 chrono.workspace = true
 cron.workspace = true
 futures-util.workspace = true
+hmac.workspace = true
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 si-rs-fort = { path = "../si-fort" }
 si-rs-codex = { path = "../si-codex" }
 si-nucleus-core = { path = "../si-nucleus-core" }
