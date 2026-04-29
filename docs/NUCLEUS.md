@@ -27,6 +27,8 @@ si nucleus task list
 si nucleus task cancel <task-id>
 si nucleus task inspect <task-id>
 si nucleus task prune --older-than-days 30
+si nucleus producer cron upsert svelte-docs-nightly --schedule-kind cron --schedule "0 0 6 * * *" --instructions "Audit Svelte docs and blog readiness."
+si nucleus producer hook upsert github-notify --match-event-type github.notification --instructions "Triage the GitHub notification and create follow-up tasks."
 si nucleus worker list
 si nucleus worker restart <worker-id>
 si nucleus worker repair-auth <worker-id>
@@ -99,14 +101,32 @@ The metadata file is written by `si-nucleus` and includes the bound websocket UR
 The main control-plane transport is WebSocket:
 
 - default local endpoint: `ws://127.0.0.1:4747/ws`
-- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.create`, `session.list`, `session.show`, `run.submit_turn`, `run.inspect`, and `run.cancel`
+- request/response methods such as `nucleus.status`, `profile.list`, `task.create`, `task.list`, `task.inspect`, `task.cancel`, `task.prune`, `producer.cron.*`, `producer.hook.*`, `worker.list`, `worker.inspect`, `worker.restart`, `worker.repair_auth`, `session.create`, `session.list`, `session.show`, `run.submit_turn`, `run.inspect`, and `run.cancel`
 - server-pushed canonical events through `events.subscribe`
 
 The external REST contract is the generated `docs/gpt-actions-openapi.yaml` artifact and the live `GET /openapi.json` response from the same Nucleus source of truth. Treat those generated OpenAPI surfaces as canonical for GPT Actions and other bounded external clients.
 
 Use `GET /capabilities` as the public compatibility probe for external clients. It reports whether REST task creation is available, whether text-mode GPT Actions are expected to work, and whether ChatGPT Voice can invoke custom GPT Actions. OpenAI's ChatGPT Voice mode does not currently invoke custom GPT Actions, so voice workflows that need Nucleus task creation must use a custom voice client, such as an OpenAI Realtime API client with function calling that calls `POST /tasks`.
 
-Additional local service routes such as `/events` and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
+Additional local service routes such as `/events`, `/producers/cron...`, and `/producers/hook...` may exist for trusted SI automation, but they are intentionally excluded from the external GPT Actions contract and should not be treated as public integration surfaces.
+
+## Task Producers
+
+Nucleus task producers turn durable schedules and canonical events into normal queued tasks. Producer tasks use the same task ledger, dispatcher, retry, blocking, and inspection paths as directly created tasks.
+
+Cron producers:
+
+- Create or update with `si nucleus producer cron upsert <name> --schedule-kind <once_at|every|cron> --schedule <value> --instructions <prompt>`.
+- `once_at` uses an RFC3339 timestamp, `every` accepts positive `s`, `m`, `h`, or `d` durations such as `30m`, and `cron` accepts the six-field cron format used by the runtime parser.
+- Upserts preserve the next due time when the schedule is unchanged; pass `--reset` to recompute it from now.
+- Each due fire creates at most one task using a producer dedup key, so replay after restart advances the rule without duplicating already-created tasks.
+
+Hook producers:
+
+- Create or update with `si nucleus producer hook upsert <name> --match-event-type <canonical.event> --instructions <prompt>`.
+- Hooks only process events after the rule was created, so a new rule does not backfill all existing event history.
+- Progress is persisted with `last_processed_event_seq`; replay after restart resumes from the last processed canonical event.
+- Self-triggered hook tasks are ignored to avoid event loops.
 
 ## Task Profile Assignment
 

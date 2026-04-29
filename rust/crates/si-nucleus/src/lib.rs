@@ -66,6 +66,8 @@ const REST_WORKERS_PATH: &str = "/workers";
 const REST_WORKER_PATH: &str = "/workers/{worker_id}";
 const REST_SESSION_PATH: &str = "/sessions/{session_id}";
 const REST_RUN_PATH: &str = "/runs/{run_id}";
+const REST_CRON_RULES_PATH: &str = "/producers/cron";
+const REST_CRON_RULE_PATH: &str = "/producers/cron/{rule_name}";
 const REST_HOOK_RULES_PATH: &str = "/producers/hook";
 const REST_HOOK_RULE_PATH: &str = "/producers/hook/{rule_name}";
 const DISPATCH_LOOP_INTERVAL: Duration = Duration::from_millis(200);
@@ -915,6 +917,42 @@ impl NucleusStore {
     pub fn list_profiles(&self) -> Result<Vec<Value>> {
         let profiles = load_json_records_from_dir::<Value>(&self.paths.profiles_state_dir)?;
         Ok(profiles)
+    }
+
+    fn list_cron_rules(&self) -> Result<Vec<CronRuleRecord>> {
+        let mut rules = load_json_records_from_dir::<CronRuleRecord>(&self.paths.cron_state_dir)?;
+        rules.sort_by(|left, right| left.name.cmp(&right.name));
+        Ok(rules)
+    }
+
+    fn inspect_cron_rule(&self, rule_name: &str) -> Result<Option<CronRuleRecord>> {
+        let path = self.paths.cron_rule_path(rule_name);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+        let rule = serde_json::from_slice::<CronRuleRecord>(&bytes)
+            .with_context(|| format!("parse {}", path.display()))?;
+        Ok(Some(rule))
+    }
+
+    fn upsert_cron_rule(&self, rule: &CronRuleRecord) -> Result<CronRuleRecord> {
+        ProfileName::new(rule.name.clone()).context("validate cron rule name")?;
+        next_cron_due_after(rule, Utc::now() - ChronoDuration::seconds(1))
+            .context("validate cron rule schedule")?;
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        write_json_atomic(&self.paths.cron_rule_path(&rule.name), rule)?;
+        Ok(rule.clone())
+    }
+
+    fn delete_cron_rule(&self, rule_name: &str) -> Result<bool> {
+        let path = self.paths.cron_rule_path(rule_name);
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        if !path.exists() {
+            return Ok(false);
+        }
+        fs::remove_file(&path).with_context(|| format!("delete {}", path.display()))?;
+        Ok(true)
     }
 
     fn list_hook_rules(&self) -> Result<Vec<HookRuleRecord>> {
@@ -2842,6 +2880,14 @@ impl NucleusService {
             .route(REST_SESSION_PATH, get(rest_show_session_handler))
             .route(REST_RUN_PATH, get(rest_inspect_run_handler))
             .route(
+                REST_CRON_RULES_PATH,
+                get(rest_list_cron_rules_handler).post(rest_upsert_cron_rule_handler),
+            )
+            .route(
+                REST_CRON_RULE_PATH,
+                get(rest_inspect_cron_rule_handler).delete(rest_delete_cron_rule_handler),
+            )
+            .route(
                 REST_HOOK_RULES_PATH,
                 get(rest_list_hook_rules_handler).post(rest_upsert_hook_rule_handler),
             )
@@ -4286,6 +4332,56 @@ impl NucleusService {
                 })?)
             }
             "profile.list" => Ok(serde_json::to_value(self.store.list_profiles()?)?),
+            "producer.cron.list" => Ok(serde_json::to_value(self.store.list_cron_rules()?)?),
+            "producer.cron.inspect" => {
+                let params: CronRuleInspectParams =
+                    serde_json::from_value(params).context("parse producer.cron.inspect params")?;
+                let rule_name = normalize_hook_rule_name(&params.rule_name)?;
+                match self.store.inspect_cron_rule(&rule_name)? {
+                    Some(rule) => Ok(serde_json::to_value(rule)?),
+                    None => Err(anyhow!("cron rule not found")),
+                }
+            }
+            "producer.cron.upsert" => {
+                let params: CronRuleUpsertParams =
+                    serde_json::from_value(params).context("parse producer.cron.upsert params")?;
+                let rule_name = normalize_hook_rule_name(&params.name)?;
+                let existing = self.store.inspect_cron_rule(&rule_name)?;
+                let schedule = params.schedule.trim().to_owned();
+                let mut candidate = CronRuleRecord {
+                    name: rule_name,
+                    enabled: params.enabled.unwrap_or_else(|| {
+                        existing.as_ref().map(|rule| rule.enabled).unwrap_or(true)
+                    }),
+                    schedule_kind: params.schedule_kind,
+                    schedule,
+                    instructions: params.instructions,
+                    last_emitted_at: existing.as_ref().and_then(|rule| rule.last_emitted_at),
+                    next_due_at: None,
+                    version: current_persisted_version().to_owned(),
+                };
+                let preserve_due = !params.reset.unwrap_or(false)
+                    && existing.as_ref().is_some_and(|rule| {
+                        rule.schedule_kind == candidate.schedule_kind
+                            && rule.schedule == candidate.schedule
+                            && rule.next_due_at.is_some()
+                    });
+                candidate.next_due_at = if preserve_due {
+                    existing.and_then(|rule| rule.next_due_at)
+                } else {
+                    next_cron_due_after(&candidate, Utc::now() - ChronoDuration::seconds(1))?
+                };
+                let rule = self.store.upsert_cron_rule(&candidate)?;
+                self.process_cron_producers_at(Utc::now())?;
+                Ok(serde_json::to_value(rule)?)
+            }
+            "producer.cron.delete" => {
+                let params: CronRuleDeleteParams =
+                    serde_json::from_value(params).context("parse producer.cron.delete params")?;
+                let rule_name = normalize_hook_rule_name(&params.rule_name)?;
+                let deleted = self.store.delete_cron_rule(&rule_name)?;
+                Ok(serde_json::to_value(ProducerRuleDeleteResultView { rule_name, deleted })?)
+            }
             "producer.hook.list" => Ok(serde_json::to_value(self.store.list_hook_rules()?)?),
             "producer.hook.inspect" => {
                 let params: HookRuleInspectParams =
@@ -4326,7 +4422,7 @@ impl NucleusService {
                     serde_json::from_value(params).context("parse producer.hook.delete params")?;
                 let rule_name = normalize_hook_rule_name(&params.rule_name)?;
                 let deleted = self.store.delete_hook_rule(&rule_name)?;
-                Ok(serde_json::to_value(HookRuleDeleteResultView { rule_name, deleted })?)
+                Ok(serde_json::to_value(ProducerRuleDeleteResultView { rule_name, deleted })?)
             }
             "worker.probe" => {
                 let runtime =
@@ -5993,6 +6089,76 @@ async fn rest_list_workers_handler(
     )
 }
 
+async fn rest_list_cron_rules_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.cron.list", json!({})),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_upsert_cron_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    request: Result<Json<CronRuleUpsertParams>, JsonRejection>,
+) -> Response {
+    let request = match rest_parse_json_body(request, "parse cron rule body") {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request(
+                    "producer.cron.upsert",
+                    serde_json::to_value(request).unwrap_or_else(|_| json!({})),
+                ),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_inspect_cron_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    AxumPath(rule_name): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.cron.inspect", json!({ "rule_name": rule_name })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
+async fn rest_delete_cron_rule_handler(
+    State(service): State<Arc<NucleusService>>,
+    headers: HeaderMap,
+    AxumPath(rule_name): AxumPath<String>,
+) -> Response {
+    rest_gateway_response(
+        service
+            .dispatch_request_authorized(
+                rest_request("producer.cron.delete", json!({ "rule_name": rule_name })),
+                extract_bearer_token(&headers).as_deref(),
+            )
+            .await,
+        StatusCode::OK,
+    )
+}
+
 async fn rest_list_hook_rules_handler(
     State(service): State<Arc<NucleusService>>,
     headers: HeaderMap,
@@ -6328,6 +6494,26 @@ struct RunCancelParams {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+struct CronRuleInspectParams {
+    rule_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct CronRuleUpsertParams {
+    name: String,
+    enabled: Option<bool>,
+    schedule_kind: CronScheduleKind,
+    schedule: String,
+    instructions: String,
+    reset: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct CronRuleDeleteParams {
+    rule_name: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 struct HookRuleInspectParams {
     rule_name: String,
 }
@@ -6346,7 +6532,7 @@ struct HookRuleDeleteParams {
 }
 
 #[derive(Clone, Debug, Serialize)]
-struct HookRuleDeleteResultView {
+struct ProducerRuleDeleteResultView {
     rule_name: String,
     deleted: bool,
 }
@@ -8766,6 +8952,87 @@ mod tests {
             .expect("inspect task")
             .expect("task exists");
         assert_eq!(stored.status, TaskStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn rest_cron_producer_endpoints_manage_durable_rules() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open(NucleusConfig {
+            bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+            state_dir: temp.path().join("nucleus"),
+            auth_token: None,
+        })
+        .expect("service");
+        let app = service.router();
+
+        let upsert_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/producers/cron")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&json!({
+                            "name": "nightly-docs",
+                            "enabled": true,
+                            "schedule_kind": "every",
+                            "schedule": "60s",
+                            "instructions": "Audit Svelte docs nightly",
+                            "reset": true,
+                        }))
+                        .expect("serialize request"),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("upsert response");
+        assert_eq!(upsert_response.status(), StatusCode::OK);
+        let upserted = response_json(upsert_response).await;
+        assert_eq!(upserted["name"], json!("nightly-docs"));
+        assert_eq!(upserted["schedule_kind"], json!("every"));
+        assert!(upserted["next_due_at"].is_string());
+
+        let list_response = app
+            .clone()
+            .oneshot(
+                Request::builder().uri("/producers/cron").body(Body::empty()).expect("request"),
+            )
+            .await
+            .expect("list response");
+        assert_eq!(list_response.status(), StatusCode::OK);
+        let listed = response_json(list_response).await;
+        assert_eq!(listed.as_array().map(Vec::len), Some(1));
+
+        let inspect_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/producers/cron/nightly-docs")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("inspect response");
+        assert_eq!(inspect_response.status(), StatusCode::OK);
+        assert_eq!(
+            response_json(inspect_response).await["instructions"],
+            json!("Audit Svelte docs nightly")
+        );
+
+        let delete_response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/producers/cron/nightly-docs")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("delete response");
+        assert_eq!(delete_response.status(), StatusCode::OK);
+        let deleted = response_json(delete_response).await;
+        assert_eq!(deleted["deleted"], json!(true));
     }
 
     #[tokio::test]
