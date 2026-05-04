@@ -1088,7 +1088,7 @@ mod tests {
         let env = BTreeMap::from([
             ("CORE_ISSUER".to_owned(), "issuer_123".to_owned()),
             ("CORE_KEY".to_owned(), "key_123".to_owned()),
-            ("CORE_PRIVATE_KEY".to_owned(), "-----BEGIN PRIVATE KEY-----".to_owned()),
+            ("CORE_PRIVATE_KEY".to_owned(), "inline-test-private-key".to_owned()),
         ]);
 
         let current = resolve_current_context(&settings, &env).expect("current context");
@@ -1114,7 +1114,7 @@ mod tests {
                 platform: "MAC_OS".to_owned(),
                 issuer_id: "issuer_123".to_owned(),
                 key_id: "key_123".to_owned(),
-                private_key: "-----BEGIN PRIVATE KEY-----".to_owned(),
+                private_key: "inline-test-private-key".to_owned(),
                 project_id: "proj_mobile".to_owned(),
                 base_url: "https://example.invalid".to_owned(),
                 ..AppleAppStoreAuthOverrides::default()

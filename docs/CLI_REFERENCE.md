@@ -139,6 +139,7 @@ si build self --timings
 - `si build self` now reuses `.artifacts/cargo-target/self-build` by default for faster rebuilds.
 - `si build self check` runs `cargo check` against the SI CLI manifest without linking a release binary.
 - `si build self` and release-asset builds auto-use `sccache` when it is available on `PATH`.
+- Keep SI's `.artifacts/cargo-target` warm during active development. Prune it only when artifacts are older than 14 days or when root disk pressure requires immediate recovery; clear repo target directories before clearing `sccache` so cross-repo Rust rebuilds stay fast.
 
 ## Safety guidance
 
