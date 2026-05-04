@@ -5,6 +5,8 @@ use base64::{
 };
 use chrono::Utc;
 use reqwest::blocking::Client as BlockingClient;
+use rsa::RsaPrivateKey;
+use rsa::pkcs8::{EncodePrivateKey, LineEnding};
 use serde_json::{Value, json};
 use si_nucleus::{NucleusConfig, NucleusService};
 use si_nucleus_core::{
@@ -23,7 +25,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::process::{Command as ProcessCommand, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use tar::Archive;
@@ -101,6 +103,33 @@ fn write_codex_auth_file(path: &Path, email: &str) {
         .expect("serialize auth json"),
     )
     .expect("write auth json");
+}
+
+fn test_rsa_private_key_pem() -> &'static str {
+    static TEST_KEY: OnceLock<String> = OnceLock::new();
+    TEST_KEY
+        .get_or_init(|| {
+            let mut rng = rsa::rand_core::OsRng;
+            RsaPrivateKey::new(&mut rng, 2048)
+                .expect("generate test rsa key")
+                .to_pkcs8_pem(LineEnding::LF)
+                .expect("encode test rsa key")
+                .to_string()
+        })
+        .as_str()
+}
+
+fn test_ec_private_key_pem() -> &'static str {
+    static TEST_KEY: OnceLock<String> = OnceLock::new();
+    TEST_KEY
+        .get_or_init(|| {
+            let mut rng = rsa::rand_core::OsRng;
+            p256::ecdsa::SigningKey::random(&mut rng)
+                .to_pkcs8_pem(LineEnding::LF)
+                .expect("encode test ec key")
+                .to_string()
+        })
+        .as_str()
 }
 
 fn write_reusable_codex_fort_session(codex_home: &Path, profile_id: &str) {
@@ -10677,7 +10706,7 @@ fn build_installer_settings_helper_rewrites_existing_login_block() {
 }
 
 fn test_app_private_key_pem() -> &'static str {
-    "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
+    test_rsa_private_key_pem()
 }
 
 #[test]
@@ -13696,7 +13725,7 @@ owner = "Aureuma"
 
     let output = cargo_bin()
         .env("GITHUB_CORE_APP_ID", "42")
-        .env("GITHUB_CORE_APP_PRIVATE_KEY_PEM", "-----BEGIN PRIVATE KEY-----abc")
+        .env("GITHUB_CORE_APP_PRIVATE_KEY_PEM", "inline-test-private-key")
         .env("GITHUB_CORE_INSTALLATION_ID", "99")
         .args(["orbit", "github", "auth", "status", "--home"])
         .arg(home.path())
@@ -13793,7 +13822,7 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
         }
     });
 
-    let app_key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----";
+    let app_key = test_rsa_private_key_pem();
 
     let output = cargo_bin()
         .env("GITHUB_APP_PRIVATE_KEY_PEM", app_key)
@@ -19879,7 +19908,7 @@ default_platform = "IOS"
     let output = cargo_bin()
         .env("CORE_ISSUER", "issuer_123")
         .env("CORE_KEY", "key_123")
-        .env("CORE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
+        .env("CORE_PRIVATE_KEY", "inline-test-private-key")
         .args(["orbit", "apple", "store", "context", "current", "--home"])
         .arg(home.path())
         .args(["--format", "json"])
@@ -23634,7 +23663,7 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
 fn apple_appstore_auth_status_json_reads_local_inputs() {
     let key_file = tempdir().expect("tempdir");
     let key_path = key_file.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args(["orbit", "apple", "store", "auth", "status"])
@@ -23665,12 +23694,9 @@ fn apple_appstore_auth_status_json_reads_local_inputs() {
     assert_eq!(parsed["token_source"], "flag:--private-key-file");
 }
 
-const APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgXv1fLQwQYWpHLmrJ
-BDNK155BX3ig/zpgQGtC9XlwhN2hRANCAASXYN6j6kX+3XZV6tbvsSjPrF542r1z
-IiirJwd3+qH5BaD2H1FSA45SwJBmSifpUAaqEFjt5zEvDmqpRReOsvvY
------END PRIVATE KEY-----
-"#;
+fn apple_appstore_test_ec_private_key_pem() -> &'static str {
+    test_ec_private_key_pem()
+}
 
 #[test]
 fn apple_appstore_app_list_json_fetches_apps() {
@@ -23688,7 +23714,7 @@ fn apple_appstore_app_list_json_fetches_apps() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -23758,7 +23784,7 @@ fn apple_appstore_app_create_json_creates_bundle_and_app() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -23818,7 +23844,7 @@ fn apple_appstore_listing_update_json_updates_localized_metadata() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -23867,7 +23893,7 @@ fn apple_appstore_raw_json_fetches_api_path() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -23928,7 +23954,7 @@ fn apple_appstore_apply_json_applies_metadata_bundle() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -23978,7 +24004,7 @@ fn apple_appstore_auth_status_json_verifies_request() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -24026,7 +24052,7 @@ fn apple_appstore_doctor_json_verifies_request() {
 
     let key_dir = tempdir().expect("tempdir");
     let key_path = key_dir.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+    fs::write(&key_path, apple_appstore_test_ec_private_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args([
@@ -25239,7 +25265,7 @@ fn oci_auth_status_json_reads_local_signature_context() {
         "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nuser=ocid1.user.oc1..example\nfingerprint=aa:bb:cc\nkey_file=keys/oci.pem\nregion=us-phoenix-1\n",
     )
     .expect("write config");
-    fs::write(&key_file, OCI_TEST_RSA_KEY_PEM).expect("write key");
+    fs::write(&key_file, oci_test_rsa_key_pem()).expect("write key");
 
     let output = cargo_bin()
         .args(["orbit", "oci", "auth", "status"])
@@ -25356,29 +25382,15 @@ fn oci_oracular_tenancy_json_reads_profile_config() {
     assert_eq!(parsed["tenancy_ocid"], "ocid1.tenancy.oc1..example");
 }
 
-const OCI_TEST_RSA_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
-MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAMHdWNb6AMmJKYK2
-AtBSIA5dld4B22eLwBBeQaqsbqyZj3Wpu4lgs2Hu/PBRIgqN/VT83RRyhLjp1PTL
-9fNTlykVRd3aBOj8QwIWsVS+10a/8GuPx5N4vZlzsiplkIOEwcrpCQs30uNPtJqv
-br2DSoulEAzFiboOri2wsY+MIbKxAgMBAAECgYAn0+mkgMgYn20/xVTep4CecuuP
-KKKCq1tSAYtMHRC/tOycJ7q3hn5T6F1eocx0jqc1Bp4EzWIm+yMdB6oHy2yKUH/f
-N5zX1Hi/pulp5zO6c8ANaHjb48fBiBOTck7FQ9c/uppCleBESdE773zk6fN7XKgm
-z6Y9EegeBYMrAP5DYQJBAOtaAtKsQYKiPoQM6EiskBfO3kpRS7C4WgrJchgArY74
-+tBk5s0Bf6ibSxSyNfSZ4gZyyF7kLNDR3CWAxFp9EX8CQQDS34pEuKVSEYz41uiS
-MzM+hQJiszF8M2NPj9IzqT8EmvXIvveK29f6C6nxkzllKB6WyjnB0PcbYqHnCsGv
-G/PPAkBw6m+eShzoIxVhX5v2eixr78mA2H47HEe/EyVVVMXwaY5Ue4SsaQKpj1A3
-bsUqRMZHl7yAonLKAVXg/GW4kHbbAkBkqCXFJepsIUqMYXFEkEIOvsjjuiuN4K2w
-BbPNyyT0ms9l0pow4z3V8oldcew8uAjZ64/kT04U+WDU+1J2tr4LAkEAo2Jr+HY3
-n7bZhk8wZV/UBPJY/hjPoMGweaYAz8Vx4OujBqJhYaVd4XHFSH8cOGiXGsj5IVfE
-ytNZBG2qI/IOCw==
------END PRIVATE KEY-----
-"#;
+fn oci_test_rsa_key_pem() -> &'static str {
+    test_rsa_private_key_pem()
+}
 
 fn write_oci_test_config(home: &tempfile::TempDir, base_url: &str) -> std::path::PathBuf {
     let config_dir = home.path().join("oci");
     fs::create_dir_all(&config_dir).expect("mkdir oci config dir");
     let key_file = config_dir.join("oci.pem");
-    fs::write(&key_file, OCI_TEST_RSA_KEY_PEM).expect("write oci key");
+    fs::write(&key_file, oci_test_rsa_key_pem()).expect("write oci key");
     let config_file = config_dir.join("config");
     fs::write(
         &config_file,

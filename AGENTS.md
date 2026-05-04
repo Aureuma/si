@@ -47,3 +47,8 @@
 - Use real component names such as `web`, `api`, `worker`, `postgres`, `walg`, `db-init`, and `databasus`.
 - Add the slot segment last, and only for blue/green swappable runtime components, such as `viva-rm-prod-api-blue` or `viva-ls-prod-web-green`.
 - Do not use `blue` or `green` as component names. For example, a frontend service should use `web-blue` or `web-green`, not a component named `blue`.
+
+### File Names And Paths
+
+- Name new files with stable, descriptive kebab-case unless the repo already has a stricter local convention; keep Viva deploy surfaces predictable with `deploy/viva.<env>.yaml`, `deploy/viva.<component>.<env>.yaml`, and `docker-compose.viva.<env>.yml`.
+- Keep file paths predictable and reviewable: avoid unrelated renames, generated churn, and mixed concerns; when moving or renaming files, update all references in the same change.

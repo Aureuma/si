@@ -475,10 +475,7 @@ mod tests {
         assert_eq!(releasemind.spec.base_url, "https://releasemind.ai");
         assert_eq!(releasemind.spec.api_version, Some("v1"));
         assert_eq!(releasemind.spec.auth_style, Some("bearer"));
-        assert_eq!(
-            releasemind.spec.public_probe.expect("probe").path,
-            "/api/health"
-        );
+        assert_eq!(releasemind.spec.public_probe.expect("probe").path, "/api/health");
         assert!(!releasemind.capabilities.supports_raw);
     }
 }

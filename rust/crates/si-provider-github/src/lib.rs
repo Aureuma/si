@@ -2868,7 +2868,7 @@ mod tests {
         env.insert("GITHUB_CORE_APP_ID".to_owned(), "42".to_owned());
         env.insert(
             "GITHUB_CORE_APP_PRIVATE_KEY_PEM".to_owned(),
-            "-----BEGIN PRIVATE KEY-----abc".to_owned(),
+            "inline-test-private-key".to_owned(),
         );
         env.insert("GITHUB_CORE_INSTALLATION_ID".to_owned(), "99".to_owned());
 

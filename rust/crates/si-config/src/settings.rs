@@ -1370,11 +1370,7 @@ pub struct VivaTunnelProfile {
     #[serde(default)]
     pub runtime_dir: String,
     #[serde(default)]
-    pub vault_env_file: String,
-    #[serde(default)]
-    pub vault_repo: String,
-    #[serde(default)]
-    pub vault_env: String,
+    pub fort_env_file: String,
     #[serde(default)]
     pub routes: Vec<VivaTunnelRoute>,
 }
@@ -1396,15 +1392,7 @@ impl VivaTunnelProfile {
             self.no_autoupdate = Some(true);
         }
         trim_string(&mut self.runtime_dir);
-        trim_string(&mut self.vault_env_file);
-        trim_string(&mut self.vault_repo);
-        if self.vault_repo.is_empty() {
-            self.vault_repo = "viva".to_owned();
-        }
-        self.vault_env = self.vault_env.trim().to_lowercase();
-        if self.vault_env.is_empty() {
-            self.vault_env = "dev".to_owned();
-        }
+        trim_string(&mut self.fort_env_file);
         self.routes = self
             .routes
             .into_iter()
@@ -1692,9 +1680,7 @@ default_profile = "dev"
 
 [viva.tunnel.profiles.dev]
 runtime_name = "viva-cloudflared-dev-browser"
-vault_env_file = "/work/safe/sampleapp/.env.dev"
-vault_repo = "sampleapp"
-vault_env = "dev"
+fort_env_file = "/work/safe/sampleapp/.env.dev"
 
 [[viva.tunnel.profiles.dev.routes]]
 hostname = "dev.example.app"

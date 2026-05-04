@@ -72798,7 +72798,7 @@ mod tests {
             "app",
             "ghp_secret",
             123,
-            "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+            "inline-test-private-key",
             456,
         );
 
@@ -72809,7 +72809,7 @@ mod tests {
         assert!(!command.contains("--token"));
         assert!(!command.contains("--app-key"));
         assert!(!command.contains("ghp_secret"));
-        assert!(!command.contains("BEGIN PRIVATE KEY"));
+        assert!(!command.contains("inline-test-private-key"));
     }
 
     #[test]

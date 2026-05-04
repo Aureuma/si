@@ -52,6 +52,8 @@ si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }
 [dev-dependencies]
 assert_cmd.workspace = true
 base64 = "0.22.1"
+p256.workspace = true
+rsa.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true

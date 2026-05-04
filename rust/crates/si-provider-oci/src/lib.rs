@@ -1060,6 +1060,22 @@ fn format_row(columns: &[&str], widths: &[usize]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rsa::pkcs8::{EncodePrivateKey, LineEnding};
+    use std::sync::OnceLock;
+
+    fn test_rsa_private_key_pem() -> &'static str {
+        static TEST_KEY: OnceLock<String> = OnceLock::new();
+        TEST_KEY
+            .get_or_init(|| {
+                let mut rng = rsa::rand_core::OsRng;
+                RsaPrivateKey::new(&mut rng, 2048)
+                    .expect("generate test rsa key")
+                    .to_pkcs8_pem(LineEnding::LF)
+                    .expect("encode test rsa key")
+                    .to_string()
+            })
+            .as_str()
+    }
 
     #[test]
     fn current_context_reads_profile_values() {
@@ -1094,11 +1110,7 @@ mod tests {
             "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..profile\nuser=ocid1.user.oc1..profile\nfingerprint=aa:bb:cc\nkey_file=keys/oci.pem\nregion=us-phoenix-1\n",
         )
         .expect("write config");
-        fs::write(
-            &key,
-            "-----BEGIN PRIVATE KEY-----\nMIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAMHdWNb6AMmJKYK2\nAtBSIA5dld4B22eLwBBeQaqsbqyZj3Wpu4lgs2Hu/PBRIgqN/VT83RRyhLjp1PTL\n9fNTlykVRd3aBOj8QwIWsVS+10a/8GuPx5N4vZlzsiplkIOEwcrpCQs30uNPtJqv\nbr2DSoulEAzFiboOri2wsY+MIbKxAgMBAAECgYAn0+mkgMgYn20/xVTep4CecuuP\nKKKCq1tSAYtMHRC/tOycJ7q3hn5T6F1eocx0jqc1Bp4EzWIm+yMdB6oHy2yKUH/f\nN5zX1Hi/pulp5zO6c8ANaHjb48fBiBOTck7FQ9c/uppCleBESdE773zk6fN7XKgm\nz6Y9EegeBYMrAP5DYQJBAOtaAtKsQYKiPoQM6EiskBfO3kpRS7C4WgrJchgArY74\n+tBk5s0Bf6ibSxSyNfSZ4gZyyF7kLNDR3CWAxFp9EX8CQQDS34pEuKVSEYz41uiS\nMzM+hQJiszF8M2NPj9IzqT8EmvXIvveK29f6C6nxkzllKB6WyjnB0PcbYqHnCsGv\nG/PPAkBw6m+eShzoIxVhX5v2eixr78mA2H47HEe/EyVVVMXwaY5Ue4SsaQKpj1A3\nbsUqRMZHl7yAonLKAVXg/GW4kHbbAkBkqCXFJepsIUqMYXFEkEIOvsjjuiuN4K2w\nBbPNyyT0ms9l0pow4z3V8oldcew8uAjZ64/kT04U+WDU+1J2tr4LAkEAo2Jr+HY3\nn7bZhk8wZV/UBPJY/hjPoMGweaYAz8Vx4OujBqJhYaVd4XHFSH8cOGiXGsj5IVfE\nytNZBG2qI/IOCw==\n-----END PRIVATE KEY-----\n",
-        )
-        .expect("write key");
+        fs::write(&key, test_rsa_private_key_pem()).expect("write key");
 
         let settings =
             OCISettings { default_account: Some("team".to_owned()), ..OCISettings::default() };
