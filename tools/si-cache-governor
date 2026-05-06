@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -h "${SOURCE}" ]]; do
+  DIR="$(cd -P "$(dirname "${SOURCE}")" && pwd)"
+  SOURCE="$(readlink "${SOURCE}")"
+  [[ "${SOURCE}" != /* ]] && SOURCE="${DIR}/${SOURCE}"
+done
+SCRIPT_DIR="$(cd "$(dirname "${SOURCE}")" && pwd)"
+SI_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_WORKSPACE_ROOT="$(cd "${SI_REPO_ROOT}/.." && pwd)"
+
+WORKSPACE_ROOT="${DEFAULT_WORKSPACE_ROOT}"
+COMMAND="audit"
+APPLY=0
+INCLUDE_DOCKER=0
+INCLUDE_NODE_MODULES=0
+DOCKER_BUILDX_MAX_AGE_DAYS=14
+DOCKER_IMAGE_MAX_AGE_DAYS=30
+
+usage() {
+  cat <<'EOF'
+Usage:
+  tools/si-cache-governor audit [--workspace-root <path>]
+  tools/si-cache-governor prune [--workspace-root <path>] [--apply] [--include-docker] [--include-node-modules]
+
+Behavior:
+  - Repos under underscore-prefixed directories are skipped.
+  - Rust target retention defaults:
+    - si repo: 14 days
+    - other repos: 30 days
+  - prune defaults to dry-run. Use --apply to execute changes.
+EOF
+}
+
+to_human_kib() {
+  local kib="${1:-0}"
+  if command -v numfmt >/dev/null 2>&1; then
+    numfmt --to=iec --suffix=B --from-unit=1024 "${kib}"
+  else
+    printf '%sKiB' "${kib}"
+  fi
+}
+
+size_kib() {
+  local path="$1"
+  if [[ -e "${path}" ]]; then
+    du -s "${path}" 2>/dev/null | awk '{print $1+0}'
+  else
+    echo 0
+  fi
+}
+
+list_repo_paths() {
+  find "${WORKSPACE_ROOT}" -mindepth 1 -maxdepth 1 -type d | while read -r path; do
+    local name
+    name="$(basename "${path}")"
+    [[ "${name}" == _* ]] && continue
+    [[ -d "${path}/.git" ]] || continue
+    printf '%s\n' "${path}"
+  done | sort
+}
+
+repo_total_kib() {
+  local repo_path="$1"
+  du -s "${repo_path}" 2>/dev/null | awk '{print $1+0}'
+}
+
+repo_artifacts_kib() {
+  local repo_path="$1"
+  size_kib "${repo_path}/.artifacts"
+}
+
+repo_targets_kib() {
+  local repo_path="$1"
+  find "${repo_path}" -type d -name target -prune -exec du -s {} + 2>/dev/null | awk '{s+=$1} END{print s+0}'
+}
+
+repo_node_modules_kib() {
+  local repo_path="$1"
+  find "${repo_path}" -type d -name node_modules -prune -exec du -s {} + 2>/dev/null | awk '{s+=$1} END{print s+0}'
+}
+
+repo_dirty_count() {
+  local repo_path="$1"
+  git -C "${repo_path}" status --porcelain 2>/dev/null | wc -l | tr -d ' '
+}
+
+repo_last_commit_epoch() {
+  local repo_path="$1"
+  git -C "${repo_path}" log -1 --format=%ct 2>/dev/null || echo 0
+}
+
+days_since_epoch() {
+  local ts="$1"
+  local now
+  now="$(date +%s)"
+  if [[ "${ts}" -le 0 ]]; then
+    echo 999999
+  else
+    echo $(( (now - ts) / 86400 ))
+  fi
+}
+
+audit_workspace() {
+  printf 'workspace_root=%s\n' "${WORKSPACE_ROOT}"
+  printf 'generated_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo
+  printf 'repo\ttotal\ta_artifacts\ttarget_dirs\tnode_modules\tdirty\tlast_commit_days_ago\n'
+  list_repo_paths | while read -r repo_path; do
+    local repo_name total artifacts targets node_modules dirty commit_age
+    repo_name="$(basename "${repo_path}")"
+    total="$(repo_total_kib "${repo_path}")"
+    artifacts="$(repo_artifacts_kib "${repo_path}")"
+    targets="$(repo_targets_kib "${repo_path}")"
+    node_modules="$(repo_node_modules_kib "${repo_path}")"
+    dirty="$(repo_dirty_count "${repo_path}")"
+    commit_age="$(days_since_epoch "$(repo_last_commit_epoch "${repo_path}")")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "${repo_name}" \
+      "$(to_human_kib "${total}")" \
+      "$(to_human_kib "${artifacts}")" \
+      "$(to_human_kib "${targets}")" \
+      "$(to_human_kib "${node_modules}")" \
+      "${dirty}" \
+      "${commit_age}"
+  done | sort
+  echo
+  printf 'global_cache\tsize\n'
+  printf 'sccache\t%s\n' "$(to_human_kib "$(size_kib "${HOME}/.cache/sccache")")"
+  printf 'cargo_registry\t%s\n' "$(to_human_kib "$(size_kib "${HOME}/.cargo/registry")")"
+  printf 'cargo_git\t%s\n' "$(to_human_kib "$(size_kib "${HOME}/.cargo/git")")"
+  printf 'pnpm_store\t%s\n' "$(to_human_kib "$(size_kib "${HOME}/.pnpm-store")")"
+  printf 'npm_cache\t%s\n' "$(to_human_kib "$(size_kib "${HOME}/.npm")")"
+  if command -v docker >/dev/null 2>&1; then
+    echo
+    docker system df
+  fi
+}
+
+select_prune_candidates() {
+  local include_node_modules="$1"
+  list_repo_paths | while read -r repo_path; do
+    local repo_name retention_days cargo_target node_modules target_mtime_days node_modules_mtime_days
+    repo_name="$(basename "${repo_path}")"
+    retention_days=30
+    if [[ "${repo_name}" == "si" ]]; then
+      retention_days=14
+    fi
+    cargo_target="${repo_path}/.artifacts/cargo-target"
+    if [[ -d "${cargo_target}" ]]; then
+      target_mtime_days="$(days_since_epoch "$(stat -c %Y "${cargo_target}" 2>/dev/null || echo 0)")"
+      if [[ "${target_mtime_days}" -gt "${retention_days}" ]]; then
+        printf 'cargo_target\t%s\t%s\t%s\n' "${repo_name}" "${cargo_target}" "${retention_days}"
+      fi
+    fi
+    if [[ "${include_node_modules}" -eq 1 ]]; then
+      node_modules="${repo_path}/node_modules"
+      if [[ -d "${node_modules}" ]]; then
+        node_modules_mtime_days="$(days_since_epoch "$(stat -c %Y "${node_modules}" 2>/dev/null || echo 0)")"
+        if [[ "${node_modules_mtime_days}" -gt 30 ]]; then
+          printf 'node_modules\t%s\t%s\t30\n' "${repo_name}" "${node_modules}" 
+        fi
+      fi
+    fi
+  done
+}
+
+prune_workspace() {
+  local candidate_lines reclaimed_kib
+  candidate_lines="$(select_prune_candidates "${INCLUDE_NODE_MODULES}")"
+  reclaimed_kib=0
+  echo "prune_mode=$([[ "${APPLY}" -eq 1 ]] && echo apply || echo dry_run)"
+  echo "workspace_root=${WORKSPACE_ROOT}"
+  echo
+  if [[ -z "${candidate_lines}" ]]; then
+    echo "local_candidates=none"
+  else
+    printf 'type\trepo\tpath\tretention_days\tcurrent_size\n'
+    while IFS=$'\t' read -r kind repo path retention_days; do
+      [[ -n "${kind}" ]] || continue
+      local path_size
+      path_size="$(size_kib "${path}")"
+      reclaimed_kib=$(( reclaimed_kib + path_size ))
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        "${kind}" \
+        "${repo}" \
+        "${path}" \
+        "${retention_days}" \
+        "$(to_human_kib "${path_size}")"
+      if [[ "${APPLY}" -eq 1 ]]; then
+        rm -rf "${path}"
+      fi
+    done <<< "${candidate_lines}"
+  fi
+  echo
+  printf 'local_reclaimable=%s\n' "$(to_human_kib "${reclaimed_kib}")"
+  if [[ "${INCLUDE_DOCKER}" -eq 1 ]]; then
+    echo
+    echo "docker_prune=enabled"
+    echo "docker_buildx_max_age_days=${DOCKER_BUILDX_MAX_AGE_DAYS}"
+    echo "docker_image_max_age_days=${DOCKER_IMAGE_MAX_AGE_DAYS}"
+    if [[ "${APPLY}" -eq 1 ]]; then
+      docker builder prune -f --filter "until=$((DOCKER_BUILDX_MAX_AGE_DAYS * 24))h"
+      docker image prune -f --filter "until=$((DOCKER_IMAGE_MAX_AGE_DAYS * 24))h"
+    else
+      echo "dry_run_note=docker prune commands not executed"
+    fi
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    audit|prune)
+      COMMAND="$1"
+      shift
+      ;;
+    --workspace-root)
+      WORKSPACE_ROOT="$2"
+      shift 2
+      ;;
+    --apply)
+      APPLY=1
+      shift
+      ;;
+    --include-docker)
+      INCLUDE_DOCKER=1
+      shift
+      ;;
+    --include-node-modules)
+      INCLUDE_NODE_MODULES=1
+      shift
+      ;;
+    --docker-buildx-max-age-days)
+      DOCKER_BUILDX_MAX_AGE_DAYS="$2"
+      shift 2
+      ;;
+    --docker-image-max-age-days)
+      DOCKER_IMAGE_MAX_AGE_DAYS="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ! -d "${WORKSPACE_ROOT}" ]]; then
+  echo "workspace root not found: ${WORKSPACE_ROOT}" >&2
+  exit 1
+fi
+
+case "${COMMAND}" in
+  audit)
+    audit_workspace
+    ;;
+  prune)
+    prune_workspace
+    ;;
+  *)
+    echo "unsupported command: ${COMMAND}" >&2
+    exit 1
+    ;;
+esac
