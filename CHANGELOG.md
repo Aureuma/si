@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Added
 - Added a first-class Vertex Gemini generation command under `si orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
+- Added `tools/si-cache-governor` and the `docs/CACHE_GOVERNANCE.md` runbook for workspace-wide cache auditing and conservative prune operations.
 
 ### Changed
 - Bumped the working version to `0.59.33` after fixing Vertex global endpoint selection and Bedrock runtime request handling.
