@@ -898,10 +898,19 @@ fn is_auth_error(turn: &Value) -> bool {
     else {
         return false;
     };
+    is_auth_or_usage_limit_error_message(message)
+}
+
+fn is_auth_or_usage_limit_error_message(message: &str) -> bool {
     let normalized = message.to_ascii_lowercase();
     normalized.contains("auth")
         || normalized.contains("login")
         || normalized.contains("unauthorized")
+        || normalized.contains("you've hit your usage limit")
+        || normalized.contains("you have hit your usage limit")
+        || normalized.contains("upgrade to plus")
+        || normalized.contains("upgrade to pro")
+        || normalized.contains("codex usage limits")
 }
 
 #[cfg(test)]
@@ -917,8 +926,9 @@ mod tests {
     };
 
     use super::{
-        CodexNucleusRuntime, TurnTimeoutBudget, build_app_server_status_input,
-        notification_matches_turn, parse_app_server_status, run_started_event,
+        CodexNucleusRuntime, TurnTimeoutBudget, build_app_server_status_input, is_auth_error,
+        is_auth_or_usage_limit_error_message, notification_matches_turn, parse_app_server_status,
+        run_started_event,
         turn_timeout_deadline, turn_timeout_message,
     };
 
@@ -1107,6 +1117,32 @@ mod tests {
         assert!(notification_matches_turn(&params, "thread-123", "turn-123"));
         assert!(!notification_matches_turn(&params, "thread-999", "turn-123"));
         assert!(!notification_matches_turn(&params, "thread-123", "turn-999"));
+    }
+
+    #[test]
+    fn auth_error_detection_includes_usage_limit_signatures() {
+        assert!(is_auth_or_usage_limit_error_message(
+            "You've hit your usage limit. Upgrade to Plus to continue using Codex, or try again at May 10th, 2026 11:53 AM."
+        ));
+        assert!(is_auth_or_usage_limit_error_message(
+            "You have hit your usage limit. Upgrade to Pro to continue."
+        ));
+        assert!(is_auth_or_usage_limit_error_message(
+            "Codex usage limits reached for this account."
+        ));
+        assert!(!is_auth_or_usage_limit_error_message(
+            "turn exceeded max duration of 7200 seconds"
+        ));
+    }
+
+    #[test]
+    fn auth_error_detection_reads_turn_error_message() {
+        let turn = json!({
+            "error": {
+                "message": "You've hit your usage limit. Upgrade to Plus to continue using Codex."
+            }
+        });
+        assert!(is_auth_error(&turn));
     }
 
     #[test]
