@@ -16505,18 +16505,8 @@ struct CodexSpawnStartArgs {
     profile: Option<String>,
     #[arg(long = "worker-slot")]
     worker_slot: Option<String>,
-    #[arg(long, default_value_t = 1)]
-    count: usize,
     #[arg(long)]
     workspace: Option<PathBuf>,
-    #[arg(long)]
-    workdir: Option<String>,
-    #[arg(long, default_value_t = true)]
-    detach: bool,
-    #[arg(long)]
-    home: Option<PathBuf>,
-    #[arg(long = "env")]
-    env: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -16640,14 +16630,6 @@ enum CodexCommand {
         profile: Option<String>,
         #[arg(long = "worker-slot")]
         worker_slot: Option<String>,
-        #[arg(long)]
-        workdir: Option<PathBuf>,
-        #[arg(long, num_args = 1, default_value = "true", value_parser = clap::value_parser!(bool))]
-        interactive: bool,
-        #[arg(long, num_args = 1, default_value = "false", value_parser = clap::value_parser!(bool))]
-        tty: bool,
-        #[arg(long = "env")]
-        env: Vec<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
@@ -35822,22 +35804,8 @@ fn main() -> Result<()> {
             CodexCommand::Spawn(CodexSpawnStartArgs {
                 profile,
                 worker_slot,
-                count,
                 workspace,
-                workdir,
-                detach,
-                home,
-                env,
-            }) => show_codex_spawn_start(
-                profile,
-                worker_slot,
-                count,
-                workspace,
-                workdir,
-                detach,
-                home,
-                env,
-            )?,
+            }) => show_codex_spawn_start(profile, worker_slot, workspace)?,
             CodexCommand::Remove { profile, worker_slot, all, format } => {
                 run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
@@ -35847,20 +35815,8 @@ fn main() -> Result<()> {
             CodexCommand::Shell {
                 profile,
                 worker_slot,
-                workdir,
-                interactive,
-                tty,
-                env,
                 command,
-            } => run_codex_shell(
-                profile.as_deref(),
-                worker_slot.as_deref(),
-                workdir,
-                interactive,
-                tty,
-                env,
-                command,
-            )?,
+            } => run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?,
             CodexCommand::List { format } => run_codex_list(format)?,
             CodexCommand::Tmux(CodexTmuxArgs { profile, worker_slot, format }) => {
                 run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
@@ -35921,22 +35877,8 @@ fn main() -> Result<()> {
             CodexCommand::Respawn(CodexSpawnStartArgs {
                 profile,
                 worker_slot,
-                count,
                 workspace,
-                workdir,
-                detach,
-                home,
-                env,
-            }) => run_codex_respawn(
-                profile,
-                worker_slot,
-                count,
-                workspace,
-                workdir,
-                detach,
-                home,
-                env,
-            )?,
+            }) => run_codex_respawn(profile, worker_slot, workspace)?,
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
@@ -71306,105 +71248,54 @@ fn run_github_repo_delete(
 fn show_codex_spawn_start(
     profile: Option<String>,
     worker_slot: Option<String>,
-    count: usize,
     workspace: Option<PathBuf>,
-    workdir: Option<String>,
-    detach: bool,
-    home: Option<PathBuf>,
-    env: Vec<String>,
 ) -> Result<()> {
-    if count == 0 {
-        anyhow::bail!("--count must be greater than zero");
-    }
-    if count > 1 && worker_slot.as_deref().is_some_and(|value| !value.trim().is_empty()) {
-        anyhow::bail!("--worker-slot cannot be combined with --count > 1");
-    }
-    let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
+    let (settings_home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
     let profile_id =
         resolve_codex_profile(&settings_home, &settings, &paths, profile.as_deref(), "spawn")?;
     let workspace = resolve_codex_workspace(workspace, &settings)?;
-    let workdir = resolve_codex_workdir(workdir, &workspace)?;
-    let slots = if count == 1 {
-        vec![normalize_codex_worker_slot(worker_slot.as_deref())?]
-    } else {
-        std::iter::once(DEFAULT_CODEX_WORKER_SLOT.to_owned())
-            .chain((2..=count).map(|index| format!("parallel-{index}")))
-            .collect::<Vec<_>>()
-    };
-    let mut states = Vec::with_capacity(slots.len());
-    for slot in slots {
-        states.push(ensure_codex_worker_session(
-            &settings_home,
-            &paths,
-            &settings,
-            &profile_id,
-            &slot,
-            workspace.clone(),
-            workdir.clone(),
-            &env,
-        )?);
-    }
-    if states.len() == 1 {
-        let state = states.first().expect("single state");
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "profile_id": state.profile_id,
-                "worker_slot": state.worker_slot,
-                "session_name": state.session_name,
-                "workspace": state.workspace,
-                "workdir": state.workdir,
-                "updated_at": state.updated_at,
-            }))?
-        );
-    } else {
-        println!("{}", serde_json::to_string_pretty(&states)?);
-    }
-    if !detach {
-        let attach_slot = states
-            .first()
-            .map(|state| state.worker_slot.as_str())
-            .unwrap_or(DEFAULT_CODEX_WORKER_SLOT);
-        run_codex_tmux_command(Some(profile_id.as_str()), Some(attach_slot), None)?;
-    }
+    let workdir = resolve_codex_workdir(None, &workspace)?;
+    let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
+    let state = ensure_codex_worker_session(
+        &settings_home,
+        &paths,
+        &settings,
+        &profile_id,
+        &slot,
+        workspace,
+        workdir,
+        &[],
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "profile_id": state.profile_id,
+            "worker_slot": state.worker_slot,
+            "session_name": state.session_name,
+            "workspace": state.workspace,
+            "workdir": state.workdir,
+            "updated_at": state.updated_at,
+        }))?
+    );
     Ok(())
 }
 
 fn run_codex_respawn(
     profile: Option<String>,
     worker_slot: Option<String>,
-    count: usize,
     workspace: Option<PathBuf>,
-    workdir: Option<String>,
-    detach: bool,
-    home: Option<PathBuf>,
-    env: Vec<String>,
 ) -> Result<()> {
-    if count == 0 {
-        anyhow::bail!("--count must be greater than zero");
-    }
-    if count > 1 && worker_slot.as_deref().is_some_and(|value| !value.trim().is_empty()) {
-        anyhow::bail!("--worker-slot cannot be combined with --count > 1");
-    }
-    let slots = if count == 1 {
-        vec![normalize_codex_worker_slot(worker_slot.as_deref())?]
-    } else {
-        std::iter::once(DEFAULT_CODEX_WORKER_SLOT.to_owned())
-            .chain((2..=count).map(|index| format!("parallel-{index}")))
-            .collect::<Vec<_>>()
-    };
-    for slot in slots {
-        let _ = run_codex_remove_with_settings(
-            profile.as_deref(),
-            Some(slot.as_str()),
-            false,
-            OutputFormat::Text,
-            home.clone(),
-            None,
-        );
-    }
-    show_codex_spawn_start(profile, worker_slot, count, workspace, workdir, detach, home, env)
+    let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
+    let _ = run_codex_remove_with_settings(
+        profile.as_deref(),
+        Some(slot.as_str()),
+        false,
+        OutputFormat::Text,
+        None,
+        None,
+    );
+    show_codex_spawn_start(profile, Some(slot), workspace)
 }
 
 fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<PathBuf> {
@@ -72012,10 +71903,6 @@ fn run_codex_tail(profile: Option<&str>, worker_slot: Option<&str>, tail: &str) 
 fn run_codex_shell(
     profile: Option<&str>,
     worker_slot: Option<&str>,
-    workdir: Option<PathBuf>,
-    interactive: bool,
-    tty: bool,
-    env_entries: Vec<String>,
     command: Vec<String>,
 ) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
@@ -72037,7 +71924,7 @@ fn run_codex_shell(
             &target.worker_slot,
         )),
     )?;
-    let resolved_workdir = workdir.unwrap_or_else(|| PathBuf::from(target.workdir.clone()));
+    let resolved_workdir = PathBuf::from(target.workdir.clone());
     let mut process = StdCommand::new(&command[0]);
     process
         .args(&command[1..])
@@ -72049,41 +71936,14 @@ fn run_codex_shell(
         .env("SI_CODEX_PROFILE", &target.profile_id)
         .env("SI_CODEX_WORKER_SLOT", &target.worker_slot)
         .env("TERM", env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
-    for entry in env_entries {
-        let trimmed = entry.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let (key, value) = trimmed.split_once('=').unwrap_or((trimmed, ""));
-        let key = key.trim();
-        if key.is_empty() || codex_env_key_protected(key) {
-            continue;
-        }
-        process.env(key, value);
-    }
-
-    if interactive || tty {
-        let status = process
-            .stdin(std::process::Stdio::inherit())
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .status()
-            .with_context(|| format!("run {}", command[0]))?;
-        if !status.success() {
-            anyhow::bail!("command failed: {status}");
-        }
-        return Ok(());
-    }
-
-    let output = process.output().with_context(|| format!("run {}", command[0]))?;
-    if !output.stdout.is_empty() {
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-    }
-    if !output.stderr.is_empty() {
-        eprint!("{}", String::from_utf8_lossy(&output.stderr));
-    }
-    if !output.status.success() {
-        anyhow::bail!("command failed: {}", output.status);
+    let status = process
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .with_context(|| format!("run {}", command[0]))?;
+    if !status.success() {
+        anyhow::bail!("command failed: {status}");
     }
     Ok(())
 }
