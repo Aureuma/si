@@ -4483,7 +4483,7 @@ impl NucleusService {
                 let params: WorkerProbeParams =
                     serde_json::from_value(params).context("parse worker.probe params")?;
                 let profile_slug = params.profile_slug().to_owned();
-                let worker_slot = params.worker_slot();
+                let worker_slot = params.worker_slot()?;
                 let profile = ProfileName::new(params.profile)?;
                 let worker_id = match params.worker_id {
                     Some(value) => WorkerId::new(value)?,
@@ -4774,8 +4774,10 @@ impl NucleusService {
         profile: &ProfileName,
         request: EnsureWorkerRequest<'_>,
     ) -> Result<EnsuredWorker> {
-        let requested_worker_slot =
-            request.requested_worker_slot.map(|slot| normalize_worker_slot(Some(slot)));
+        let requested_worker_slot = request
+            .requested_worker_slot
+            .map(|slot| normalize_worker_slot_checked(Some(slot)))
+            .transpose()?;
         let mut profile_workers = self
             .store
             .list_workers()?
@@ -6032,7 +6034,7 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                     "properties": {
                         "worker_id": openapi_id_property("Canonical SI worker id.", "si-worker-", "si-worker-0123456789abcdef00000001"),
                         "profile": { "type": "string", "description": "SI profile this worker runs as.", "pattern": "^[a-z][a-z0-9-]*$", "example": "darmstada" },
-                        "worker_slot": { "type": "string", "description": "Worker slot under the profile (primary by default).", "pattern": "^[a-z][a-z0-9-]*$", "example": "primary" },
+                        "worker_slot": { "type": "string", "description": "Worker slot under the profile (primary by default).", "pattern": "^[a-z](?:[a-z0-9-]*[a-z0-9])?$", "example": "primary" },
                         "home_dir": { "type": ["string", "null"], "description": "Home directory used by the worker process.", "example": "/home/si" },
                         "codex_home": { "type": "string", "description": "Codex home directory used by this worker.", "example": "/home/si/.codex" },
                         "workdir": { "type": ["string", "null"], "description": "Default workspace directory for worker execution.", "example": "/home/si/Development/si" },
@@ -6551,6 +6553,22 @@ fn normalize_worker_slot(worker_slot: Option<&str>) -> String {
     if slot.is_empty() { DEFAULT_NUCLEUS_WORKER_SLOT.to_owned() } else { slot }
 }
 
+fn normalize_worker_slot_checked(worker_slot: Option<&str>) -> Result<String> {
+    let slot = normalize_worker_slot(worker_slot);
+    if slot == DEFAULT_NUCLEUS_WORKER_SLOT {
+        return Ok(slot);
+    }
+    let valid = slot.chars().enumerate().all(|(index, ch)| {
+        ch.is_ascii_lowercase() || ch.is_ascii_digit() || (ch == '-' && index > 0)
+    });
+    if !valid || slot.starts_with('-') || slot.ends_with('-') {
+        anyhow::bail!(
+            "invalid worker_slot {slot:?}; use lowercase letters, digits, and dashes (example: review-2)"
+        );
+    }
+    Ok(slot)
+}
+
 fn parse_positive_usize_env(name: &str) -> Option<usize> {
     env::var(name).ok().and_then(|raw| {
         let parsed = raw.trim().parse::<usize>().ok()?;
@@ -6724,8 +6742,8 @@ impl WorkerProbeParams {
         self.profile.trim()
     }
 
-    fn worker_slot(&self) -> String {
-        normalize_worker_slot(self.worker_slot.as_deref())
+    fn worker_slot(&self) -> Result<String> {
+        normalize_worker_slot_checked(self.worker_slot.as_deref())
     }
 }
 
@@ -8026,6 +8044,78 @@ mod tests {
                 .unwrap_or(false)
         );
         assert_eq!(service.store.list_sessions().expect("list sessions").len(), 0);
+        assert_eq!(service.store.list_workers().expect("list workers").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn session_create_rejects_invalid_worker_slot_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-invalid-worker-slot"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "worker_slot": "Review-",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(!session.ok);
+        assert!(
+            session
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("invalid worker_slot"))
+                .unwrap_or(false)
+        );
+        assert_eq!(service.store.list_sessions().expect("list sessions").len(), 0);
+        assert_eq!(service.store.list_workers().expect("list workers").len(), 0);
+    }
+
+    #[tokio::test]
+    async fn worker_probe_rejects_invalid_worker_slot_names() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let probe = service
+            .dispatch_request(GatewayRequest {
+                id: json!("worker-probe-invalid-worker-slot"),
+                method: "worker.probe".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "worker_slot": "bad_slot",
+                }),
+            })
+            .await;
+        assert!(!probe.ok);
+        assert!(
+            probe
+                .error
+                .as_ref()
+                .map(|error| error.message.contains("invalid worker_slot"))
+                .unwrap_or(false)
+        );
         assert_eq!(service.store.list_workers().expect("list workers").len(), 0);
     }
 
