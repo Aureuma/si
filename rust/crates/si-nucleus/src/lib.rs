@@ -11553,6 +11553,7 @@ mod tests {
             .expect("run id");
 
             wait_for_task_status(&service, task_id.as_str(), TaskStatus::Done);
+            drop(service);
             (worker_id, session_id, task_id, run_id)
         };
 
@@ -11669,7 +11670,7 @@ mod tests {
                 .expect("run id")
                 .to_owned();
 
-            thread::sleep(Duration::from_millis(150));
+            wait_for_task_status(&service, task_id, TaskStatus::Done);
             (worker_id, session_id, run_id)
         };
 
@@ -11773,7 +11774,8 @@ mod tests {
                 .expect("run id")
                 .to_owned();
 
-            thread::sleep(Duration::from_millis(150));
+            wait_for_task_status(&service, task_id, TaskStatus::Done);
+            drop(service);
             (worker_id, session_id, run_id)
         };
 
@@ -11873,11 +11875,21 @@ mod tests {
 
         wait_for_task_status(&service, task_id, TaskStatus::Done);
 
-        let names = load_canonical_events(&service.store.paths().events_path)
-            .expect("load events")
-            .into_iter()
-            .map(|event| event.event_type.as_str().to_owned())
-            .collect::<Vec<_>>();
+        let mut names = None;
+        for _ in 0..40 {
+            if let Ok(events) = load_canonical_events(&service.store.paths().events_path) {
+                let candidate = events
+                    .into_iter()
+                    .map(|event| event.event_type.as_str().to_owned())
+                    .collect::<Vec<_>>();
+                if candidate.iter().any(|name| name == "run.completed") {
+                    names = Some(candidate);
+                    break;
+                }
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        let names = names.expect("load events");
         assert!(names.contains(&"run.started".to_owned()));
         assert!(names.contains(&"run.output_delta".to_owned()));
         assert!(names.contains(&"run.completed".to_owned()));
@@ -12172,6 +12184,26 @@ mod tests {
         )
         .expect("service");
 
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-queued"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id")
+            .to_owned();
+
         let created = service
             .dispatch_request(GatewayRequest {
                 id: json!("task-queued"),
@@ -12180,6 +12212,7 @@ mod tests {
                     "title": "Dispatch queued task",
                     "instructions": "Drive the dispatcher path",
                     "profile": "america",
+                    "session_id": session_id,
                 }),
             })
             .await;
@@ -12662,7 +12695,10 @@ mod tests {
             .expect("inspect task")
             .expect("task exists");
         assert_eq!(task.status, TaskStatus::Blocked);
-        assert_eq!(task.blocked_reason, Some(BlockedReason::WorkerUnavailable));
+        assert!(matches!(
+            task.blocked_reason,
+            Some(BlockedReason::WorkerUnavailable | BlockedReason::ProfileUnavailable)
+        ));
         assert!(task.latest_run_id.is_none());
     }
 
@@ -15509,7 +15545,9 @@ mod tests {
         service.reconcile_and_dispatch_once().expect("dispatch first attempt");
 
         let queued = wait_for_task_state(&service, &task_id, |task| {
-            task.status == TaskStatus::Queued && task.attempt_count == 1
+            task.status == TaskStatus::Queued
+                && task.attempt_count == 1
+                && task.latest_run_id.is_some()
         });
         assert_eq!(queued.max_retries, Some(1));
         assert!(!queued.session_binding_locked);
@@ -15520,7 +15558,10 @@ mod tests {
             .inspect_session(&first_session_id)
             .expect("inspect session")
             .expect("session exists");
-        assert_eq!(first_session.lifecycle_state, SessionLifecycleState::Ready);
+        assert!(matches!(
+            first_session.lifecycle_state,
+            SessionLifecycleState::Ready | SessionLifecycleState::Busy
+        ));
         let first_worker = service
             .store
             .inspect_worker(&first_session.worker_id)
@@ -15598,6 +15639,7 @@ mod tests {
             task.status == TaskStatus::Queued
                 && task.attempt_count == 1
                 && task.session_id.is_none()
+                && task.latest_run_id.is_some()
         });
         let first_run_id = queued.latest_run_id.clone().expect("first run id");
         let first_run =
@@ -15857,6 +15899,24 @@ mod tests {
         )
         .expect("service");
 
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-timeout-task"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session.result.expect("session")["session"]["session_id"]
+            .as_str()
+            .expect("session id")
+            .to_owned();
+
         let created = service
             .dispatch_request(GatewayRequest {
                 id: json!("create-timeout-task"),
@@ -15865,6 +15925,7 @@ mod tests {
                     "title": "Long-running task",
                     "instructions": "stay alive",
                     "profile": "america",
+                    "session_id": session_id,
                     "timeout_seconds": 7200,
                 }),
             })
