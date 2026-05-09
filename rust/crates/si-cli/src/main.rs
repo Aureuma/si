@@ -35801,22 +35801,18 @@ fn main() -> Result<()> {
                     format,
                 }) => swap_codex_profile(profile, home, settings_file, format)?,
             },
-            CodexCommand::Spawn(CodexSpawnStartArgs {
-                profile,
-                worker_slot,
-                workspace,
-            }) => show_codex_spawn_start(profile, worker_slot, workspace)?,
+            CodexCommand::Spawn(CodexSpawnStartArgs { profile, worker_slot, workspace }) => {
+                show_codex_spawn_start(profile, worker_slot, workspace)?
+            }
             CodexCommand::Remove { profile, worker_slot, all, format } => {
                 run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
             CodexCommand::Tail { profile, worker_slot, tail } => {
                 run_codex_tail(profile.as_deref(), worker_slot.as_deref(), &tail)?
             }
-            CodexCommand::Shell {
-                profile,
-                worker_slot,
-                command,
-            } => run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?,
+            CodexCommand::Shell { profile, worker_slot, command } => {
+                run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?
+            }
             CodexCommand::List { format } => run_codex_list(format)?,
             CodexCommand::Tmux(CodexTmuxArgs { profile, worker_slot, format }) => {
                 run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
@@ -35874,11 +35870,9 @@ fn main() -> Result<()> {
                     }
                 },
             },
-            CodexCommand::Respawn(CodexSpawnStartArgs {
-                profile,
-                worker_slot,
-                workspace,
-            }) => run_codex_respawn(profile, worker_slot, workspace)?,
+            CodexCommand::Respawn(CodexSpawnStartArgs { profile, worker_slot, workspace }) => {
+                run_codex_respawn(profile, worker_slot, workspace)?
+            }
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,

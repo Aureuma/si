@@ -1192,12 +1192,11 @@ impl NucleusStore {
         if task.status != TaskStatus::Queued {
             anyhow::bail!("task is not queued");
         }
-        if let Some(latest_run_id) = task.latest_run_id.as_ref() {
-            if let Some(latest_run) = self.read_run_locked(latest_run_id)? {
-                if is_active_run_status(latest_run.status) {
-                    anyhow::bail!("task already has an active run");
-                }
-            }
+        if let Some(latest_run_id) = task.latest_run_id.as_ref()
+            && let Some(latest_run) = self.read_run_locked(latest_run_id)?
+            && is_active_run_status(latest_run.status)
+        {
+            anyhow::bail!("task already has an active run");
         }
         self.write_run_projection_locked(&run, Some(&task))?;
         if task.session_id.is_none() {
@@ -1233,64 +1232,58 @@ impl NucleusStore {
                     run.app_server_turn_id = turn_id;
                     self.write_run_projection_locked(&run, None)?;
                 }
-                if let Some(session_id) = primary.data.session_id.clone() {
-                    if let Some(mut session) = self.read_session_locked(&session_id)? {
-                        if session.lifecycle_state == SessionLifecycleState::Ready {
-                            session
-                                .transition_to(SessionLifecycleState::Busy)
-                                .map_err(anyhow::Error::new)?;
-                            self.write_session_projection_locked(&session)?;
-                        }
-                    }
+                if let Some(session_id) = primary.data.session_id.clone()
+                    && let Some(mut session) = self.read_session_locked(&session_id)?
+                    && session.lifecycle_state == SessionLifecycleState::Ready
+                {
+                    session
+                        .transition_to(SessionLifecycleState::Busy)
+                        .map_err(anyhow::Error::new)?;
+                    self.write_session_projection_locked(&session)?;
                 }
-                if let Some(task_id) = primary.data.task_id.clone() {
-                    if let Some(mut task) = self.read_task_locked(&task_id)? {
-                        if matches!(task.status, TaskStatus::Queued | TaskStatus::Blocked) {
-                            task.transition_to(TaskStatus::Running, None)
-                                .map_err(anyhow::Error::new)?;
-                            write_json_atomic(&self.paths.task_path(&task_id), &task)?;
-                            events.push(self.append_event_locked(
-                                CanonicalEventType::TaskUpdated,
-                                CanonicalEventSource::Nucleus,
-                                EventDataEnvelope {
-                                    task_id: Some(task_id),
-                                    worker_id: primary.data.worker_id.clone(),
-                                    session_id: primary.data.session_id.clone(),
-                                    run_id: Some(run_id),
-                                    profile: primary.data.profile.clone(),
-                                    payload: json!({
-                                        "status": task.status,
-                                    }),
-                                },
-                            )?);
-                        }
-                    }
+                if let Some(task_id) = primary.data.task_id.clone()
+                    && let Some(mut task) = self.read_task_locked(&task_id)?
+                    && matches!(task.status, TaskStatus::Queued | TaskStatus::Blocked)
+                {
+                    task.transition_to(TaskStatus::Running, None).map_err(anyhow::Error::new)?;
+                    write_json_atomic(&self.paths.task_path(&task_id), &task)?;
+                    events.push(self.append_event_locked(
+                        CanonicalEventType::TaskUpdated,
+                        CanonicalEventSource::Nucleus,
+                        EventDataEnvelope {
+                            task_id: Some(task_id),
+                            worker_id: primary.data.worker_id.clone(),
+                            session_id: primary.data.session_id.clone(),
+                            run_id: Some(run_id),
+                            profile: primary.data.profile.clone(),
+                            payload: json!({
+                                "status": task.status,
+                            }),
+                        },
+                    )?);
                 }
             }
             CanonicalEventType::RunOutputDelta => {
-                if let Some(task_id) = primary.data.task_id.clone() {
-                    if let Some(mut task) = self.read_task_locked(&task_id)? {
-                        if let Some(delta) =
-                            primary.data.payload.get("delta").and_then(Value::as_str)
-                        {
-                            task.checkpoint_summary = Some(delta.to_owned());
-                            task.checkpoint_at = Some(primary.ts);
-                            task.checkpoint_seq = Some(primary.seq);
-                            task.updated_at = Utc::now();
-                            write_json_atomic(&self.paths.task_path(&task_id), &task)?;
-                            if let Some(session_id) = primary.data.session_id.clone() {
-                                if let Some(mut session) = self.read_session_locked(&session_id)? {
-                                    session.summary_state = Some(delta.to_owned());
-                                    session.updated_at = Utc::now();
-                                    self.write_session_projection_locked(&session)?;
-                                }
-                            }
-                            if let Some(run_id) = primary.data.run_id.clone() {
-                                if let Some(run) = self.read_run_locked(&run_id)? {
-                                    self.write_run_projection_locked(&run, Some(&task))?;
-                                }
-                            }
-                        }
+                if let Some(task_id) = primary.data.task_id.clone()
+                    && let Some(mut task) = self.read_task_locked(&task_id)?
+                    && let Some(delta) = primary.data.payload.get("delta").and_then(Value::as_str)
+                {
+                    task.checkpoint_summary = Some(delta.to_owned());
+                    task.checkpoint_at = Some(primary.ts);
+                    task.checkpoint_seq = Some(primary.seq);
+                    task.updated_at = Utc::now();
+                    write_json_atomic(&self.paths.task_path(&task_id), &task)?;
+                    if let Some(session_id) = primary.data.session_id.clone()
+                        && let Some(mut session) = self.read_session_locked(&session_id)?
+                    {
+                        session.summary_state = Some(delta.to_owned());
+                        session.updated_at = Utc::now();
+                        self.write_session_projection_locked(&session)?;
+                    }
+                    if let Some(run_id) = primary.data.run_id.clone()
+                        && let Some(run) = self.read_run_locked(&run_id)?
+                    {
+                        self.write_run_projection_locked(&run, Some(&task))?;
                     }
                 }
             }
@@ -1315,12 +1308,11 @@ impl NucleusStore {
                     None,
                     &mut events,
                 )?;
-                if let Some(retry_plan) = retry_plan {
-                    if let Some(task_id) = primary.data.task_id.as_ref() {
-                        if let Some(event) = self.retry_failed_task_locked(task_id, &retry_plan)? {
-                            events.push(event);
-                        }
-                    }
+                if let Some(retry_plan) = retry_plan
+                    && let Some(task_id) = primary.data.task_id.as_ref()
+                    && let Some(event) = self.retry_failed_task_locked(task_id, &retry_plan)?
+                {
+                    events.push(event);
                 }
             }
             CanonicalEventType::RunCancelled => {
@@ -1387,19 +1379,17 @@ impl NucleusStore {
             event.data.payload.get("session_quarantine").and_then(Value::as_bool).unwrap_or_else(
                 || run_failure_requires_session_quarantine(error) || quarantine_worker,
             );
-        if quarantine_session {
-            if let Some(session_id) = event.data.session_id.as_ref() {
-                if let Some(appended) = self.mark_session_broken_locked(session_id, error)? {
-                    events.push(appended);
-                }
-            }
+        if quarantine_session
+            && let Some(session_id) = event.data.session_id.as_ref()
+            && let Some(appended) = self.mark_session_broken_locked(session_id, error)?
+        {
+            events.push(appended);
         }
-        if quarantine_worker {
-            if let Some(worker_id) = event.data.worker_id.as_ref() {
-                if let Some(appended) = self.mark_worker_failed_locked(worker_id, error)? {
-                    events.push(appended);
-                }
-            }
+        if quarantine_worker
+            && let Some(worker_id) = event.data.worker_id.as_ref()
+            && let Some(appended) = self.mark_worker_failed_locked(worker_id, error)?
+        {
+            events.push(appended);
         }
         Ok(())
     }
@@ -1485,73 +1475,71 @@ impl NucleusStore {
         events: &mut Vec<CanonicalEvent>,
     ) -> Result<()> {
         let mut refreshed_run = None;
-        if let Some(run_id) = event.data.run_id.clone() {
-            if let Some(mut run) = self.read_run_locked(&run_id)? {
-                if run.status != run_status {
-                    run.transition_to(run_status).map_err(anyhow::Error::new)?;
-                }
-                self.write_run_projection_locked(&run, None)?;
-                refreshed_run = Some(run);
+        if let Some(run_id) = event.data.run_id.clone()
+            && let Some(mut run) = self.read_run_locked(&run_id)?
+        {
+            if run.status != run_status {
+                run.transition_to(run_status).map_err(anyhow::Error::new)?;
             }
+            self.write_run_projection_locked(&run, None)?;
+            refreshed_run = Some(run);
         }
-        if let Some(session_id) = event.data.session_id.clone() {
-            if let Some(mut session) = self.read_session_locked(&session_id)? {
-                if let Some(summary) = event
-                    .data
-                    .payload
-                    .get("final_output")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    session.summary_state = Some(summary.to_owned());
-                    session.updated_at = Utc::now();
-                }
-                if session.lifecycle_state == SessionLifecycleState::Busy {
-                    session
-                        .transition_to(SessionLifecycleState::Ready)
-                        .map_err(anyhow::Error::new)?;
-                }
-                self.write_session_projection_locked(&session)?;
+        if let Some(session_id) = event.data.session_id.clone()
+            && let Some(mut session) = self.read_session_locked(&session_id)?
+        {
+            if let Some(summary) = event
+                .data
+                .payload
+                .get("final_output")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                session.summary_state = Some(summary.to_owned());
+                session.updated_at = Utc::now();
             }
+            if session.lifecycle_state == SessionLifecycleState::Busy {
+                session.transition_to(SessionLifecycleState::Ready).map_err(anyhow::Error::new)?;
+            }
+            self.write_session_projection_locked(&session)?;
         }
-        if let Some(task_id) = event.data.task_id.clone() {
-            if let Some(mut task) = self.read_task_locked(&task_id)? {
-                if task.status != task_status {
-                    task.transition_to(task_status, blocked_reason).map_err(anyhow::Error::new)?;
-                }
-                if let Some(summary) = event
-                    .data
-                    .payload
-                    .get("final_output")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    task.checkpoint_summary = Some(summary.to_owned());
-                    task.checkpoint_at = Some(event.ts);
-                    task.checkpoint_seq = Some(event.seq);
-                }
-                write_json_atomic(&self.paths.task_path(&task_id), &task)?;
-                if let Some(run) = refreshed_run.as_ref() {
-                    self.write_run_projection_locked(run, Some(&task))?;
-                }
-                events.push(self.append_event_locked(
-                    task_event_type.unwrap_or(CanonicalEventType::TaskUpdated),
-                    CanonicalEventSource::Nucleus,
-                    EventDataEnvelope {
-                        task_id: Some(task_id),
-                        worker_id: event.data.worker_id.clone(),
-                        session_id: event.data.session_id.clone(),
-                        run_id: event.data.run_id.clone(),
-                        profile: event.data.profile.clone(),
-                        payload: json!({
-                            "status": task.status,
-                            "blocked_reason": task.blocked_reason,
-                        }),
-                    },
-                )?);
+        if let Some(task_id) = event.data.task_id.clone()
+            && let Some(mut task) = self.read_task_locked(&task_id)?
+        {
+            if task.status != task_status {
+                task.transition_to(task_status, blocked_reason).map_err(anyhow::Error::new)?;
             }
+            if let Some(summary) = event
+                .data
+                .payload
+                .get("final_output")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                task.checkpoint_summary = Some(summary.to_owned());
+                task.checkpoint_at = Some(event.ts);
+                task.checkpoint_seq = Some(event.seq);
+            }
+            write_json_atomic(&self.paths.task_path(&task_id), &task)?;
+            if let Some(run) = refreshed_run.as_ref() {
+                self.write_run_projection_locked(run, Some(&task))?;
+            }
+            events.push(self.append_event_locked(
+                task_event_type.unwrap_or(CanonicalEventType::TaskUpdated),
+                CanonicalEventSource::Nucleus,
+                EventDataEnvelope {
+                    task_id: Some(task_id),
+                    worker_id: event.data.worker_id.clone(),
+                    session_id: event.data.session_id.clone(),
+                    run_id: event.data.run_id.clone(),
+                    profile: event.data.profile.clone(),
+                    payload: json!({
+                        "status": task.status,
+                        "blocked_reason": task.blocked_reason,
+                    }),
+                },
+            )?);
         }
         Ok(())
     }
@@ -2954,15 +2942,13 @@ impl NucleusService {
 
     fn background_runtime_loop(self) {
         loop {
-            if let Err(error) = self.reconcile_and_dispatch_once() {
-                if let Some(payload) = self.record_background_loop_warning(Utc::now(), &error) {
-                    if let Ok(event) = self
-                        .store
-                        .append_system_warning("nucleus background loop iteration failed", payload)
-                    {
-                        let _ = self.events.send(event);
-                    }
-                }
+            if let Err(error) = self.reconcile_and_dispatch_once()
+                && let Some(payload) = self.record_background_loop_warning(Utc::now(), &error)
+                && let Ok(event) = self
+                    .store
+                    .append_system_warning("nucleus background loop iteration failed", payload)
+            {
+                let _ = self.events.send(event);
             }
             thread::sleep(DISPATCH_LOOP_INTERVAL);
         }
@@ -2986,11 +2972,11 @@ impl NucleusService {
         let mut state = self.background_warning_state.lock().ok()?;
         let mut suppressed = 0_u64;
         if state.last_error.as_deref() == Some(signature.as_str()) {
-            if let Some(last_emitted_at) = state.last_emitted_at {
-                if now < last_emitted_at + BACKGROUND_WARNING_THROTTLE_WINDOW {
-                    state.suppressed += 1;
-                    return None;
-                }
+            if let Some(last_emitted_at) = state.last_emitted_at
+                && now < last_emitted_at + BACKGROUND_WARNING_THROTTLE_WINDOW
+            {
+                state.suppressed += 1;
+                return None;
             }
             suppressed = state.suppressed;
         }
@@ -3014,13 +3000,13 @@ impl NucleusService {
             ) {
                 continue;
             }
-            if runtime.inspect_worker(&worker.worker_id)?.is_none() {
-                if let Some(event) = self.store.mark_worker_failed(
+            if runtime.inspect_worker(&worker.worker_id)?.is_none()
+                && let Some(event) = self.store.mark_worker_failed(
                     &worker.worker_id,
                     "worker process is not attached to the runtime",
-                )? {
-                    let _ = self.events.send(event);
-                }
+                )?
+            {
+                let _ = self.events.send(event);
             }
         }
         for worker in self.store.list_workers()? {
@@ -3043,16 +3029,16 @@ impl NucleusService {
         for mut rule in
             load_json_records_from_dir::<CronRuleRecord>(&self.store.paths().cron_state_dir)?
         {
-            if let Err(error) = self.process_single_cron_rule(&mut rule, now) {
-                if let Ok(event) = self.store.append_system_warning(
+            if let Err(error) = self.process_single_cron_rule(&mut rule, now)
+                && let Ok(event) = self.store.append_system_warning(
                     "cron producer iteration failed",
                     json!({
                         "rule_name": rule.name,
                         "error": error.to_string(),
                     }),
-                ) {
-                    let _ = self.events.send(event);
-                }
+                )
+            {
+                let _ = self.events.send(event);
             }
         }
         Ok(())
@@ -3154,16 +3140,16 @@ impl NucleusService {
             let _ = self.events.send(event);
         }
         for mut rule in rules {
-            if let Err(error) = self.process_single_hook_rule(&mut rule, &loaded.events) {
-                if let Ok(event) = self.store.append_system_warning(
+            if let Err(error) = self.process_single_hook_rule(&mut rule, &loaded.events)
+                && let Ok(event) = self.store.append_system_warning(
                     "hook producer iteration failed",
                     json!({
                         "rule_name": rule.name,
                         "error": error.to_string(),
                     }),
-                ) {
-                    let _ = self.events.send(event);
-                }
+                )
+            {
+                let _ = self.events.send(event);
             }
         }
         Ok(())
@@ -3323,14 +3309,11 @@ impl NucleusService {
         for event in events {
             let _ = self.events.send(event);
         }
-        if blocked.mark_session_broken {
-            if let Some(session_id) = blocked.session_id {
-                if let Some(event) =
-                    self.store.mark_session_broken(&session_id, &blocked.message)?
-                {
-                    let _ = self.events.send(event);
-                }
-            }
+        if blocked.mark_session_broken
+            && let Some(session_id) = blocked.session_id
+            && let Some(event) = self.store.mark_session_broken(&session_id, &blocked.message)?
+        {
+            let _ = self.events.send(event);
         }
         Ok(())
     }
@@ -3376,17 +3359,16 @@ impl NucleusService {
         let bound_profile = self.task_create_bound_session_profile(&session)?;
         if let (Some(requested_profile), Some(bound_profile)) =
             (requested_profile, bound_profile.as_ref())
+            && requested_profile != bound_profile
         {
-            if requested_profile != bound_profile {
-                return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
-                    worker_id: Some(session.worker_id.clone()),
-                    session_id: Some(session.session_id.clone()),
-                    profile: Some(requested_profile.clone()),
-                    blocked_reason: BlockedReason::SessionBroken,
-                    message: "task profile does not match session profile".to_owned(),
-                    mark_session_broken: false,
-                }));
-            }
+            return Ok(TaskSessionBindingEvaluation::Blocked(TaskSessionBindingBlock {
+                worker_id: Some(session.worker_id.clone()),
+                session_id: Some(session.session_id.clone()),
+                profile: Some(requested_profile.clone()),
+                blocked_reason: BlockedReason::SessionBroken,
+                message: "task profile does not match session profile".to_owned(),
+                mark_session_broken: false,
+            }));
         }
         if matches!(
             session.lifecycle_state,
@@ -3429,14 +3411,11 @@ impl NucleusService {
         )? {
             let _ = self.events.send(event);
         }
-        if blocked.mark_session_broken {
-            if let Some(session_id) = blocked.session_id {
-                if let Some(event) =
-                    self.store.mark_session_broken(&session_id, &blocked.message)?
-                {
-                    let _ = self.events.send(event);
-                }
-            }
+        if blocked.mark_session_broken
+            && let Some(session_id) = blocked.session_id
+            && let Some(event) = self.store.mark_session_broken(&session_id, &blocked.message)?
+        {
+            let _ = self.events.send(event);
         }
         Ok(())
     }
@@ -3494,12 +3473,11 @@ impl NucleusService {
             }
         }
         for task in tasks.into_iter().filter(|task| task.status == TaskStatus::Queued) {
-            if let Some(latest_run_id) = task.latest_run_id.as_ref() {
-                if let Some(run) = runs_by_id.get(latest_run_id) {
-                    if is_active_run_status(run.status) {
-                        continue;
-                    }
-                }
+            if let Some(latest_run_id) = task.latest_run_id.as_ref()
+                && let Some(run) = runs_by_id.get(latest_run_id)
+                && is_active_run_status(run.status)
+            {
+                continue;
             }
             if let Some(session_id) = task.session_id.as_ref() {
                 if session_queue_heads.get(session_id) != Some(&task.task_id) {
@@ -3547,14 +3525,14 @@ impl NucleusService {
                     .store
                     .inspect_task(&task.task_id)?
                     .ok_or_else(|| anyhow!("task missing during dispatch"))?;
-                if current_task.status == TaskStatus::Blocked {
-                    if let Some(event) = self.store.requeue_blocked_task(
+                if current_task.status == TaskStatus::Blocked
+                    && let Some(event) = self.store.requeue_blocked_task(
                         &current_task.task_id,
                         Some(profile.clone()),
                         "task re-queued for next profile candidate",
-                    )? {
-                        let _ = self.events.send(event);
-                    }
+                    )?
+                {
+                    let _ = self.events.send(event);
                 }
                 match self.try_dispatch_task(runtime.as_ref(), current_task, profile.clone())? {
                     DispatchAttemptOutcome::Started => break,
@@ -3955,10 +3933,10 @@ impl NucleusService {
         message: &str,
         mark_session_broken: bool,
     ) -> Result<(TaskRecord, RunRecord)> {
-        if mark_session_broken {
-            if let Some(event) = self.store.mark_session_broken(&session.session_id, message)? {
-                let _ = self.events.send(event);
-            }
+        if mark_session_broken
+            && let Some(event) = self.store.mark_session_broken(&session.session_id, message)?
+        {
+            let _ = self.events.send(event);
         }
         let events = self.store.apply_runtime_event(CanonicalEventDraft {
             event_type: CanonicalEventType::RunCancelled,
@@ -4082,12 +4060,11 @@ impl NucleusService {
             if !allowed_reasons.contains(&reason) {
                 continue;
             }
-            if let Some(latest_run_id) = task.latest_run_id.as_ref() {
-                if let Some(run) = self.store.inspect_run(latest_run_id)? {
-                    if is_active_run_status(run.status) {
-                        continue;
-                    }
-                }
+            if let Some(latest_run_id) = task.latest_run_id.as_ref()
+                && let Some(run) = self.store.inspect_run(latest_run_id)?
+                && is_active_run_status(run.status)
+            {
+                continue;
             }
             if let Some(session_id) = task.session_id.as_ref() {
                 let Some(session) = sessions.get(session_id) else {
@@ -4606,10 +4583,10 @@ impl NucleusService {
                 let task_id = TaskId::new(params.task_id)?;
                 let task =
                     self.store.inspect_task(&task_id)?.ok_or_else(|| anyhow!("task not found"))?;
-                if let Some(bound_session_id) = task.session_id.as_ref() {
-                    if bound_session_id != &session_id {
-                        anyhow::bail!("task is bound to a different session");
-                    }
+                if let Some(bound_session_id) = task.session_id.as_ref()
+                    && bound_session_id != &session_id
+                {
+                    anyhow::bail!("task is bound to a different session");
                 }
                 let session =
                     match self.evaluate_task_session_binding(&session_id, task.profile.as_ref())? {
@@ -4625,12 +4602,11 @@ impl NucleusService {
                     .inspect_worker(&session.worker_id)?
                     .ok_or_else(|| anyhow!("worker not found"))?;
                 let profile = worker.profile.clone();
-                if let Some(latest_run_id) = task.latest_run_id.as_ref() {
-                    if let Some(latest_run) = self.store.inspect_run(latest_run_id)? {
-                        if is_active_run_status(latest_run.status) {
-                            anyhow::bail!("task already has an active run");
-                        }
-                    }
+                if let Some(latest_run_id) = task.latest_run_id.as_ref()
+                    && let Some(latest_run) = self.store.inspect_run(latest_run_id)?
+                    && is_active_run_status(latest_run.status)
+                {
+                    anyhow::bail!("task already has an active run");
                 }
                 if let Some(message) = self.enforce_fort_capability(
                     &task,
@@ -4880,14 +4856,13 @@ impl NucleusService {
         if let (Some(worker), Some(runtime_view)) = (existing.clone(), live_runtime) {
             return Ok(EnsuredWorker { worker, runtime: Some(runtime_view) });
         }
-        if let Some(worker) = existing.as_ref() {
-            if !request.allow_exhausted_restart
-                && self.worker_restart_exhausted(&worker.worker_id)?
-            {
-                anyhow::bail!(
-                    "worker restart attempts exhausted; explicit worker.restart or worker.repair_auth required"
-                );
-            }
+        if let Some(worker) = existing.as_ref()
+            && !request.allow_exhausted_restart
+            && self.worker_restart_exhausted(&worker.worker_id)?
+        {
+            anyhow::bail!(
+                "worker restart attempts exhausted; explicit worker.restart or worker.repair_auth required"
+            );
         }
 
         let started = runtime.start_worker(&spec)?;
@@ -4918,10 +4893,10 @@ impl NucleusService {
                 if restart.exhausted {
                     return Ok(());
                 }
-                if let Some(next_retry_at) = restart.next_retry_at {
-                    if now < next_retry_at {
-                        return Ok(());
-                    }
+                if let Some(next_retry_at) = restart.next_retry_at
+                    && now < next_retry_at
+                {
+                    return Ok(());
                 }
             }
         }
@@ -5294,6 +5269,7 @@ fn rest_invalid_params_response(message: impl Into<String>) -> Response {
     )
 }
 
+#[allow(clippy::result_large_err)]
 fn rest_parse_json_body<T>(
     body: Result<Json<T>, JsonRejection>,
     context: &str,
@@ -15207,7 +15183,7 @@ mod tests {
         wait_for_task_status(&service, task_id, TaskStatus::Failed);
         let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run exists");
         assert_eq!(run.status, RunStatus::Failed);
-        let session = wait_for_session_state(&service, &session_id, SessionLifecycleState::Broken);
+        let session = wait_for_session_state(&service, session_id, SessionLifecycleState::Broken);
         assert_eq!(session.lifecycle_state, SessionLifecycleState::Broken);
     }
 
