@@ -95,7 +95,7 @@ Codex lifecycle:
 ```bash
 si codex spawn --profile <profile> --workspace "$PWD"
 si codex spawn --profile <profile> --worker-slot review --workspace "$PWD"
-si codex spawn --profile <profile> --count 3 --workspace "$PWD"
+si codex spawn --profile <profile> --worker-slot release --workspace "$PWD"
 si codex list
 si codex shell --profile <profile> --worker-slot review -- bash
 si codex tail --profile <profile> --worker-slot review
