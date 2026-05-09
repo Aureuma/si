@@ -1133,12 +1133,30 @@ fn copy_dir_recursive(source: &Path, destination: &Path) {
 
 fn load_event_log_values(state_root: &Path) -> Vec<Value> {
     let path = state_root.join("state").join("events").join("events.jsonl");
-    fs::read_to_string(path)
-        .expect("read events jsonl")
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| serde_json::from_str::<Value>(line).expect("parse event line"))
-        .collect()
+    let mut last_error = None;
+    for _ in 0..5 {
+        let raw = fs::read_to_string(&path).expect("read events jsonl");
+        let mut values = Vec::new();
+        let mut parse_failed = false;
+        for line in raw.lines().filter(|line| !line.trim().is_empty()) {
+            match serde_json::from_str::<Value>(line) {
+                Ok(value) => values.push(value),
+                Err(error) => {
+                    last_error = Some(format!("{error}: {line}"));
+                    parse_failed = true;
+                    break;
+                }
+            }
+        }
+        if !parse_failed {
+            return values;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    panic!(
+        "parse event line: {}",
+        last_error.unwrap_or_else(|| "unknown parse failure".to_owned())
+    );
 }
 
 fn clear_live_session_thread_id(state_root: &Path, session_id: &str) {
@@ -13514,7 +13532,7 @@ fn warmup_state_write_persists_normalized_json() {
 
     let raw = fs::read_to_string(&state_path).expect("read persisted state");
     let parsed: Value = serde_json::from_str(&raw).expect("json");
-    assert_eq!(parsed["version"], 3);
+    assert_eq!(parsed["version"], 4);
     assert_eq!(parsed["updated_at"], "2030-03-19T12:00:00Z");
     assert_eq!(parsed["profiles"]["profile-zeta"]["profile_id"], "profile-zeta");
     assert_eq!(parsed["profiles"]["profile-zeta"]["last_result"], "ready");
