@@ -76,6 +76,8 @@ Additional env vars:
 - `SI_NUCLEUS_AUTH_TOKEN`: bearer token forwarded by CLI gateway clients when set
 - `SI_NUCLEUS_STATE_DIR`: override the Nucleus state root for service/runtime commands
 - `SI_NUCLEUS_BIND_ADDR`: override the Nucleus bind address for service/runtime commands
+- `SI_NUCLEUS_PROFILE_MAX_WORKERS`: default max worker slots per profile for dispatch (`1` when unset)
+- `SI_NUCLEUS_PROFILE_MAX_WORKERS_<PROFILE>`: per-profile max override where `<PROFILE>` is uppercased and `-` is replaced with `_`
 - `SI_NUCLEUS_SERVICE_PLATFORM`: force service generation to `systemd-user` or `launchd-agent`
 
 The metadata file is written by the Nucleus service and advertises the current websocket URL and SI version for local CLI bootstrap.
@@ -90,6 +92,10 @@ Defaults for `si codex` profile-bound worker commands.
 - `codex.workdir` (string): worker working directory
 - `codex.profile` (string): legacy compatibility field for the most recently selected Codex profile.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
+- Worker-slot behavior is command-level:
+  - `si codex spawn|respawn --worker-slot <slot>`
+  - `si codex spawn|respawn --count <n>`
+  - `si codex shell|tail|tmux|remove --worker-slot <slot>`
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
@@ -120,7 +126,10 @@ CLI and runtime behavior:
 - `si fort` uses host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` only for explicit admin/provisioning commands.
 - Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files provisioned by `si codex spawn` or `si codex shell`.
 - Codex profile provisioning explicitly requests a `30d` Fort refresh-session TTL even if Fort's general default refresh-session TTL is shorter.
-- Runtime worker token state remains file-backed under `~/.si/codex/profiles/<profile>/fort/`; profile refresh tokens must be rotated in place.
+- Runtime worker token state remains file-backed under:
+  - `~/.si/codex/profiles/<profile>/fort/` for the `primary` slot
+  - `~/.si/codex/profiles/<profile>/workers/<slot>/fort/` for non-primary slots
+  - profile refresh tokens must be rotated in place.
 
 ### Orbit Fort secret materialization
 All `si orbit ...` provider accounts support a shared Fort-backed secret binding shape:

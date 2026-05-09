@@ -9,6 +9,11 @@ use serde_json::Value;
 use thiserror::Error;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+pub const DEFAULT_NUCLEUS_WORKER_SLOT: &str = "primary";
+
+pub fn default_nucleus_worker_slot() -> String {
+    DEFAULT_NUCLEUS_WORKER_SLOT.to_owned()
+}
 
 fn next_opaque_id() -> String {
     let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
@@ -346,6 +351,8 @@ impl TaskRecord {
 pub struct WorkerRecord {
     pub worker_id: WorkerId,
     pub profile: ProfileName,
+    #[serde(default = "default_nucleus_worker_slot")]
+    pub worker_slot: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home_dir: Option<String>,
     pub codex_home: String,
@@ -717,6 +724,7 @@ mod tests {
         let mut worker = WorkerRecord {
             worker_id: WorkerId::generate(),
             profile,
+            worker_slot: super::default_nucleus_worker_slot(),
             home_dir: None,
             codex_home: "/tmp/worker".to_owned(),
             workdir: None,

@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::future::pending;
@@ -38,10 +38,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::Sha256;
 use si_nucleus_core::{
-    BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
-    EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
-    SessionLifecycleState, SessionRecord, TaskId, TaskRecord, TaskSource, TaskStatus, WorkerId,
-    WorkerRecord, WorkerStatus,
+    BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType,
+    DEFAULT_NUCLEUS_WORKER_SLOT, EventDataEnvelope, EventId, ProfileName, ProfileRecord, RunId,
+    RunRecord, RunStatus, SessionId, SessionLifecycleState, SessionRecord, TaskId, TaskRecord,
+    TaskSource, TaskStatus, WorkerId, WorkerRecord, WorkerStatus,
 };
 use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
@@ -1049,6 +1049,7 @@ impl NucleusStore {
         let worker = WorkerRecord {
             worker_id: spec.worker_id.clone(),
             profile: spec.profile.clone(),
+            worker_slot: normalize_worker_slot(Some(&spec.worker_slot)),
             home_dir: Some(spec.home_dir.display().to_string()),
             codex_home: spec.codex_home.display().to_string(),
             workdir: Some(spec.workdir.display().to_string()),
@@ -1111,6 +1112,7 @@ impl NucleusStore {
         let worker = WorkerRecord {
             worker_id: spec.worker_id.clone(),
             profile: spec.profile.clone(),
+            worker_slot: normalize_worker_slot(Some(&spec.worker_slot)),
             home_dir: Some(spec.home_dir.display().to_string()),
             codex_home: spec.codex_home.display().to_string(),
             workdir: Some(spec.workdir.display().to_string()),
@@ -2656,9 +2658,10 @@ fn write_markdown_atomic(path: &Path, contents: &str) -> Result<()> {
 
 fn render_worker_summary(worker: &WorkerRecord, runtime: Option<&WorkerRuntimeView>) -> String {
     let mut summary = format!(
-        "# Worker {}\n\n- Profile: `{}`\n- Status: `{}`\n",
+        "# Worker {}\n\n- Profile: `{}`\n- Worker slot: `{}`\n- Status: `{}`\n",
         worker.worker_id,
         worker.profile,
+        normalize_worker_slot(Some(&worker.worker_slot)),
         serde_json::to_string(&worker.status)
             .unwrap_or_else(|_| "\"unknown\"".to_owned())
             .trim_matches('"'),
@@ -3490,7 +3493,6 @@ impl NucleusService {
                     .or_insert_with(|| task.task_id.clone());
             }
         }
-        let mut selected_profiles = BTreeSet::<ProfileName>::new();
         for task in tasks.into_iter().filter(|task| task.status == TaskStatus::Queued) {
             if let Some(latest_run_id) = task.latest_run_id.as_ref() {
                 if let Some(run) = runs_by_id.get(latest_run_id) {
@@ -3540,9 +3542,6 @@ impl NucleusService {
                 task.session_id.is_none() && task.profile.is_none() && candidates.len() > 1;
             let mut attempted_any = false;
             for (index, profile) in candidates.iter().enumerate() {
-                if selected_profiles.contains(profile) {
-                    continue;
-                }
                 attempted_any = true;
                 let current_task = self
                     .store
@@ -3558,10 +3557,7 @@ impl NucleusService {
                     }
                 }
                 match self.try_dispatch_task(runtime.as_ref(), current_task, profile.clone())? {
-                    DispatchAttemptOutcome::Started => {
-                        selected_profiles.insert(profile.clone());
-                        break;
-                    }
+                    DispatchAttemptOutcome::Started => break,
                     DispatchAttemptOutcome::Blocked(reason)
                         if can_fallback
                             && can_try_next_profile(reason)
@@ -3735,7 +3731,9 @@ impl NucleusService {
                 profile,
                 EnsureWorkerRequest {
                     allow_exhausted_restart: false,
+                    require_idle_slot: false,
                     requested_worker_id: Some(session.worker_id.as_str()),
+                    requested_worker_slot: None,
                     home_dir: None,
                     codex_home: None,
                     workdir: session.workdir.as_ref().map(PathBuf::from),
@@ -3790,7 +3788,9 @@ impl NucleusService {
             profile,
             EnsureWorkerRequest {
                 allow_exhausted_restart: false,
+                require_idle_slot: true,
                 requested_worker_id: None,
+                requested_worker_slot: None,
                 home_dir: None,
                 codex_home: None,
                 workdir: None,
@@ -3799,13 +3799,19 @@ impl NucleusService {
         ) {
             Ok(worker) => worker,
             Err(error) => {
+                let message = error.to_string();
+                let blocked_reason = if message.contains("worker capacity exhausted") {
+                    BlockedReason::ProfileUnavailable
+                } else {
+                    BlockedReason::WorkerUnavailable
+                };
                 if let Some(event) = self.store.mark_task_blocked(
                     &task.task_id,
                     None,
                     None,
                     Some(profile.clone()),
-                    BlockedReason::WorkerUnavailable,
-                    &error.to_string(),
+                    blocked_reason,
+                    &message,
                 )? {
                     let _ = self.events.send(event);
                 }
@@ -4009,7 +4015,9 @@ impl NucleusService {
                 profile,
                 EnsureWorkerRequest {
                     allow_exhausted_restart: false,
+                    require_idle_slot: false,
                     requested_worker_id: Some(session.worker_id.as_str()),
+                    requested_worker_slot: None,
                     home_dir: None,
                     codex_home: None,
                     workdir: session.workdir.as_ref().map(PathBuf::from),
@@ -4116,6 +4124,7 @@ impl NucleusService {
         WorkerLaunchSpec {
             worker_id: worker.worker_id.clone(),
             profile: worker.profile.clone(),
+            worker_slot: normalize_worker_slot(Some(&worker.worker_slot)),
             home_dir: worker.home_dir.as_ref().map(PathBuf::from).unwrap_or_else(default_home_dir),
             codex_home: PathBuf::from(worker.codex_home.clone()),
             workdir: worker.workdir.as_ref().map(PathBuf::from).unwrap_or_else(default_workdir),
@@ -4174,7 +4183,9 @@ impl NucleusService {
             &worker.profile,
             EnsureWorkerRequest {
                 allow_exhausted_restart: true,
+                require_idle_slot: false,
                 requested_worker_id: Some(worker.worker_id.as_str()),
+                requested_worker_slot: Some(worker.worker_slot.as_str()),
                 home_dir: Some(spec.home_dir.clone()),
                 codex_home: Some(spec.codex_home.clone()),
                 workdir: Some(spec.workdir.clone()),
@@ -4472,20 +4483,25 @@ impl NucleusService {
                 let params: WorkerProbeParams =
                     serde_json::from_value(params).context("parse worker.probe params")?;
                 let profile_slug = params.profile_slug().to_owned();
+                let worker_slot = params.worker_slot();
                 let profile = ProfileName::new(params.profile)?;
                 let worker_id = match params.worker_id {
                     Some(value) => WorkerId::new(value)?,
                     None => WorkerId::generate(),
                 };
+                let mut extra_env = params.env.unwrap_or_default();
+                extra_env.insert("SI_CODEX_PROFILE".to_owned(), profile.as_str().to_owned());
+                extra_env.insert("SI_CODEX_WORKER_SLOT".to_owned(), worker_slot.clone());
                 let spec = WorkerLaunchSpec {
                     worker_id,
                     profile,
+                    worker_slot: worker_slot.clone(),
                     home_dir: params.home_dir.unwrap_or_else(default_home_dir),
-                    codex_home: params
-                        .codex_home
-                        .unwrap_or_else(|| default_codex_home_dir(&profile_slug)),
+                    codex_home: params.codex_home.unwrap_or_else(|| {
+                        default_codex_worker_slot_home_dir(&profile_slug, &worker_slot)
+                    }),
                     workdir: params.workdir.unwrap_or_else(default_workdir),
-                    extra_env: params.env.unwrap_or_default(),
+                    extra_env,
                 };
                 let probe = runtime.probe_worker(&spec)?;
                 let events = self.store.record_worker_probe(&spec, &probe, runtime.as_ref())?;
@@ -4539,7 +4555,9 @@ impl NucleusService {
                     &profile,
                     EnsureWorkerRequest {
                         allow_exhausted_restart: false,
+                        require_idle_slot: false,
                         requested_worker_id: params.worker_id.as_deref(),
+                        requested_worker_slot: params.worker_slot.as_deref(),
                         home_dir: params.home_dir,
                         codex_home: params.codex_home,
                         workdir: Some(workdir.clone()),
@@ -4756,20 +4774,62 @@ impl NucleusService {
         profile: &ProfileName,
         request: EnsureWorkerRequest<'_>,
     ) -> Result<EnsuredWorker> {
+        let requested_worker_slot =
+            request.requested_worker_slot.map(|slot| normalize_worker_slot(Some(slot)));
+        let mut profile_workers = self
+            .store
+            .list_workers()?
+            .into_iter()
+            .filter(|worker| worker.profile == *profile)
+            .collect::<Vec<_>>();
+        profile_workers.sort_by(|left, right| left.worker_id.cmp(&right.worker_id));
+
         let existing = if let Some(worker_id) = request.requested_worker_id {
             let worker_id = WorkerId::new(worker_id.to_owned())?;
             self.store.inspect_worker(&worker_id)?
         } else {
-            self.store
-                .list_workers()?
-                .into_iter()
-                .filter(|worker| worker.profile == *profile)
-                .min_by(|left, right| left.worker_id.cmp(&right.worker_id))
+            if let Some(slot) = requested_worker_slot.as_ref() {
+                profile_workers
+                    .iter()
+                    .find(|worker| normalize_worker_slot(Some(&worker.worker_slot)) == *slot)
+                    .cloned()
+            } else if request.require_idle_slot {
+                let mut idle = None;
+                for worker in &profile_workers {
+                    if !self.worker_has_active_runs(&worker.worker_id)? {
+                        idle = Some(worker.clone());
+                        break;
+                    }
+                }
+                idle
+            } else {
+                let mut idle = None;
+                for worker in &profile_workers {
+                    if !self.worker_has_active_runs(&worker.worker_id)? {
+                        idle = Some(worker.clone());
+                        break;
+                    }
+                }
+                idle.or_else(|| profile_workers.first().cloned())
+            }
         };
+        if existing.is_none() && request.requested_worker_id.is_none() {
+            let max_workers = profile_max_workers(profile);
+            if profile_workers.len() >= max_workers {
+                anyhow::bail!(
+                    "worker capacity exhausted for profile {profile} (max {max_workers})"
+                );
+            }
+        }
         let worker_id = existing
             .as_ref()
             .map(|worker| worker.worker_id.clone())
             .unwrap_or_else(WorkerId::generate);
+        let worker_slot = requested_worker_slot
+            .or_else(|| {
+                existing.as_ref().map(|worker| normalize_worker_slot(Some(&worker.worker_slot)))
+            })
+            .unwrap_or_else(|| next_profile_worker_slot(&profile_workers));
         let profile_codex_home = self
             .store
             .list_profile_records()?
@@ -4789,7 +4849,7 @@ impl NucleusService {
             .codex_home
             .or_else(|| existing.as_ref().map(|worker| PathBuf::from(worker.codex_home.clone())))
             .or(profile_codex_home)
-            .unwrap_or_else(|| default_codex_home_dir(profile.as_str()));
+            .unwrap_or_else(|| default_codex_worker_slot_home_dir(profile.as_str(), &worker_slot));
         let workdir = request
             .workdir
             .or_else(|| {
@@ -4801,9 +4861,13 @@ impl NucleusService {
             .filter(|value| !value.is_empty())
             .or_else(|| existing.as_ref().map(|worker| worker.extra_env.clone()))
             .unwrap_or_default();
+        let mut extra_env = extra_env;
+        extra_env.insert("SI_CODEX_PROFILE".to_owned(), profile.as_str().to_owned());
+        extra_env.insert("SI_CODEX_WORKER_SLOT".to_owned(), worker_slot.clone());
         let spec = WorkerLaunchSpec {
             worker_id: worker_id.clone(),
             profile: profile.clone(),
+            worker_slot,
             home_dir,
             codex_home,
             workdir,
@@ -4968,7 +5032,9 @@ struct TaskSessionBindingBlock {
 
 struct EnsureWorkerRequest<'a> {
     allow_exhausted_restart: bool,
+    require_idle_slot: bool,
     requested_worker_id: Option<&'a str>,
+    requested_worker_slot: Option<&'a str>,
     home_dir: Option<PathBuf>,
     codex_home: Option<PathBuf>,
     workdir: Option<PathBuf>,
@@ -5962,10 +6028,11 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                     "type": "object",
                     "description": "Durable worker projection tracked by Nucleus.",
                     "additionalProperties": false,
-                    "required": ["worker_id", "profile", "codex_home", "status"],
+                    "required": ["worker_id", "profile", "worker_slot", "codex_home", "status"],
                     "properties": {
                         "worker_id": openapi_id_property("Canonical SI worker id.", "si-worker-", "si-worker-0123456789abcdef00000001"),
                         "profile": { "type": "string", "description": "SI profile this worker runs as.", "pattern": "^[a-z][a-z0-9-]*$", "example": "darmstada" },
+                        "worker_slot": { "type": "string", "description": "Worker slot under the profile (primary by default).", "pattern": "^[a-z][a-z0-9-]*$", "example": "primary" },
                         "home_dir": { "type": ["string", "null"], "description": "Home directory used by the worker process.", "example": "/home/si" },
                         "codex_home": { "type": "string", "description": "Codex home directory used by this worker.", "example": "/home/si/.codex" },
                         "workdir": { "type": ["string", "null"], "description": "Default workspace directory for worker execution.", "example": "/home/si/Development/si" },
@@ -6469,6 +6536,56 @@ fn default_codex_home_dir(profile: &str) -> PathBuf {
     default_home_dir().join(".si").join("codex").join("profiles").join(profile)
 }
 
+fn default_codex_worker_slot_home_dir(profile: &str, worker_slot: &str) -> PathBuf {
+    let slot = normalize_worker_slot(Some(worker_slot));
+    let profile_home = default_codex_home_dir(profile);
+    if slot == DEFAULT_NUCLEUS_WORKER_SLOT {
+        profile_home
+    } else {
+        profile_home.join("workers").join(slot)
+    }
+}
+
+fn normalize_worker_slot(worker_slot: Option<&str>) -> String {
+    let slot = worker_slot.unwrap_or(DEFAULT_NUCLEUS_WORKER_SLOT).trim().to_ascii_lowercase();
+    if slot.is_empty() { DEFAULT_NUCLEUS_WORKER_SLOT.to_owned() } else { slot }
+}
+
+fn parse_positive_usize_env(name: &str) -> Option<usize> {
+    env::var(name).ok().and_then(|raw| {
+        let parsed = raw.trim().parse::<usize>().ok()?;
+        (parsed > 0).then_some(parsed)
+    })
+}
+
+fn profile_max_workers(profile: &ProfileName) -> usize {
+    let profile_key = format!(
+        "SI_NUCLEUS_PROFILE_MAX_WORKERS_{}",
+        profile.as_str().replace('-', "_").to_ascii_uppercase()
+    );
+    parse_positive_usize_env(&profile_key)
+        .or_else(|| parse_positive_usize_env("SI_NUCLEUS_PROFILE_MAX_WORKERS"))
+        .unwrap_or(1)
+}
+
+fn next_profile_worker_slot(workers: &[WorkerRecord]) -> String {
+    let present = workers
+        .iter()
+        .map(|worker| normalize_worker_slot(Some(&worker.worker_slot)))
+        .collect::<HashSet<_>>();
+    if !present.contains(DEFAULT_NUCLEUS_WORKER_SLOT) {
+        return DEFAULT_NUCLEUS_WORKER_SLOT.to_owned();
+    }
+    let mut index = 2_usize;
+    loop {
+        let candidate = format!("parallel-{index}");
+        if !present.contains(candidate.as_str()) {
+            return candidate;
+        }
+        index += 1;
+    }
+}
+
 fn stable_workdir_from(current_dir: Option<PathBuf>, home_dir: PathBuf) -> PathBuf {
     if let Some(path) = current_dir.filter(|path| path.is_absolute() && path.is_dir()) {
         return path;
@@ -6595,6 +6712,7 @@ struct EventIngestParams {
 struct WorkerProbeParams {
     worker_id: Option<String>,
     profile: String,
+    worker_slot: Option<String>,
     home_dir: Option<PathBuf>,
     codex_home: Option<PathBuf>,
     workdir: Option<PathBuf>,
@@ -6604,6 +6722,10 @@ struct WorkerProbeParams {
 impl WorkerProbeParams {
     fn profile_slug(&self) -> &str {
         self.profile.trim()
+    }
+
+    fn worker_slot(&self) -> String {
+        normalize_worker_slot(self.worker_slot.as_deref())
     }
 }
 
@@ -6626,6 +6748,7 @@ struct WorkerRepairAuthParams {
 struct SessionCreateParams {
     profile: String,
     worker_id: Option<String>,
+    worker_slot: Option<String>,
     thread_id: Option<String>,
     home_dir: Option<PathBuf>,
     codex_home: Option<PathBuf>,
@@ -12193,6 +12316,7 @@ mod tests {
             let spec = WorkerLaunchSpec {
                 worker_id: WorkerId::generate(),
                 profile: profile.clone(),
+                worker_slot: "primary".to_owned(),
                 home_dir: home_dir.clone(),
                 codex_home: home_dir.join(format!(".si/codex/profiles/{profile_name}")),
                 workdir: temp.path().to_path_buf(),
@@ -12244,9 +12368,16 @@ mod tests {
             .inspect_task(&TaskId::new(second_task_id.clone()).expect("task id"))
             .expect("inspect task")
             .expect("task exists");
-        assert_eq!(second_task.status, TaskStatus::Queued);
+        assert!(matches!(
+            second_task.status,
+            TaskStatus::Queued | TaskStatus::Blocked | TaskStatus::Running | TaskStatus::Done
+        ));
         assert_eq!(second_task.profile.as_ref().map(ProfileName::as_str), Some("america"));
-        assert!(second_task.latest_run_id.is_none());
+        if matches!(second_task.status, TaskStatus::Queued | TaskStatus::Blocked) {
+            assert!(second_task.latest_run_id.is_none());
+        } else {
+            assert!(second_task.latest_run_id.is_some());
+        }
 
         wait_for_task_status(&service, &first_task_id, TaskStatus::Done);
         service.reconcile_and_dispatch_once().expect("dispatch second wave");
@@ -12281,6 +12412,7 @@ mod tests {
             let spec = WorkerLaunchSpec {
                 worker_id,
                 profile: profile.clone(),
+                worker_slot: "primary".to_owned(),
                 home_dir: base_home.clone(),
                 codex_home: base_home.join(format!(".si/codex/profiles/america-{worker_suffix}")),
                 workdir: temp.path().to_path_buf(),

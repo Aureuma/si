@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use thiserror::Error;
 
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
+pub const DEFAULT_CODEX_WORKER_SLOT: &str = "primary";
 pub const CODEX_PROFILE_FORT_DIR_NAME: &str = "fort";
 pub const CODEX_PROFILE_FORT_SESSION_FILE_NAME: &str = "session.json";
 pub const CODEX_PROFILE_FORT_ACCESS_TOKEN_FILE_NAME: &str = "access.token";
@@ -63,11 +64,40 @@ pub enum CodexAppServerStatusError {
 }
 
 pub fn codex_worker_name(profile_id: &str) -> String {
-    profile_id.trim().to_owned()
+    codex_worker_instance_name(profile_id, DEFAULT_CODEX_WORKER_SLOT)
+}
+
+pub fn codex_worker_slot_name(slot: Option<&str>) -> String {
+    let slot = slot.unwrap_or(DEFAULT_CODEX_WORKER_SLOT).trim();
+    if slot.is_empty() { DEFAULT_CODEX_WORKER_SLOT.to_owned() } else { slot.to_ascii_lowercase() }
+}
+
+pub fn codex_worker_instance_name(profile_id: &str, worker_slot: &str) -> String {
+    let profile = profile_id.trim();
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    if slot == DEFAULT_CODEX_WORKER_SLOT {
+        profile.to_owned()
+    } else if profile.is_empty() {
+        slot
+    } else {
+        format!("{profile}--{slot}")
+    }
 }
 
 pub fn codex_tmux_session_name(profile_id: &str) -> String {
-    let suffix = codex_worker_name(profile_id);
+    codex_tmux_session_name_for_slot(profile_id, DEFAULT_CODEX_WORKER_SLOT)
+}
+
+pub fn codex_tmux_session_name_for_slot(profile_id: &str, worker_slot: &str) -> String {
+    let profile = profile_id.trim();
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    let suffix = if slot == DEFAULT_CODEX_WORKER_SLOT {
+        profile.to_owned()
+    } else if profile.is_empty() {
+        slot
+    } else {
+        format!("{profile}-{slot}")
+    };
     if suffix.is_empty() {
         TMUX_SESSION_PREFIX.to_owned()
     } else {
@@ -512,8 +542,9 @@ fn is_transient_report(lines: &[String]) -> bool {
 mod tests {
     use super::{
         build_codex_app_server_status_input, codex_profile_fort_runtime_env,
-        codex_profile_fort_session_paths, codex_tmux_session_name, parse_codex_app_server_status,
-        parse_prompt_segments_dual, parse_report_capture,
+        codex_profile_fort_session_paths, codex_tmux_session_name,
+        codex_tmux_session_name_for_slot, codex_worker_instance_name, codex_worker_slot_name,
+        parse_codex_app_server_status, parse_prompt_segments_dual, parse_report_capture,
     };
     use serde_json::json;
     use std::path::Path;
@@ -521,6 +552,28 @@ mod tests {
     #[test]
     fn codex_tmux_session_name_uses_profile_slug() {
         assert_eq!(codex_tmux_session_name("profile-delta"), "si-codex-pane-profile-delta");
+    }
+
+    #[test]
+    fn codex_worker_slot_name_normalizes_defaults() {
+        assert_eq!(codex_worker_slot_name(None), "primary");
+        assert_eq!(codex_worker_slot_name(Some("  ")), "primary");
+        assert_eq!(codex_worker_slot_name(Some("Review")), "review");
+    }
+
+    #[test]
+    fn codex_worker_instance_name_uses_profile_for_primary_slot() {
+        assert_eq!(codex_worker_instance_name("ferma", "primary"), "ferma");
+        assert_eq!(codex_worker_instance_name("ferma", "review"), "ferma--review");
+    }
+
+    #[test]
+    fn codex_tmux_session_name_for_slot_is_backward_compatible_for_primary() {
+        assert_eq!(codex_tmux_session_name_for_slot("ferma", "primary"), "si-codex-pane-ferma");
+        assert_eq!(
+            codex_tmux_session_name_for_slot("ferma", "review"),
+            "si-codex-pane-ferma-review"
+        );
     }
 
     #[test]

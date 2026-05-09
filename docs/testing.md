@@ -162,6 +162,26 @@ cargo test -p si-tools
 
 Use these suites as the compatibility gate before upgrading Codex-facing flows.
 
+## Multi-slot Codex/Nucleus validation
+Run targeted checks for multi-worker-per-profile behavior:
+
+```bash
+cargo test -p si-rs-codex
+cargo test -p si-nucleus explicit_profile_tasks_do_not_fall_back_when_requested_profile_is_busy -- --nocapture
+cargo test -p si-nucleus session_create_reuses_single_worker_and_codex_home_per_profile -- --nocapture
+```
+
+Manual runtime smoke:
+
+```bash
+si codex spawn --profile <profile> --worker-slot primary --workspace "$PWD"
+si codex spawn --profile <profile> --worker-slot review --workspace "$PWD"
+si codex list
+si codex shell --profile <profile> --worker-slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
+si codex shell --profile <profile> --worker-slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
+si codex remove --profile <profile> --worker-slot review
+```
+
 ## Fresh-machine doctor
 Run the non-invasive distribution doctor after installing SI on another machine:
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use si_nucleus_core::{
     CanonicalEventSource, CanonicalEventType, EventDataEnvelope, ProfileName, RunId, RunStatus,
-    SessionId, TaskId, WorkerId, WorkerStatus,
+    SessionId, TaskId, WorkerId, WorkerStatus, default_nucleus_worker_slot,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -22,6 +22,8 @@ pub struct RuntimeCommand {
 pub struct WorkerLaunchSpec {
     pub worker_id: WorkerId,
     pub profile: ProfileName,
+    #[serde(default = "default_nucleus_worker_slot")]
+    pub worker_slot: String,
     pub home_dir: PathBuf,
     pub codex_home: PathBuf,
     pub workdir: PathBuf,
