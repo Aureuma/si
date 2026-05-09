@@ -13255,6 +13255,38 @@ fn codex_report_command_is_not_available() {
 }
 
 #[test]
+fn codex_removed_lifecycle_flags_are_rejected() {
+    let cases: &[(&[&str], &str)] = &[
+        (&["codex", "spawn", "--count", "2"], "--count"),
+        (&["codex", "spawn", "--workdir", "/tmp"], "--workdir"),
+        (&["codex", "spawn", "--detach", "false"], "--detach"),
+        (&["codex", "spawn", "--home", "/tmp"], "--home"),
+        (&["codex", "spawn", "--env", "FOO=bar"], "--env"),
+        (&["codex", "respawn", "--count", "2"], "--count"),
+        (&["codex", "respawn", "--workdir", "/tmp"], "--workdir"),
+        (&["codex", "respawn", "--detach", "false"], "--detach"),
+        (&["codex", "respawn", "--home", "/tmp"], "--home"),
+        (&["codex", "respawn", "--env", "FOO=bar"], "--env"),
+        (&["codex", "shell", "--workdir", "/tmp", "echo", "ok"], "--workdir"),
+        (&["codex", "shell", "--interactive", "false", "echo", "ok"], "--interactive"),
+        (&["codex", "shell", "--tty", "true", "echo", "ok"], "--tty"),
+        (&["codex", "shell", "--env", "FOO=bar", "echo", "ok"], "--env"),
+    ];
+
+    for (args, flag) in cases {
+        let output = cargo_bin().args(*args).assert().failure().get_output().stderr.clone();
+        let stderr = String::from_utf8(output).expect("stderr utf8");
+        assert!(stderr.contains(flag), "stderr should mention removed flag {flag}: {stderr}");
+        assert!(
+            stderr.contains("unexpected argument")
+                || stderr.contains("unexpected '--")
+                || stderr.contains("Found argument"),
+            "stderr should report clap argument failure for {flag}: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn help_rejects_manifest_only_root_commands() {
     let stderr = String::from_utf8(
         cargo_bin().args(["help", "analyze"]).assert().failure().get_output().stderr.clone(),
