@@ -94,7 +94,6 @@ Defaults for `si codex` profile-bound worker commands.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
 - Worker-slot behavior is command-level:
   - `si codex spawn|respawn --worker-slot <slot>`
-  - `si codex spawn|respawn --count <n>`
   - `si codex shell|tail|tmux|remove --worker-slot <slot>`
 
 #### `[codex.profiles]`
