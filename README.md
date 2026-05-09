@@ -94,10 +94,12 @@ Codex lifecycle:
 
 ```bash
 si codex spawn --profile <profile> --workspace "$PWD"
+si codex spawn --profile <profile> --worker-slot review --workspace "$PWD"
+si codex spawn --profile <profile> --count 3 --workspace "$PWD"
 si codex list
-si codex shell --profile <profile> -- bash
-si codex tail --profile <profile>
-si codex remove --profile <profile>
+si codex shell --profile <profile> --worker-slot review -- bash
+si codex tail --profile <profile> --worker-slot review
+si codex remove --profile <profile> --worker-slot review
 ```
 
 Browser runtime:

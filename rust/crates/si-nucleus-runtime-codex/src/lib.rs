@@ -928,8 +928,7 @@ mod tests {
     use super::{
         CodexNucleusRuntime, TurnTimeoutBudget, build_app_server_status_input, is_auth_error,
         is_auth_or_usage_limit_error_message, notification_matches_turn, parse_app_server_status,
-        run_started_event,
-        turn_timeout_deadline, turn_timeout_message,
+        run_started_event, turn_timeout_deadline, turn_timeout_message,
     };
 
     #[test]
@@ -940,6 +939,7 @@ mod tests {
         let spec = WorkerLaunchSpec {
             worker_id,
             profile,
+            worker_slot: "primary".to_owned(),
             home_dir: PathBuf::from("/tmp/home"),
             codex_home: PathBuf::from("/tmp/home/.si/codex/profiles/america"),
             workdir: PathBuf::from("/tmp/work"),
@@ -975,6 +975,7 @@ mod tests {
         let spec = WorkerLaunchSpec {
             worker_id: WorkerId::generate(),
             profile: profile.clone(),
+            worker_slot: "primary".to_owned(),
             home_dir: PathBuf::from("/tmp/home"),
             codex_home: PathBuf::from("/tmp/codex-home"),
             workdir: PathBuf::from("/tmp/work"),

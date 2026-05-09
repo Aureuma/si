@@ -41,9 +41,9 @@ use si_nucleus_runtime::{
 };
 use si_nucleus_runtime_codex::CodexNucleusRuntime;
 use si_rs_codex::{
-    CodexProfileFortSessionPaths, build_codex_app_server_status_input,
-    codex_profile_fort_session_paths, codex_tmux_session_name, codex_worker_name,
-    parse_codex_app_server_status,
+    CodexProfileFortSessionPaths, DEFAULT_CODEX_WORKER_SLOT, build_codex_app_server_status_input,
+    codex_profile_fort_session_paths, codex_tmux_session_name_for_slot, codex_worker_name,
+    codex_worker_slot_name, parse_codex_app_server_status,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -16503,6 +16503,10 @@ enum GitHubPullRequestCommand {
 struct CodexSpawnStartArgs {
     #[arg(long)]
     profile: Option<String>,
+    #[arg(long = "worker-slot")]
+    worker_slot: Option<String>,
+    #[arg(long, default_value_t = 1)]
+    count: usize,
     #[arg(long)]
     workspace: Option<PathBuf>,
     #[arg(long)]
@@ -16601,6 +16605,8 @@ enum CodexProfileCommand {
 #[derive(Debug, Args)]
 struct CodexTmuxArgs {
     profile: Option<String>,
+    #[arg(long = "worker-slot")]
+    worker_slot: Option<String>,
     #[arg(long)]
     format: Option<OutputFormat>,
 }
@@ -16616,6 +16622,8 @@ enum CodexCommand {
     Spawn(CodexSpawnStartArgs),
     Remove {
         profile: Option<String>,
+        #[arg(long = "worker-slot")]
+        worker_slot: Option<String>,
         #[arg(long, default_value_t = false, conflicts_with = "profile")]
         all: bool,
         #[arg(long, default_value = "text")]
@@ -16623,11 +16631,15 @@ enum CodexCommand {
     },
     Tail {
         profile: Option<String>,
+        #[arg(long = "worker-slot")]
+        worker_slot: Option<String>,
         #[arg(long, default_value = "200")]
         tail: String,
     },
     Shell {
         profile: Option<String>,
+        #[arg(long = "worker-slot")]
+        worker_slot: Option<String>,
         #[arg(long)]
         workdir: Option<PathBuf>,
         #[arg(long, num_args = 1, default_value = "true", value_parser = clap::value_parser!(bool))]
@@ -18861,7 +18873,11 @@ struct CodexProfileView {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct CodexWorkerState {
+    #[serde(default = "default_codex_worker_state_schema_version")]
+    schema_version: u32,
     profile_id: String,
+    #[serde(default = "default_codex_worker_slot_name")]
+    worker_slot: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     profile_name: Option<String>,
     session_name: String,
@@ -18881,9 +18897,11 @@ struct CodexRemoveResultView {
 #[derive(Debug, Serialize)]
 struct CodexListEntryView {
     profile_id: String,
+    worker_slot: String,
     session_name: String,
     state: String,
     workspace: String,
+    workdir: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -18923,6 +18941,7 @@ struct CodexStatusView {
 #[derive(Debug, Serialize)]
 struct CodexTmuxCommandView {
     profile_id: String,
+    worker_slot: String,
     session_name: String,
     window_name: String,
     launch_command: String,
@@ -35802,22 +35821,49 @@ fn main() -> Result<()> {
             },
             CodexCommand::Spawn(CodexSpawnStartArgs {
                 profile,
+                worker_slot,
+                count,
                 workspace,
                 workdir,
                 detach,
                 home,
                 env,
-            }) => show_codex_spawn_start(profile, workspace, workdir, detach, home, env)?,
-            CodexCommand::Remove { profile, all, format } => {
-                run_codex_remove(profile.as_deref(), all, format)?
+            }) => show_codex_spawn_start(
+                profile,
+                worker_slot,
+                count,
+                workspace,
+                workdir,
+                detach,
+                home,
+                env,
+            )?,
+            CodexCommand::Remove { profile, worker_slot, all, format } => {
+                run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
-            CodexCommand::Tail { profile, tail } => run_codex_tail(profile.as_deref(), &tail)?,
-            CodexCommand::Shell { profile, workdir, interactive, tty, env, command } => {
-                run_codex_shell(profile.as_deref(), workdir, interactive, tty, env, command)?
+            CodexCommand::Tail { profile, worker_slot, tail } => {
+                run_codex_tail(profile.as_deref(), worker_slot.as_deref(), &tail)?
             }
+            CodexCommand::Shell {
+                profile,
+                worker_slot,
+                workdir,
+                interactive,
+                tty,
+                env,
+                command,
+            } => run_codex_shell(
+                profile.as_deref(),
+                worker_slot.as_deref(),
+                workdir,
+                interactive,
+                tty,
+                env,
+                command,
+            )?,
             CodexCommand::List { format } => run_codex_list(format)?,
-            CodexCommand::Tmux(CodexTmuxArgs { profile, format }) => {
-                run_codex_tmux_command(profile.as_deref(), format)?
+            CodexCommand::Tmux(CodexTmuxArgs { profile, worker_slot, format }) => {
+                run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
             }
             CodexCommand::Warmup { command } => match command {
                 WarmupCommand::Decision {
@@ -35874,12 +35920,23 @@ fn main() -> Result<()> {
             },
             CodexCommand::Respawn(CodexSpawnStartArgs {
                 profile,
+                worker_slot,
+                count,
                 workspace,
                 workdir,
                 detach,
                 home,
                 env,
-            }) => run_codex_respawn(profile, workspace, workdir, detach, home, env)?,
+            }) => run_codex_respawn(
+                profile,
+                worker_slot,
+                count,
+                workspace,
+                workdir,
+                detach,
+                home,
+                env,
+            )?,
         },
         Command::Nucleus { command } => match command {
             NucleusCommand::Status { endpoint, format } => run_nucleus_status(endpoint, format)?,
@@ -71248,59 +71305,106 @@ fn run_github_repo_delete(
 #[allow(clippy::too_many_arguments)]
 fn show_codex_spawn_start(
     profile: Option<String>,
+    worker_slot: Option<String>,
+    count: usize,
     workspace: Option<PathBuf>,
     workdir: Option<String>,
     detach: bool,
     home: Option<PathBuf>,
     env: Vec<String>,
 ) -> Result<()> {
+    if count == 0 {
+        anyhow::bail!("--count must be greater than zero");
+    }
+    if count > 1 && worker_slot.as_deref().is_some_and(|value| !value.trim().is_empty()) {
+        anyhow::bail!("--worker-slot cannot be combined with --count > 1");
+    }
     let (settings_home, settings) = load_codex_runtime_settings(home.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
     let profile_id =
         resolve_codex_profile(&settings_home, &settings, &paths, profile.as_deref(), "spawn")?;
     let workspace = resolve_codex_workspace(workspace, &settings)?;
     let workdir = resolve_codex_workdir(workdir, &workspace)?;
-    let state = ensure_codex_worker_session(
-        &settings_home,
-        &paths,
-        &settings,
-        &profile_id,
-        workspace,
-        workdir,
-        &env,
-    )?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&serde_json::json!({
-            "profile_id": state.profile_id,
-            "session_name": state.session_name,
-            "workspace": state.workspace,
-            "workdir": state.workdir,
-            "updated_at": state.updated_at,
-        }))?
-    );
+    let slots = if count == 1 {
+        vec![normalize_codex_worker_slot(worker_slot.as_deref())?]
+    } else {
+        std::iter::once(DEFAULT_CODEX_WORKER_SLOT.to_owned())
+            .chain((2..=count).map(|index| format!("parallel-{index}")))
+            .collect::<Vec<_>>()
+    };
+    let mut states = Vec::with_capacity(slots.len());
+    for slot in slots {
+        states.push(ensure_codex_worker_session(
+            &settings_home,
+            &paths,
+            &settings,
+            &profile_id,
+            &slot,
+            workspace.clone(),
+            workdir.clone(),
+            &env,
+        )?);
+    }
+    if states.len() == 1 {
+        let state = states.first().expect("single state");
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "profile_id": state.profile_id,
+                "worker_slot": state.worker_slot,
+                "session_name": state.session_name,
+                "workspace": state.workspace,
+                "workdir": state.workdir,
+                "updated_at": state.updated_at,
+            }))?
+        );
+    } else {
+        println!("{}", serde_json::to_string_pretty(&states)?);
+    }
     if !detach {
-        run_codex_tmux_command(Some(profile_id.as_str()), None)?;
+        let attach_slot = states
+            .first()
+            .map(|state| state.worker_slot.as_str())
+            .unwrap_or(DEFAULT_CODEX_WORKER_SLOT);
+        run_codex_tmux_command(Some(profile_id.as_str()), Some(attach_slot), None)?;
     }
     Ok(())
 }
 
 fn run_codex_respawn(
     profile: Option<String>,
+    worker_slot: Option<String>,
+    count: usize,
     workspace: Option<PathBuf>,
     workdir: Option<String>,
     detach: bool,
     home: Option<PathBuf>,
     env: Vec<String>,
 ) -> Result<()> {
-    run_codex_remove_with_settings(
-        profile.as_deref(),
-        false,
-        OutputFormat::Text,
-        home.clone(),
-        None,
-    )?;
-    show_codex_spawn_start(profile, workspace, workdir, detach, home, env)
+    if count == 0 {
+        anyhow::bail!("--count must be greater than zero");
+    }
+    if count > 1 && worker_slot.as_deref().is_some_and(|value| !value.trim().is_empty()) {
+        anyhow::bail!("--worker-slot cannot be combined with --count > 1");
+    }
+    let slots = if count == 1 {
+        vec![normalize_codex_worker_slot(worker_slot.as_deref())?]
+    } else {
+        std::iter::once(DEFAULT_CODEX_WORKER_SLOT.to_owned())
+            .chain((2..=count).map(|index| format!("parallel-{index}")))
+            .collect::<Vec<_>>()
+    };
+    for slot in slots {
+        let _ = run_codex_remove_with_settings(
+            profile.as_deref(),
+            Some(slot.as_str()),
+            false,
+            OutputFormat::Text,
+            home.clone(),
+            None,
+        );
+    }
+    show_codex_spawn_start(profile, worker_slot, count, workspace, workdir, detach, home, env)
 }
 
 fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<PathBuf> {
@@ -71348,8 +71452,52 @@ fn codex_workers_dir(paths: &SiPaths) -> PathBuf {
     paths.root.join("codex").join("workers")
 }
 
-fn codex_worker_state_path(paths: &SiPaths, profile_id: &str) -> PathBuf {
+fn default_codex_worker_slot_name() -> String {
+    DEFAULT_CODEX_WORKER_SLOT.to_owned()
+}
+
+fn default_codex_worker_state_schema_version() -> u32 {
+    1
+}
+
+fn normalize_codex_worker_slot(slot: Option<&str>) -> Result<String> {
+    let slot = codex_worker_slot_name(slot);
+    if slot == DEFAULT_CODEX_WORKER_SLOT {
+        return Ok(slot);
+    }
+    let valid = slot.chars().enumerate().all(|(index, ch)| {
+        ch.is_ascii_lowercase() || ch.is_ascii_digit() || (ch == '-' && index > 0)
+    });
+    if !valid || slot.starts_with('-') || slot.ends_with('-') {
+        anyhow::bail!(
+            "invalid worker slot {slot:?}; use lowercase letters, digits, and dashes (example: review-2)"
+        );
+    }
+    Ok(slot)
+}
+
+fn codex_worker_legacy_state_path(paths: &SiPaths, profile_id: &str) -> PathBuf {
     codex_workers_dir(paths).join(format!("{}.json", codex_worker_name(profile_id)))
+}
+
+fn codex_worker_state_path(paths: &SiPaths, profile_id: &str, worker_slot: &str) -> PathBuf {
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    codex_workers_dir(paths).join(codex_worker_name(profile_id)).join(format!("{slot}.json"))
+}
+
+fn codex_profile_worker_slot_home_dir(
+    paths: &SiPaths,
+    settings: &Settings,
+    profile_id: &str,
+    worker_slot: &str,
+) -> PathBuf {
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    let profile_home = codex_profile_home_dir(paths, settings, profile_id);
+    if slot == DEFAULT_CODEX_WORKER_SLOT {
+        profile_home
+    } else {
+        profile_home.join("workers").join(slot)
+    }
 }
 
 fn ensure_codex_workers_dir(paths: &SiPaths) -> Result<PathBuf> {
@@ -71372,15 +71520,29 @@ fn save_codex_worker_state(path: &Path, state: &CodexWorkerState) -> Result<()> 
 
 fn load_codex_worker_state(path: &Path) -> Result<CodexWorkerState> {
     let raw = fs::read(path).with_context(|| format!("read {}", path.display()))?;
-    serde_json::from_slice(&raw).with_context(|| format!("parse {}", path.display()))
+    let mut state: CodexWorkerState =
+        serde_json::from_slice(&raw).with_context(|| format!("parse {}", path.display()))?;
+    state.worker_slot = normalize_codex_worker_slot(Some(state.worker_slot.as_str()))?;
+    Ok(state)
 }
 
-fn find_codex_worker_state(paths: &SiPaths, profile_id: &str) -> Result<Option<CodexWorkerState>> {
-    let path = codex_worker_state_path(paths, profile_id);
-    if !path.is_file() {
-        return Ok(None);
+fn find_codex_worker_state(
+    paths: &SiPaths,
+    profile_id: &str,
+    worker_slot: Option<&str>,
+) -> Result<Option<CodexWorkerState>> {
+    let slot = normalize_codex_worker_slot(worker_slot)?;
+    let slot_path = codex_worker_state_path(paths, profile_id, &slot);
+    if slot_path.is_file() {
+        return load_codex_worker_state(&slot_path).map(Some);
     }
-    load_codex_worker_state(&path).map(Some)
+    if slot == DEFAULT_CODEX_WORKER_SLOT {
+        let legacy_path = codex_worker_legacy_state_path(paths, profile_id);
+        if legacy_path.is_file() {
+            return load_codex_worker_state(&legacy_path).map(Some);
+        }
+    }
+    Ok(None)
 }
 
 fn read_codex_worker_states(paths: &SiPaths) -> Result<Vec<CodexWorkerState>> {
@@ -71388,13 +71550,39 @@ fn read_codex_worker_states(paths: &SiPaths) -> Result<Vec<CodexWorkerState>> {
     if !dir.is_dir() {
         return Ok(Vec::new());
     }
-    let mut items = fs::read_dir(&dir)
+    let items = fs::read_dir(&dir)
         .with_context(|| format!("read {}", dir.display()))?
         .filter_map(|entry| entry.ok().map(|value| value.path()))
+        .flat_map(|path| {
+            if path.is_file() {
+                vec![path]
+            } else if path.is_dir() {
+                fs::read_dir(path)
+                    .ok()
+                    .into_iter()
+                    .flat_map(|iter| iter.filter_map(|entry| entry.ok().map(|value| value.path())))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        })
         .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("json"))
         .filter_map(|path| load_codex_worker_state(&path).ok())
         .collect::<Vec<_>>();
-    items.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
+    let mut merged = BTreeMap::<(String, String), CodexWorkerState>::new();
+    for item in items {
+        let key = (item.profile_id.clone(), item.worker_slot.clone());
+        let replace = merged
+            .get(&key)
+            .is_none_or(|current| item.updated_at.as_str() >= current.updated_at.as_str());
+        if replace {
+            merged.insert(key, item);
+        }
+    }
+    let mut items = merged.into_values().collect::<Vec<_>>();
+    items.sort_by(|left, right| {
+        left.profile_id.cmp(&right.profile_id).then(left.worker_slot.cmp(&right.worker_slot))
+    });
     Ok(items)
 }
 
@@ -71419,26 +71607,42 @@ fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
+fn codex_env_key_protected(key: &str) -> bool {
+    matches!(
+        key,
+        "HOME"
+            | "CODEX_HOME"
+            | "FORT_TOKEN_PATH"
+            | "FORT_REFRESH_TOKEN_PATH"
+            | "SI_CODEX_PROFILE"
+            | "SI_CODEX_WORKER_SLOT"
+    )
+}
+
 fn build_codex_launch_command(
     home: &Path,
     codex_home: &Path,
     workdir: &Path,
+    profile_id: &str,
+    worker_slot: &str,
     env_entries: &[String],
     fort_paths: &CodexProfileFortSessionPaths,
 ) -> String {
     let mut exports = format!(
-        "export COLORTERM=truecolor HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={}; ",
+        "export COLORTERM=truecolor HOME={} CODEX_HOME={} FORT_TOKEN_PATH={} FORT_REFRESH_TOKEN_PATH={} SI_CODEX_PROFILE={} SI_CODEX_WORKER_SLOT={}; ",
         shell_single_quote(&home.display().to_string()),
         shell_single_quote(&codex_home.display().to_string()),
         shell_single_quote(&fort_paths.access_token_path.display().to_string()),
-        shell_single_quote(&fort_paths.refresh_token_path.display().to_string())
+        shell_single_quote(&fort_paths.refresh_token_path.display().to_string()),
+        shell_single_quote(profile_id),
+        shell_single_quote(worker_slot),
     );
     for entry in env_entries {
         let Some((key, value)) = entry.split_once('=') else {
             continue;
         };
         let key = key.trim();
-        if key.is_empty() {
+        if key.is_empty() || codex_env_key_protected(key) {
             continue;
         }
         exports.push_str(&format!("export {}={}; ", key, shell_single_quote(value.trim())));
@@ -71512,17 +71716,24 @@ fn ensure_codex_worker_session(
     paths: &SiPaths,
     settings: &Settings,
     profile_id: &str,
+    worker_slot: &str,
     workspace: PathBuf,
     workdir: PathBuf,
     env_entries: &[String],
 ) -> Result<CodexWorkerState> {
     let _ = ensure_codex_workers_dir(paths)?;
+    let worker_slot = normalize_codex_worker_slot(Some(worker_slot))?;
     let profile_name = codex_profile_display_name_from_settings(settings, profile_id);
-    let session_name = codex_tmux_session_name(profile_id);
-    let state_path = codex_worker_state_path(paths, profile_id);
-    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
+    let session_name = codex_tmux_session_name_for_slot(profile_id, &worker_slot);
+    let state_path = codex_worker_state_path(paths, profile_id, &worker_slot);
+    let lock_path = state_path.with_extension("lock");
+    let _state_lock = acquire_session_lock(&lock_path)
+        .with_context(|| format!("acquire worker-state lock {}", lock_path.display()))?;
+    let codex_home = codex_profile_worker_slot_home_dir(paths, settings, profile_id, &worker_slot);
+    let prepared =
+        prepare_codex_profile_runtime(home, paths, settings, profile_id, Some(codex_home))?;
 
-    let existing = find_codex_worker_state(paths, profile_id)?;
+    let existing = find_codex_worker_state(paths, profile_id, Some(&worker_slot))?;
     let restart_needed = existing.as_ref().is_some_and(|state| {
         state.workspace != workspace.display().to_string()
             || state.workdir != workdir.display().to_string()
@@ -71538,6 +71749,8 @@ fn ensure_codex_worker_session(
             home,
             &prepared.codex_home,
             &workdir,
+            profile_id,
+            &worker_slot,
             env_entries,
             &prepared.fort_paths,
         );
@@ -71552,7 +71765,9 @@ fn ensure_codex_worker_session(
     }
 
     let state = CodexWorkerState {
+        schema_version: default_codex_worker_state_schema_version(),
         profile_id: profile_id.to_owned(),
+        worker_slot,
         profile_name,
         session_name,
         workspace: workspace.display().to_string(),
@@ -71586,9 +71801,10 @@ fn prompt_codex_remove_all(states: &[CodexWorkerState]) -> Result<bool> {
     );
     for item in states {
         eprintln!(
-            "{} {} ({})",
+            "{} {} [{}] ({})",
             stderr_text("-", CliTone::Muted),
             stderr_text(&item.profile_id, CliTone::Command),
+            stderr_text(&item.worker_slot, CliTone::Label),
             item.session_name,
         );
     }
@@ -71601,6 +71817,7 @@ fn prompt_codex_remove_all(states: &[CodexWorkerState]) -> Result<bool> {
 
 fn resolve_codex_worker_for_profile(
     profile: Option<&str>,
+    worker_slot: Option<&str>,
     purpose: &str,
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -71608,25 +71825,57 @@ fn resolve_codex_worker_for_profile(
     let (home, settings) = load_codex_runtime_settings(home, settings_file)?;
     let paths = SiPaths::from_settings(&home, &settings);
     let states = read_codex_worker_states(&paths)?;
+    let requested_slot = worker_slot.map(str::trim).filter(|value| !value.is_empty());
+    let requested_slot = match requested_slot {
+        Some(slot) => Some(normalize_codex_worker_slot(Some(slot))?),
+        None => None,
+    };
 
     if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(state) =
-            states.iter().find(|item| item.session_name.eq_ignore_ascii_case(query))
-        {
+        if let Some(state) = states.iter().find(|item| {
+            item.session_name.eq_ignore_ascii_case(query)
+                && requested_slot
+                    .as_ref()
+                    .is_none_or(|slot| item.worker_slot.eq_ignore_ascii_case(slot))
+        }) {
             return Ok(state.clone());
         }
     }
 
     let profile_id = resolve_codex_requested_profile(&home, &settings, &paths, profile)?;
-    states
+    let mut matches = states
         .into_iter()
-        .find(|state| state.profile_id == profile_id)
-        .ok_or_else(|| {
-            anyhow!(
-                "no codex worker session found for profile {profile_id:?}; run `si codex spawn --profile {profile_id}` first"
-            )
+        .filter(|state| state.profile_id == profile_id)
+        .filter(|state| {
+            requested_slot.as_ref().is_none_or(|slot| state.worker_slot.eq_ignore_ascii_case(slot))
         })
-        .with_context(|| format!("resolve codex worker for {purpose}"))
+        .collect::<Vec<_>>();
+    matches.sort_by(|left, right| left.worker_slot.cmp(&right.worker_slot));
+    match matches.as_slice() {
+        [state] => Ok(state.clone()),
+        [] => {
+            if let Some(slot) = requested_slot {
+                Err(anyhow!(
+                    "no codex worker session found for profile {profile_id:?} slot {slot:?}; run `si codex spawn --profile {profile_id} --worker-slot {slot}` first"
+                ))
+            } else {
+                Err(anyhow!(
+                    "no codex worker session found for profile {profile_id:?}; run `si codex spawn --profile {profile_id}` first"
+                ))
+            }
+        }
+        _ => {
+            let slots = matches
+                .iter()
+                .map(|state| state.worker_slot.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(anyhow!(
+                "multiple codex worker sessions found for profile {profile_id:?} ({slots}); pass --worker-slot"
+            ))
+        }
+    }
+    .with_context(|| format!("resolve codex worker for {purpose}"))
 }
 
 fn remove_codex_worker_state(
@@ -71636,9 +71885,16 @@ fn remove_codex_worker_state(
     let tmux_bin = "tmux";
     let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
     kill_tmux_session_if_present(tmux_bin, &tmux_term, &state.session_name);
-    let state_path = codex_worker_state_path(paths, &state.profile_id);
+    let state_path = codex_worker_state_path(paths, &state.profile_id, &state.worker_slot);
     if state_path.exists() {
         fs::remove_file(&state_path).with_context(|| format!("remove {}", state_path.display()))?;
+    }
+    if state.worker_slot == DEFAULT_CODEX_WORKER_SLOT {
+        let legacy_path = codex_worker_legacy_state_path(paths, &state.profile_id);
+        if legacy_path.exists() {
+            fs::remove_file(&legacy_path)
+                .with_context(|| format!("remove {}", legacy_path.display()))?;
+        }
     }
     Ok(CodexRemoveResultView {
         name: state.profile_id.clone(),
@@ -71650,6 +71906,7 @@ fn remove_codex_worker_state(
 
 fn run_codex_remove_with_settings(
     profile: Option<&str>,
+    worker_slot: Option<&str>,
     all: bool,
     format: OutputFormat,
     home: Option<PathBuf>,
@@ -71707,7 +71964,8 @@ fn run_codex_remove_with_settings(
         return Ok(());
     }
 
-    let target = resolve_codex_worker_for_profile(profile, "remove", Some(home), None)?;
+    let target =
+        resolve_codex_worker_for_profile(profile, worker_slot, "remove", Some(home), None)?;
     let view = remove_codex_worker_state(&paths, &target)?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
@@ -71716,8 +71974,13 @@ fn run_codex_remove_with_settings(
     Ok(())
 }
 
-fn run_codex_remove(profile: Option<&str>, all: bool, format: OutputFormat) -> Result<()> {
-    run_codex_remove_with_settings(profile, all, format, None, None)
+fn run_codex_remove(
+    profile: Option<&str>,
+    worker_slot: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    run_codex_remove_with_settings(profile, worker_slot, all, format, None, None)
 }
 
 fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String> {
@@ -71740,14 +72003,15 @@ fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String>
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn run_codex_tail(profile: Option<&str>, tail: &str) -> Result<()> {
-    let target = resolve_codex_worker_for_profile(profile, "tail", None, None)?;
+fn run_codex_tail(profile: Option<&str>, worker_slot: Option<&str>, tail: &str) -> Result<()> {
+    let target = resolve_codex_worker_for_profile(profile, worker_slot, "tail", None, None)?;
     print!("{}", capture_tmux_session_output(&target.session_name, tail)?);
     Ok(())
 }
 
 fn run_codex_shell(
     profile: Option<&str>,
+    worker_slot: Option<&str>,
     workdir: Option<PathBuf>,
     interactive: bool,
     tty: bool,
@@ -71756,12 +72020,23 @@ fn run_codex_shell(
 ) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let target = resolve_codex_worker_for_profile(profile, "shell", Some(home.clone()), None)?;
+    let target =
+        resolve_codex_worker_for_profile(profile, worker_slot, "shell", Some(home.clone()), None)?;
     if command.is_empty() {
         anyhow::bail!("shell command is required");
     }
-    let prepared =
-        prepare_codex_profile_runtime(&home, &paths, &settings, &target.profile_id, None)?;
+    let prepared = prepare_codex_profile_runtime(
+        &home,
+        &paths,
+        &settings,
+        &target.profile_id,
+        Some(codex_profile_worker_slot_home_dir(
+            &paths,
+            &settings,
+            &target.profile_id,
+            &target.worker_slot,
+        )),
+    )?;
     let resolved_workdir = workdir.unwrap_or_else(|| PathBuf::from(target.workdir.clone()));
     let mut process = StdCommand::new(&command[0]);
     process
@@ -71771,6 +72046,8 @@ fn run_codex_shell(
         .env("CODEX_HOME", &prepared.codex_home)
         .env("FORT_TOKEN_PATH", &prepared.fort_paths.access_token_path)
         .env("FORT_REFRESH_TOKEN_PATH", &prepared.fort_paths.refresh_token_path)
+        .env("SI_CODEX_PROFILE", &target.profile_id)
+        .env("SI_CODEX_WORKER_SLOT", &target.worker_slot)
         .env("TERM", env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
     for entry in env_entries {
         let trimmed = entry.trim();
@@ -71779,7 +72056,7 @@ fn run_codex_shell(
         }
         let (key, value) = trimmed.split_once('=').unwrap_or((trimmed, ""));
         let key = key.trim();
-        if key.is_empty() {
+        if key.is_empty() || codex_env_key_protected(key) {
             continue;
         }
         process.env(key, value);
@@ -71826,9 +72103,11 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
             };
             CodexListEntryView {
                 profile_id: item.profile_id,
+                worker_slot: item.worker_slot,
                 session_name: item.session_name,
                 state: state.to_owned(),
                 workspace: item.workspace,
+                workdir: item.workdir,
             }
         })
         .collect::<Vec<_>>();
@@ -71840,8 +72119,9 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
             } else {
                 for item in items {
                     println!(
-                        "{}\tstate={}\tsession={}\tworkspace={}",
+                        "{}\tslot={}\tstate={}\tsession={}\tworkspace={}\tworkdir={}",
                         stdout_text(&item.profile_id, CliTone::Command),
+                        stdout_text(&item.worker_slot, CliTone::Label),
                         stdout_text(
                             &item.state,
                             if item.state == "running" {
@@ -71852,6 +72132,7 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
                         ),
                         stdout_text(&item.session_name, CliTone::Info),
                         item.workspace,
+                        item.workdir,
                     );
                 }
             }
@@ -71865,6 +72146,8 @@ fn run_local_codex_app_server_status(
     codex_home: &Path,
     fort_paths: &CodexProfileFortSessionPaths,
     workdir: &Path,
+    profile_id: &str,
+    worker_slot: &str,
 ) -> Result<CodexStatusView> {
     let mut child = StdCommand::new("codex")
         .arg("app-server")
@@ -71873,6 +72156,8 @@ fn run_local_codex_app_server_status(
         .env("CODEX_HOME", codex_home)
         .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
         .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
+        .env("SI_CODEX_PROFILE", profile_id)
+        .env("SI_CODEX_WORKER_SLOT", worker_slot)
         .env("TERM", "xterm-256color")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -71917,21 +72202,35 @@ fn read_codex_status_for_profile(
     workspace: Option<PathBuf>,
     raw: bool,
 ) -> Result<CodexStatusView> {
-    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
-    let workdir = if let Some(state) = find_codex_worker_state(paths, profile_id)? {
-        PathBuf::from(state.workdir)
-    } else if let Some(workspace) = workspace {
-        resolve_codex_workdir(None, &workspace)?
-    } else if let Some(configured) = settings.codex.workspace.as_deref() {
-        resolve_codex_workspace_path(PathBuf::from(configured))?
+    let selected = find_codex_worker_state(paths, profile_id, Some(DEFAULT_CODEX_WORKER_SLOT))?;
+    let (worker_slot, workdir) = if let Some(state) = selected {
+        (state.worker_slot, PathBuf::from(state.workdir))
     } else {
-        std::env::current_dir().context("read current dir for codex status")?
+        (
+            DEFAULT_CODEX_WORKER_SLOT.to_owned(),
+            if let Some(workspace) = workspace {
+                resolve_codex_workdir(None, &workspace)?
+            } else if let Some(configured) = settings.codex.workspace.as_deref() {
+                resolve_codex_workspace_path(PathBuf::from(configured))?
+            } else {
+                std::env::current_dir().context("read current dir for codex status")?
+            },
+        )
     };
+    let prepared = prepare_codex_profile_runtime(
+        home,
+        paths,
+        settings,
+        profile_id,
+        Some(codex_profile_worker_slot_home_dir(paths, settings, profile_id, &worker_slot)),
+    )?;
     let mut status = run_local_codex_app_server_status(
         home,
         &prepared.codex_home,
         &prepared.fort_paths,
         &workdir,
+        profile_id,
+        &worker_slot,
     )?;
     if !raw {
         status.raw = None;
@@ -72002,6 +72301,7 @@ fn run_nucleus_codex_warmup_profile(
     let launch_spec = WorkerLaunchSpec {
         worker_id: worker_id.clone(),
         profile: profile.clone(),
+        worker_slot: DEFAULT_CODEX_WORKER_SLOT.to_owned(),
         home_dir: home.to_path_buf(),
         codex_home: prepared.codex_home,
         workdir: workdir.clone(),
@@ -72302,15 +72602,21 @@ fn run_codex_warmup(
     Ok(())
 }
 
-fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -> Result<()> {
+fn run_codex_tmux_command(
+    profile: Option<&str>,
+    worker_slot: Option<&str>,
+    format: Option<OutputFormat>,
+) -> Result<()> {
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let target = resolve_codex_worker_for_profile(profile, "tmux", Some(home.clone()), None)?;
+    let target =
+        resolve_codex_worker_for_profile(profile, worker_slot, "tmux", Some(home.clone()), None)?;
     let profile_display_name = target.profile_name.as_deref();
     let session_name = target.session_name.clone();
     let window_name = codex_tmux_window_name(&target.profile_id, profile_display_name);
     let view = CodexTmuxCommandView {
         profile_id: target.profile_id.clone(),
+        worker_slot: target.worker_slot.clone(),
         session_name: session_name.clone(),
         window_name: window_name.clone(),
         launch_command: format!("tmux attach-session -t {}", shell_single_quote(&session_name)),
@@ -72321,6 +72627,7 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
             OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
             OutputFormat::Text => {
                 print_cli_kv("profile_id", &view.profile_id);
+                print_cli_kv("worker_slot", &view.worker_slot);
                 print_cli_kv("session_name", &view.session_name);
                 print_cli_kv("window_name", &view.window_name);
                 print_cli_kv("workspace", &view.workspace);
@@ -72345,6 +72652,7 @@ fn run_codex_tmux_command(profile: Option<&str>, format: Option<OutputFormat>) -
             &paths,
             &settings,
             &target.profile_id,
+            &target.worker_slot,
             workspace,
             workdir,
             &[],
@@ -72659,6 +72967,8 @@ mod tests {
             Path::new("/tmp/home"),
             Path::new("/tmp/home/.si/codex/profiles/america"),
             Path::new("/tmp/workspace"),
+            "america",
+            "primary",
             &[],
             &fort_paths,
         );

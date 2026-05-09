@@ -138,7 +138,7 @@ GitHub webhooks:
 
 ## Task Profile Assignment
 
-Nucleus assigns every dispatched task to one worker profile. Task creation may include a preferred `profile`, but the dispatcher can select a fallback when the task is not pinned to an existing session.
+Nucleus assigns every dispatched task to one worker profile and one worker slot. Task creation may include a preferred `profile`, but the dispatcher can select a fallback when the task is not pinned to an existing session.
 
 Priority order:
 
@@ -149,6 +149,16 @@ Priority order:
 5. profiles with non-ready workers, used only as a last candidate
 
 If a candidate is unavailable because its worker cannot start, Fort authentication is unavailable, or the profile is otherwise not usable, Nucleus tries the next candidate. Tasks pinned to a `session_id` do not cross profile boundaries; a session mismatch remains blocked as `session_broken`.
+
+Worker slot notes:
+
+1. worker slots default to `primary`.
+2. `worker.probe` and `session.create` accept `worker_slot` to target a named runtime lane under the same profile.
+3. when no explicit worker id/slot is requested, dispatch prefers an idle worker for the selected profile.
+4. explicit-profile tasks can run concurrently under the same profile when additional worker slots exist.
+5. profile worker-pool size defaults to one worker and can be increased with:
+   - `SI_NUCLEUS_PROFILE_MAX_WORKERS=<n>` for all profiles.
+   - `SI_NUCLEUS_PROFILE_MAX_WORKERS_<PROFILE>=<n>` for one profile, where `<PROFILE>` is uppercased and `-` becomes `_`.
 
 When Nucleus selects a candidate, it writes that profile back to the task record so later inspection shows which profile actually owns execution.
 
