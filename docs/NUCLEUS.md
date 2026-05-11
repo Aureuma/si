@@ -30,6 +30,21 @@ Nucleus is implemented and operated under these stable architecture constraints:
 9. bounded external contract: REST and OpenAPI are generated from Nucleus canonical model and route through the same internal request paths as WebSocket/CLI.
 10. local-first service model: Nucleus runs as an OS-native user service by default; public exposure is explicit and opt-in.
 
+## Architecture Guardrails
+
+These are strict constraints for ongoing Nucleus changes:
+
+1. Nucleus is the control plane identity. Do not introduce parallel SI orchestration services or alternate task/run/session universes.
+2. Canonical events are authoritative. Do not persist separate raw source ledgers as competing truth streams.
+3. All event sources must normalize into canonical event shapes before durable append.
+4. Adjacent integrations (Fort, webhook automation, external clients) must route outcomes back into canonical Nucleus events and blocked states.
+5. Public control-plane surfaces must not expose raw runtime internals as API contract shapes.
+6. Runtime correctness must not depend on tmux state, Docker runtime assumptions, or `codex exec` fallback behavior.
+7. Auth/account runtime state remains profile-scoped; Nucleus must not mutate Codex auth internals through hidden repair paths.
+8. Durable writes remain atomic (`temp` + `rename` for JSON objects) and append-serialized for JSONL streams.
+9. Producer replay semantics remain restart-safe and at-least-once with durable deduplication, preferring duplicate suppression over silent task loss.
+10. Task cancellation is terminal for the current run; resumption must happen via new queued task creation, not implicit turn resurrection.
+
 ## Main CLI surfaces
 
 Use `si nucleus ...` for control-plane operations:
