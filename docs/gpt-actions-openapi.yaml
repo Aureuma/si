@@ -69,7 +69,7 @@ components:
           type: array
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.58
+          example: 0.59.60
           readOnly: true
           type: string
       required:
@@ -124,7 +124,7 @@ components:
           type: integer
         version:
           description: Running SI Nucleus package version.
-          example: 0.59.58
+          example: 0.59.60
           readOnly: true
           type: string
         worker_count:
@@ -171,7 +171,7 @@ components:
               type: string
             version:
               description: API package version.
-              example: 0.59.58
+              example: 0.59.60
               type: string
           required:
           - title
@@ -245,6 +245,29 @@ components:
         app_server_turn_id:
           description: Underlying app server turn id associated with this run.
           example: null
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cancel_deadline_at:
+          description: Deadline when Nucleus should stop waiting for runtime cancellation acknowledgement.
+          example: null
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cancel_request_source:
+          description: Source that requested cancellation for this run.
+          example: nucleus
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cancel_requested_at:
+          description: Timestamp when cancellation was requested for this run.
+          example: null
+          format: date-time
           readOnly: true
           type:
           - string
@@ -428,6 +451,13 @@ components:
           type:
           - string
           - 'null'
+        requires_fort:
+          default: null
+          description: Optional explicit Fort capability requirement. When true, Nucleus blocks execution until Fort is ready; when null, legacy text heuristics may still infer Fort usage.
+          example: false
+          type:
+          - boolean
+          - 'null'
         session_id:
           default: null
           description: Optional existing SI session id to reuse for continuity.
@@ -561,6 +591,12 @@ components:
           type:
           - string
           - 'null'
+        requires_fort:
+          description: Explicit Fort capability requirement for this task when set.
+          example: null
+          type:
+          - boolean
+          - 'null'
         session_binding_locked:
           description: True when the task was created against an explicit existing session and retries must preserve that session binding.
           example: false
@@ -652,7 +688,7 @@ components:
       properties:
         capability_version:
           description: Worker capability or package version when reported.
-          example: 0.59.58
+          example: 0.59.60
           type:
           - string
           - 'null'
@@ -777,7 +813,7 @@ components:
 info:
   description: Bounded external integration API over the canonical SI Nucleus task, worker, session, and run model.
   title: SI Nucleus REST API
-  version: 0.59.58
+  version: 0.59.60
 openapi: 3.1.0
 paths:
   /capabilities:
@@ -804,7 +840,7 @@ paths:
                 - cron
                 - hook
                 - system
-                version: 0.59.58
+                version: 0.59.60
               schema:
                 $ref: '#/components/schemas/NucleusCapabilitiesView'
           description: Current REST integration capabilities.
@@ -857,6 +893,9 @@ paths:
             application/json:
               example:
                 app_server_turn_id: null
+                cancel_deadline_at: null
+                cancel_request_source: null
+                cancel_requested_at: null
                 ended_at: null
                 parent_run_id: null
                 run_id: si-run-0123456789abcdef00000001
@@ -945,7 +984,7 @@ paths:
                 session_count: 2
                 state_dir: /home/si/.local/state/si/nucleus
                 task_count: 12
-                version: 0.59.58
+                version: 0.59.60
                 worker_count: 2
                 ws_url: ws://0.0.0.0:4747/ws
               schema:
@@ -983,6 +1022,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                requires_fort: null
                 session_binding_locked: false
                 session_id: null
                 source: rest
@@ -1016,6 +1056,7 @@ paths:
               instructions: Inspect queued and running tasks and report any items that are stuck.
               max_retries: 0
               profile: darmstada
+              requires_fort: false
               session_id: null
               source: rest
               timeout_seconds: 900
@@ -1042,6 +1083,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                requires_fort: null
                 session_binding_locked: false
                 session_id: null
                 source: rest
@@ -1108,6 +1150,7 @@ paths:
                 producer_dedup_key: null
                 producer_rule_name: null
                 profile: darmstada
+                requires_fort: null
                 session_binding_locked: false
                 session_id: null
                 source: rest
@@ -1157,6 +1200,9 @@ paths:
                 cancellation_requested: true
                 run:
                   app_server_turn_id: null
+                  cancel_deadline_at: null
+                  cancel_request_source: null
+                  cancel_requested_at: null
                   ended_at: null
                   parent_run_id: null
                   run_id: si-run-0123456789abcdef00000001
@@ -1178,6 +1224,7 @@ paths:
                   producer_dedup_key: null
                   producer_rule_name: null
                   profile: darmstada
+                  requires_fort: null
                   session_binding_locked: false
                   session_id: null
                   source: rest
@@ -1227,7 +1274,7 @@ paths:
           content:
             application/json:
               example:
-              - capability_version: 0.59.58
+              - capability_version: 0.59.60
                 codex_home: /home/si/.codex
                 effective_account_state: authenticated
                 extra_env: {}
@@ -1278,7 +1325,7 @@ paths:
                   started_at: 2026-04-17T00:00:00Z
                   worker_id: si-worker-0123456789abcdef00000001
                 worker:
-                  capability_version: 0.59.58
+                  capability_version: 0.59.60
                   codex_home: /home/si/.codex
                   effective_account_state: authenticated
                   extra_env: {}

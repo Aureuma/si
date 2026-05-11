@@ -244,6 +244,7 @@ fn stderr_loop(stderr: ChildStderr, stderr_lines: Arc<Mutex<Vec<String>>>) {
 #[derive(Debug, Default)]
 pub struct CodexNucleusRuntime {
     workers: Mutex<HashMap<WorkerId, Arc<ManagedCodexWorker>>>,
+    startup_guards: Mutex<HashMap<WorkerId, Arc<Mutex<()>>>>,
 }
 
 impl CodexNucleusRuntime {
@@ -254,6 +255,14 @@ impl CodexNucleusRuntime {
     fn worker(&self, worker_id: &WorkerId) -> Result<Arc<ManagedCodexWorker>> {
         let workers = self.workers.lock().map_err(|_| anyhow!("runtime worker lock poisoned"))?;
         workers.get(worker_id).cloned().ok_or_else(|| anyhow!("worker not running: {worker_id}"))
+    }
+
+    fn startup_guard(&self, worker_id: &WorkerId) -> Result<Arc<Mutex<()>>> {
+        let mut guards = self
+            .startup_guards
+            .lock()
+            .map_err(|_| anyhow!("runtime startup guard lock poisoned"))?;
+        Ok(guards.entry(worker_id.clone()).or_insert_with(|| Arc::new(Mutex::new(()))).clone())
     }
 
     fn initialize_live_worker(worker: &ManagedCodexWorker) -> Result<()> {
@@ -369,6 +378,8 @@ impl NucleusRuntime for CodexNucleusRuntime {
     }
 
     fn start_worker(&self, spec: &WorkerLaunchSpec) -> Result<WorkerStartResult> {
+        let guard = self.startup_guard(&spec.worker_id)?;
+        let _startup = guard.lock().map_err(|_| anyhow!("runtime startup guard poisoned"))?;
         if let Ok(worker) = self.worker(&spec.worker_id) {
             let probe =
                 Self::probe_live_worker(&worker, Some(&spec.workdir.display().to_string()))?;
@@ -917,6 +928,8 @@ fn is_auth_or_usage_limit_error_message(message: &str) -> bool {
 mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::thread;
     use std::time::{Duration, Instant};
 
     use serde_json::json;
@@ -1003,6 +1016,39 @@ mod tests {
         assert_eq!(events[0].event_type, si_nucleus_core::CanonicalEventType::WorkerReady);
         assert_eq!(events[0].data.profile, Some(profile));
         assert_eq!(events[0].data.payload["model"], json!("gpt-5.4"));
+    }
+
+    #[test]
+    fn startup_guard_is_stable_per_worker() {
+        let runtime = Arc::new(CodexNucleusRuntime::new());
+        let worker_id = WorkerId::generate();
+        let first = runtime.startup_guard(&worker_id).expect("first guard");
+        let second = runtime.startup_guard(&worker_id).expect("second guard");
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn startup_guard_serializes_parallel_starts_for_same_worker() {
+        let runtime = Arc::new(CodexNucleusRuntime::new());
+        let worker_id = WorkerId::generate();
+        let guard = runtime.startup_guard(&worker_id).expect("guard");
+        let hold = guard.lock().expect("hold guard");
+
+        let runtime_clone = Arc::clone(&runtime);
+        let worker_id_clone = worker_id.clone();
+        let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let started_clone = Arc::clone(&started);
+        let join = thread::spawn(move || {
+            let other_guard = runtime_clone.startup_guard(&worker_id_clone).expect("other guard");
+            let _wait = other_guard.lock().expect("wait for guard");
+            started_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+
+        thread::sleep(Duration::from_millis(25));
+        assert!(!started.load(std::sync::atomic::Ordering::SeqCst));
+        drop(hold);
+        join.join().expect("join startup guard thread");
+        assert!(started.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]

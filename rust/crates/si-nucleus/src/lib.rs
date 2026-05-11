@@ -80,6 +80,7 @@ const MAX_EVENTS_JSONL_BYTES: u64 = 1024 * 1024;
 const DEFAULT_TASK_RETENTION_DAYS: u64 = 30;
 const WORKER_RESTART_BACKOFF_BASE: Duration = Duration::from_millis(100);
 const MAX_WORKER_RESTART_ATTEMPTS: u32 = 3;
+const RUN_CANCEL_ACK_TIMEOUT: ChronoDuration = ChronoDuration::seconds(30);
 pub const GPT_ACTIONS_OPENAPI_PUBLIC_URL: &str = "https://nucleus.aureuma.ai";
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
@@ -718,6 +719,7 @@ impl NucleusStore {
         if let Some(timeout_seconds) = input.timeout_seconds {
             task.timeout_seconds = Some(timeout_seconds);
         }
+        task.requires_fort = input.requires_fort;
         let task_path = self.paths.task_path(&task.task_id);
         write_json_atomic(&task_path, &task)?;
         let event = self.append_event_locked(
@@ -802,6 +804,7 @@ impl NucleusStore {
         if let Some(timeout_seconds) = input.timeout_seconds {
             task.timeout_seconds = Some(timeout_seconds);
         }
+        task.requires_fort = input.requires_fort;
         let task_path = self.paths.task_path(&task.task_id);
         write_json_atomic(&task_path, &task)?;
         let event = self.append_event_locked(
@@ -1479,7 +1482,16 @@ impl NucleusStore {
             && let Some(mut run) = self.read_run_locked(&run_id)?
         {
             if run.status != run_status {
-                run.transition_to(run_status).map_err(anyhow::Error::new)?;
+                if is_terminal_run_status(run.status) && is_terminal_run_status(run_status) {
+                    // Keep the persisted terminal outcome when a stale terminal runtime event arrives.
+                } else {
+                    run.transition_to(run_status).map_err(anyhow::Error::new)?;
+                }
+            }
+            if is_terminal_run_status(run.status) {
+                run.cancel_requested_at = None;
+                run.cancel_request_source = None;
+                run.cancel_deadline_at = None;
             }
             self.write_run_projection_locked(&run, None)?;
             refreshed_run = Some(run);
@@ -1507,7 +1519,11 @@ impl NucleusStore {
             && let Some(mut task) = self.read_task_locked(&task_id)?
         {
             if task.status != task_status {
-                task.transition_to(task_status, blocked_reason).map_err(anyhow::Error::new)?;
+                if is_terminal_task_status(task.status) && is_terminal_task_status(task_status) {
+                    // Preserve terminal task state on stale terminal runtime notifications.
+                } else {
+                    task.transition_to(task_status, blocked_reason).map_err(anyhow::Error::new)?;
+                }
             }
             if let Some(summary) = event
                 .data
@@ -1891,6 +1907,26 @@ impl NucleusStore {
         Ok(Some((task, event)))
     }
 
+    fn request_run_cancellation(
+        &self,
+        run_id: &RunId,
+        source: CanonicalEventSource,
+        deadline_at: DateTime<Utc>,
+    ) -> Result<Option<RunRecord>> {
+        let _guard = self.write_lock.lock().map_err(|_| anyhow!("nucleus store lock poisoned"))?;
+        let Some(mut run) = self.read_run_locked(run_id)? else {
+            return Ok(None);
+        };
+        if is_terminal_run_status(run.status) {
+            return Ok(Some(run));
+        }
+        run.cancel_requested_at = Some(Utc::now());
+        run.cancel_request_source = Some(canonical_event_source_label(source).to_owned());
+        run.cancel_deadline_at = Some(deadline_at);
+        self.write_run_projection_locked(&run, None)?;
+        Ok(Some(run))
+    }
+
     fn requeue_blocked_task(
         &self,
         task_id: &TaskId,
@@ -1955,6 +1991,28 @@ impl NucleusStore {
 
 fn is_active_run_status(status: RunStatus) -> bool {
     matches!(status, RunStatus::Queued | RunStatus::Running)
+}
+
+fn is_terminal_run_status(status: RunStatus) -> bool {
+    matches!(status, RunStatus::Completed | RunStatus::Failed | RunStatus::Cancelled)
+}
+
+fn is_terminal_task_status(status: TaskStatus) -> bool {
+    matches!(status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Cancelled)
+}
+
+fn canonical_event_source_label(source: CanonicalEventSource) -> &'static str {
+    match source {
+        CanonicalEventSource::Nucleus => "nucleus",
+        CanonicalEventSource::AppServer => "app_server",
+        CanonicalEventSource::Cli => "cli",
+        CanonicalEventSource::Websocket => "websocket",
+        CanonicalEventSource::Cron => "cron",
+        CanonicalEventSource::Hook => "hook",
+        CanonicalEventSource::Github => "github",
+        CanonicalEventSource::Fort => "fort",
+        CanonicalEventSource::System => "system",
+    }
 }
 
 fn blocked_reason_from_payload(payload: &Value) -> Option<BlockedReason> {
@@ -2136,6 +2194,9 @@ fn hook_event_key(rule_name: &str, seq: u64) -> String {
 }
 
 fn task_requires_fort(task: &TaskRecord, prompt_override: Option<&str>) -> bool {
+    if let Some(requires_fort) = task.requires_fort {
+        return requires_fort;
+    }
     let mut combined = String::with_capacity(
         task.title.len() + task.instructions.len() + prompt_override.unwrap_or_default().len() + 2,
     );
@@ -2825,6 +2886,7 @@ pub struct NucleusService {
     events: broadcast::Sender<CanonicalEvent>,
     runtime: Option<Arc<dyn NucleusRuntime>>,
     background_started: Arc<AtomicBool>,
+    dispatch_claim_lock: Arc<Mutex<()>>,
     worker_restart_state: Arc<Mutex<HashMap<WorkerId, WorkerRestartState>>>,
     background_warning_state: Arc<Mutex<BackgroundWarningState>>,
 }
@@ -2843,6 +2905,7 @@ impl NucleusService {
             events,
             runtime: None,
             background_started: Arc::new(AtomicBool::new(false)),
+            dispatch_claim_lock: Arc::new(Mutex::new(())),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
             background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
         })
@@ -2860,6 +2923,7 @@ impl NucleusService {
             events,
             runtime: Some(runtime),
             background_started: Arc::new(AtomicBool::new(false)),
+            dispatch_claim_lock: Arc::new(Mutex::new(())),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
             background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
         })
@@ -3105,6 +3169,7 @@ impl NucleusService {
                     session_id: None,
                     max_retries: None,
                     timeout_seconds: None,
+                    requires_fort: None,
                 },
                 &rule.name,
                 &dedup_key,
@@ -3195,6 +3260,7 @@ impl NucleusService {
                         session_id: None,
                         max_retries: None,
                         timeout_seconds: None,
+                        requires_fort: None,
                     },
                     &rule.name,
                     &dedup_key,
@@ -3218,8 +3284,29 @@ impl NucleusService {
     }
 
     fn reconcile_inflight_runs(&self, block_ambiguous_healthy_runs: bool) -> Result<()> {
+        let now = Utc::now();
         for run in self.store.list_runs()? {
             if !is_active_run_status(run.status) {
+                continue;
+            }
+            if run.cancel_deadline_at.is_some_and(|deadline_at| now >= deadline_at) {
+                let events = self.store.apply_runtime_event(CanonicalEventDraft {
+                    event_type: CanonicalEventType::RunCancelled,
+                    source: CanonicalEventSource::System,
+                    data: EventDataEnvelope {
+                        task_id: Some(run.task_id.clone()),
+                        worker_id: None,
+                        session_id: Some(run.session_id.clone()),
+                        run_id: Some(run.run_id.clone()),
+                        profile: None,
+                        payload: json!({
+                            "message": "run cancellation request timed out waiting for runtime acknowledgement",
+                        }),
+                    },
+                })?;
+                for event in events {
+                    let _ = self.events.send(event);
+                }
                 continue;
             }
             let task = self.store.inspect_task(&run.task_id)?;
@@ -3437,6 +3524,8 @@ impl NucleusService {
         let Some(runtime) = self.runtime.as_ref() else {
             return Ok(());
         };
+        let _dispatch_guard =
+            self.dispatch_claim_lock.lock().map_err(|_| anyhow!("dispatch claim lock poisoned"))?;
         let mut tasks = self.store.list_tasks()?;
         let sessions = self
             .store
@@ -3876,6 +3965,11 @@ impl NucleusService {
                     };
                     let runtime =
                         self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
+                    let _ = self.store.request_run_cancellation(
+                        &run.run_id,
+                        CanonicalEventSource::Nucleus,
+                        Utc::now() + RUN_CANCEL_ACK_TIMEOUT,
+                    )?;
                     runtime.interrupt_turn(&session.worker_id, &thread_id, turn_id)?;
                     let task = self
                         .store
@@ -4192,6 +4286,32 @@ impl NucleusService {
         let runtime = Arc::clone(self.runtime.as_ref().expect("runtime must exist for execution"));
         let events = self.events.clone();
         thread::spawn(move || {
+            if let Ok(Some(run)) = store.inspect_run(&run_spec.run_id)
+                && run.cancel_requested_at.is_some()
+            {
+                let cancelled = CanonicalEventDraft {
+                    event_type: CanonicalEventType::RunCancelled,
+                    source: CanonicalEventSource::Nucleus,
+                    data: EventDataEnvelope {
+                        task_id: run_spec.task_id.clone(),
+                        worker_id: Some(run_spec.worker_id.clone()),
+                        session_id: Some(run_spec.session_id.clone()),
+                        run_id: Some(run_spec.run_id.clone()),
+                        profile: Some(run_spec.profile.clone()),
+                        payload: json!({
+                            "thread_id": run_spec.thread_id,
+                            "turn_id": Value::Null,
+                            "message": "run cancelled before execution started",
+                        }),
+                    },
+                };
+                if let Ok(appended) = store.apply_runtime_event(cancelled) {
+                    for event in appended {
+                        let _ = events.send(event);
+                    }
+                }
+                return;
+            }
             let mut sink = |draft: CanonicalEventDraft| -> Result<()> {
                 let appended = store.apply_runtime_event(draft)?;
                 for event in appended {
@@ -4200,6 +4320,11 @@ impl NucleusService {
                 Ok(())
             };
             if let Err(error) = runtime.execute_turn(&run_spec, &mut sink) {
+                if let Ok(Some(run)) = store.inspect_run(&run_spec.run_id)
+                    && is_terminal_run_status(run.status)
+                {
+                    return;
+                }
                 let error_message = error.to_string();
                 let failure = CanonicalEventDraft {
                     event_type: CanonicalEventType::RunFailed,
@@ -4298,6 +4423,7 @@ impl NucleusService {
                     session_id,
                     max_retries: params.max_retries,
                     timeout_seconds: params.timeout_seconds,
+                    requires_fort: params.requires_fort,
                 };
                 self.validate_task_create_input(&input)?;
                 let preflight_block = self.preflight_task_create_block(&input)?;
@@ -4579,6 +4705,10 @@ impl NucleusService {
                     self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
                 let params: RunSubmitTurnParams =
                     serde_json::from_value(params).context("parse run.submit_turn params")?;
+                let _dispatch_guard = self
+                    .dispatch_claim_lock
+                    .lock()
+                    .map_err(|_| anyhow!("dispatch claim lock poisoned"))?;
                 let session_id = SessionId::new(params.session_id)?;
                 let task_id = TaskId::new(params.task_id)?;
                 let task =
@@ -4702,6 +4832,11 @@ impl NucleusService {
                 };
                 let runtime =
                     self.runtime.as_ref().ok_or_else(|| anyhow!("runtime unavailable"))?;
+                let _ = self.store.request_run_cancellation(
+                    &run_id,
+                    CanonicalEventSource::Nucleus,
+                    Utc::now() + RUN_CANCEL_ACK_TIMEOUT,
+                )?;
                 runtime.interrupt_turn(&session.worker_id, &thread_id, &turn_id)?;
                 let run =
                     self.store.inspect_run(&run_id)?.ok_or_else(|| anyhow!("run not found"))?;
@@ -4793,7 +4928,16 @@ impl NucleusService {
         };
         if existing.is_none() && request.requested_worker_id.is_none() {
             let max_workers = profile_max_workers(profile);
-            if profile_workers.len() >= max_workers {
+            let mut capacity_workers = 0_usize;
+            for worker in &profile_workers {
+                if matches!(worker.status, WorkerStatus::Failed | WorkerStatus::Stopped)
+                    && !self.worker_has_active_runs(&worker.worker_id)?
+                {
+                    continue;
+                }
+                capacity_workers += 1;
+            }
+            if capacity_workers >= max_workers {
                 anyhow::bail!(
                     "worker capacity exhausted for profile {profile} (max {max_workers})"
                 );
@@ -5333,7 +5477,8 @@ fn task_record_example() -> Value {
         "attempt_count": 1,
         "max_retries": 0,
         "session_binding_locked": false,
-        "timeout_seconds": 900
+        "timeout_seconds": 900,
+        "requires_fort": null
     })
 }
 
@@ -5346,7 +5491,10 @@ fn run_record_example() -> Value {
         "started_at": "2026-04-17T00:00:05Z",
         "ended_at": null,
         "parent_run_id": null,
-        "app_server_turn_id": null
+        "app_server_turn_id": null,
+        "cancel_requested_at": null,
+        "cancel_request_source": null,
+        "cancel_deadline_at": null
     })
 }
 
@@ -5633,7 +5781,8 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                                     "profile": "darmstada",
                                     "session_id": null,
                                     "max_retries": 0,
-                                    "timeout_seconds": 900
+                                    "timeout_seconds": 900,
+                                    "requires_fort": false
                                 }
                             }
                         }
@@ -5965,7 +6114,8 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         "profile": { "type": ["string", "null"], "description": "Preferred SI worker profile. If omitted or temporarily unavailable, Nucleus assigns the first available profile by priority: requested profile, ready workers, configured profiles, reusable sessions, then non-ready workers.", "pattern": "^[a-z][a-z0-9-]*$", "default": null, "example": "darmstada" },
                         "session_id": { "type": ["string", "null"], "description": "Optional existing SI session id to reuse for continuity.", "pattern": "^si-session-.+", "default": null, "example": "si-session-0123456789abcdef00000001" },
                         "max_retries": { "type": ["integer", "null"], "description": "Optional maximum retry attempts after failed execution.", "minimum": 0, "default": null, "example": 0 },
-                        "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task. REST requests default to 900 seconds when omitted.", "minimum": 1, "default": 900, "example": 900 }
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Optional execution timeout in seconds for this task. REST requests default to 900 seconds when omitted.", "minimum": 1, "default": 900, "example": 900 },
+                        "requires_fort": { "type": ["boolean", "null"], "description": "Optional explicit Fort capability requirement. When true, Nucleus blocks execution until Fort is ready; when null, legacy text heuristics may still infer Fort usage.", "default": null, "example": false }
                     }
                 },
                 "TaskRecord": {
@@ -5999,7 +6149,8 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         "attempt_count": { "type": "integer", "description": "How many execution attempts Nucleus has already started for this task.", "minimum": 0, "example": 1, "readOnly": true },
                         "max_retries": { "type": ["integer", "null"], "description": "Maximum retry attempts configured for this task after a failed run.", "minimum": 0, "example": 0 },
                         "session_binding_locked": { "type": "boolean", "description": "True when the task was created against an explicit existing session and retries must preserve that session binding.", "example": false, "readOnly": true },
-                        "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 1, "example": 900 }
+                        "timeout_seconds": { "type": ["integer", "null"], "description": "Execution timeout configured for this task.", "minimum": 1, "example": 900 },
+                        "requires_fort": { "type": ["boolean", "null"], "description": "Explicit Fort capability requirement for this task when set.", "example": null }
                     }
                 },
                 "WorkerRecord": {
@@ -6077,7 +6228,10 @@ fn openapi_document_with_server_url(server_url: &str) -> Value {
                         "started_at": { "type": ["string", "null"], "description": "Timestamp when execution started.", "format": "date-time", "example": "2026-04-17T00:00:05Z", "readOnly": true },
                         "ended_at": { "type": ["string", "null"], "description": "Timestamp when execution reached a terminal state.", "format": "date-time", "example": null, "readOnly": true },
                         "parent_run_id": openapi_nullable_id_property("Parent run id for nested execution, if any.", "si-run-", json!(null)),
-                        "app_server_turn_id": { "type": ["string", "null"], "description": "Underlying app server turn id associated with this run.", "example": null, "readOnly": true }
+                        "app_server_turn_id": { "type": ["string", "null"], "description": "Underlying app server turn id associated with this run.", "example": null, "readOnly": true },
+                        "cancel_requested_at": { "type": ["string", "null"], "description": "Timestamp when cancellation was requested for this run.", "format": "date-time", "example": null, "readOnly": true },
+                        "cancel_request_source": { "type": ["string", "null"], "description": "Source that requested cancellation for this run.", "example": "nucleus", "readOnly": true },
+                        "cancel_deadline_at": { "type": ["string", "null"], "description": "Deadline when Nucleus should stop waiting for runtime cancellation acknowledgement.", "format": "date-time", "example": null, "readOnly": true }
                     }
                 },
                 "TaskCancelResultView": {
@@ -6620,6 +6774,7 @@ struct CreateTaskInput {
     session_id: Option<SessionId>,
     max_retries: Option<u32>,
     timeout_seconds: Option<u64>,
+    requires_fort: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6639,6 +6794,7 @@ struct TaskCreateParams {
     session_id: Option<String>,
     max_retries: Option<u32>,
     timeout_seconds: Option<u64>,
+    requires_fort: Option<bool>,
 }
 
 fn default_request_task_source() -> TaskSource {
@@ -6654,6 +6810,7 @@ struct RestTaskCreateParams {
     session_id: Option<String>,
     max_retries: Option<u32>,
     timeout_seconds: Option<u64>,
+    requires_fort: Option<bool>,
 }
 
 impl From<RestTaskCreateParams> for TaskCreateParams {
@@ -6666,6 +6823,7 @@ impl From<RestTaskCreateParams> for TaskCreateParams {
             session_id: value.session_id,
             max_retries: value.max_retries,
             timeout_seconds: value.timeout_seconds,
+            requires_fort: value.requires_fort,
         }
     }
 }
@@ -6867,7 +7025,7 @@ mod tests {
     use std::collections::{BTreeMap, HashMap, HashSet};
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Barrier, Mutex};
     use std::thread;
     use std::time::Duration;
 
@@ -6892,9 +7050,9 @@ mod tests {
         WorkerStatus,
     };
     use si_nucleus_runtime::{
-        CanonicalEventDraft, NucleusRuntime, RunTurnSpec, RuntimeCommand, RuntimeRunOutcome,
-        RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
-        WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
+        CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, RuntimeCommand,
+        RuntimeRunOutcome, RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec,
+        WorkerLaunchSpec, WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
     };
     use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
     use tempfile::tempdir;
@@ -6905,6 +7063,7 @@ mod tests {
         workers: HashMap<String, WorkerRuntimeView>,
         run_delay: Duration,
         fail_execute: bool,
+        execute_calls: usize,
         remaining_start_failures: usize,
         start_calls: usize,
         interrupted_turns: HashSet<String>,
@@ -6954,6 +7113,10 @@ mod tests {
 
         fn last_timeout_seconds(&self) -> Option<u64> {
             self.state.lock().expect("state").last_timeout_seconds
+        }
+
+        fn execute_call_count(&self) -> usize {
+            self.state.lock().expect("state").execute_calls
         }
     }
 
@@ -7042,6 +7205,7 @@ mod tests {
         ) -> Result<RuntimeRunOutcome> {
             let (run_delay, fail_execute, run_failure_error) = {
                 let mut state = self.state.lock().expect("state");
+                state.execute_calls += 1;
                 state.last_timeout_seconds = spec.timeout_seconds;
                 let run_failure_error = if state.remaining_run_failures > 0 {
                     state.remaining_run_failures -= 1;
@@ -14677,6 +14841,7 @@ mod tests {
                     session_id: None,
                     max_retries: None,
                     timeout_seconds: None,
+                    requires_fort: None,
                 },
                 "nightly",
                 &dedup_key,
@@ -14733,6 +14898,7 @@ mod tests {
                     session_id: None,
                     max_retries: None,
                     timeout_seconds: None,
+                    requires_fort: None,
                 },
                 "nightly",
                 "nightly:previous",
@@ -14967,6 +15133,7 @@ mod tests {
                     session_id: None,
                     max_retries: None,
                     timeout_seconds: None,
+                    requires_fort: None,
                 },
                 "task-created",
                 &dedup_key,
@@ -16175,5 +16342,411 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Done);
         let events = fort_events_for_task(&service, task_id);
         assert!(events.iter().any(|event| event.event_type == CanonicalEventType::FortReady));
+    }
+
+    #[tokio::test]
+    async fn concurrent_dispatch_claims_only_one_run_for_a_bound_task() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = Arc::new(FakeRuntime::with_run_delay(Duration::from_millis(150)));
+        let service = Arc::new(
+            NucleusService::open_with_runtime(
+                NucleusConfig {
+                    bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                    state_dir: temp.path().join("nucleus"),
+                    auth_token: None,
+                },
+                runtime,
+            )
+            .expect("service"),
+        );
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-dispatch-claim"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = session
+            .result
+            .as_ref()
+            .and_then(|item| item["session"]["session_id"].as_str())
+            .expect("session id")
+            .to_owned();
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-dispatch-claim"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Concurrent dispatch claim",
+                    "instructions": "Only one run should be claimed",
+                    "profile": "america",
+                    "session_id": session_id,
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id =
+            task.result.as_ref().and_then(|item| item["task_id"].as_str()).expect("task id");
+
+        let barrier = Arc::new(Barrier::new(3));
+        let mut joins = Vec::new();
+        for _ in 0..2 {
+            let service_clone = Arc::clone(&service);
+            let barrier_clone = Arc::clone(&barrier);
+            joins.push(thread::spawn(move || {
+                barrier_clone.wait();
+                service_clone.reconcile_and_dispatch_once().expect("dispatch loop");
+            }));
+        }
+        barrier.wait();
+        for join in joins {
+            join.join().expect("join dispatch thread");
+        }
+
+        wait_for_task_status(&service, task_id, TaskStatus::Done);
+        let runs = service.store.list_runs().expect("runs");
+        let task_runs =
+            runs.into_iter().filter(|run| run.task_id.as_str() == task_id).collect::<Vec<_>>();
+        assert_eq!(task_runs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn spawn_run_execution_short_circuits_when_run_was_pre_cancelled() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = Arc::new(FakeRuntime::default());
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            runtime.clone(),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-pre-cancel"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+        let worker_id = WorkerId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-pre-cancel"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Pre-cancel run",
+                    "instructions": "This run should be cancelled before execute_turn",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id = TaskId::new(
+            created
+                .result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let run = service
+            .store
+            .claim_run_for_task(RunRecord::new(
+                RunId::generate(),
+                task_id.clone(),
+                session_id.clone(),
+            ))
+            .expect("claim run");
+        let _ = service
+            .store
+            .request_run_cancellation(
+                &run.run_id,
+                CanonicalEventSource::Nucleus,
+                Utc::now() + ChronoDuration::seconds(30),
+            )
+            .expect("request cancel");
+
+        let thread_id = service
+            .store
+            .inspect_session(&session_id)
+            .expect("inspect session")
+            .expect("session exists")
+            .app_server_thread_id
+            .expect("thread id");
+        service.spawn_run_execution(
+            runtime.as_ref(),
+            RunTurnSpec {
+                run_id: run.run_id.clone(),
+                task_id: Some(task_id.clone()),
+                worker_id,
+                session_id: session_id.clone(),
+                profile: ProfileName::new("america").expect("profile"),
+                thread_id,
+                timeout_seconds: None,
+                input: vec![RunInputItem::Text { text: "skip execute".to_owned() }],
+            },
+        );
+
+        wait_for_task_status(&service, task_id.as_str(), TaskStatus::Cancelled);
+        assert_eq!(runtime.execute_call_count(), 0);
+    }
+
+    #[test]
+    fn stale_terminal_runtime_events_do_not_override_cancelled_task_and_run() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let task_id = TaskId::generate();
+        let session_id = SessionId::generate();
+        let worker_id = WorkerId::generate();
+        let run_id = RunId::generate();
+
+        let mut task =
+            TaskRecord::new(task_id.clone(), TaskSource::System, "idempotent terminal", "test");
+        task.profile = Some(ProfileName::new("america").expect("profile"));
+        task.session_id = Some(session_id.clone());
+        write_json_atomic(&service.store.paths().task_path(&task_id), &task).expect("write task");
+
+        let mut session = SessionRecord::new(session_id.clone(), worker_id.clone());
+        session.profile = Some(ProfileName::new("america").expect("profile"));
+        session.transition_to(SessionLifecycleState::Ready).expect("opening -> ready");
+        session.app_server_thread_id = Some("thread-1".to_owned());
+        service.store.write_session_projection_locked(&session).expect("write session");
+
+        let run = service
+            .store
+            .claim_run_for_task(RunRecord::new(run_id.clone(), task_id.clone(), session_id.clone()))
+            .expect("claim run");
+
+        let cancelled = CanonicalEventDraft {
+            event_type: CanonicalEventType::RunCancelled,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: Some(task_id.clone()),
+                worker_id: Some(worker_id.clone()),
+                session_id: Some(session_id.clone()),
+                run_id: Some(run.run_id.clone()),
+                profile: Some(ProfileName::new("america").expect("profile")),
+                payload: json!({ "message": "cancelled first" }),
+            },
+        };
+        service.store.apply_runtime_event(cancelled).expect("apply cancelled");
+
+        let completed = CanonicalEventDraft {
+            event_type: CanonicalEventType::RunCompleted,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: Some(task_id.clone()),
+                worker_id: Some(worker_id),
+                session_id: Some(session_id.clone()),
+                run_id: Some(run_id.clone()),
+                profile: Some(ProfileName::new("america").expect("profile")),
+                payload: json!({ "final_output": "late completed event" }),
+            },
+        };
+        service.store.apply_runtime_event(completed).expect("apply stale completed");
+
+        let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        let task = service.store.inspect_task(&task_id).expect("inspect task").expect("task");
+        assert_eq!(task.status, TaskStatus::Cancelled);
+    }
+
+    #[test]
+    fn explicit_requires_fort_overrides_legacy_text_heuristic() {
+        let mut task =
+            TaskRecord::new(TaskId::generate(), TaskSource::System, "mentions si fort", "noop");
+        task.requires_fort = Some(false);
+        assert!(!super::task_requires_fort(&task, Some("please run si fort status")));
+
+        task.requires_fort = Some(true);
+        assert!(super::task_requires_fort(&task, Some("no keyword here")));
+    }
+
+    #[tokio::test]
+    async fn failed_worker_does_not_block_new_slot_capacity_for_same_profile() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = Arc::new(FakeRuntime::default());
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            runtime.clone(),
+        )
+        .expect("service");
+
+        let first = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-capacity-primary"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "worker_slot": "primary",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(first.ok);
+        let first_worker = WorkerId::new(
+            first
+                .result
+                .as_ref()
+                .and_then(|item| item["worker"]["worker_id"].as_str())
+                .expect("worker id")
+                .to_owned(),
+        )
+        .expect("worker id");
+
+        runtime.stop_worker(&first_worker).expect("stop worker");
+        let _ = service
+            .store
+            .mark_worker_failed(&first_worker, "simulate failed worker")
+            .expect("mark failed");
+
+        let second = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-capacity-parallel"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "worker_slot": "parallel-2",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america/workers/parallel-2"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(second.ok);
+        let workers = service.store.list_workers().expect("workers");
+        assert_eq!(workers.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn reconcile_cancels_overdue_run_cancellation_requests() {
+        let temp = tempdir().expect("tempdir");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-overdue-cancel"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": temp.path().join("home/.si/codex/profiles/america"),
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+        let session_id = SessionId::new(
+            session
+                .result
+                .as_ref()
+                .and_then(|item| item["session"]["session_id"].as_str())
+                .expect("session id")
+                .to_owned(),
+        )
+        .expect("session id");
+
+        let task = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-overdue-cancel"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Overdue cancel run",
+                    "instructions": "Reconcile overdue cancellation request",
+                    "profile": "america",
+                    "session_id": session_id.as_str(),
+                }),
+            })
+            .await;
+        assert!(task.ok);
+        let task_id = TaskId::new(
+            task.result
+                .as_ref()
+                .and_then(|item| item["task_id"].as_str())
+                .expect("task id")
+                .to_owned(),
+        )
+        .expect("task id");
+
+        let mut run = service
+            .store
+            .claim_run_for_task(RunRecord::new(
+                RunId::generate(),
+                task_id.clone(),
+                session_id.clone(),
+            ))
+            .expect("claim run");
+        run.cancel_requested_at = Some(Utc::now() - ChronoDuration::seconds(60));
+        run.cancel_request_source = Some("nucleus".to_owned());
+        run.cancel_deadline_at = Some(Utc::now() - ChronoDuration::seconds(30));
+        service.store.write_run_projection_locked(&run, None).expect("persist overdue cancel");
+
+        service.reconcile_inflight_runs(false).expect("reconcile inflight runs");
+
+        let run = service.store.inspect_run(&run.run_id).expect("inspect run").expect("run");
+        assert_eq!(run.status, RunStatus::Cancelled);
+        let task = service.store.inspect_task(&task_id).expect("inspect task").expect("task");
+        assert_eq!(task.status, TaskStatus::Cancelled);
     }
 }
