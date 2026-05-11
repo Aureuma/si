@@ -603,6 +603,8 @@ enum NucleusTaskCommand {
         endpoint: Option<String>,
         #[arg(long)]
         profile: Option<String>,
+        #[arg(long)]
+        requires_fort: Option<bool>,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
@@ -17854,6 +17856,7 @@ fn run_nucleus_task_create(
     title: String,
     instructions: String,
     profile: Option<String>,
+    requires_fort: Option<bool>,
     format: OutputFormat,
 ) -> Result<()> {
     let payload = run_nucleus_gateway_request(
@@ -17863,6 +17866,7 @@ fn run_nucleus_task_create(
             "title": title,
             "instructions": instructions,
             "profile": profile,
+            "requires_fort": requires_fort,
         }),
     )?;
     print_nucleus_output(format, &payload)
@@ -35961,9 +35965,21 @@ fn main() -> Result<()> {
                 }
             },
             NucleusCommand::Task { command } => match command {
-                NucleusTaskCommand::Create { title, instructions, endpoint, profile, format } => {
-                    run_nucleus_task_create(endpoint, title, instructions, profile, format)?
-                }
+                NucleusTaskCommand::Create {
+                    title,
+                    instructions,
+                    endpoint,
+                    profile,
+                    requires_fort,
+                    format,
+                } => run_nucleus_task_create(
+                    endpoint,
+                    title,
+                    instructions,
+                    profile,
+                    requires_fort,
+                    format,
+                )?,
                 NucleusTaskCommand::List { endpoint, format } => {
                     run_nucleus_task_list(endpoint, format)?
                 }

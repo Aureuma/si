@@ -16583,7 +16583,7 @@ mod tests {
             source: CanonicalEventSource::System,
             data: EventDataEnvelope {
                 task_id: Some(task_id.clone()),
-                worker_id: Some(worker_id),
+                worker_id: Some(worker_id.clone()),
                 session_id: Some(session_id.clone()),
                 run_id: Some(run_id.clone()),
                 profile: Some(ProfileName::new("america").expect("profile")),
@@ -16591,6 +16591,34 @@ mod tests {
             },
         };
         service.store.apply_runtime_event(completed).expect("apply stale completed");
+
+        let failed = CanonicalEventDraft {
+            event_type: CanonicalEventType::RunFailed,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: Some(task_id.clone()),
+                worker_id: Some(worker_id.clone()),
+                session_id: Some(session_id.clone()),
+                run_id: Some(run_id.clone()),
+                profile: Some(ProfileName::new("america").expect("profile")),
+                payload: json!({ "error": "late failed event" }),
+            },
+        };
+        service.store.apply_runtime_event(failed).expect("apply stale failed");
+
+        let duplicate_cancelled = CanonicalEventDraft {
+            event_type: CanonicalEventType::RunCancelled,
+            source: CanonicalEventSource::System,
+            data: EventDataEnvelope {
+                task_id: Some(task_id.clone()),
+                worker_id: Some(worker_id),
+                session_id: Some(session_id.clone()),
+                run_id: Some(run_id.clone()),
+                profile: Some(ProfileName::new("america").expect("profile")),
+                payload: json!({ "message": "duplicate cancelled" }),
+            },
+        };
+        service.store.apply_runtime_event(duplicate_cancelled).expect("apply duplicate cancelled");
 
         let run = service.store.inspect_run(&run_id).expect("inspect run").expect("run");
         assert_eq!(run.status, RunStatus::Cancelled);
