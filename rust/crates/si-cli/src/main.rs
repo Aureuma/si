@@ -18889,6 +18889,7 @@ struct CodexListEntryView {
     profile_id: String,
     worker_slot: String,
     session_name: String,
+    tmux_window_name: String,
     state: String,
     workspace: String,
     workdir: String,
@@ -41718,11 +41719,13 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     header.push(
         Cell::new("Email").fg(cli_table_color(CliTone::Label)).add_attribute(Attribute::Bold),
     );
-    header.push(Cell::new("5H").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold));
-    header
-        .push(Cell::new("Weekly").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold));
+    header.push(
+        Cell::new("5H").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
+    );
+    header.push(
+        Cell::new("Weekly").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
+    );
     table.set_header(header);
-
     let mut constraints = Vec::new();
     if include_index {
         constraints.push(ColumnConstraint::Absolute(Width::Fixed(3)));
@@ -42090,7 +42093,10 @@ fn clear_codex_profile_live_status(view: &mut CodexProfileView) {
 }
 
 fn codex_status_has_live_quota(status: &CodexStatusView) -> bool {
-    status.five_hour_left_pct.is_some() && status.weekly_left_pct.is_some()
+    status.five_hour_left_pct.is_some()
+        || status.weekly_left_pct.is_some()
+        || status.five_hour_remaining_minutes.is_some()
+        || status.weekly_remaining_minutes.is_some()
 }
 
 fn resolve_codex_profile_live_view(
@@ -71686,7 +71692,7 @@ fn ensure_codex_worker_session(
         kill_tmux_session_if_present(tmux_bin, &tmux_term, &session_name);
     }
     if !tmux_session_exists(tmux_bin, &tmux_term, &session_name)? {
-        let window_name = codex_tmux_window_name(profile_id, profile_name.as_deref());
+        let window_name = codex_tmux_window_name(profile_id, profile_name.as_deref(), &worker_slot);
         let launch_command = build_codex_launch_command(
             home,
             &prepared.codex_home,
@@ -72012,10 +72018,16 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
                 Ok(false) => "stopped",
                 Err(_) => "unknown",
             };
+            let tmux_window_name = codex_tmux_window_name(
+                &item.profile_id,
+                item.profile_name.as_deref(),
+                &item.worker_slot,
+            );
             CodexListEntryView {
                 profile_id: item.profile_id,
                 worker_slot: item.worker_slot,
                 session_name: item.session_name,
+                tmux_window_name,
                 state: state.to_owned(),
                 workspace: item.workspace,
                 workdir: item.workdir,
@@ -72028,24 +72040,45 @@ fn run_codex_list(format: OutputFormat) -> Result<()> {
             if items.is_empty() {
                 println!("no codex worker sessions found");
             } else {
-                for item in items {
-                    println!(
-                        "{}\tslot={}\tstate={}\tsession={}\tworkspace={}\tworkdir={}",
-                        stdout_text(&item.profile_id, CliTone::Command),
-                        stdout_text(&item.worker_slot, CliTone::Label),
-                        stdout_text(
-                            &item.state,
-                            if item.state == "running" {
-                                CliTone::Success
-                            } else {
-                                CliTone::Warning
-                            },
-                        ),
-                        stdout_text(&item.session_name, CliTone::Info),
-                        item.workspace,
-                        item.workdir,
-                    );
+                let mut table = Table::new();
+                table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS)
+                    .set_content_arrangement(ContentArrangement::Dynamic)
+                    .set_truncation_indicator("…");
+                if let Some(width) = env::var("COLUMNS")
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u16>().ok())
+                    .filter(|width| *width > 20)
+                {
+                    table.set_width(width);
                 }
+                table.set_header(vec![
+                    Cell::new("Profile")
+                        .fg(cli_table_color(CliTone::Section))
+                        .add_attribute(Attribute::Bold),
+                    Cell::new("Slot")
+                        .fg(cli_table_color(CliTone::Label))
+                        .add_attribute(Attribute::Bold),
+                    Cell::new("State")
+                        .fg(cli_table_color(CliTone::Success))
+                        .add_attribute(Attribute::Bold),
+                ]);
+                table.set_constraints(vec![
+                    ColumnConstraint::UpperBoundary(Width::Fixed(24)),
+                    ColumnConstraint::UpperBoundary(Width::Fixed(20)),
+                    ColumnConstraint::Absolute(Width::Fixed(12)),
+                ]);
+                for item in items {
+                    let state_tone =
+                        if item.state == "running" { CliTone::Success } else { CliTone::Warning };
+                    table.add_row(vec![
+                        Cell::new(item.profile_id).fg(cli_table_color(CliTone::Section)),
+                        Cell::new(item.worker_slot).fg(cli_table_color(CliTone::Label)),
+                        Cell::new(item.state).fg(cli_table_color(state_tone)),
+                    ]);
+                }
+                println!("{table}");
             }
         }
     }
@@ -72060,49 +72093,61 @@ fn run_local_codex_app_server_status(
     profile_id: &str,
     worker_slot: &str,
 ) -> Result<CodexStatusView> {
-    let mut child = StdCommand::new("codex")
-        .arg("app-server")
-        .current_dir(workdir)
-        .env("HOME", home)
-        .env("CODEX_HOME", codex_home)
-        .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
-        .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
-        .env("SI_CODEX_PROFILE", profile_id)
-        .env("SI_CODEX_WORKER_SLOT", worker_slot)
-        .env("TERM", "xterm-256color")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .context("run codex app-server")?;
-    {
-        let stdin =
-            child.stdin.as_mut().ok_or_else(|| anyhow!("missing codex app-server stdin"))?;
-        stdin
-            .write_all(&build_app_server_status_input(Some(workdir.display().to_string())))
-            .context("write codex app-server input")?;
-    }
-    let output = child.wait_with_output().context("wait for codex app-server")?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let mut combined = stdout.trim().to_owned();
-    if !stderr.trim().is_empty() {
-        if !combined.is_empty() {
-            combined.push('\n');
+    let probe = |stdin_grace: Duration| -> Result<CodexStatusView> {
+        let mut child = StdCommand::new("codex")
+            .arg("--dangerously-bypass-approvals-and-sandbox")
+            .arg("app-server")
+            .current_dir(workdir)
+            .env("HOME", home)
+            .env("CODEX_HOME", codex_home)
+            .env("FORT_TOKEN_PATH", &fort_paths.access_token_path)
+            .env("FORT_REFRESH_TOKEN_PATH", &fort_paths.refresh_token_path)
+            .env("SI_CODEX_PROFILE", profile_id)
+            .env("SI_CODEX_WORKER_SLOT", worker_slot)
+            .env("TERM", "xterm-256color")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .context("run codex app-server")?;
+        {
+            let stdin =
+                child.stdin.as_mut().ok_or_else(|| anyhow!("missing codex app-server stdin"))?;
+            stdin
+                .write_all(&build_app_server_status_input(Some(workdir.display().to_string())))
+                .context("write codex app-server input")?;
+            stdin.flush().context("flush codex app-server input")?;
+            if !stdin_grace.is_zero() {
+                thread::sleep(stdin_grace);
+            }
         }
-        combined.push_str(stderr.trim());
+        let output = child.wait_with_output().context("wait for codex app-server")?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut combined = stdout.trim().to_owned();
+        if !stderr.trim().is_empty() {
+            if !combined.is_empty() {
+                combined.push('\n');
+            }
+            combined.push_str(stderr.trim());
+        }
+        if !output.status.success() {
+            anyhow::bail!(if combined.is_empty() {
+                "codex app-server failed".to_owned()
+            } else {
+                combined
+            });
+        }
+        parse_app_server_status(&combined).map(|mut status| {
+            status.raw = Some(combined);
+            status
+        })
+    };
+
+    match probe(Duration::ZERO) {
+        Ok(status) => Ok(status),
+        Err(_) => probe(Duration::from_secs(3)),
     }
-    if !output.status.success() {
-        anyhow::bail!(if combined.is_empty() {
-            "codex app-server failed".to_owned()
-        } else {
-            combined
-        });
-    }
-    parse_app_server_status(&combined).map(|mut status| {
-        status.raw = Some(combined);
-        status
-    })
 }
 
 fn read_codex_status_for_profile(
@@ -72524,7 +72569,8 @@ fn run_codex_tmux_command(
         resolve_codex_worker_for_profile(profile, worker_slot, "tmux", Some(home.clone()), None)?;
     let profile_display_name = target.profile_name.as_deref();
     let session_name = target.session_name.clone();
-    let window_name = codex_tmux_window_name(&target.profile_id, profile_display_name);
+    let window_name =
+        codex_tmux_window_name(&target.profile_id, profile_display_name, &target.worker_slot);
     let view = CodexTmuxCommandView {
         profile_id: target.profile_id.clone(),
         worker_slot: target.worker_slot.clone(),
@@ -72610,10 +72656,31 @@ fn sanitize_codex_tmux_profile_label(raw: &str) -> Option<String> {
     if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
 }
 
-fn codex_tmux_window_name(profile_id: &str, profile_display_name: Option<&str>) -> String {
-    profile_display_name
+fn codex_repo_emoji_for_slot(worker_slot: &str) -> Option<&'static str> {
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    match slot.as_str() {
+        "si" => Some("⚛️"),
+        "si-nucleus" => Some("⚛️"),
+        "lingospeak" => Some("💬"),
+        "releasemind" => Some("🧠"),
+        _ => None,
+    }
+}
+
+fn codex_tmux_window_name(
+    profile_id: &str,
+    profile_display_name: Option<&str>,
+    worker_slot: &str,
+) -> String {
+    let profile_label = profile_display_name
         .and_then(sanitize_codex_tmux_profile_label)
-        .unwrap_or_else(|| profile_id.trim().to_owned())
+        .unwrap_or_else(|| profile_id.trim().to_owned());
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    if let Some(emoji) = codex_repo_emoji_for_slot(&slot) {
+        format!("{profile_label} {emoji} [{slot}]")
+    } else {
+        format!("{profile_label} [{slot}]")
+    }
 }
 
 fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> Result<bool> {
@@ -72892,6 +72959,57 @@ mod tests {
         assert!(!command.contains("TERM=xterm-256color"));
         assert!(!command.contains("COLUMNS=160"));
         assert!(!command.contains("LINES=60"));
+    }
+
+    #[test]
+    fn codex_tmux_window_name_includes_profile_and_slot() {
+        assert_eq!(
+            codex_tmux_window_name("america", Some("Ada Lovelace"), "primary"),
+            "Ada Lovelace [primary]"
+        );
+        assert_eq!(codex_tmux_window_name("america", None, "review"), "america [review]");
+        assert_eq!(codex_tmux_window_name("america", Some("America"), "si"), "America ⚛️ [si]");
+        assert_eq!(
+            codex_tmux_window_name("america", Some("America"), "lingospeak"),
+            "America 💬 [lingospeak]"
+        );
+        assert_eq!(
+            codex_tmux_window_name("america", Some("America"), "releasemind"),
+            "America 🧠 [releasemind]"
+        );
+        assert_eq!(
+            codex_tmux_window_name("america", Some("America"), "si-nucleus"),
+            "America ⚛️ [si-nucleus]"
+        );
+    }
+
+    #[test]
+    fn codex_tmux_window_name_sanitizes_profile_label_and_normalizes_slot() {
+        assert_eq!(
+            codex_tmux_window_name("america", Some(" Ada :\nLovelace  "), " ReView "),
+            "Ada Lovelace [review]"
+        );
+    }
+
+    #[test]
+    fn format_relative_minutes_compact_renders_compact_relative_values() {
+        assert_eq!(format_relative_minutes_compact(0), "now");
+        assert_eq!(format_relative_minutes_compact(45), "in 45m");
+        assert_eq!(format_relative_minutes_compact(120), "in 2h");
+        assert_eq!(format_relative_minutes_compact(185), "in 3h5m");
+        assert_eq!(format_relative_minutes_compact(60 * 24), "in 1d");
+        assert_eq!(format_relative_minutes_compact((60 * 24) + 130), "in 1d2h");
+    }
+
+    #[test]
+    fn render_codex_quota_cell_marks_missing_auth_and_formats_quota() {
+        let missing = render_codex_quota_cell(Some(80.0), Some(30), true);
+        assert_eq!(missing.0, "Missing");
+        assert_eq!(missing.1, cli_table_color(CliTone::Warning));
+
+        let low = render_codex_quota_cell(Some(19.9), Some(75), false);
+        assert_eq!(low.0, "19.9% · in 1h15m");
+        assert_eq!(low.1, cli_table_color(CliTone::Command));
     }
 
     #[test]
