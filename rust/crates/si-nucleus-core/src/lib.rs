@@ -297,6 +297,8 @@ pub struct TaskRecord {
     #[serde(default)]
     pub session_binding_locked: bool,
     pub timeout_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requires_fort: Option<bool>,
 }
 
 impl TaskRecord {
@@ -329,6 +331,7 @@ impl TaskRecord {
             max_retries: None,
             session_binding_locked: false,
             timeout_seconds: None,
+            requires_fort: None,
         }
     }
 
@@ -438,6 +441,12 @@ pub struct RunRecord {
     pub ended_at: Option<DateTime<Utc>>,
     pub parent_run_id: Option<RunId>,
     pub app_server_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_requested_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_request_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_deadline_at: Option<DateTime<Utc>>,
 }
 
 impl RunRecord {
@@ -451,6 +460,9 @@ impl RunRecord {
             ended_at: None,
             parent_run_id: None,
             app_server_turn_id: None,
+            cancel_requested_at: None,
+            cancel_request_source: None,
+            cancel_deadline_at: None,
         }
     }
 
