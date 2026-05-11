@@ -15,6 +15,21 @@ It owns:
 - the bounded REST inspection/mutation surface
 - OS-native user-service install helpers
 
+## Architecture Principles
+
+Nucleus is implemented and operated under these stable architecture constraints:
+
+1. one canonical domain model: `task`, `worker`, `session`, `run`, `event`, and `profile` are the only orchestration primitives.
+2. one canonical event ledger: all sources are normalized into the same canonical `events.jsonl` stream before durable append.
+3. task-first orchestration: producer-created work and operator-created work are the same durable `task` object, not separate job systems.
+4. session-affine backlog: tasks bound to the same `session_id` execute in stable backlog order without overlapping turns.
+5. runtime boundary isolation: `si-nucleus` depends on runtime traits and canonical event drafts; Codex-specific behavior lives in `si-nucleus-runtime-codex`.
+6. App Server as substrate: worker/session/run behavior maps to `codex app-server` lifecycle and turn semantics, not to ad hoc wrappers.
+7. explicit blocked state: capacity/auth/runtime failures project to stable blocked reasons (`worker_unavailable`, `auth_required`, `fort_unavailable`, `session_broken`, `profile_unavailable`) instead of silent queue stalls.
+8. durability before convenience: JSON objects are canonical state, JSONL is ordered append state, Markdown files are operator-facing projections only.
+9. bounded external contract: REST and OpenAPI are generated from Nucleus canonical model and route through the same internal request paths as WebSocket/CLI.
+10. local-first service model: Nucleus runs as an OS-native user service by default; public exposure is explicit and opt-in.
+
 ## Main CLI surfaces
 
 Use `si nucleus ...` for control-plane operations:
