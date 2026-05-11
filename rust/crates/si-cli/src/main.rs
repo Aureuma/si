@@ -18857,6 +18857,8 @@ struct CodexProfileView {
     weekly_reset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_remaining_minutes: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quota_sampled_at: Option<DateTime<Utc>>,
     auth_path: Option<String>,
     auth_updated: Option<String>,
 }
@@ -41690,6 +41692,7 @@ fn codex_profile_email_table_value(email: Option<&str>) -> String {
 }
 
 fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
+    let snapshot_now = Utc::now();
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -41754,12 +41757,16 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
         let five_hour = render_codex_quota_cell(
             profile.five_hour_left_pct,
             profile.five_hour_remaining_minutes,
+            profile.quota_sampled_at.as_ref(),
+            snapshot_now,
             missing_auth,
         );
         row.push(Cell::new(five_hour.0).fg(five_hour.1));
         let weekly = render_codex_quota_cell(
             profile.weekly_left_pct,
             profile.weekly_remaining_minutes,
+            profile.quota_sampled_at.as_ref(),
+            snapshot_now,
             missing_auth,
         );
         row.push(Cell::new(weekly.0).fg(weekly.1));
@@ -41814,6 +41821,8 @@ fn codex_quota_color(pct: Option<f64>, missing_auth: bool) -> Color {
 fn render_codex_quota_cell(
     pct: Option<f64>,
     remaining_minutes: Option<i32>,
+    sampled_at: Option<&DateTime<Utc>>,
+    snapshot_now: DateTime<Utc>,
     missing_auth: bool,
 ) -> (String, Color) {
     if missing_auth {
@@ -41821,10 +41830,26 @@ fn render_codex_quota_cell(
     }
     let mut text = render_option_percent_value(pct);
     if let Some(minutes) = remaining_minutes {
+        let minutes = normalize_quota_remaining_minutes(minutes, sampled_at, snapshot_now);
         text.push_str(" · ");
         text.push_str(&format_relative_minutes_compact(minutes));
     }
     (text, codex_quota_color(pct, false))
+}
+
+fn normalize_quota_remaining_minutes(
+    remaining_minutes: i32,
+    sampled_at: Option<&DateTime<Utc>>,
+    snapshot_now: DateTime<Utc>,
+) -> i32 {
+    let Some(sampled_at) = sampled_at else {
+        return remaining_minutes;
+    };
+    let elapsed = snapshot_now.signed_duration_since(*sampled_at).num_minutes();
+    if elapsed <= 0 {
+        return remaining_minutes;
+    }
+    remaining_minutes.saturating_sub(elapsed as i32)
 }
 
 fn codex_profile_prompt_available() -> bool {
@@ -42063,6 +42088,7 @@ fn codex_profile_view(
         weekly_left_pct: None,
         weekly_reset: None,
         weekly_remaining_minutes: None,
+        quota_sampled_at: None,
         auth_path: Some(auth_path),
         auth_updated: entry.auth_updated.clone(),
     }
@@ -42080,6 +42106,7 @@ fn apply_codex_status_to_profile(view: &mut CodexProfileView, status: &CodexStat
     view.weekly_left_pct = status.weekly_left_pct;
     view.weekly_reset = status.weekly_reset.clone();
     view.weekly_remaining_minutes = status.weekly_remaining_minutes;
+    view.quota_sampled_at = Some(Utc::now());
 }
 
 fn clear_codex_profile_live_status(view: &mut CodexProfileView) {
@@ -42090,6 +42117,7 @@ fn clear_codex_profile_live_status(view: &mut CodexProfileView) {
     view.weekly_left_pct = None;
     view.weekly_reset = None;
     view.weekly_remaining_minutes = None;
+    view.quota_sampled_at = None;
 }
 
 fn codex_status_has_live_quota(status: &CodexStatusView) -> bool {
@@ -42105,20 +42133,33 @@ fn resolve_codex_profile_live_view(
     paths: SiPaths,
     settings: Settings,
 ) -> CodexProfileView {
-    match read_codex_status_for_profile(
-        profile.profile.as_str(),
-        &home,
-        &paths,
-        &settings,
-        None,
-        false,
-    ) {
-        Ok(status) if codex_status_has_live_quota(&status) => {
-            apply_codex_status_to_profile(&mut profile, &status);
+    let mut last_status: Option<CodexStatusView> = None;
+    for wait_ms in [0_u64, 250, 1000] {
+        if wait_ms > 0 {
+            thread::sleep(Duration::from_millis(wait_ms));
         }
-        _ => {
-            clear_codex_profile_live_status(&mut profile);
+        match read_codex_status_for_profile(
+            profile.profile.as_str(),
+            &home,
+            &paths,
+            &settings,
+            None,
+            false,
+        ) {
+            Ok(status) if codex_status_has_live_quota(&status) => {
+                apply_codex_status_to_profile(&mut profile, &status);
+                return profile;
+            }
+            Ok(status) => {
+                last_status = Some(status);
+            }
+            Err(_) => {}
         }
+    }
+    if let Some(status) = last_status {
+        apply_codex_status_to_profile(&mut profile, &status);
+    } else {
+        clear_codex_profile_live_status(&mut profile);
     }
     profile
 }
@@ -73003,11 +73044,12 @@ mod tests {
 
     #[test]
     fn render_codex_quota_cell_marks_missing_auth_and_formats_quota() {
-        let missing = render_codex_quota_cell(Some(80.0), Some(30), true);
+        let now = Utc::now();
+        let missing = render_codex_quota_cell(Some(80.0), Some(30), None, now, true);
         assert_eq!(missing.0, "Missing");
         assert_eq!(missing.1, cli_table_color(CliTone::Warning));
 
-        let low = render_codex_quota_cell(Some(19.9), Some(75), false);
+        let low = render_codex_quota_cell(Some(19.9), Some(75), None, now, false);
         assert_eq!(low.0, "19.9% · in 1h15m");
         assert_eq!(low.1, cli_table_color(CliTone::Command));
     }
