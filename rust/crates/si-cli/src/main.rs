@@ -42164,6 +42164,13 @@ fn resolve_codex_profile_live_view(
     profile
 }
 
+fn codex_profile_has_live_quota(profile: &CodexProfileView) -> bool {
+    profile.five_hour_left_pct.is_some()
+        || profile.weekly_left_pct.is_some()
+        || profile.five_hour_remaining_minutes.is_some()
+        || profile.weekly_remaining_minutes.is_some()
+}
+
 fn enrich_codex_profiles_with_live_status(
     profiles: Vec<CodexProfileView>,
     home: &Path,
@@ -42184,31 +42191,47 @@ fn enrich_codex_profiles_with_live_status_parallel(
     let home = home.to_path_buf();
     let paths = paths.clone();
     let settings = settings.clone();
-    thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(profiles.len());
-        for (index, profile) in profiles.into_iter().enumerate() {
-            let home = home.clone();
-            let paths = paths.clone();
-            let settings = settings.clone();
-            let progress = progress.clone();
-            handles.push(scope.spawn(move || {
-                let resolved = resolve_codex_profile_live_view(profile, home, paths, settings);
-                if let Some(progress) = progress {
-                    progress.fetch_add(1, Ordering::Relaxed);
-                }
-                (index, resolved)
-            }));
-        }
-
-        let mut ordered = Vec::with_capacity(handles.len());
-        for handle in handles {
-            if let Ok(item) = handle.join() {
-                ordered.push(item);
+    let max_parallel = 2usize;
+    let mut pending = profiles.into_iter().enumerate().collect::<Vec<_>>();
+    let mut ordered = Vec::with_capacity(pending.len());
+    while !pending.is_empty() {
+        let batch_size = pending.len().min(max_parallel);
+        let batch = pending.drain(..batch_size).collect::<Vec<_>>();
+        thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(batch.len());
+            for (index, profile) in batch {
+                let home = home.clone();
+                let paths = paths.clone();
+                let settings = settings.clone();
+                let progress = progress.clone();
+                handles.push(scope.spawn(move || {
+                    let resolved = resolve_codex_profile_live_view(profile, home, paths, settings);
+                    if let Some(progress) = progress {
+                        progress.fetch_add(1, Ordering::Relaxed);
+                    }
+                    (index, resolved)
+                }));
             }
+            for handle in handles {
+                if let Ok(item) = handle.join() {
+                    ordered.push(item);
+                }
+            }
+        });
+    }
+    ordered.sort_by_key(|(index, _)| *index);
+    let mut profiles = ordered.into_iter().map(|(_, profile)| profile).collect::<Vec<_>>();
+    for profile in &mut profiles {
+        if profile.state == "Logged-In" && !codex_profile_has_live_quota(profile) {
+            *profile = resolve_codex_profile_live_view(
+                profile.clone(),
+                home.clone(),
+                paths.clone(),
+                settings.clone(),
+            );
         }
-        ordered.sort_by_key(|(index, _)| *index);
-        ordered.into_iter().map(|(_, profile)| profile).collect()
-    })
+    }
+    profiles
 }
 
 fn show_codex_profile_list(
