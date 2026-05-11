@@ -159,8 +159,17 @@ Worker slot notes:
 5. profile worker-pool size defaults to one worker and can be increased with:
    - `SI_NUCLEUS_PROFILE_MAX_WORKERS=<n>` for all profiles.
    - `SI_NUCLEUS_PROFILE_MAX_WORKERS_<PROFILE>=<n>` for one profile, where `<PROFILE>` is uppercased and `-` becomes `_`.
+6. failed or stopped workers with no active runs do not consume profile worker-capacity slots; Nucleus can create a replacement worker for that profile without manual retirement of the stale record.
 
 When Nucleus selects a candidate, it writes that profile back to the task record so later inspection shows which profile actually owns execution.
+
+Fort requirement notes:
+
+1. `task.create` accepts `requires_fort` as explicit capability metadata.
+2. `requires_fort: true` forces Fort preflight before run dispatch.
+3. `requires_fort: false` disables Fort preflight even when instructions mention Fort.
+4. `requires_fort: null` keeps legacy compatibility mode where Nucleus may infer Fort usage from task text containing `si fort`.
+5. when legacy inference is used, Nucleus emits a `system.warning` canonical event so operators can migrate callers to explicit `requires_fort`.
 
 ## External Task Failure Modes
 

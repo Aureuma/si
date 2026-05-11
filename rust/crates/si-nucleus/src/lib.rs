@@ -2197,6 +2197,10 @@ fn task_requires_fort(task: &TaskRecord, prompt_override: Option<&str>) -> bool 
     if let Some(requires_fort) = task.requires_fort {
         return requires_fort;
     }
+    legacy_fort_heuristic_matches(task, prompt_override)
+}
+
+fn legacy_fort_heuristic_matches(task: &TaskRecord, prompt_override: Option<&str>) -> bool {
     let mut combined = String::with_capacity(
         task.title.len() + task.instructions.len() + prompt_override.unwrap_or_default().len() + 2,
     );
@@ -2889,6 +2893,7 @@ pub struct NucleusService {
     dispatch_claim_lock: Arc<Mutex<()>>,
     worker_restart_state: Arc<Mutex<HashMap<WorkerId, WorkerRestartState>>>,
     background_warning_state: Arc<Mutex<BackgroundWarningState>>,
+    legacy_fort_warning_emitted: Arc<Mutex<HashSet<TaskId>>>,
 }
 
 impl NucleusService {
@@ -2908,6 +2913,7 @@ impl NucleusService {
             dispatch_claim_lock: Arc::new(Mutex::new(())),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
             background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
+            legacy_fort_warning_emitted: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -2926,6 +2932,7 @@ impl NucleusService {
             dispatch_claim_lock: Arc::new(Mutex::new(())),
             worker_restart_state: Arc::new(Mutex::new(HashMap::new())),
             background_warning_state: Arc::new(Mutex::new(BackgroundWarningState::default())),
+            legacy_fort_warning_emitted: Arc::new(Mutex::new(HashSet::new())),
         })
     }
 
@@ -3742,6 +3749,7 @@ impl NucleusService {
         profile: &ProfileName,
         prompt_override: Option<&str>,
     ) -> Result<Option<String>> {
+        self.maybe_emit_legacy_fort_requirement_warning(task, profile, prompt_override);
         let Some((state, message, payload)) =
             classify_fort_requirement(task, worker, profile, prompt_override)?
         else {
@@ -3777,6 +3785,34 @@ impl NucleusService {
         }
 
         Ok(None)
+    }
+
+    fn maybe_emit_legacy_fort_requirement_warning(
+        &self,
+        task: &TaskRecord,
+        profile: &ProfileName,
+        prompt_override: Option<&str>,
+    ) {
+        if task.requires_fort.is_some() || !legacy_fort_heuristic_matches(task, prompt_override) {
+            return;
+        }
+        let Ok(mut emitted) = self.legacy_fort_warning_emitted.lock() else {
+            return;
+        };
+        if !emitted.insert(task.task_id.clone()) {
+            return;
+        }
+        drop(emitted);
+        if let Ok(event) = self.store.append_system_warning(
+            "task Fort requirement inferred from legacy text heuristic; set requires_fort explicitly",
+            json!({
+                "task_id": task.task_id.as_str(),
+                "profile": profile.as_str(),
+                "task_title": task.title.as_str(),
+            }),
+        ) {
+            let _ = self.events.send(event);
+        }
     }
 
     fn ensure_dispatch_session(
@@ -15976,6 +16012,65 @@ mod tests {
         assert!(
             events.iter().any(|event| event.event_type == CanonicalEventType::FortAuthRequired)
         );
+    }
+
+    #[tokio::test]
+    async fn legacy_fort_heuristic_emits_single_system_warning() {
+        let temp = tempdir().expect("tempdir");
+        let codex_home = temp.path().join("home/.si/codex/profiles/america");
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(FakeRuntime::default()),
+        )
+        .expect("service");
+
+        let created = service
+            .dispatch_request(GatewayRequest {
+                id: json!("task-fort-legacy-warning"),
+                method: "task.create".to_owned(),
+                params: json!({
+                    "title": "Legacy Fort hint",
+                    "instructions": "Use si fort status before continuing",
+                    "profile": "america",
+                }),
+            })
+            .await;
+        assert!(created.ok);
+        let task_id =
+            created.result.as_ref().and_then(|task| task["task_id"].as_str()).expect("task id");
+
+        let session = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-fort-legacy-warning"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "home_dir": temp.path().join("home"),
+                    "codex_home": codex_home,
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(session.ok);
+
+        service.reconcile_and_dispatch_once().expect("dispatch first attempt");
+        service.reconcile_and_dispatch_once().expect("dispatch second attempt");
+
+        let warning_message = "task Fort requirement inferred from legacy text heuristic; set requires_fort explicitly";
+        let warnings = load_canonical_events(&service.store.paths().events_path)
+            .expect("load events")
+            .into_iter()
+            .filter(|event| {
+                event.event_type == CanonicalEventType::SystemWarning
+                    && event.data.payload["message"] == json!(warning_message)
+                    && event.data.payload["details"]["task_id"] == json!(task_id)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(warnings.len(), 1);
     }
 
     #[tokio::test]
