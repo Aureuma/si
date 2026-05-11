@@ -16505,7 +16505,7 @@ enum GitHubPullRequestCommand {
 struct CodexSpawnStartArgs {
     #[arg(long)]
     profile: Option<String>,
-    #[arg(long = "worker-slot")]
+    #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
     workspace: Option<PathBuf>,
@@ -16597,7 +16597,7 @@ enum CodexProfileCommand {
 #[derive(Debug, Args)]
 struct CodexTmuxArgs {
     profile: Option<String>,
-    #[arg(long = "worker-slot")]
+    #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
     format: Option<OutputFormat>,
@@ -16614,7 +16614,7 @@ enum CodexCommand {
     Spawn(CodexSpawnStartArgs),
     Remove {
         profile: Option<String>,
-        #[arg(long = "worker-slot")]
+        #[arg(long = "slot")]
         worker_slot: Option<String>,
         #[arg(long, default_value_t = false, conflicts_with = "profile")]
         all: bool,
@@ -16623,14 +16623,14 @@ enum CodexCommand {
     },
     Tail {
         profile: Option<String>,
-        #[arg(long = "worker-slot")]
+        #[arg(long = "slot")]
         worker_slot: Option<String>,
         #[arg(long, default_value = "200")]
         tail: String,
     },
     Shell {
         profile: Option<String>,
-        #[arg(long = "worker-slot")]
+        #[arg(long = "slot")]
         worker_slot: Option<String>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
@@ -71868,7 +71868,7 @@ fn resolve_codex_worker_for_profile(
         [] => {
             if let Some(slot) = requested_slot {
                 Err(anyhow!(
-                    "no codex worker session found for profile {profile_id:?} slot {slot:?}; run `si codex spawn --profile {profile_id} --worker-slot {slot}` first"
+                    "no codex worker session found for profile {profile_id:?} slot {slot:?}; run `si codex spawn --profile {profile_id} --slot {slot}` first"
                 ))
             } else {
                 Err(anyhow!(
@@ -71883,7 +71883,7 @@ fn resolve_codex_worker_for_profile(
                 .collect::<Vec<_>>()
                 .join(", ");
             Err(anyhow!(
-                "multiple codex worker sessions found for profile {profile_id:?} ({slots}); pass --worker-slot"
+                "multiple codex worker sessions found for profile {profile_id:?} ({slots}); pass --slot"
             ))
         }
     }

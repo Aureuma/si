@@ -93,8 +93,8 @@ Defaults for `si codex` profile-bound worker commands.
 - `codex.profile` (string): legacy compatibility field for the most recently selected Codex profile.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
 - Worker-slot behavior is command-level:
-  - `si codex spawn|respawn --worker-slot <slot>`
-  - `si codex shell|tail|tmux|remove --worker-slot <slot>`
+  - `si codex spawn|respawn --slot <slot>`
+  - `si codex shell|tail|tmux|remove --slot <slot>`
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.

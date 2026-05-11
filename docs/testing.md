@@ -174,12 +174,12 @@ cargo test -p si-nucleus session_create_reuses_single_worker_and_codex_home_per_
 Manual runtime smoke:
 
 ```bash
-si codex spawn --profile <profile> --worker-slot primary --workspace "$PWD"
-si codex spawn --profile <profile> --worker-slot review --workspace "$PWD"
+si codex spawn --profile <profile> --slot primary --workspace "$PWD"
+si codex spawn --profile <profile> --slot review --workspace "$PWD"
 si codex list
-si codex shell --profile <profile> --worker-slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
-si codex shell --profile <profile> --worker-slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
-si codex remove --profile <profile> --worker-slot review
+si codex shell --profile <profile> --slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
+si codex shell --profile <profile> --slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
+si codex remove --profile <profile> --slot review
 ```
 
 ## Fresh-machine doctor
