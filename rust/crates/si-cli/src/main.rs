@@ -18850,9 +18850,13 @@ struct CodexProfileView {
     #[serde(skip_serializing_if = "Option::is_none")]
     five_hour_reset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_remaining_minutes: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     weekly_left_pct: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_reset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_remaining_minutes: Option<i32>,
     auth_path: Option<String>,
     auth_updated: Option<String>,
 }
@@ -41685,9 +41689,6 @@ fn codex_profile_email_table_value(email: Option<&str>) -> String {
 }
 
 fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool) -> String {
-    let show_five_hour = profiles.iter().any(|profile| profile.five_hour_left_pct.is_some());
-    let show_weekly = profiles.iter().any(|profile| profile.weekly_left_pct.is_some());
-
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -41717,22 +41718,11 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     header.push(
         Cell::new("Email").fg(cli_table_color(CliTone::Label)).add_attribute(Attribute::Bold),
     );
-    if show_five_hour {
-        header.push(
-            Cell::new("5h Left").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
-        );
-    }
-    if show_weekly {
-        header.push(
-            Cell::new("Week Left")
-                .fg(cli_table_color(CliTone::Info))
-                .add_attribute(Attribute::Bold),
-        );
-    }
-    header.push(
-        Cell::new("State").fg(cli_table_color(CliTone::Success)).add_attribute(Attribute::Bold),
-    );
+    header.push(Cell::new("5H").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold));
+    header
+        .push(Cell::new("Weekly").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold));
     table.set_header(header);
+
     let mut constraints = Vec::new();
     if include_index {
         constraints.push(ColumnConstraint::Absolute(Width::Fixed(3)));
@@ -41740,13 +41730,8 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(12)));
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(16)));
     constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(30)));
-    if show_five_hour {
-        constraints.push(ColumnConstraint::Absolute(Width::Fixed(9)));
-    }
-    if show_weekly {
-        constraints.push(ColumnConstraint::Absolute(Width::Fixed(11)));
-    }
-    constraints.push(ColumnConstraint::Absolute(Width::Fixed(12)));
+    constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(22)));
+    constraints.push(ColumnConstraint::UpperBoundary(Width::Fixed(22)));
     table.set_constraints(constraints);
 
     for (index, profile) in profiles.iter().enumerate() {
@@ -41762,23 +41747,19 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
             Cell::new(codex_profile_email_table_value(profile.email.as_deref()))
                 .fg(cli_table_color(CliTone::Label)),
         );
-        if show_five_hour {
-            row.push(
-                Cell::new(render_option_percent_value(profile.five_hour_left_pct))
-                    .fg(cli_table_color(CliTone::Info)),
-            );
-        }
-        if show_weekly {
-            row.push(
-                Cell::new(render_option_percent_value(profile.weekly_left_pct))
-                    .fg(cli_table_color(CliTone::Info)),
-            );
-        }
-        let state_color = match profile.state.as_str() {
-            "Logged-In" => cli_table_color(CliTone::Success),
-            _ => cli_table_color(CliTone::Warning),
-        };
-        row.push(Cell::new(&profile.state).fg(state_color));
+        let missing_auth = profile.state != "Logged-In";
+        let five_hour = render_codex_quota_cell(
+            profile.five_hour_left_pct,
+            profile.five_hour_remaining_minutes,
+            missing_auth,
+        );
+        row.push(Cell::new(five_hour.0).fg(five_hour.1));
+        let weekly = render_codex_quota_cell(
+            profile.weekly_left_pct,
+            profile.weekly_remaining_minutes,
+            missing_auth,
+        );
+        row.push(Cell::new(weekly.0).fg(weekly.1));
         table.add_row(row);
     }
 
@@ -41787,6 +41768,60 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
 
 fn render_option_percent_value(value: Option<f64>) -> String {
     value.map(|value| format!("{value:.1}%")).unwrap_or_else(|| "-".to_owned())
+}
+
+fn format_relative_minutes_compact(remaining_minutes: i32) -> String {
+    if remaining_minutes <= 0 {
+        return "now".to_owned();
+    }
+    let mut minutes = remaining_minutes;
+    let days = minutes / (24 * 60);
+    minutes %= 24 * 60;
+    let hours = minutes / 60;
+    minutes %= 60;
+    if days > 0 {
+        if hours > 0 {
+            format!("in {days}d{hours}h")
+        } else {
+            format!("in {days}d")
+        }
+    } else if hours > 0 {
+        if minutes > 0 {
+            format!("in {hours}h{minutes}m")
+        } else {
+            format!("in {hours}h")
+        }
+    } else {
+        format!("in {minutes}m")
+    }
+}
+
+fn codex_quota_color(pct: Option<f64>, missing_auth: bool) -> Color {
+    if missing_auth {
+        return cli_table_color(CliTone::Warning);
+    }
+    match pct {
+        Some(value) if value < 20.0 => cli_table_color(CliTone::Command),
+        Some(value) if value < 50.0 => cli_table_color(CliTone::Warning),
+        Some(_) => cli_table_color(CliTone::Success),
+        None => cli_table_color(CliTone::Muted),
+    }
+}
+
+fn render_codex_quota_cell(
+    pct: Option<f64>,
+    remaining_minutes: Option<i32>,
+    missing_auth: bool,
+) -> (String, Color) {
+    if missing_auth {
+        return ("Missing".to_owned(), cli_table_color(CliTone::Warning));
+    }
+    let mut text = render_option_percent_value(pct);
+    if let Some(minutes) = remaining_minutes {
+        text.push_str(" · ");
+        text.push_str(&format_relative_minutes_compact(minutes));
+    }
+    (text, codex_quota_color(pct, false))
 }
 
 fn codex_profile_prompt_available() -> bool {
@@ -42021,8 +42056,10 @@ fn codex_profile_view(
         account_plan: None,
         five_hour_left_pct: None,
         five_hour_reset: None,
+        five_hour_remaining_minutes: None,
         weekly_left_pct: None,
         weekly_reset: None,
+        weekly_remaining_minutes: None,
         auth_path: Some(auth_path),
         auth_updated: entry.auth_updated.clone(),
     }
@@ -42036,16 +42073,20 @@ fn apply_codex_status_to_profile(view: &mut CodexProfileView, status: &CodexStat
     view.account_plan = status.account_plan.clone();
     view.five_hour_left_pct = status.five_hour_left_pct;
     view.five_hour_reset = status.five_hour_reset.clone();
+    view.five_hour_remaining_minutes = status.five_hour_remaining_minutes;
     view.weekly_left_pct = status.weekly_left_pct;
     view.weekly_reset = status.weekly_reset.clone();
+    view.weekly_remaining_minutes = status.weekly_remaining_minutes;
 }
 
 fn clear_codex_profile_live_status(view: &mut CodexProfileView) {
     view.account_plan = None;
     view.five_hour_left_pct = None;
     view.five_hour_reset = None;
+    view.five_hour_remaining_minutes = None;
     view.weekly_left_pct = None;
     view.weekly_reset = None;
+    view.weekly_remaining_minutes = None;
 }
 
 fn codex_status_has_live_quota(status: &CodexStatusView) -> bool {
