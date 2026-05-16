@@ -12,7 +12,7 @@ Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[work
 ## Start here
 
 1. Install SI:
-   - npm: `mkdir -p "$HOME/.npm-global" && npm config set prefix "$HOME/.npm-global" && export PATH="$HOME/.npm-global/bin:$PATH" && corepack pnpm install -g @aureuma/si`
+   - pnpm: `corepack pnpm add -g @aureuma/si`
    - Homebrew: `brew install aureuma/si/si`
 2. Build and verify your local binary from source when needed: `./.artifacts/cargo-target/release/si-rs build self`
 3. Validate secret setup: `si fort doctor`

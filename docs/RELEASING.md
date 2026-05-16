@@ -81,7 +81,7 @@ Do not invent or hand-maintain separate SI versions in crate manifests, provider
 ```
 cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-pnpm
 cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
 ./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight
 ./.artifacts/cargo-target/release/si-rs build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
@@ -91,7 +91,7 @@ git commit -m "release: vX.Y.0"
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
 - `si build self assets` reads the canonical version from root `Cargo.toml` when `--version` is omitted.
-- Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
+- Include the pnpm smoke lane so user-owned global-prefix installs stay verified before release.
 - Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary.
 
 ### 5) Create an annotated tag for the release commit
@@ -215,7 +215,7 @@ When a GitHub Release is published, workflow `.github/workflows/cli-release-asse
 builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` is configured, or by fallback to `GH_PAT_AUREUMA` when that token has tap push access)
-- verifies release assets + npm + Homebrew sync in a final gate job
+- verifies release assets + package + Homebrew sync in a final gate job
 - runs a macOS Homebrew smoke install lane through `si build installer smoke-homebrew`
 
 Supported targets:
@@ -250,7 +250,7 @@ Notes:
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
 - Use `si build corepack pnpm publish --dry-run` for local corepack pnpm publish rehearsal.
-- Use `si build npm vault` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
+- Use `si build pnpm vault` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
 - Use `si build homebrew core --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 - Those commands default to the canonical SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached version target.
 

@@ -51,10 +51,10 @@ cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
 
 Use `si build installer host --help` for a quick usage reminder.
 
-To validate the npm launcher package end-to-end, run:
+To validate the pnpm launcher package end-to-end, run:
 
 ```bash
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-npm
+cargo run --quiet --locked -p si-rs-cli -- build installer smoke-pnpm
 ```
 
 To validate the Homebrew tap install path end-to-end, run:

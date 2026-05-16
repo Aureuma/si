@@ -173,8 +173,8 @@ jobs:
             dist/*.tar.gz
             dist/checksums.txt
 
-  publish-npm:
-    name: Publish npm package (@aureuma/si)
+  publish-package:
+    name: Publish package (@aureuma/si)
     needs: [resolve-tag, publish-assets]
     runs-on: ubuntu-latest
     steps:
@@ -421,8 +421,8 @@ jobs:
               echo "corepack pnpm version mismatch: expected ${version}, got ${npm_version}" >&2
               exit 1
             fi
-            echo "npm package verified: @aureuma/si@${npm_version}"
-            npm_prefix="${RUNNER_TEMP}/si-npm-verify"
+            echo "package verified: @aureuma/si@${npm_version}"
+            npm_prefix="${RUNNER_TEMP}/si-pnpm-verify"
             rm -rf "${npm_prefix}"
             mkdir -p "${npm_prefix}"
             corepack pnpm install --silent --global --prefix "${npm_prefix}" "@aureuma/si@${version}"
@@ -430,7 +430,7 @@ jobs:
               "${npm_prefix}/bin/si" version >/dev/null
             echo "corepack pnpm install verification passed for @aureuma/si@${version}"
           else
-            echo "NPM_TOKEN is not configured; skipping npm verification."
+            echo "NPM_TOKEN is not configured; skipping pnpm verification."
           fi
 
           if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" || -n "${GH_PAT_AUREUMA}" ]]; then

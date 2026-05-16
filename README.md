@@ -213,7 +213,7 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 
 Local preflight command:
 - `./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight`
-- `./.artifacts/cargo-target/release/si-rs build npm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
+- `./.artifacts/cargo-target/release/si-rs build pnpm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
 
