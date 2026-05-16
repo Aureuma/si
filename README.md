@@ -37,7 +37,7 @@ Use one of these install paths:
 
 ```bash
 # npm (global launcher package)
-npm install -g @aureuma/si
+corepack pnpm install -g @aureuma/si
 
 # Homebrew
 brew install aureuma/si/si
@@ -96,6 +96,7 @@ Codex lifecycle:
 si codex spawn --profile <profile> --workspace "$PWD"
 si codex spawn --profile <profile> --slot review --workspace "$PWD"
 si codex spawn --profile <profile> --slot release --workspace "$PWD"
+si codex respawn --profile <profile> --slot review --workspace "$PWD"
 si codex list
 si codex shell --profile <profile> --slot review -- bash
 si codex tail --profile <profile> --slot review
