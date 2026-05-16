@@ -6,7 +6,7 @@ Install the SI CLI with npm:
 mkdir -p "$HOME/.npm-global"
 npm config set prefix "$HOME/.npm-global"
 export PATH="$HOME/.npm-global/bin:$PATH"
-npm install -g @aureuma/si
+corepack pnpm install -g @aureuma/si
 ```
 
 Then run:
