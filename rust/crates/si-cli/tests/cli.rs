@@ -9459,6 +9459,70 @@ fn fort_wrapper_rejects_profile_refresh_token_rotation_to_noncanonical_path() {
 }
 
 #[test]
+fn fort_wrapper_rejects_nonprimary_profile_refresh_token_rotation_to_noncanonical_path() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si/codex/profiles/profile-zeta/workers/review/fort"))
+        .expect("mkdir worker fort dir");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        format!(
+            "schema_version = 1\n[paths]\ncodex_profiles_dir = {:?}\n[fort]\nhost = \"https://fort.example.test\"\n",
+            home.path().join(".si/codex/profiles")
+        ),
+    )
+    .expect("write settings");
+    let refresh_path =
+        home.path().join(".si/codex/profiles/profile-zeta/workers/review/fort/refresh.token");
+    fs::write(&refresh_path, "profile-refresh-token\n").expect("write profile refresh token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&refresh_path).expect("stat refresh token").permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(&refresh_path, perms).expect("chmod refresh token");
+    }
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("fort-args.txt");
+    let fort_path = bin_dir.path().join("fort");
+    write_executable_shell_script(
+        &fort_path,
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n", shell_escape_for_test(&args_file)),
+    );
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let out_path = home.path().join("detached-refresh.token");
+
+    let assert = cargo_bin()
+        .args([
+            "fort",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "auth",
+            "session",
+            "refresh",
+            "--refresh-token-file",
+            refresh_path.to_str().expect("refresh path"),
+            "--refresh-token-out",
+            out_path.to_str().expect("out path"),
+        ])
+        .env("PATH", path_env)
+        .env_remove("FORT_HOST")
+        .env_remove("FORT_TOKEN_PATH")
+        .env_remove("FORT_BOOTSTRAP_TOKEN_FILE")
+        .env_remove("FORT_REFRESH_TOKEN_PATH")
+        .env_remove("CODEX_HOME")
+        .assert()
+        .failure();
+
+    assert!(!args_file.exists(), "fort binary should not be invoked after guard failure");
+    assert!(!out_path.exists(), "guard must not write a detached refresh token");
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+    assert!(stderr.contains("refusing to rotate Codex profile Fort refresh token"));
+    assert!(stderr.contains("refreshed in place"));
+}
+
+#[test]
 fn fort_wrapper_reuses_fresh_bootstrap_token_without_refreshing() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
@@ -12805,8 +12869,47 @@ fn help_output_uses_single_word_operational_subcommands() {
     )
     .expect("utf8 codex tmux help");
     assert!(codex_tmux_help.contains("[PROFILE]"));
+    assert!(codex_tmux_help.contains("--profile"));
     assert!(!codex_tmux_help.contains("launch"));
     assert!(!codex_tmux_help.contains("plan"));
+
+    let codex_remove_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "remove", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex remove help");
+    assert!(codex_remove_help.contains("[PROFILE]"));
+    assert!(codex_remove_help.contains("--profile"));
+
+    let codex_shell_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "shell", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex shell help");
+    assert!(codex_shell_help.contains("--profile"));
+
+    let codex_tail_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "tail", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex tail help");
+    assert!(codex_tail_help.contains("[PROFILE]"));
+    assert!(codex_tail_help.contains("--profile"));
 
     let build_self_help = String::from_utf8(
         cargo_bin()
@@ -15521,6 +15624,51 @@ fn releasemind_repo_token_and_play_help_surface_is_visible() {
     assert!(runbook_help.contains("plan"));
     assert!(runbook_help.contains("status"));
     assert!(runbook_help.contains("complete"));
+}
+
+#[test]
+fn releasemind_help_uses_release_mind_casing_and_json_descriptions() {
+    let root_help = String::from_utf8(
+        cargo_bin()
+            .args(["orbit", "releasemind", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("root help utf8");
+    assert!(root_help.contains("ReleaseMind commands."));
+    assert!(!root_help.contains("Orbit Releasemind"));
+    assert!(!root_help.contains("Releasemind "));
+
+    let doctor_help = String::from_utf8(
+        cargo_bin()
+            .args(["orbit", "releasemind", "doctor", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("doctor help utf8");
+    assert!(doctor_help.contains("Check ReleaseMind automation readiness for a repository."));
+    assert!(doctor_help.contains("Output JSON."));
+    assert!(!doctor_help.contains("\n      --json\n          \n"));
+
+    let view_help = String::from_utf8(
+        cargo_bin()
+            .args(["orbit", "releasemind", "release", "view", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("release view help utf8");
+    assert!(view_help.contains("Inspect a prepared or published release from ReleaseMind."));
+    assert!(view_help.contains("Output JSON."));
+    assert!(!view_help.contains("Releasemind"));
 }
 
 #[test]

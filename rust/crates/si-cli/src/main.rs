@@ -14228,7 +14228,7 @@ enum ReleaseMindCommand {
         repo_ref: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Manage repo linking in ReleaseMind.", long_about = None)]
@@ -14264,19 +14264,19 @@ enum ReleaseMindAuthCommand {
     Login {
         #[arg(long)]
         no_open: bool,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Show the current ReleaseMind login status.", long_about = None)]
     Status {
         #[arg(long, hide = true)]
         no_refresh: bool,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Remove the saved ReleaseMind session.", long_about = None)]
     Logout {
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -14287,7 +14287,7 @@ enum ReleaseMindRepoCommand {
     EnsureLink {
         #[arg(help = "Owner/repo reference, for example Aureuma/si.")]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(hide = true)]
@@ -14296,7 +14296,7 @@ enum ReleaseMindRepoCommand {
         repo_ref: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -14305,25 +14305,30 @@ enum ReleaseMindRepoCommand {
 enum ReleaseMindTokenCommand {
     #[command(about = "List ReleaseMind automation tokens.", long_about = None)]
     List {
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Create a ReleaseMind automation token.", long_about = None)]
     Create {
         #[arg(help = "Short token label, for example CI or release-bot.")]
         label: Option<String>,
-        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        #[arg(
+            long = "repo",
+            short = 'R',
+            visible_alias = "repo-ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Token expiry in days.")]
         expires_in_days: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Revoke a ReleaseMind automation token.", long_about = None)]
     Revoke {
         #[arg(help = "Automation token id.")]
         token_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -14365,7 +14370,7 @@ enum ReleaseMindReleaseCommand {
         changelog_path: Option<String>,
         #[arg(long, hide = true)]
         timeout_seconds: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(hide = true)]
@@ -14396,7 +14401,7 @@ enum ReleaseMindReleaseCommand {
         wait_for_ready: bool,
         #[arg(long)]
         timeout_seconds: Option<i64>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(hide = true)]
@@ -14407,7 +14412,7 @@ enum ReleaseMindReleaseCommand {
         post_id: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(
@@ -14415,11 +14420,16 @@ enum ReleaseMindReleaseCommand {
         long_about = None
     )]
     View {
-        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        #[arg(
+            long = "repo",
+            short = 'R',
+            visible_alias = "repo-ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(
@@ -14433,7 +14443,7 @@ enum ReleaseMindReleaseCommand {
         post_id: Option<String>,
         #[arg(long, hide = true)]
         token: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -14444,16 +14454,21 @@ enum ReleaseMindRunbookCommand {
     Plan {
         #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Show the runbook snapshot for a ReleaseMind post.", long_about = None)]
     Status {
-        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        #[arg(
+            long = "repo",
+            short = 'R',
+            visible_alias = "repo-ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
         repo_ref: Option<String>,
         #[arg(help = "ReleaseMind post id.")]
         post_id: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Mark a ReleaseMind runbook gate complete.", long_about = None)]
@@ -14466,7 +14481,7 @@ enum ReleaseMindRunbookCommand {
         gate_id: Option<String>,
         #[arg(long)]
         evidence: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -14475,13 +14490,18 @@ enum ReleaseMindRunbookCommand {
 enum ReleaseMindPlayCommand {
     #[command(about = "Generate a Google Play plan through ReleaseMind.", long_about = None)]
     Plan {
-        #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
+        #[arg(
+            long = "repo",
+            short = 'R',
+            visible_alias = "repo-ref",
+            help = "Owner/repo reference, for example Aureuma/si."
+        )]
         repo_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Base release tag for diff scope.")]
         base_tag: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Head ref or branch for diff scope.")]
         head_ref: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
     #[command(about = "Publish a Google Play release through ReleaseMind.", long_about = None)]
@@ -14526,7 +14546,7 @@ enum ReleaseMindPlayCommand {
         details_contact_phone: Option<String>,
         #[arg(long = "details-contact-website")]
         details_contact_website: Option<String>,
-        #[arg(long)]
+        #[arg(long, help = "Output JSON.")]
         json: bool,
     },
 }
@@ -36268,6 +36288,35 @@ fn leaf_command_help_summary(path: &[String]) -> String {
             let current = command_subject_sentence(path);
             if path.len() > 1 {
                 format!("Manage {} for {}.", current, command_subject(&path[..path.len() - 1]))
+        ["orbit", "releasemind"] => Some("ReleaseMind commands."),
+        ["orbit", "releasemind", "auth"] => Some("ReleaseMind authentication commands."),
+        ["orbit", "releasemind", "doctor"] => {
+            Some("Check ReleaseMind automation readiness for a repository.")
+        }
+        ["orbit", "releasemind", "repo"] => Some("ReleaseMind repository commands."),
+        ["orbit", "releasemind", "repo", "ensure-link"] => {
+            Some("Ensure a repository is linked in ReleaseMind.")
+        }
+        ["orbit", "releasemind", "token"] => Some("ReleaseMind automation token commands."),
+        ["orbit", "releasemind", "token", "list"] => Some("List ReleaseMind automation tokens."),
+        ["orbit", "releasemind", "token", "create"] => {
+            Some("Create a ReleaseMind automation token.")
+        }
+        ["orbit", "releasemind", "token", "revoke"] => {
+            Some("Revoke a ReleaseMind automation token.")
+        }
+        ["orbit", "releasemind", "release"] => Some("ReleaseMind GitHub release commands."),
+        ["orbit", "releasemind", "release", "view"] => {
+            Some("Inspect a prepared or published release from ReleaseMind.")
+        }
+        ["orbit", "releasemind", "runbook"] => Some("ReleaseMind runbook commands."),
+        ["orbit", "releasemind", "runbook", "status"] => {
+            Some("Show the runbook snapshot for a ReleaseMind post.")
+        }
+        ["orbit", "releasemind", "play"] => Some("ReleaseMind Google Play commands."),
+        ["orbit", "releasemind", "play", "plan"] => {
+            Some("Generate a Google Play plan through ReleaseMind.")
+        }
             } else {
                 format!("{current} command.")
             }
@@ -36961,7 +37010,7 @@ fn run_releasemind_auth_login(no_open: bool, json: bool) -> Result<()> {
                 return Ok(());
             }
 
-            println!("releasemind auth login complete");
+            println!("ReleaseMind auth login complete");
             print_cli_kv("state_path", releasemind_auth_state_path().display());
             print_cli_kv(
                 "github_username",
@@ -37042,12 +37091,12 @@ fn run_releasemind_auth_status(no_refresh: bool, json: bool) -> Result<()> {
     }
 
     if state.is_none() {
-        println!("releasemind auth not configured");
+        println!("ReleaseMind auth not configured");
         print_cli_kv("state_path", releasemind_auth_state_path().display());
         return Ok(());
     }
 
-    println!("releasemind auth configured");
+    println!("ReleaseMind auth configured");
     print_cli_kv("state_path", releasemind_auth_state_path().display());
     print_cli_kv(
         "expires_at",
@@ -37069,7 +37118,7 @@ fn run_releasemind_auth_logout(json: bool) -> Result<()> {
         if json {
             println!("{}", serde_json::to_string_pretty(&json!({"ok": true, "removed": false}))?);
         } else {
-            println!("releasemind auth already logged out");
+            println!("ReleaseMind auth already logged out");
         }
         return Ok(());
     };
@@ -37085,7 +37134,7 @@ fn run_releasemind_auth_logout(json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(&json!({"ok": true, "removed": true}))?);
     } else {
-        println!("releasemind auth logged out");
+        println!("ReleaseMind auth logged out");
         print_cli_kv("state_path", releasemind_auth_state_path().display());
     }
     Ok(())
@@ -37132,7 +37181,7 @@ fn run_releasemind_doctor(
             return Ok(());
         }
 
-        println!("releasemind doctor ok");
+        println!("ReleaseMind doctor OK");
         print_cli_kv("repo_ref", &repo_ref);
         print_cli_kv("token_source", "session");
         print_cli_kv("repo_id", json_string_field(&repo_link.2, "repo_id").unwrap_or("(none)"));
@@ -37195,7 +37244,7 @@ fn run_releasemind_doctor(
         return Ok(());
     }
 
-    println!("releasemind doctor ok");
+    println!("ReleaseMind doctor OK");
     print_cli_kv("repo_ref", &repo_ref);
     print_cli_kv("token_source", token_source);
     print_cli_kv(
@@ -37252,7 +37301,7 @@ fn run_releasemind_repo_resolve(
         return Ok(());
     }
 
-    println!("releasemind repo resolved");
+    println!("ReleaseMind repo resolved");
     print_cli_kv("repo_ref", repo_ref);
     print_cli_kv(
         "repo_id",
@@ -37290,7 +37339,7 @@ fn run_releasemind_repo_ensure_link(repo_ref: Option<String>, json: bool) -> Res
         return Ok(());
     }
 
-    println!("releasemind repo linked");
+    println!("ReleaseMind repo linked");
     print_cli_kv("repo_id", json_string_field(&response.2, "repo_id").unwrap_or("(none)"));
     print_cli_kv("repo_url", json_string_field(&response.2, "repo_url").unwrap_or("(none)"));
     print_cli_kv(
@@ -37325,7 +37374,7 @@ fn run_releasemind_token_list(json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("releasemind tokens");
+    println!("ReleaseMind tokens");
     if let Some(tokens) = response.2.as_array() {
         if tokens.is_empty() {
             println!("no automation tokens");
@@ -37377,7 +37426,7 @@ fn run_releasemind_token_create(
         return Ok(());
     }
 
-    println!("releasemind token created");
+    println!("ReleaseMind token created");
     print_cli_kv("token_id", json_string_field(&response.2, "token_id").unwrap_or("(none)"));
     print_cli_kv("label", json_string_field(&response.2, "label").unwrap_or("(none)"));
     print_cli_kv("repo_scope", json_string_field(&response.2, "repo_scope").unwrap_or("(none)"));
@@ -37406,7 +37455,7 @@ fn run_releasemind_token_revoke(token_id: Option<String>, json: bool) -> Result<
         return Ok(());
     }
 
-    println!("releasemind token revoked");
+    println!("ReleaseMind token revoked");
     Ok(())
 }
 
@@ -37495,7 +37544,7 @@ fn run_releasemind_release_prepare(
         return Ok(());
     }
 
-    print_releasemind_release_response("releasemind release prepared", &repo_ref, &response.2);
+    print_releasemind_release_response("ReleaseMind release prepared", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37591,7 +37640,7 @@ fn run_releasemind_release_create(
         println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
         return Ok(());
     }
-    print_releasemind_release_response("releasemind release created", &repo_ref, &response.2);
+    print_releasemind_release_response("ReleaseMind release created", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37622,7 +37671,7 @@ fn run_releasemind_release_status(
         return Ok(());
     }
 
-    print_releasemind_release_response("releasemind release status", &repo_ref, &response.2);
+    print_releasemind_release_response("ReleaseMind release status", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37650,7 +37699,7 @@ fn run_releasemind_release_view(
         println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
         return Ok(());
     }
-    print_releasemind_release_response("releasemind release view", &repo_ref, &response.2);
+    print_releasemind_release_response("ReleaseMind release view", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37694,7 +37743,7 @@ fn run_releasemind_release_publish(
         return Ok(());
     }
 
-    print_releasemind_release_response("releasemind release published", &repo_ref, &response.2);
+    print_releasemind_release_response("ReleaseMind release published", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37717,7 +37766,7 @@ fn run_releasemind_runbook_plan(repo_ref: Option<String>, json: bool) -> Result<
         return Ok(());
     }
 
-    print_releasemind_runbook_response("releasemind runbook plan", &repo_ref, &response.2);
+    print_releasemind_runbook_response("ReleaseMind runbook plan", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37747,7 +37796,7 @@ fn run_releasemind_runbook_status(
         return Ok(());
     }
 
-    print_releasemind_runbook_response("releasemind runbook status", &repo_ref, &response.2);
+    print_releasemind_runbook_response("ReleaseMind runbook status", &repo_ref, &response.2);
     Ok(())
 }
 
@@ -37789,7 +37838,7 @@ fn run_releasemind_runbook_complete(
     }
 
     print_releasemind_runbook_response(
-        "releasemind runbook gate completed",
+        "ReleaseMind runbook gate completed",
         &repo_ref,
         &response.2,
     );
@@ -37830,7 +37879,7 @@ fn run_releasemind_play_plan(
         return Ok(());
     }
 
-    println!("releasemind play plan ready");
+    println!("ReleaseMind play plan ready");
     print_cli_kv("repo_ref", &repo_ref);
     print_cli_kv(
         "package_name",
@@ -37987,7 +38036,7 @@ fn run_releasemind_play_publish(
         return Ok(());
     }
 
-    println!("releasemind play publish complete");
+    println!("ReleaseMind play publish complete");
     print_cli_kv("repo_ref", &repo_ref);
     print_cli_kv("edit_id", json_string_field(&response.2, "edit_id").unwrap_or("(none)"));
     print_cli_kv("track", json_string_field(&response.2, "track").unwrap_or("(none)"));
