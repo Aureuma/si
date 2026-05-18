@@ -42,8 +42,8 @@ use si_nucleus_runtime::{
 use si_nucleus_runtime_codex::CodexNucleusRuntime;
 use si_rs_codex::{
     CodexProfileFortSessionPaths, DEFAULT_CODEX_WORKER_SLOT, build_codex_app_server_status_input,
-    codex_profile_fort_session_paths, codex_tmux_session_name_for_slot, codex_worker_name,
-    codex_worker_slot_name, parse_codex_app_server_status,
+    codex_fort_agent_id, codex_profile_fort_session_paths, codex_tmux_session_name_for_slot,
+    codex_worker_name, codex_worker_slot_name, parse_codex_app_server_status,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -16617,10 +16617,59 @@ enum CodexProfileCommand {
 #[derive(Debug, Args)]
 struct CodexTmuxArgs {
     profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
     format: Option<OutputFormat>,
+}
+
+#[derive(Debug, Args)]
+struct CodexRemoveArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
+    all: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct CodexTailArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long, default_value = "200")]
+    tail: String,
+}
+
+#[derive(Debug, Args)]
+struct CodexShellArgs {
+    #[arg(long = "profile")]
+    profile: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    command: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct CodexRepairAuthArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
+    all: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -16632,34 +16681,16 @@ enum CodexCommand {
         command: CodexProfileCommand,
     },
     Spawn(CodexSpawnStartArgs),
-    Remove {
-        profile: Option<String>,
-        #[arg(long = "slot")]
-        worker_slot: Option<String>,
-        #[arg(long, default_value_t = false, conflicts_with = "profile")]
-        all: bool,
-        #[arg(long, default_value = "text")]
-        format: OutputFormat,
-    },
-    Tail {
-        profile: Option<String>,
-        #[arg(long = "slot")]
-        worker_slot: Option<String>,
-        #[arg(long, default_value = "200")]
-        tail: String,
-    },
-    Shell {
-        profile: Option<String>,
-        #[arg(long = "slot")]
-        worker_slot: Option<String>,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        command: Vec<String>,
-    },
+    Remove(CodexRemoveArgs),
+    Tail(CodexTailArgs),
+    Shell(CodexShellArgs),
     List {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
     Tmux(CodexTmuxArgs),
+    #[command(name = "repair-auth")]
+    RepairAuth(CodexRepairAuthArgs),
     Warmup {
         #[command(subcommand)]
         command: WarmupCommand,
@@ -17140,8 +17171,14 @@ fn prepare_nucleus_codex_profile_runtime(
     validate_nucleus_profile_slug(profile)?;
     let (settings_home, settings) = load_codex_runtime_settings(home_dir.clone(), None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let prepared =
-        prepare_codex_profile_runtime(&settings_home, &paths, &settings, profile, codex_home)?;
+    let prepared = prepare_codex_profile_runtime(
+        &settings_home,
+        &paths,
+        &settings,
+        profile,
+        DEFAULT_CODEX_WORKER_SLOT,
+        codex_home,
+    )?;
     let mut env = parse_env_assignments(&env_entries)?;
     insert_codex_profile_fort_env(&mut env, &prepared.fort_paths);
     Ok((home_dir.unwrap_or(settings_home), prepared.codex_home, env))
@@ -18923,6 +18960,20 @@ struct CodexRemoveAllResultView {
     removed: Vec<CodexRemoveResultView>,
 }
 
+#[derive(Debug, Serialize)]
+struct CodexRepairAuthResultView {
+    profile_id: String,
+    worker_slot: String,
+    agent_id: String,
+    status: String,
+    detail: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexRepairAuthAllResultView {
+    repaired: Vec<CodexRepairAuthResultView>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct CodexStatusView {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -19718,10 +19769,10 @@ fn run_publish_npm_package(
         command.arg("--dry-run");
     }
     let output =
-        command.output().with_context(|| format!("run npm publish for {}", package.display()))?;
+        command.output().with_context(|| format!("run corepack pnpm publish for {}", package.display()))?;
     if !output.status.success() {
         return Err(anyhow!(
-            "npm publish failed: {}",
+            "corepack pnpm publish failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
@@ -19764,9 +19815,9 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .arg("pack")
         .arg("--silent")
         .output()
-        .context("run npm pack")?;
+        .context("run corepack pnpm pack")?;
     if !output.status.success() {
-        return Err(anyhow!("npm pack failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
+        return Err(anyhow!("corepack pnpm pack failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
     }
 
     let mut matches = fs::read_dir(stage.path())
@@ -19775,7 +19826,7 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("tgz"))
         .collect::<Vec<_>>();
     matches.sort();
-    let src = matches.pop().ok_or_else(|| anyhow!("npm pack did not produce a tarball"))?;
+    let src = matches.pop().ok_or_else(|| anyhow!("corepack pnpm pack did not produce a tarball"))?;
     let dst = out_dir.join(
         src.file_name().ok_or_else(|| anyhow!("invalid npm tarball path {}", src.display()))?,
     );
@@ -19850,7 +19901,7 @@ fn npm_package_exists(package_version: &str) -> Result<bool> {
         .arg(package_version)
         .arg("version")
         .output()
-        .with_context(|| format!("run npm view for {package_version}"))?;
+        .with_context(|| format!("run corepack pnpm view for {package_version}"))?;
     Ok(output.status.success() && !String::from_utf8_lossy(&output.stdout).trim().is_empty())
 }
 
@@ -20628,7 +20679,7 @@ fn run_installer_smoke_npm() -> Result<()> {
         &[("SI_NPM_LOCAL_ARCHIVE_DIR", assets_dir.to_str().unwrap_or_default())],
         &["version"],
     )?;
-    println!("npm install smoke passed");
+    println!("corepack pnpm install smoke passed");
     Ok(())
 }
 
@@ -20945,7 +20996,7 @@ fn run_publish_npm_from_vault(
         .status()
         .with_context(|| format!("run {} vault run", si_cmd.display()))?;
     if !status.success() {
-        return Err(anyhow!("vault-run npm publish failed"));
+        return Err(anyhow!("vault-run corepack pnpm publish failed"));
     }
     Ok(())
 }
@@ -35835,18 +35886,42 @@ fn main() -> Result<()> {
             CodexCommand::Spawn(CodexSpawnStartArgs { profile, worker_slot, workspace }) => {
                 show_codex_spawn_start(profile, worker_slot, workspace)?
             }
-            CodexCommand::Remove { profile, worker_slot, all, format } => {
+            CodexCommand::Remove(CodexRemoveArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                all,
+                format,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
-            CodexCommand::Tail { profile, worker_slot, tail } => {
+            CodexCommand::Tail(CodexTailArgs { profile, profile_flag, worker_slot, tail }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_tail(profile.as_deref(), worker_slot.as_deref(), &tail)?
             }
-            CodexCommand::Shell { profile, worker_slot, command } => {
+            CodexCommand::Shell(CodexShellArgs { profile, worker_slot, command }) => {
                 run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?
             }
             CodexCommand::List { format } => run_codex_list(format)?,
-            CodexCommand::Tmux(CodexTmuxArgs { profile, worker_slot, format }) => {
+            CodexCommand::Tmux(CodexTmuxArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                format,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
+            }
+            CodexCommand::RepairAuth(CodexRepairAuthArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                all,
+                format,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
+                run_codex_repair_auth(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
             CodexCommand::Warmup { command } => match command {
                 WarmupCommand::Decision {
@@ -36213,6 +36288,35 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["orbit", "stripe"] => Some("Stripe orbit commands."),
         ["orbit", "workos"] => Some("WorkOS orbit commands."),
         ["orbit", "github"] => Some("GitHub orbit commands."),
+        ["orbit", "releasemind"] => Some("ReleaseMind commands."),
+        ["orbit", "releasemind", "auth"] => Some("ReleaseMind authentication commands."),
+        ["orbit", "releasemind", "doctor"] => {
+            Some("Check ReleaseMind automation readiness for a repository.")
+        }
+        ["orbit", "releasemind", "repo"] => Some("ReleaseMind repository commands."),
+        ["orbit", "releasemind", "repo", "ensure-link"] => {
+            Some("Ensure a repository is linked in ReleaseMind.")
+        }
+        ["orbit", "releasemind", "token"] => Some("ReleaseMind automation token commands."),
+        ["orbit", "releasemind", "token", "list"] => Some("List ReleaseMind automation tokens."),
+        ["orbit", "releasemind", "token", "create"] => {
+            Some("Create a ReleaseMind automation token.")
+        }
+        ["orbit", "releasemind", "token", "revoke"] => {
+            Some("Revoke a ReleaseMind automation token.")
+        }
+        ["orbit", "releasemind", "release"] => Some("ReleaseMind GitHub release commands."),
+        ["orbit", "releasemind", "release", "view"] => {
+            Some("Inspect a prepared or published release from ReleaseMind.")
+        }
+        ["orbit", "releasemind", "runbook"] => Some("ReleaseMind runbook commands."),
+        ["orbit", "releasemind", "runbook", "status"] => {
+            Some("Show the runbook snapshot for a ReleaseMind post.")
+        }
+        ["orbit", "releasemind", "play"] => Some("ReleaseMind Google Play commands."),
+        ["orbit", "releasemind", "play", "plan"] => {
+            Some("Generate a Google Play plan through ReleaseMind.")
+        }
         ["orbit", "github", "release"] => Some("Manage GitHub releases and release assets."),
         ["orbit", "github", "release", "list"] => Some("List GitHub releases for a repository."),
         ["orbit", "github", "release", "get"] => Some("Get a GitHub release by tag or id."),
@@ -36288,35 +36392,6 @@ fn leaf_command_help_summary(path: &[String]) -> String {
             let current = command_subject_sentence(path);
             if path.len() > 1 {
                 format!("Manage {} for {}.", current, command_subject(&path[..path.len() - 1]))
-        ["orbit", "releasemind"] => Some("ReleaseMind commands."),
-        ["orbit", "releasemind", "auth"] => Some("ReleaseMind authentication commands."),
-        ["orbit", "releasemind", "doctor"] => {
-            Some("Check ReleaseMind automation readiness for a repository.")
-        }
-        ["orbit", "releasemind", "repo"] => Some("ReleaseMind repository commands."),
-        ["orbit", "releasemind", "repo", "ensure-link"] => {
-            Some("Ensure a repository is linked in ReleaseMind.")
-        }
-        ["orbit", "releasemind", "token"] => Some("ReleaseMind automation token commands."),
-        ["orbit", "releasemind", "token", "list"] => Some("List ReleaseMind automation tokens."),
-        ["orbit", "releasemind", "token", "create"] => {
-            Some("Create a ReleaseMind automation token.")
-        }
-        ["orbit", "releasemind", "token", "revoke"] => {
-            Some("Revoke a ReleaseMind automation token.")
-        }
-        ["orbit", "releasemind", "release"] => Some("ReleaseMind GitHub release commands."),
-        ["orbit", "releasemind", "release", "view"] => {
-            Some("Inspect a prepared or published release from ReleaseMind.")
-        }
-        ["orbit", "releasemind", "runbook"] => Some("ReleaseMind runbook commands."),
-        ["orbit", "releasemind", "runbook", "status"] => {
-            Some("Show the runbook snapshot for a ReleaseMind post.")
-        }
-        ["orbit", "releasemind", "play"] => Some("ReleaseMind Google Play commands."),
-        ["orbit", "releasemind", "play", "plan"] => {
-            Some("Generate a Google Play plan through ReleaseMind.")
-        }
             } else {
                 format!("{current} command.")
             }
@@ -40811,7 +40886,11 @@ fn is_codex_profile_refresh_token_path(path: &Path, settings: &Settings, home: &
             _ => None,
         })
         .collect::<Vec<_>>();
-    parts.len() == 3 && parts[1] == "fort" && parts[2] == "refresh.token"
+    (parts.len() == 3 && parts[1] == "fort" && parts[2] == "refresh.token")
+        || (parts.len() == 5
+            && parts[1] == "workers"
+            && parts[3] == "fort"
+            && parts[4] == "refresh.token")
 }
 
 fn resolve_required_fort_auth(
@@ -41046,14 +41125,7 @@ fn fort_profile_session_is_reusable(
         .with_context(|| format!("load Fort session state {}", paths.session_path.display()))?;
     let state = state.normalized();
     if state.profile_id != profile_id || state.agent_id != agent_id {
-        anyhow::bail!(
-            "Fort session state {} belongs to profile={} agent={}, expected profile={} agent={}",
-            paths.session_path.display(),
-            state.profile_id,
-            state.agent_id,
-            profile_id,
-            agent_id
-        );
+        return Ok(false);
     }
     match classify_persisted_session_state(&state, Utc::now().timestamp())
         .with_context(|| format!("classify Fort session state {}", paths.session_path.display()))?
@@ -41183,13 +41255,15 @@ fn ensure_codex_profile_fort_session(
     settings: &Settings,
     codex_home: &Path,
     profile_id: &str,
+    worker_slot: &str,
 ) -> Result<CodexProfileFortSessionPaths> {
     let paths = codex_profile_fort_session_paths(codex_home);
     ensure_fort_secret_dir(&paths.dir)?;
     let _lock = acquire_session_lock(&paths.lock_path)
         .with_context(|| format!("lock Fort profile session {}", paths.lock_path.display()))?;
-    let agent_id = format!("si-codex-{profile_id}");
+    let agent_id = codex_fort_agent_id(profile_id, worker_slot);
     if fort_profile_session_is_reusable(&paths, profile_id, &agent_id)? {
+        ensure_fort_profile_policy_best_effort(home, settings, profile_id, &agent_id);
         return Ok(paths);
     }
 
@@ -41211,6 +41285,56 @@ fn ensure_codex_profile_fort_session(
         &paths,
     )?;
     Ok(paths)
+}
+
+fn ensure_fort_profile_policy_best_effort(
+    home: &Path,
+    settings: &Settings,
+    profile_id: &str,
+    agent_id: &str,
+) {
+    let host = match resolve_configured_fort_public_host(settings, home) {
+        Ok(Some(host)) => host,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!(
+                "WARNING: skipping Fort policy sync for Codex profile {profile_id}: resolve fort host failed: {error}"
+            );
+            return;
+        }
+    };
+
+    let client = match FortApiClient::new(host) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!(
+                "WARNING: skipping Fort policy sync for Codex profile {profile_id}: build Fort API client failed: {error}"
+            );
+            return;
+        }
+    };
+
+    let admin_token = match refresh_bootstrap_admin_token_for_fort_provisioning(&client, home) {
+        Ok(token) => token,
+        Err(error) => {
+            eprintln!(
+                "WARNING: skipping Fort policy sync for Codex profile {profile_id}: bootstrap admin token unavailable: {error}"
+            );
+            return;
+        }
+    };
+
+    if let Err(error) = ensure_fort_profile_agent(&client, &admin_token, agent_id) {
+        eprintln!(
+            "WARNING: skipping Fort policy sync for Codex profile {profile_id}: ensure agent {agent_id} failed: {error}"
+        );
+        return;
+    }
+    if let Err(error) = ensure_fort_profile_policy(&client, &admin_token, agent_id) {
+        eprintln!(
+            "WARNING: skipping Fort policy sync for Codex profile {profile_id}: ensure policy for agent {agent_id} failed: {error}"
+        );
+    }
 }
 
 fn refresh_fort_access_token(
@@ -41963,27 +42087,14 @@ fn load_codex_profiles_from_settings(
     profiles
 }
 
-fn load_codex_profiles_for_display(
-    home: &Path,
-    settings: &Settings,
-    paths: &SiPaths,
-) -> Vec<CodexProfileView> {
-    enrich_codex_profiles_with_live_status(
-        load_codex_profiles_from_settings(settings, paths),
-        home,
-        paths,
-        settings,
-    )
-}
-
 fn resolve_codex_profile(
-    home: &Path,
+    _home: &Path,
     settings: &Settings,
     paths: &SiPaths,
     profile: Option<&str>,
     purpose: &str,
 ) -> Result<String> {
-    let profiles = load_codex_profiles_for_display(home, settings, paths);
+    let profiles = load_codex_profiles_from_settings(settings, paths);
 
     if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
         let candidates = find_codex_profile_candidates(&profiles, query);
@@ -42183,7 +42294,7 @@ fn resolve_codex_profile_live_view(
     settings: Settings,
 ) -> CodexProfileView {
     let mut last_status: Option<CodexStatusView> = None;
-    for wait_ms in [0_u64, 250, 1000] {
+    for wait_ms in [0_u64, 350] {
         if wait_ms > 0 {
             thread::sleep(Duration::from_millis(wait_ms));
         }
@@ -42240,7 +42351,7 @@ fn enrich_codex_profiles_with_live_status_parallel(
     let home = home.to_path_buf();
     let paths = paths.clone();
     let settings = settings.clone();
-    let max_parallel = 2usize;
+    let max_parallel = thread::available_parallelism().map_or(2, |value| value.get().min(4)).max(1);
     let mut pending = profiles.into_iter().enumerate().collect::<Vec<_>>();
     let mut ordered = Vec::with_capacity(pending.len());
     while !pending.is_empty() {
@@ -42254,7 +42365,11 @@ fn enrich_codex_profiles_with_live_status_parallel(
                 let settings = settings.clone();
                 let progress = progress.clone();
                 handles.push(scope.spawn(move || {
-                    let resolved = resolve_codex_profile_live_view(profile, home, paths, settings);
+                    let resolved = if profile.state == "Logged-In" {
+                        resolve_codex_profile_live_view(profile, home, paths, settings)
+                    } else {
+                        profile
+                    };
                     if let Some(progress) = progress {
                         progress.fetch_add(1, Ordering::Relaxed);
                     }
@@ -42327,7 +42442,13 @@ fn show_codex_profile(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "show")?;
+    let profile_id = resolve_codex_profile(
+        &home,
+        &settings,
+        &paths,
+        profile.as_deref(),
+        "show",
+    )?;
     let entry = settings
         .codex
         .profiles
@@ -42411,7 +42532,13 @@ fn remove_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "remove")?;
+    let profile_id = resolve_codex_profile(
+        &home,
+        &settings,
+        &paths,
+        profile.as_deref(),
+        "remove",
+    )?;
     let mut document = load_settings_document(&settings_path)?;
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
@@ -42449,7 +42576,13 @@ fn login_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "login")?;
+    let profile_id = resolve_codex_profile(
+        &home,
+        &settings,
+        &paths,
+        profile.as_deref(),
+        "login",
+    )?;
     let entry = settings
         .codex
         .profiles
@@ -42541,7 +42674,13 @@ fn swap_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "swap")?;
+    let profile_id = resolve_codex_profile(
+        &home,
+        &settings,
+        &paths,
+        profile.as_deref(),
+        "swap",
+    )?;
     let entry = settings
         .codex
         .profiles
@@ -71422,8 +71561,13 @@ fn show_codex_spawn_start(
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id =
-        resolve_codex_profile(&settings_home, &settings, &paths, profile.as_deref(), "spawn")?;
+    let profile_id = resolve_codex_profile(
+        &settings_home,
+        &settings,
+        &paths,
+        profile.as_deref(),
+        "spawn",
+    )?;
     let workspace = resolve_codex_workspace(workspace, &settings)?;
     let workdir = resolve_codex_workdir(None, &workspace)?;
     let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
@@ -71457,7 +71601,7 @@ fn run_codex_respawn(
     workspace: Option<PathBuf>,
 ) -> Result<()> {
     let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
-    let _ = run_codex_remove_with_settings(
+    let remove_result = run_codex_remove_with_settings(
         profile.as_deref(),
         Some(slot.as_str()),
         false,
@@ -71465,7 +71609,21 @@ fn run_codex_respawn(
         None,
         None,
     );
+    if let Err(error) = remove_result {
+        let detail = error.to_string();
+        let not_found = detail.contains("no codex worker session found for profile");
+        if !not_found {
+            return Err(error).context("respawn cleanup failed");
+        }
+    }
     show_codex_spawn_start(profile, Some(slot), workspace)
+}
+
+fn resolve_codex_cli_profile_arg(
+    positional: Option<String>,
+    flag: Option<String>,
+) -> Option<String> {
+    flag.or(positional).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
 }
 
 fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<PathBuf> {
@@ -71751,13 +71909,15 @@ fn prepare_codex_profile_runtime(
     paths: &SiPaths,
     settings: &Settings,
     profile_id: &str,
+    worker_slot: &str,
     codex_home_override: Option<PathBuf>,
 ) -> Result<PreparedCodexProfileRuntime> {
     let codex_home =
         codex_home_override.unwrap_or_else(|| codex_profile_home_dir(paths, settings, profile_id));
     fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
     sync_codex_profile_auth_to_home(paths, settings, profile_id, &codex_home)?;
-    let fort_paths = ensure_codex_profile_fort_session(home, settings, &codex_home, profile_id)?;
+    let fort_paths =
+        ensure_codex_profile_fort_session(home, settings, &codex_home, profile_id, worker_slot)?;
     Ok(PreparedCodexProfileRuntime { codex_home, fort_paths })
 }
 
@@ -71791,8 +71951,14 @@ fn ensure_codex_worker_session(
     let _state_lock = acquire_session_lock(&lock_path)
         .with_context(|| format!("acquire worker-state lock {}", lock_path.display()))?;
     let codex_home = codex_profile_worker_slot_home_dir(paths, settings, profile_id, &worker_slot);
-    let prepared =
-        prepare_codex_profile_runtime(home, paths, settings, profile_id, Some(codex_home))?;
+    let prepared = prepare_codex_profile_runtime(
+        home,
+        paths,
+        settings,
+        profile_id,
+        &worker_slot,
+        Some(codex_home),
+    )?;
 
     let existing = find_codex_worker_state(paths, profile_id, Some(&worker_slot))?;
     let restart_needed = existing.as_ref().is_some_and(|state| {
@@ -71939,8 +72105,104 @@ fn resolve_codex_worker_for_profile(
     .with_context(|| format!("resolve codex worker for {purpose}"))
 }
 
+fn remove_dir_if_empty(path: &Path) -> Result<()> {
+    if !path.is_dir() {
+        return Ok(());
+    }
+    let mut entries =
+        fs::read_dir(path).with_context(|| format!("read directory {}", path.display()))?;
+    if entries.next().is_none() {
+        fs::remove_dir(path).with_context(|| format!("remove empty dir {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn clear_codex_worker_fort_state(
+    paths: &SiPaths,
+    settings: &Settings,
+    home: &Path,
+    state: &CodexWorkerState,
+) -> Result<()> {
+    let codex_home =
+        codex_profile_worker_slot_home_dir(paths, settings, &state.profile_id, &state.worker_slot);
+    let fort_paths = codex_profile_fort_session_paths(&codex_home);
+    close_codex_worker_fort_session(home, &fort_paths)?;
+    for path in [
+        fort_paths.access_token_path.as_path(),
+        fort_paths.refresh_token_path.as_path(),
+        fort_paths.session_path.as_path(),
+        fort_paths.lock_path.as_path(),
+    ] {
+        if path.exists() {
+            fs::remove_file(path).with_context(|| format!("remove {}", path.display()))?;
+        }
+    }
+    remove_dir_if_empty(&fort_paths.dir)?;
+    if state.worker_slot != DEFAULT_CODEX_WORKER_SLOT {
+        remove_dir_if_empty(&codex_home)?;
+    }
+    Ok(())
+}
+
+fn close_codex_worker_fort_session(
+    home: &Path,
+    fort_paths: &CodexProfileFortSessionPaths,
+) -> Result<()> {
+    if !fort_paths.refresh_token_path.is_file() && !fort_paths.session_path.is_file() {
+        return Ok(());
+    }
+    let session_id = if fort_paths.session_path.is_file() {
+        load_persisted_session_state(&fort_paths.session_path)
+            .ok()
+            .map(|value| value.normalized().session_id)
+            .filter(|value| !value.trim().is_empty())
+    } else {
+        None
+    };
+    let program = std::env::current_exe().context("resolve si executable for Fort session close")?;
+    let mut command = StdCommand::new(program);
+    command
+        .arg("fort")
+        .arg("--home")
+        .arg(home)
+        .arg("auth")
+        .arg("session")
+        .arg("close");
+    if let Some(session_id) = session_id.as_deref() {
+        command.arg("--session-id").arg(session_id);
+    }
+    if fort_paths.refresh_token_path.is_file() {
+        command.arg("--refresh-token-file").arg(&fort_paths.refresh_token_path);
+    }
+    command.env_remove("FORT_TOKEN");
+    command.env_remove("FORT_REFRESH_TOKEN");
+    command.env_remove("FORT_TOKEN_PATH");
+    command.env_remove("FORT_REFRESH_TOKEN_PATH");
+    command.env_remove("FORT_BOOTSTRAP_TOKEN_FILE");
+    let output = command.output().context("run Fort session close")?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("exit status {}", output.status)
+    };
+    if detail.contains("status=401") || detail.contains("status=403") || detail.contains("status=404")
+    {
+        return Ok(());
+    }
+    Err(anyhow!("close Fort session before cleanup failed: {detail}"))
+}
+
 fn remove_codex_worker_state(
     paths: &SiPaths,
+    settings: &Settings,
+    home: &Path,
     state: &CodexWorkerState,
 ) -> Result<CodexRemoveResultView> {
     let tmux_bin = "tmux";
@@ -71957,6 +72219,7 @@ fn remove_codex_worker_state(
                 .with_context(|| format!("remove {}", legacy_path.display()))?;
         }
     }
+    clear_codex_worker_fort_state(paths, settings, home, state)?;
     Ok(CodexRemoveResultView {
         name: state.profile_id.clone(),
         session_name: state.session_name.clone(),
@@ -72006,7 +72269,7 @@ fn run_codex_remove_with_settings(
         }
         let removed = states
             .iter()
-            .map(|state| remove_codex_worker_state(&paths, state))
+            .map(|state| remove_codex_worker_state(&paths, &settings, &home, state))
             .collect::<Result<Vec<_>>>()?;
         match format {
             OutputFormat::Json => println!(
@@ -72025,9 +72288,14 @@ fn run_codex_remove_with_settings(
         return Ok(());
     }
 
-    let target =
-        resolve_codex_worker_for_profile(profile, worker_slot, "remove", Some(home), None)?;
-    let view = remove_codex_worker_state(&paths, &target)?;
+    let target = resolve_codex_worker_for_profile(
+        profile,
+        worker_slot,
+        "remove",
+        Some(home.clone()),
+        None,
+    )?;
+    let view = remove_codex_worker_state(&paths, &settings, &home, &target)?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => print!("{}", view.output),
@@ -72042,6 +72310,126 @@ fn run_codex_remove(
     format: OutputFormat,
 ) -> Result<()> {
     run_codex_remove_with_settings(profile, worker_slot, all, format, None, None)
+}
+
+fn repair_codex_worker_fort_auth(
+    home: &Path,
+    paths: &SiPaths,
+    settings: &Settings,
+    state: &CodexWorkerState,
+) -> Result<CodexRepairAuthResultView> {
+    let worker_slot = normalize_codex_worker_slot(Some(&state.worker_slot))?;
+    let codex_home =
+        codex_profile_worker_slot_home_dir(paths, settings, &state.profile_id, &worker_slot);
+    let fort_paths = codex_profile_fort_session_paths(&codex_home);
+    let expected_agent_id = codex_fort_agent_id(&state.profile_id, &worker_slot);
+
+    let previous_agent_id = if fort_paths.session_path.is_file() {
+        Some(load_persisted_session_state(&fort_paths.session_path)?.normalized().agent_id)
+    } else {
+        None
+    };
+
+    let _prepared = prepare_codex_profile_runtime(
+        home,
+        paths,
+        settings,
+        &state.profile_id,
+        &worker_slot,
+        Some(codex_home),
+    )?;
+
+    let persisted = load_persisted_session_state(&fort_paths.session_path)
+        .with_context(|| format!("load Fort session state {}", fort_paths.session_path.display()))?
+        .normalized();
+    if persisted.agent_id != expected_agent_id {
+        anyhow::bail!(
+            "Fort session repair wrote unexpected agent id {} for profile={} slot={}, expected {}",
+            persisted.agent_id,
+            state.profile_id,
+            worker_slot,
+            expected_agent_id
+        );
+    }
+    let detail = match previous_agent_id {
+        Some(previous) if previous == expected_agent_id => {
+            format!("verified Fort session agent {expected_agent_id}")
+        }
+        Some(previous) => {
+            format!("repaired Fort session agent {previous} -> {expected_agent_id}")
+        }
+        None => format!("provisioned Fort session agent {expected_agent_id}"),
+    };
+    let status = if detail.starts_with("verified") { "verified" } else { "repaired" }.to_owned();
+    Ok(CodexRepairAuthResultView {
+        profile_id: state.profile_id.clone(),
+        worker_slot,
+        agent_id: expected_agent_id,
+        status,
+        detail,
+    })
+}
+
+fn run_codex_repair_auth(
+    profile: Option<&str>,
+    worker_slot: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, settings) = load_codex_runtime_settings(None, None)?;
+    let paths = SiPaths::from_settings(&home, &settings);
+
+    if all {
+        let states = read_codex_worker_states(&paths)?;
+        if states.is_empty() {
+            match format {
+                OutputFormat::Json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexRepairAuthAllResultView {
+                        repaired: Vec::new(),
+                    })?
+                ),
+                OutputFormat::Text => println!("no codex worker sessions found"),
+            }
+            return Ok(());
+        }
+        let repaired = states
+            .iter()
+            .map(|state| repair_codex_worker_fort_auth(&home, &paths, &settings, state))
+            .collect::<Result<Vec<_>>>()?;
+        match format {
+            OutputFormat::Json => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexRepairAuthAllResultView { repaired })?
+                );
+            }
+            OutputFormat::Text => {
+                for item in repaired {
+                    println!(
+                        "{} [{}] {}",
+                        item.profile_id, item.worker_slot, stdout_text(&item.detail, CliTone::Info)
+                    );
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let target = resolve_codex_worker_for_profile(profile, worker_slot, "repair-auth", None, None)?;
+    let result = repair_codex_worker_fort_auth(&home, &paths, &settings, &target)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+        OutputFormat::Text => {
+            println!(
+                "{} [{}] {}",
+                result.profile_id,
+                result.worker_slot,
+                stdout_text(&result.detail, CliTone::Info)
+            );
+        }
+    }
+    Ok(())
 }
 
 fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String> {
@@ -72087,6 +72475,7 @@ fn run_codex_shell(
         &paths,
         &settings,
         &target.profile_id,
+        &target.worker_slot,
         Some(codex_profile_worker_slot_home_dir(
             &paths,
             &settings,
@@ -72291,6 +72680,7 @@ fn read_codex_status_for_profile(
         paths,
         settings,
         profile_id,
+        &worker_slot,
         Some(codex_profile_worker_slot_home_dir(paths, settings, profile_id, &worker_slot)),
     )?;
     let mut status = run_local_codex_app_server_status(
@@ -72362,7 +72752,14 @@ fn run_nucleus_codex_warmup_profile(
         anyhow::bail!("turn_timeout_seconds must be greater than zero");
     }
 
-    let prepared = prepare_codex_profile_runtime(home, paths, settings, profile_id, None)?;
+    let prepared = prepare_codex_profile_runtime(
+        home,
+        paths,
+        settings,
+        profile_id,
+        DEFAULT_CODEX_WORKER_SLOT,
+        None,
+    )?;
     let resolved_workspace = resolve_codex_workspace(workspace, settings)?;
     let workdir = resolve_codex_workdir(None, &resolved_workspace)?;
     let worker_id = WorkerId::generate();

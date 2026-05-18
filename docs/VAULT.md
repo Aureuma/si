@@ -25,7 +25,7 @@ Architecture boundary:
 ## `si fort` Wrapper Contract
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
-- `si codex spawn ...` and `si codex shell ...` provision or reuse a profile-scoped Fort session under `~/.si/codex/profiles/<profile>/fort/`.
+- `si codex spawn ...` and `si codex shell ...` provision or reuse a slot-scoped Fort session under `CODEX_HOME/fort/` (`~/.si/codex/profiles/<profile>/fort/` for `primary`, `~/.si/codex/profiles/<profile>/workers/<slot>/fort/` for non-primary slots).
 - Host bootstrap/admin auth for provisioning uses the bootstrap token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token`.
 - Runtime worker sessions use profile-local file-backed token paths for the short-lived access token and rotating refresh token.
 - Wrapper behavior:
@@ -42,8 +42,9 @@ Architecture boundary:
 - Operational guidance:
   - keep `~/.si/fort/bootstrap/*` for break-glass recovery only
   - keep routine Fort access in `~/.si/codex/profiles/<profile>/fort/access.token` and `refresh.token`
-  - invoke routine Fort commands through `si codex shell <profile> -- si fort ...` when outside that profile runtime
+  - invoke routine Fort commands through `si codex shell --profile <profile> --slot <slot> -- si fort ...` when outside that profile runtime
   - Codex profile provisioning explicitly requests a `30d` refresh-session TTL; Fort's general default may be shorter for non-Codex sessions
+  - Fort runtime agent IDs are slot-aware: `si-codex-<profile>` for `primary` and `si-codex-<profile>--<slot>` for non-primary slots
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 

@@ -105,6 +105,16 @@ pub fn codex_tmux_session_name_for_slot(profile_id: &str, worker_slot: &str) -> 
     }
 }
 
+pub fn codex_fort_agent_id(profile_id: &str, worker_slot: &str) -> String {
+    let profile = profile_id.trim();
+    let slot = codex_worker_slot_name(Some(worker_slot));
+    if slot == DEFAULT_CODEX_WORKER_SLOT {
+        format!("si-codex-{profile}")
+    } else {
+        format!("si-codex-{profile}--{slot}")
+    }
+}
+
 pub fn codex_profile_fort_session_paths(codex_home: &Path) -> CodexProfileFortSessionPaths {
     let dir = codex_home.join(CODEX_PROFILE_FORT_DIR_NAME);
     CodexProfileFortSessionPaths {
@@ -542,7 +552,7 @@ fn is_transient_report(lines: &[String]) -> bool {
 mod tests {
     use super::{
         build_codex_app_server_status_input, codex_profile_fort_runtime_env,
-        codex_profile_fort_session_paths, codex_tmux_session_name,
+        codex_fort_agent_id, codex_profile_fort_session_paths, codex_tmux_session_name,
         codex_tmux_session_name_for_slot, codex_worker_instance_name, codex_worker_slot_name,
         parse_codex_app_server_status, parse_prompt_segments_dual, parse_report_capture,
     };
@@ -574,6 +584,12 @@ mod tests {
             codex_tmux_session_name_for_slot("ferma", "review"),
             "si-codex-pane-ferma-review"
         );
+    }
+
+    #[test]
+    fn codex_fort_agent_id_is_slot_aware() {
+        assert_eq!(codex_fort_agent_id("ferma", "primary"), "si-codex-ferma");
+        assert_eq!(codex_fort_agent_id("ferma", "review"), "si-codex-ferma--review");
     }
 
     #[test]

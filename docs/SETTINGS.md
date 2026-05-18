@@ -93,8 +93,9 @@ Defaults for `si codex` profile-bound worker commands.
 - `codex.profile` (string): legacy compatibility field for the most recently selected Codex profile.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
 - Worker-slot behavior is command-level:
-  - `si codex spawn|respawn --slot <slot>`
-  - `si codex shell|tail|tmux|remove --slot <slot>`
+  - `si codex spawn|respawn --profile <profile> --slot <slot>`
+  - `si codex shell|tail|tmux|remove --profile <profile> --slot <slot>`
+  - `si codex repair-auth --profile <profile> --slot <slot>` for in-place Fort runtime repair
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
@@ -128,6 +129,7 @@ CLI and runtime behavior:
 - Runtime worker token state remains file-backed under:
   - `~/.si/codex/profiles/<profile>/fort/` for the `primary` slot
   - `~/.si/codex/profiles/<profile>/workers/<slot>/fort/` for non-primary slots
+  - Fort runtime agent IDs are slot-aware: `si-codex-<profile>` for `primary`, `si-codex-<profile>--<slot>` for non-primary slots
   - profile refresh tokens must be rotated in place.
 
 ### Orbit Fort secret materialization
