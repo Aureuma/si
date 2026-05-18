@@ -41636,8 +41636,12 @@ fn read_fort_host_from_settings_file(path: &Path) -> Result<Option<String>> {
 fn normalize_fort_public_https_host(value: &str, label: &str) -> Result<String> {
     let parsed = url::Url::parse(value.trim())
         .with_context(|| format!("{label} must be a valid Fort endpoint URL"))?;
-    if parsed.scheme() != "https" {
+    let insecure_override = fort_allow_insecure_host_override();
+    if parsed.scheme() != "https" && !insecure_override {
         anyhow::bail!("{label} must use https for persistent Fort configuration");
+    }
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        anyhow::bail!("{label} must use https (or http when SI_FORT_ALLOW_INSECURE_HOST=1)");
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
         anyhow::bail!("{label} must not include credentials");
@@ -41653,12 +41657,19 @@ fn normalize_fort_public_https_host(value: &str, label: &str) -> Result<String> 
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow!("{label} must include a host"))?;
-    if fort_host_is_local_or_private(host) {
+    if fort_host_is_local_or_private(host) && !insecure_override {
         anyhow::bail!(
             "{label} must resolve through a public Fort HTTPS endpoint; use an explicit native --host only for temporary local development or break/fix debugging"
         );
     }
     Ok(parsed.to_string().trim_end_matches('/').to_owned())
+}
+
+fn fort_allow_insecure_host_override() -> bool {
+    std::env::var("SI_FORT_ALLOW_INSECURE_HOST")
+        .ok()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "yes"))
 }
 
 fn fort_host_is_local_or_private(host: &str) -> bool {
@@ -72463,6 +72474,11 @@ fn run_codex_shell(
     worker_slot: Option<&str>,
     command: Vec<String>,
 ) -> Result<()> {
+    if profile.is_none() && command.len() >= 2 && command[1] == "--" {
+        anyhow::bail!(
+            "legacy positional profile form for `si codex shell` is no longer supported; use `si codex shell --profile <profile> --slot <slot> -- <command>`"
+        );
+    }
     let (home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&home, &settings);
     let target =

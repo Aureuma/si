@@ -169,6 +169,40 @@ fn write_reusable_codex_fort_session(codex_home: &Path, profile_id: &str) {
     }
 }
 
+fn write_codex_worker_state_for_test(
+    home: &Path,
+    profile_id: &str,
+    worker_slot: &str,
+    session_name: &str,
+    workspace: &Path,
+    workdir: &Path,
+) {
+    let path = home
+        .join(".si")
+        .join("codex")
+        .join("workers")
+        .join(profile_id)
+        .join(format!("{worker_slot}.json"));
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("mkdir worker state dir");
+    }
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&json!({
+            "schema_version": 1,
+            "profile_id": profile_id,
+            "worker_slot": worker_slot,
+            "profile_name": "America",
+            "session_name": session_name,
+            "workspace": workspace.display().to_string(),
+            "workdir": workdir.display().to_string(),
+            "updated_at": Utc::now().to_rfc3339(),
+        }))
+        .expect("serialize worker state"),
+    )
+    .expect("write worker state");
+}
+
 fn write_releasemind_auth_state(
     home: &Path,
     session_token: &str,
@@ -26876,6 +26910,187 @@ fn codex_profile_list_preserves_logged_in_state_when_live_probe_fails() {
     assert_eq!(profile["state"], "Logged-In");
     assert!(profile["five_hour_left_pct"].is_null());
     assert!(profile["weekly_left_pct"].is_null());
+}
+
+#[test]
+fn codex_repair_auth_all_provisions_slot_specific_agents_with_30d_ttl() {
+    let home = tempdir().expect("home tempdir");
+    let workspace = home.path().join("workspace");
+    fs::create_dir_all(&workspace).expect("mkdir workspace");
+    let codex_profiles_dir = home.path().join(".si/codex/profiles");
+    fs::create_dir_all(&codex_profiles_dir).expect("mkdir codex profiles");
+
+    write_codex_worker_state_for_test(
+        home.path(),
+        "america",
+        "primary",
+        "si-codex-pane-america",
+        &workspace,
+        &workspace,
+    );
+    write_codex_worker_state_for_test(
+        home.path(),
+        "america",
+        "review",
+        "si-codex-pane-america-review",
+        &workspace,
+        &workspace,
+    );
+
+    let requests_seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let seen_clone = Arc::clone(&requests_seen);
+    let call_index = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let call_index_clone = Arc::clone(&call_index);
+    let server = start_http_server_with_body(8, move |request| {
+        seen_clone.lock().expect("requests lock").push(request.clone());
+        let call = call_index_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if request.starts_with("GET /v1/agents/si-codex-america HTTP/1.1\r\n")
+            || request.starts_with("GET /v1/agents/si-codex-america--review HTTP/1.1\r\n")
+        {
+            return http_json_response("404 Not Found", &[], r#"{"error":"not found"}"#);
+        }
+        if request.starts_with("POST /v1/agents HTTP/1.1\r\n") {
+            return http_json_response("201 Created", &[], r#"{"ok":true}"#);
+        }
+        if request.starts_with("PUT /v1/agents/si-codex-america/policy HTTP/1.1\r\n")
+            || request.starts_with("PUT /v1/agents/si-codex-america--review/policy HTTP/1.1\r\n")
+        {
+            return http_json_response("200 OK", &[], r#"{"ok":true}"#);
+        }
+        if request.starts_with("POST /v1/auth/session/open HTTP/1.1\r\n") {
+            let body = format!(
+                r#"{{"access_token":"{}","refresh_token":"rft-{call}","session_id":"session-{call}","access_expires_at":"2030-01-01T00:00:00Z","refresh_expires_at":"2030-01-31T00:00:00Z"}}"#,
+                fake_jwt(json!({"exp": Utc::now().timestamp() + 3600}))
+            );
+            return http_json_response("200 OK", &[], &body);
+        }
+        panic!("unexpected request: {}", request.lines().next().unwrap_or("<empty>"));
+    });
+
+    fs::create_dir_all(home.path().join(".si/fort/bootstrap")).expect("mkdir fort bootstrap");
+    fs::write(
+        home.path().join(".si/fort/bootstrap/admin.token"),
+        format!("{}\n", fake_jwt(json!({"exp": Utc::now().timestamp() + 3600}))),
+    )
+    .expect("write bootstrap token");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            home.path().join(".si/fort/bootstrap/admin.token"),
+            fs::Permissions::from_mode(0o600),
+        )
+        .expect("chmod bootstrap token");
+    }
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        format!(
+            "schema_version = 1\n[paths]\ncodex_profiles_dir = {:?}\n[codex]\nprofile = \"america\"\n[codex.profiles]\nactive = \"america\"\n[codex.profiles.entries.america]\nname = \"America\"\nemail = \"america@example.test\"\nauth_path = {:?}\n[fort]\nhost = {:?}\n",
+            codex_profiles_dir,
+            codex_profiles_dir.join("america").join("auth.json"),
+            server.base_url,
+        ),
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("SI_FORT_ALLOW_INSECURE_HOST", "1")
+        .args(["codex", "repair-auth", "--all", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("parse repair output");
+    let repaired = parsed["repaired"].as_array().expect("repaired array");
+    assert_eq!(repaired.len(), 2);
+    assert!(repaired.iter().any(|item| item["agent_id"] == "si-codex-america"));
+    assert!(repaired.iter().any(|item| item["agent_id"] == "si-codex-america--review"));
+
+    let requests = requests_seen.lock().expect("requests lock");
+    let open_calls = requests
+        .iter()
+        .filter(|request| request.starts_with("POST /v1/auth/session/open HTTP/1.1\r\n"))
+        .collect::<Vec<_>>();
+    assert_eq!(open_calls.len(), 2, "expected two Fort session open calls");
+    assert!(
+        open_calls.iter().any(|request| request.contains(r#""agent_id":"si-codex-america""#))
+    );
+    assert!(
+        open_calls
+            .iter()
+            .any(|request| request.contains(r#""agent_id":"si-codex-america--review""#))
+    );
+    assert!(open_calls.iter().all(|request| request.contains(r#""refresh_ttl":"30d""#)));
+    server.join();
+}
+
+#[test]
+fn codex_profile_resolution_forms_are_consistent_across_lifecycle_commands() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[codex]\nprofile = \"america\"\n[codex.profiles]\nactive = \"america\"\n[codex.profiles.entries.america]\nname = \"America\"\nemail = \"america@example.test\"\nauth_path = \"/tmp/nonexistent\"\n",
+    )
+    .expect("write settings");
+
+    for args in [
+        vec!["codex", "remove", "america", "--slot", "primary"],
+        vec!["codex", "remove", "--profile", "america", "--slot", "primary"],
+        vec!["codex", "tail", "america", "--slot", "primary"],
+        vec!["codex", "tail", "--profile", "america", "--slot", "primary"],
+        vec!["codex", "tmux", "america", "--slot", "primary", "--format", "json"],
+        vec!["codex", "tmux", "--profile", "america", "--slot", "primary", "--format", "json"],
+    ] {
+        let output = cargo_bin()
+            .env("HOME", home.path())
+            .args(args)
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8(output).expect("stderr utf8");
+        assert!(stderr.contains("no codex worker session found for profile"));
+        assert!(!stderr.contains("unexpected argument"));
+    }
+}
+
+#[test]
+fn codex_lifecycle_commands_reject_dual_profile_forms_and_shell_legacy_positional_profile() {
+    for args in [
+        vec!["codex", "remove", "america", "--profile", "america", "--slot", "primary"],
+        vec!["codex", "tail", "america", "--profile", "america", "--slot", "primary"],
+        vec![
+            "codex",
+            "tmux",
+            "america",
+            "--profile",
+            "america",
+            "--slot",
+            "primary",
+            "--format",
+            "json",
+        ],
+    ] {
+        let output = cargo_bin().args(args).assert().failure().get_output().stderr.clone();
+        let stderr = String::from_utf8(output).expect("stderr utf8");
+        assert!(stderr.contains("cannot be used with"));
+        assert!(stderr.contains("[PROFILE]"));
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "shell", "america", "--", "echo", "ok"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("stderr utf8");
+    assert!(stderr.contains("legacy positional profile form"));
+    assert!(stderr.contains("use `si codex shell --profile <profile> --slot <slot> -- <command>`"));
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {
