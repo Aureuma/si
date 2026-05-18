@@ -4997,6 +4997,11 @@ impl NucleusService {
                 let codex_home = record.codex_home.trim();
                 (!codex_home.is_empty()).then(|| PathBuf::from(codex_home))
             });
+        let profile_codex_home = if worker_slot == DEFAULT_NUCLEUS_WORKER_SLOT {
+            profile_codex_home
+        } else {
+            None
+        };
         let home_dir = request
             .home_dir
             .or_else(|| {
@@ -7070,6 +7075,7 @@ mod tests {
         DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS, GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest,
         HookRuleRecord, MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService,
         NucleusStore, append_jsonl_with_rotation, cron_due_key, current_persisted_version,
+        default_codex_worker_slot_home_dir,
         hook_event_key, load_canonical_events, load_canonical_events_for_live_iteration,
         load_last_event_seq, public_openapi_document, run_failure_requires_session_quarantine,
         runtime_error_requires_worker_quarantine, stable_workdir_from, write_json_atomic,
@@ -12491,6 +12497,65 @@ mod tests {
         );
         assert_eq!(service.store.list_workers().expect("workers").len(), 1);
         assert_eq!(service.store.list_sessions().expect("sessions").len(), 2);
+    }
+
+    #[tokio::test]
+    async fn session_create_non_primary_slot_ignores_profile_level_codex_home_fallback() {
+        let temp = tempdir().expect("tempdir");
+        let runtime = FakeRuntime::default();
+        let service = NucleusService::open_with_runtime(
+            NucleusConfig {
+                bind_addr: "127.0.0.1:9898".parse().expect("addr"),
+                state_dir: temp.path().join("nucleus"),
+                auth_token: None,
+            },
+            Arc::new(runtime),
+        )
+        .expect("service");
+
+        let profile = ProfileName::new("america").expect("profile");
+        let profile_path = service.store.paths().profile_path(&profile);
+        write_json_atomic(
+            &profile_path,
+            &ProfileRecord {
+                profile: profile.clone(),
+                account_identity: Some("america@example.com".to_owned()),
+                codex_home: temp
+                    .path()
+                    .join("stale/.si/codex/profiles/america")
+                    .display()
+                    .to_string(),
+                auth_mode: None,
+                preferred_model: None,
+                runtime_defaults: BTreeMap::new(),
+            },
+        )
+        .expect("persist profile record");
+
+        let response = service
+            .dispatch_request(GatewayRequest {
+                id: json!("session-review-slot"),
+                method: "session.create".to_owned(),
+                params: json!({
+                    "profile": "america",
+                    "worker_slot": "review",
+                    "workdir": temp.path(),
+                }),
+            })
+            .await;
+        assert!(response.ok);
+
+        let expected = default_codex_worker_slot_home_dir("america", "review");
+        let worker_codex_home = response
+            .result
+            .as_ref()
+            .and_then(|item| item["worker"]["codex_home"].as_str())
+            .expect("worker codex_home");
+        assert_eq!(worker_codex_home, expected.display().to_string());
+        assert_ne!(
+            worker_codex_home,
+            temp.path().join("stale/.si/codex/profiles/america").display().to_string()
+        );
     }
 
     #[tokio::test]

@@ -117,7 +117,7 @@ si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` runtime auth is file-backed and resolves from the managed Codex profile `CODEX_HOME/fort/` session.
-- Caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` values are not normal `si fort` runtime fallbacks; use `si codex shell <profile> -- si fort ...` for profile runtime auth.
+- Caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` values are not normal `si fort` runtime fallbacks; use `si codex shell --profile <profile> --slot <slot> -- si fort ...` for profile runtime auth.
 - Bootstrap/admin Fort token files are reserved for explicit admin and provisioning commands; runtime secret commands fail loudly instead of falling back to bootstrap/admin auth.
 - Codex profile refresh tokens must be rotated in place.
 - Pass native `fort` flags after `--` when invoking through wrapper.

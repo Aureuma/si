@@ -86,10 +86,10 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 ```
 
 This matrix validates:
-- profile-scoped Fort agent auth bootstrap in `si codex spawn`
+- slot-scoped Fort agent auth bootstrap in `si codex spawn` (`si-codex-<profile>` for primary, `si-codex-<profile>--<slot>` for non-primary)
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
 - host-side bootstrap admin token files are used for provisioning/admin flows only
-- runtime token-path flow remains file-backed under `CODEX_HOME/fort/`; use `si codex shell <profile> -- si fort ...` for profile runtime auth
+- runtime token-path flow remains file-backed under `CODEX_HOME/fort/`; use `si codex shell --profile <profile> --slot <slot> -- si fort ...` for profile runtime auth
 - runtime secret commands fail loudly when profile-scoped Fort token files are missing or cannot refresh
 - worker-shell access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
@@ -179,6 +179,7 @@ si codex spawn --profile <profile> --slot review --workspace "$PWD"
 si codex list
 si codex shell --profile <profile> --slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
 si codex shell --profile <profile> --slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
+si codex repair-auth --profile <profile> --slot review
 si codex remove --profile <profile> --slot review
 ```
 

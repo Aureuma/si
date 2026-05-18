@@ -11,17 +11,46 @@ fn main() -> ExitCode {
         }
     };
 
-    println!("[fort-spawn-matrix] running Rust fort package tests");
+    let checks: &[&[&str]] = &[
+        &["test", "-p", "si-rs-fort"],
+        &[
+            "test",
+            "-p",
+            "si-rs-codex",
+            "tests::codex_fort_agent_id_is_slot_aware",
+            "--",
+            "--exact",
+        ],
+        &[
+            "test",
+            "-p",
+            "si-rs-cli",
+            "fort_wrapper_rejects_profile_refresh_token_rotation_to_noncanonical_path",
+            "--",
+            "--exact",
+        ],
+        &[
+            "test",
+            "-p",
+            "si-rs-cli",
+            "fort_wrapper_rejects_nonprimary_profile_refresh_token_rotation_to_noncanonical_path",
+            "--",
+            "--exact",
+        ],
+    ];
 
-    match Command::new("cargo").current_dir(&root).arg("test").arg("-p").arg("si-rs-fort").status()
-    {
-        Ok(status) if status.success() => ExitCode::SUCCESS,
-        Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
-        Err(err) => {
-            eprintln!("{err}");
-            ExitCode::from(1)
+    for args in checks {
+        println!("[fort-spawn-matrix] cargo {}", args.join(" "));
+        match Command::new("cargo").current_dir(&root).args(*args).status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => return ExitCode::from(status.code().unwrap_or(1) as u8),
+            Err(err) => {
+                eprintln!("{err}");
+                return ExitCode::from(1);
+            }
         }
     }
+    ExitCode::SUCCESS
 }
 
 fn repo_root() -> Result<PathBuf, String> {
