@@ -72244,13 +72244,18 @@ fn close_codex_worker_fort_session(
     } else {
         format!("exit status {}", output.status)
     };
-    if detail.contains("status=401")
-        || detail.contains("status=403")
-        || detail.contains("status=404")
-    {
+    if is_non_fatal_fort_session_close_error(&detail) {
         return Ok(());
     }
     Err(anyhow!("close Fort session before cleanup failed: {detail}"))
+}
+
+fn is_non_fatal_fort_session_close_error(detail: &str) -> bool {
+    let detail = detail.to_ascii_lowercase();
+    detail.contains("status=401")
+        || detail.contains("status=403")
+        || detail.contains("status=404")
+        || detail.contains("token file auth required")
 }
 
 fn remove_codex_worker_state(
@@ -73670,6 +73675,17 @@ mod tests {
         assert!(error.contains("/home/test/.si/fort/bootstrap/admin.token"));
         assert!(error.contains("Reissue Fort break-glass/admin bootstrap auth on the Fort host"));
         assert!(error.contains("SI did not fall back to any local bypass"));
+    }
+
+    #[test]
+    fn fort_session_close_non_fatal_errors_are_ignored() {
+        assert!(is_non_fatal_fort_session_close_error("status=401: unauthorized"));
+        assert!(is_non_fatal_fort_session_close_error("status=403 forbidden"));
+        assert!(is_non_fatal_fort_session_close_error("status=404 missing"));
+        assert!(is_non_fatal_fort_session_close_error("token file auth required"));
+
+        assert!(!is_non_fatal_fort_session_close_error("status=500: internal server error"));
+        assert!(!is_non_fatal_fort_session_close_error("network transport failed"));
     }
 
     #[test]
