@@ -60,5 +60,5 @@ tokio.workspace = true
 si-nucleus = { path = "../si-nucleus" }
 
 [[bin]]
-name = "si-rs"
+name = "si"
 path = "src/main.rs"

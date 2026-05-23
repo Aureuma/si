@@ -36,7 +36,7 @@ use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message as WsMessage, WebSocket, accept_hdr, connect};
 
 fn cargo_bin() -> Command {
-    Command::cargo_bin("si-rs").expect("si-rs binary should build")
+    Command::cargo_bin("si").expect("si binary should build")
 }
 
 #[allow(clippy::result_large_err)]
@@ -1498,7 +1498,7 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si\"\nchmod 755 \"$out/si\"\n",
     );
     let out_dir = repo.path().join("out");
     let path_env =
@@ -1549,7 +1549,7 @@ fn build_self_build_no_upgrade_writes_binary() {
     let cargo_path = repo.path().join("fake-cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho built\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho built\\n' > \"$CARGO_TARGET_DIR/release/si\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si\"\n",
     );
     let bin_dir = tempdir().expect("bin tempdir");
     let bin_cargo = bin_dir.path().join("cargo");
@@ -1591,7 +1591,7 @@ fn build_self_default_writes_path_binary() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho upgraded\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho upgraded\\n' > \"$CARGO_TARGET_DIR/release/si\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si\"\n",
     );
     let si_path = bin_dir.path().join("si");
     write_executable_shell_script(&si_path, "#!/bin/sh\necho old\n");
@@ -1615,7 +1615,7 @@ fn build_self_flag_first_no_upgrade_writes_binary() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho flagfirst\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho flagfirst\\n' > \"$CARGO_TARGET_DIR/release/si\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si\"\n",
     );
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
@@ -1683,7 +1683,7 @@ fn build_self_run_forwards_args_to_cargo() {
     assert!(args.contains("--manifest-path"));
     assert!(args.contains("rust/crates/si-cli/Cargo.toml"));
     assert!(args.contains("--bin"));
-    assert!(args.contains("si-rs"));
+    assert!(args.contains("si"));
     assert!(args.contains("--"));
     assert!(args.contains("version"));
     assert!(args.contains("--json"));
@@ -1888,7 +1888,7 @@ fn nucleus_service_install_writes_launchd_agent_definition() {
     assert_eq!(payload["service_name"], "com.aureuma.si.nucleus");
     assert_eq!(
         payload["logs_hint"],
-        "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si-rs\"'"
+        "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si\"'"
     );
     assert!(payload["manager_command"].is_null());
 
@@ -3692,7 +3692,7 @@ fn nucleus_events_subscribe_streams_live_run_events_on_service() {
         )
     });
 
-    let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin("si-rs"))
+    let output = ProcessCommand::new(assert_cmd::cargo::cargo_bin("si"))
         .args([
             "nucleus",
             "events",
@@ -10203,7 +10203,7 @@ fn build_homebrew_render_core_formula_writes_formula() {
     assert!(rendered.contains("depends_on \"rust\" => :build"));
     assert!(rendered.contains("cargo\", \"install\", \"--locked\""));
     assert!(rendered.contains("std_cargo_args(path: \"rust/crates/si-cli\")"));
-    assert!(rendered.contains("mv bin/\"si-rs\", bin/\"si\""));
+    assert!(rendered.contains("\"--bin\", \"si\""));
 }
 
 #[test]
@@ -10315,7 +10315,7 @@ fn build_self_verify_release_assets_checks_archives() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si\"\nchmod 755 \"$out/si\"\n",
     );
     let file_path = bin_dir.path().join("file");
     write_executable_shell_script(
@@ -10460,7 +10460,7 @@ fn build_installer_run_installs_fake_binary() {
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.94.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.94.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si\"\n",
     );
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
@@ -10820,7 +10820,7 @@ fn build_self_release_asset_creates_single_archive() {
     let cargo_path = toolchain_dir.path().join("cargo");
     write_executable_shell_script(
         &cargo_path,
-        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si-rs\"\nchmod 755 \"$out/si-rs\"\n",
+        "#!/bin/sh\ntarget=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--target\" ]; then target=\"$arg\"; fi\n  prev=\"$arg\"\ndone\nout=\"$CARGO_TARGET_DIR/release\"\nif [ -n \"$target\" ]; then out=\"$CARGO_TARGET_DIR/$target/release\"; fi\nmkdir -p \"$out\"\nprintf '#!/bin/sh\\necho si\\n' > \"$out/si\"\nchmod 755 \"$out/si\"\n",
     );
     #[cfg(unix)]
     {
@@ -13537,7 +13537,7 @@ fn nucleus_help_surface_stays_bounded_to_plan_scope() {
 
     let help = String::from_utf8(output).expect("help output should be utf-8");
     for expected in [
-        "Usage: si-rs nucleus <COMMAND>",
+        "Usage: si nucleus <COMMAND>",
         "status",
         "profile",
         "service",

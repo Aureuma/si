@@ -56,19 +56,19 @@ cargo run --quiet --locked -p si-rs-cli -- build installer run --force
 Prerequisites:
 
 - Rust `1.94.0` for local source builds (see `rust-toolchain.toml`).
-- Installed `si` for normal usage, or `target/release/si-rs` if you want to run the just-built binary directly from source.
+- Installed `si` for normal usage, or `target/release/si` if you want to run the just-built binary directly from source.
 
 Build the local source binary:
 
 ```bash
 cd /path/to/si
-cargo build --release --locked --bin si-rs
+cargo build --release --locked --bin si
 ```
 
 Run the built binary directly without installing it:
 
 ```bash
-target/release/si-rs --help
+target/release/si --help
 ```
 
 Fast local iteration:
@@ -213,8 +213,8 @@ Published GitHub Releases automatically include multi-arch CLI archives for:
 - macOS (`amd64`, `arm64`)
 
 Local preflight command:
-- `./.artifacts/cargo-target/release/si-rs build self assets --out-dir .artifacts/release-preflight`
-- `./.artifacts/cargo-target/release/si-rs build pnpm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
+- `./.artifacts/cargo-target/release/si build self assets --out-dir .artifacts/release-preflight`
+- `./.artifacts/cargo-target/release/si build pnpm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
 
