@@ -16523,8 +16523,9 @@ enum GitHubPullRequestCommand {
 
 #[derive(Debug, Args)]
 struct CodexSpawnStartArgs {
-    #[arg(long)]
     profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
@@ -16639,6 +16640,19 @@ struct CodexRemoveArgs {
 }
 
 #[derive(Debug, Args)]
+struct CodexStopArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
+    all: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
 struct CodexTailArgs {
     profile: Option<String>,
     #[arg(long = "profile", conflicts_with = "profile")]
@@ -16682,6 +16696,7 @@ enum CodexCommand {
     },
     Spawn(CodexSpawnStartArgs),
     Remove(CodexRemoveArgs),
+    Stop(CodexStopArgs),
     Tail(CodexTailArgs),
     Shell(CodexShellArgs),
     List {
@@ -18944,6 +18959,14 @@ struct CodexRemoveResultView {
 }
 
 #[derive(Debug, Serialize)]
+struct CodexStopResultView {
+    name: String,
+    session_name: String,
+    profile_id: String,
+    output: String,
+}
+
+#[derive(Debug, Serialize)]
 struct CodexListEntryView {
     profile_id: String,
     worker_slot: String,
@@ -18958,6 +18981,12 @@ struct CodexListEntryView {
 struct CodexRemoveAllResultView {
     aborted: bool,
     removed: Vec<CodexRemoveResultView>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexStopAllResultView {
+    aborted: bool,
+    stopped: Vec<CodexStopResultView>,
 }
 
 #[derive(Debug, Serialize)]
@@ -19768,8 +19797,9 @@ fn run_publish_npm_package(
     if dry_run {
         command.arg("--dry-run");
     }
-    let output =
-        command.output().with_context(|| format!("run corepack pnpm publish for {}", package.display()))?;
+    let output = command
+        .output()
+        .with_context(|| format!("run corepack pnpm publish for {}", package.display()))?;
     if !output.status.success() {
         return Err(anyhow!(
             "corepack pnpm publish failed: {}",
@@ -19817,7 +19847,10 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .output()
         .context("run corepack pnpm pack")?;
     if !output.status.success() {
-        return Err(anyhow!("corepack pnpm pack failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
+        return Err(anyhow!(
+            "corepack pnpm pack failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
     }
 
     let mut matches = fs::read_dir(stage.path())
@@ -19826,7 +19859,8 @@ fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<
         .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("tgz"))
         .collect::<Vec<_>>();
     matches.sort();
-    let src = matches.pop().ok_or_else(|| anyhow!("corepack pnpm pack did not produce a tarball"))?;
+    let src =
+        matches.pop().ok_or_else(|| anyhow!("corepack pnpm pack did not produce a tarball"))?;
     let dst = out_dir.join(
         src.file_name().ok_or_else(|| anyhow!("invalid npm tarball path {}", src.display()))?,
     );
@@ -35883,7 +35917,13 @@ fn main() -> Result<()> {
                     format,
                 }) => swap_codex_profile(profile, home, settings_file, format)?,
             },
-            CodexCommand::Spawn(CodexSpawnStartArgs { profile, worker_slot, workspace }) => {
+            CodexCommand::Spawn(CodexSpawnStartArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                workspace,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 show_codex_spawn_start(profile, worker_slot, workspace)?
             }
             CodexCommand::Remove(CodexRemoveArgs {
@@ -35896,6 +35936,16 @@ fn main() -> Result<()> {
                 let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
             }
+            CodexCommand::Stop(CodexStopArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                all,
+                format,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
+                run_codex_stop(profile.as_deref(), worker_slot.as_deref(), all, format)?
+            }
             CodexCommand::Tail(CodexTailArgs { profile, profile_flag, worker_slot, tail }) => {
                 let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_tail(profile.as_deref(), worker_slot.as_deref(), &tail)?
@@ -35904,12 +35954,7 @@ fn main() -> Result<()> {
                 run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?
             }
             CodexCommand::List { format } => run_codex_list(format)?,
-            CodexCommand::Tmux(CodexTmuxArgs {
-                profile,
-                profile_flag,
-                worker_slot,
-                format,
-            }) => {
+            CodexCommand::Tmux(CodexTmuxArgs { profile, profile_flag, worker_slot, format }) => {
                 let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
             }
@@ -35976,7 +36021,13 @@ fn main() -> Result<()> {
                     }
                 },
             },
-            CodexCommand::Respawn(CodexSpawnStartArgs { profile, worker_slot, workspace }) => {
+            CodexCommand::Respawn(CodexSpawnStartArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                workspace,
+            }) => {
+                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
                 run_codex_respawn(profile, worker_slot, workspace)?
             }
         },
@@ -36356,6 +36407,7 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "profile"] => Some("Manage Codex profiles."),
         ["codex", "spawn"] => Some("Start a Codex worker for a chosen profile."),
         ["codex", "remove"] => Some("Remove a Codex worker session."),
+        ["codex", "stop"] => Some("Stop a Codex worker session."),
         ["codex", "tail"] => Some("Tail Codex worker session output."),
         ["codex", "shell"] => Some("Run a shell command with a Codex worker environment."),
         ["codex", "list"] => Some("List Codex worker sessions."),
@@ -41906,9 +41958,7 @@ fn render_codex_profile_table(profiles: &[CodexProfileView], include_index: bool
     header.push(
         Cell::new("Email").fg(cli_table_color(CliTone::Label)).add_attribute(Attribute::Bold),
     );
-    header.push(
-        Cell::new("5H").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
-    );
+    header.push(Cell::new("5H").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold));
     header.push(
         Cell::new("Weekly").fg(cli_table_color(CliTone::Info)).add_attribute(Attribute::Bold),
     );
@@ -41974,17 +42024,9 @@ fn format_relative_minutes_compact(remaining_minutes: i32) -> String {
     let hours = minutes / 60;
     minutes %= 60;
     if days > 0 {
-        if hours > 0 {
-            format!("in {days}d{hours}h")
-        } else {
-            format!("in {days}d")
-        }
+        if hours > 0 { format!("in {days}d{hours}h") } else { format!("in {days}d") }
     } else if hours > 0 {
-        if minutes > 0 {
-            format!("in {hours}h{minutes}m")
-        } else {
-            format!("in {hours}h")
-        }
+        if minutes > 0 { format!("in {hours}h{minutes}m") } else { format!("in {hours}h") }
     } else {
         format!("in {minutes}m")
     }
@@ -42453,13 +42495,7 @@ fn show_codex_profile(
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(
-        &home,
-        &settings,
-        &paths,
-        profile.as_deref(),
-        "show",
-    )?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "show")?;
     let entry = settings
         .codex
         .profiles
@@ -42543,13 +42579,7 @@ fn remove_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(
-        &home,
-        &settings,
-        &paths,
-        profile.as_deref(),
-        "remove",
-    )?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "remove")?;
     let mut document = load_settings_document(&settings_path)?;
     let codex = ensure_toml_table(&mut document, "codex")?;
     if let Some(profiles) = codex.get_mut("profiles").and_then(toml::Value::as_table_mut) {
@@ -42587,13 +42617,7 @@ fn login_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(
-        &home,
-        &settings,
-        &paths,
-        profile.as_deref(),
-        "login",
-    )?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "login")?;
     let entry = settings
         .codex
         .profiles
@@ -42685,13 +42709,7 @@ fn swap_codex_profile(
     let settings_path = settings_file.unwrap_or_else(|| home.join(".si").join("settings.toml"));
     let settings = Settings::load(&home, Some(&settings_path))?;
     let paths = SiPaths::from_settings(&home, &settings);
-    let profile_id = resolve_codex_profile(
-        &home,
-        &settings,
-        &paths,
-        profile.as_deref(),
-        "swap",
-    )?;
+    let profile_id = resolve_codex_profile(&home, &settings, &paths, profile.as_deref(), "swap")?;
     let entry = settings
         .codex
         .profiles
@@ -71572,13 +71590,8 @@ fn show_codex_spawn_start(
 ) -> Result<()> {
     let (settings_home, settings) = load_codex_runtime_settings(None, None)?;
     let paths = SiPaths::from_settings(&settings_home, &settings);
-    let profile_id = resolve_codex_profile(
-        &settings_home,
-        &settings,
-        &paths,
-        profile.as_deref(),
-        "spawn",
-    )?;
+    let profile_id =
+        resolve_codex_profile(&settings_home, &settings, &paths, profile.as_deref(), "spawn")?;
     let workspace = resolve_codex_workspace(workspace, &settings)?;
     let workdir = resolve_codex_workdir(None, &workspace)?;
     let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
@@ -72053,6 +72066,39 @@ fn prompt_codex_remove_all(states: &[CodexWorkerState]) -> Result<bool> {
     Ok(input.trim() == "remove all")
 }
 
+fn stop_codex_worker_state(state: &CodexWorkerState) -> Result<CodexStopResultView> {
+    let tmux_bin = "tmux";
+    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
+    kill_tmux_session_if_present(tmux_bin, &tmux_term, &state.session_name);
+    Ok(CodexStopResultView {
+        name: state.profile_id.clone(),
+        session_name: state.session_name.clone(),
+        profile_id: state.profile_id.clone(),
+        output: format!("stopped {}\n", state.session_name),
+    })
+}
+
+fn prompt_codex_stop_all(states: &[CodexWorkerState]) -> Result<bool> {
+    eprintln!(
+        "{}",
+        stderr_text(&format!("Stop all {} codex worker sessions?", states.len()), CliTone::Warning,)
+    );
+    for item in states {
+        eprintln!(
+            "{} {} [{}] ({})",
+            stderr_text("-", CliTone::Muted),
+            stderr_text(&item.profile_id, CliTone::Command),
+            stderr_text(&item.worker_slot, CliTone::Label),
+            item.session_name,
+        );
+    }
+    eprint!("{} ", stderr_text("Type 'stop all' to confirm:", CliTone::Heading));
+    io::stderr().flush().context("flush codex stop-all prompt")?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).context("read codex stop-all confirmation")?;
+    Ok(input.trim() == "stop all")
+}
+
 fn resolve_codex_worker_for_profile(
     profile: Option<&str>,
     worker_slot: Option<&str>,
@@ -72170,15 +72216,10 @@ fn close_codex_worker_fort_session(
     } else {
         None
     };
-    let program = std::env::current_exe().context("resolve si executable for Fort session close")?;
+    let program =
+        std::env::current_exe().context("resolve si executable for Fort session close")?;
     let mut command = StdCommand::new(program);
-    command
-        .arg("fort")
-        .arg("--home")
-        .arg(home)
-        .arg("auth")
-        .arg("session")
-        .arg("close");
+    command.arg("fort").arg("--home").arg(home).arg("auth").arg("session").arg("close");
     if let Some(session_id) = session_id.as_deref() {
         command.arg("--session-id").arg(session_id);
     }
@@ -72203,7 +72244,9 @@ fn close_codex_worker_fort_session(
     } else {
         format!("exit status {}", output.status)
     };
-    if detail.contains("status=401") || detail.contains("status=403") || detail.contains("status=404")
+    if detail.contains("status=401")
+        || detail.contains("status=403")
+        || detail.contains("status=404")
     {
         return Ok(());
     }
@@ -72299,19 +72342,85 @@ fn run_codex_remove_with_settings(
         return Ok(());
     }
 
-    let target = resolve_codex_worker_for_profile(
-        profile,
-        worker_slot,
-        "remove",
-        Some(home.clone()),
-        None,
-    )?;
+    let target =
+        resolve_codex_worker_for_profile(profile, worker_slot, "remove", Some(home.clone()), None)?;
     let view = remove_codex_worker_state(&paths, &settings, &home, &target)?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
         OutputFormat::Text => print!("{}", view.output),
     }
     Ok(())
+}
+
+fn run_codex_stop_with_settings(
+    profile: Option<&str>,
+    worker_slot: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+    home: Option<PathBuf>,
+) -> Result<()> {
+    let (home, settings) = load_codex_runtime_settings(home, None)?;
+    let paths = SiPaths::from_settings(&home, &settings);
+    if all {
+        let states = read_codex_worker_states(&paths)?;
+        if states.is_empty() {
+            match format {
+                OutputFormat::Json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexStopAllResultView {
+                        aborted: false,
+                        stopped: Vec::new(),
+                    })?
+                ),
+                OutputFormat::Text => println!("no codex worker sessions found"),
+            }
+            return Ok(());
+        }
+        let confirmed = prompt_codex_stop_all(&states)?;
+        if !confirmed {
+            match format {
+                OutputFormat::Json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&CodexStopAllResultView {
+                        aborted: true,
+                        stopped: Vec::new(),
+                    })?
+                ),
+                OutputFormat::Text => println!("aborted"),
+            }
+            return Ok(());
+        }
+        let stopped = states.iter().map(stop_codex_worker_state).collect::<Result<Vec<_>>>()?;
+        match format {
+            OutputFormat::Json => println!(
+                "{}",
+                serde_json::to_string_pretty(&CodexStopAllResultView { aborted: false, stopped })?
+            ),
+            OutputFormat::Text => {
+                for item in stopped {
+                    print!("{}", item.output);
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let target = resolve_codex_worker_for_profile(profile, worker_slot, "stop", None, None)?;
+    let view = stop_codex_worker_state(&target)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => print!("{}", view.output),
+    }
+    Ok(())
+}
+
+fn run_codex_stop(
+    profile: Option<&str>,
+    worker_slot: Option<&str>,
+    all: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    run_codex_stop_with_settings(profile, worker_slot, all, format, None)
 }
 
 fn run_codex_remove(
@@ -72419,7 +72528,9 @@ fn run_codex_repair_auth(
                 for item in repaired {
                     println!(
                         "{} [{}] {}",
-                        item.profile_id, item.worker_slot, stdout_text(&item.detail, CliTone::Info)
+                        item.profile_id,
+                        item.worker_slot,
+                        stdout_text(&item.detail, CliTone::Info)
                     );
                 }
             }
