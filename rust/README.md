@@ -14,8 +14,8 @@ Current scope:
 - typed runtime launch specs with early path validation
 - shared Codex worker-path and workspace binding for local sessions
 - local Codex worker spawn assembly for names, environment, workdir, and process launch inputs
-- Rust CLI exposure for Nucleus control-plane commands under `si-rs nucleus ...`
-- Rust CLI exposure for Codex worker lifecycle commands under `si-rs codex ...`
+- Rust CLI exposure for Nucleus control-plane commands under `si nucleus ...`
+- Rust CLI exposure for Codex worker lifecycle commands under `si codex ...`
 - the primary Rust CLI entrypoint used for local and shipped runtime flows
 
 Current entrypoint:

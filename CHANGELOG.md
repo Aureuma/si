@@ -97,7 +97,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 ### Changed
-- Changed SI to a Rust-only workspace for build, test, runtime, wrapper, and release flows, with `si-rs` now serving as the primary shipped CLI binary.
+- Changed SI to a Rust-only workspace for build, test, runtime, wrapper, and release flows, with `si` now serving as the primary shipped CLI binary.
 - Changed installer, npm, Homebrew, release-asset, and image-build paths to use the Rust-owned self-build and packaging surfaces by default.
 
 ### Fixed

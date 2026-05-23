@@ -239,7 +239,7 @@ use vault_compat::{VaultCommand, run_vault_command};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "si-rs",
+    name = "si",
     disable_version_flag = true,
     disable_help_subcommand = true,
     arg_required_else_help = true
@@ -17395,7 +17395,7 @@ fn nucleus_service_logs_hint(platform: NucleusServicePlatform) -> String {
             format!("journalctl --user-unit {} -f", nucleus_service_name(platform))
         }
         NucleusServicePlatform::LaunchdAgent => {
-            "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si-rs\"'".to_owned()
+            "log stream --style compact --predicate 'process == \"si-nucleus\" || process == \"si\"'".to_owned()
         }
     }
 }
@@ -19423,7 +19423,7 @@ fn build_self_binary(
         prepare_self_cargo_target_dir(repo_root, cargo_options.target_dir.clone())?;
     if !quiet {
         println!(
-            "running: cargo build --release --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs"
+            "running: cargo build --release --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si"
         );
     }
     print_self_build_runtime_notes(&cargo_target_dir.path, cargo_options.timings, quiet);
@@ -19437,17 +19437,14 @@ fn build_self_binary(
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
-        .arg("si-rs")
+        .arg("si")
         .status()
         .context("run cargo build for self build")?;
     if !status.success() {
         return Err(anyhow!("build failed: {status}"));
     }
-    let built_binary = cargo_target_dir.path.join("release").join(if cfg!(windows) {
-        "si-rs.exe"
-    } else {
-        "si-rs"
-    });
+    let built_binary =
+        cargo_target_dir.path.join("release").join(if cfg!(windows) { "si.exe" } else { "si" });
     let tmp = tempfile::Builder::new()
         .prefix("si-self-build-")
         .tempfile_in(dir)
@@ -19521,7 +19518,7 @@ fn run_build_self_check(
         prepare_self_cargo_target_dir(&repo_root, cargo_options.target_dir.clone())?;
     if !quiet {
         println!(
-            "running: cargo check --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs"
+            "running: cargo check --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si"
         );
     }
     print_self_build_runtime_notes(&cargo_target_dir.path, cargo_options.timings, quiet);
@@ -19534,7 +19531,7 @@ fn run_build_self_check(
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
-        .arg("si-rs")
+        .arg("si")
         .status()
         .context("run cargo check for self build")?;
     if !status.success() {
@@ -19560,7 +19557,7 @@ fn run_build_self_run(
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
-        .arg("si-rs")
+        .arg("si")
         .arg("--");
     for arg in args {
         command.arg(arg);
@@ -19656,7 +19653,7 @@ fn build_release_asset(
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
-        .arg("si-rs");
+        .arg("si");
     let output = cargo_command.output().context("run cargo build for release asset")?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -19677,7 +19674,7 @@ fn build_release_asset(
     let built_binary = cargo_target_dir
         .join(target.rust_triple)
         .join("release")
-        .join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
+        .join(if cfg!(windows) { "si.exe" } else { "si" });
     fs::copy(&built_binary, &output_path).with_context(|| {
         format!("copy built release binary {} to {}", built_binary.display(), output_path.display())
     })?;
@@ -20022,7 +20019,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
             .join(".artifacts")
             .join("cargo-target")
             .join("release")
-            .join(if cfg!(windows) { "si-rs.exe" } else { "si-rs" });
+            .join(if cfg!(windows) { "si.exe" } else { "si" });
         if prebuilt.exists() {
             if !cfg.quiet {
                 println!("rust: using prebuilt installer binary {}", prebuilt.display());
@@ -20068,16 +20065,13 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         .arg("--manifest-path")
         .arg("rust/crates/si-cli/Cargo.toml")
         .arg("--bin")
-        .arg("si-rs");
+        .arg("si");
     let status = command.status().context("run cargo build for installer")?;
     if !status.success() {
         return Err(anyhow!("build failed: {status}"));
     }
-    let built_binary = cargo_target_dir.path().join("release").join(if cfg!(windows) {
-        "si-rs.exe"
-    } else {
-        "si-rs"
-    });
+    let built_binary =
+        cargo_target_dir.path().join("release").join(if cfg!(windows) { "si.exe" } else { "si" });
     fs::copy(&built_binary, &tmp_output_path).with_context(|| {
         format!(
             "copy built installer binary {} to {}",
@@ -21077,7 +21071,7 @@ fn run_homebrew_render_core_formula(
     download_file(&source_url, temp.path())?;
     let digest = sha256_file(temp.path())?;
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
     );
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
@@ -36280,7 +36274,7 @@ fn build_cli_help_command() -> clap::Command {
 fn annotate_command_help(mut command: clap::Command, parent_path: &[String]) -> clap::Command {
     let name = command.get_name().to_owned();
     let mut path = parent_path.to_vec();
-    if name != "si" && name != "si-rs" {
+    if name != "si" {
         path.push(name);
     }
 

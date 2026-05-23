@@ -9,8 +9,7 @@ class Si < Formula
 
   depends_on "rust" => :build
   def install
-    system "cargo", "install", "--locked", *std_cargo_args(path: "rust/crates/si-cli"), "--bin", "si-rs"
-    mv bin/"si-rs", bin/"si"
+    system "cargo", "install", "--locked", *std_cargo_args(path: "rust/crates/si-cli"), "--bin", "si"
   end
 
   test do
