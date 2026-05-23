@@ -15,7 +15,7 @@ complete from terminal-driven work.
 ```bash
 si orbit releasemind runbook plan --repo Aureuma/si --json
 si orbit releasemind runbook status --repo Aureuma/si <post-id> --json
-si orbit releasemind runbook complete --repo Aureuma/si <post-id> tests --evidence "cargo test -p si-rs-cli releasemind_runbook"
+si orbit releasemind runbook complete --repo Aureuma/si <post-id> tests --evidence "cargo test -p si-cli releasemind_runbook"
 ```
 
 If `--repo` is omitted, SI infers `owner/repo` from the current GitHub origin.
@@ -51,7 +51,7 @@ si orbit releasemind runbook plan --repo Aureuma/si
 
 ```bash
 si orbit releasemind runbook complete --repo Aureuma/si <post-id> version_bump --evidence "commit <sha> bumped patch version"
-si orbit releasemind runbook complete --repo Aureuma/si <post-id> tests --evidence "cargo test -p si-rs-cli releasemind_runbook"
+si orbit releasemind runbook complete --repo Aureuma/si <post-id> tests --evidence "cargo test -p si-cli releasemind_runbook"
 si orbit releasemind runbook complete --repo Aureuma/si <post-id> docs --evidence "docs updated in commit <sha>"
 si orbit releasemind runbook complete --repo Aureuma/si <post-id> approval --evidence "reviewed by release operator"
 ```

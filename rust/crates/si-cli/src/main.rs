@@ -34,29 +34,21 @@ use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use si_nucleus_core::{ProfileName, RunId, RunStatus, SessionId, WorkerId};
-use si_nucleus_runtime::{
-    NucleusRuntime, RunInputItem, RunTurnSpec, RuntimeStatusSnapshot, SessionOpenSpec,
-    WorkerLaunchSpec,
-};
-use si_nucleus_runtime_codex::CodexNucleusRuntime;
-use si_rs_codex::{
+use si_codex::{
     CodexProfileFortSessionPaths, DEFAULT_CODEX_WORKER_SLOT, build_codex_app_server_status_input,
     codex_fort_agent_id, codex_profile_fort_session_paths, codex_tmux_session_name_for_slot,
     codex_worker_name, codex_worker_slot_name, parse_codex_app_server_status,
 };
-use si_rs_command_manifest::{
-    CommandCategory, CommandSpec, find_root_command, visible_root_commands,
-};
-use si_rs_config::paths::SiPaths;
-use si_rs_config::runtime::git_repo_root_from;
-use si_rs_config::settings::{
+use si_command_manifest::{CommandCategory, CommandSpec, find_root_command, visible_root_commands};
+use si_config::paths::SiPaths;
+use si_config::runtime::git_repo_root_from;
+use si_config::settings::{
     AWSAccountEntry, AppleAppStoreAccountEntry, CloudflareAccountEntry, CodexProfileEntry,
     FortSettings, GCPAccountEntry, GitHubAccountEntry, GoogleAccountEntry, GooglePlayAccountEntry,
     GoogleYouTubeAccountEntry, OCIAccountEntry, OpenAIAccountEntry, Settings, StripeAccountEntry,
     SurfSettings, VivaSettings, WorkOSAccountEntry,
 };
-use si_rs_fort::{
+use si_fort::{
     BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
     RefreshSuccess, SessionState, acquire_session_lock,
     apply_refresh_outcome_to_persisted_session_state, build_bootstrap_view,
@@ -65,7 +57,13 @@ use si_rs_fort::{
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
 };
-use si_rs_provider_apple::{
+use si_nucleus_core::{ProfileName, RunId, RunStatus, SessionId, WorkerId};
+use si_nucleus_runtime::{
+    NucleusRuntime, RunInputItem, RunTurnSpec, RuntimeStatusSnapshot, SessionOpenSpec,
+    WorkerLaunchSpec,
+};
+use si_nucleus_runtime_codex::CodexNucleusRuntime;
+use si_provider_apple::{
     AppleAppStoreAPIResponse, AppleAppStoreAuthOverrides, AppleAppStoreAuthStatus,
     AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, AppleAppStoreRuntime,
     issue_api_token as issue_apple_appstore_token, list_appstore_contexts,
@@ -74,7 +72,7 @@ use si_rs_provider_apple::{
     resolve_runtime as resolve_apple_appstore_runtime,
     run_api_request as run_apple_appstore_api_request,
 };
-use si_rs_provider_aws::{
+use si_provider_aws::{
     AWSAPIRequest, AWSAPIResponse, AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry,
     AWSCurrentContext, AWSRuntimeContext, execute_api_request as execute_aws_api_request,
     list_contexts as list_aws_contexts, preview_access_key as preview_aws_access_key,
@@ -82,8 +80,8 @@ use si_rs_provider_aws::{
     resolve_current_context as resolve_aws_current_context, resolve_runtime as resolve_aws_runtime,
     verify_auth_status as verify_aws_auth_status,
 };
-use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
-use si_rs_provider_cloudflare::{
+use si_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
+use si_provider_cloudflare::{
     CloudflareAPIRequest, CloudflareAPIResponse, CloudflareAuthOverrides, CloudflareAuthRuntime,
     CloudflareAuthStatus, CloudflareContextListEntry, CloudflareContextOverrides,
     CloudflareCurrentContext, execute_api_request as execute_cloudflare_api_request,
@@ -94,14 +92,14 @@ use si_rs_provider_cloudflare::{
     resolve_current_context as resolve_cloudflare_current_context,
     verify_auth_status as verify_cloudflare_auth_status,
 };
-use si_rs_provider_gcp::{
+use si_provider_gcp::{
     GCPAPIRequest, GCPAPIResponse, GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry,
     GCPCurrentContext, GCPRuntime, execute_api_request as execute_gcp_api_request,
     list_contexts as list_gcp_contexts, render_context_list_text as render_gcp_context_list_text,
     resolve_auth_status as resolve_gcp_auth_status,
     resolve_current_context as resolve_gcp_current_context, resolve_runtime as resolve_gcp_runtime,
 };
-use si_rs_provider_github::{
+use si_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubBranchCreateOptions,
     GitHubBranchProtectionOptions, GitHubContextListEntry, GitHubRuntime, GitHubSecretScope,
     add_project_item as github_add_project_item,
@@ -136,7 +134,7 @@ use si_rs_provider_github::{
     update_project_item_field_value as github_update_project_item_field_value,
     update_repo as github_update_repo, upload_release_asset as github_upload_release_asset,
 };
-use si_rs_provider_google::{
+use si_provider_google::{
     GooglePlacesAPIRequest, GooglePlacesAPIResponse, GooglePlacesAuthStatus,
     GooglePlacesContextListEntry, GooglePlacesCurrentContext, GooglePlacesOverrides,
     GooglePlacesRuntime, GooglePlayAPIRequest, GooglePlayAPIResponse, GooglePlayContextListEntry,
@@ -151,7 +149,7 @@ use si_rs_provider_google::{
     resolve_play_runtime, resolve_youtube_auth_status, resolve_youtube_current_context,
     resolve_youtube_runtime, set_youtube_thumbnail, upload_youtube_caption, upload_youtube_video,
 };
-use si_rs_provider_oci::{
+use si_provider_oci::{
     OCIAPIRequest, OCIAPIResponse, OCIAPIService, OCIAuthOverrides, OCIAuthStatus,
     OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
     build_oracular_cloud_init_user_data as build_oci_oracular_cloud_init_user_data,
@@ -161,7 +159,7 @@ use si_rs_provider_oci::{
     resolve_auth_status as resolve_oci_auth_status,
     resolve_current_context as resolve_oci_current_context,
 };
-use si_rs_provider_openai::{
+use si_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
     OpenAICurrentContext, OpenAIRuntime, archive_project as openai_archive_project,
     create_admin_api_key as openai_create_admin_api_key, create_project as openai_create_project,
@@ -187,7 +185,7 @@ use si_rs_provider_openai::{
     update_project_rate_limit as openai_update_project_rate_limit,
     verify_auth_status as verify_openai_auth_status,
 };
-use si_rs_provider_stripe::{
+use si_provider_stripe::{
     StripeAPIRequest, StripeAPIResponse, StripeAuthOverrides, StripeAuthStatus,
     StripeContextListEntry, StripeCurrentContext, StripeRuntimeContext,
     execute_api_request as execute_stripe_api_request, list_all as list_all_stripe_objects,
@@ -198,7 +196,7 @@ use si_rs_provider_stripe::{
     resolve_current_context as resolve_stripe_current_context,
     resolve_runtime as resolve_stripe_runtime,
 };
-use si_rs_provider_workos::{
+use si_provider_workos::{
     WorkOSAPIRequest, WorkOSAPIResponse, WorkOSAuthOverrides, WorkOSAuthStatus,
     WorkOSContextListEntry, WorkOSCurrentContext, WorkOSRuntimeContext,
     execute_api_request as execute_workos_api_request, list_contexts as list_workos_contexts,
@@ -207,8 +205,8 @@ use si_rs_provider_workos::{
     resolve_current_context as resolve_workos_current_context,
     resolve_runtime as resolve_workos_runtime,
 };
-use si_rs_vault::TrustStore;
-use si_rs_warmup::{
+use si_vault::TrustStore;
+use si_warmup::{
     WarmupState, classify_autostart_request, default_autostart_marker_path,
     default_disabled_marker_path, default_state_path as default_warmup_state_path,
     load_state as load_warmup_state, read_marker_state as read_warmup_marker_state,
@@ -19303,7 +19301,7 @@ fn run_distribution_doctor(format: OutputFormat) -> Result<()> {
         checks.push(distribution_doctor_check("brew", "Homebrew install validation"));
     }
     let view = DistributionDoctorView {
-        version: si_rs_core::version::current_version().to_owned(),
+        version: si_core::version::current_version().to_owned(),
         binary,
         checks,
     };
@@ -20410,7 +20408,7 @@ fn run_installer_smoke_host() -> Result<()> {
         run_command_checked(
             &root,
             "cargo",
-            ["test", "-p", "si-rs-cli", "build_installer_settings_helper_"],
+            ["test", "-p", "si-cli", "build_installer_settings_helper_"],
         )?;
     }
 
@@ -21574,7 +21572,7 @@ fn main() -> Result<()> {
     let cli = parse_cli();
 
     if cli.version_flag {
-        println!("{}", si_rs_core::version::current_version());
+        println!("{}", si_core::version::current_version());
         return Ok(());
     }
 
@@ -21585,7 +21583,7 @@ fn main() -> Result<()> {
 
     match command {
         Command::Version => {
-            println!("{}", si_rs_core::version::current_version());
+            println!("{}", si_core::version::current_version());
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Doctor { format } => run_distribution_doctor(format)?,
@@ -43037,7 +43035,7 @@ fn render_fort_session_classification_text(state: &SessionState) {
     }
 }
 
-fn render_fort_snapshot_text(snapshot: &si_rs_fort::SessionSnapshot) {
+fn render_fort_snapshot_text(snapshot: &si_fort::SessionSnapshot) {
     println!("profile_id={}", render_option_text_value(Some(&snapshot.profile_id)));
     println!("agent_id={}", render_option_text_value(Some(&snapshot.agent_id)));
     println!("session_id={}", render_option_text_value(snapshot.session_id.as_deref()));
@@ -67095,7 +67093,7 @@ fn load_github_runtime(
     installation_id: Option<i64>,
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
-) -> Result<si_rs_provider_github::GitHubRuntime> {
+) -> Result<si_provider_github::GitHubRuntime> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let token = materialize_orbit_secret_override(&settings, &home, token.as_deref())?
@@ -67978,7 +67976,7 @@ fn parse_github_project_optional_bool_flag(
 }
 
 fn resolve_github_project_identity(
-    runtime: &si_rs_provider_github::GitHubRuntime,
+    runtime: &si_provider_github::GitHubRuntime,
     owner: Option<String>,
     project_ref: Option<String>,
 ) -> Result<(String, String)> {
@@ -68003,7 +68001,7 @@ fn resolve_github_project_identity(
 }
 
 fn load_github_project_field_descriptors(
-    runtime: &si_rs_provider_github::GitHubRuntime,
+    runtime: &si_provider_github::GitHubRuntime,
     project_id: &str,
 ) -> Result<Vec<GitHubProjectFieldDescriptor>> {
     let response =
@@ -73156,7 +73154,7 @@ fn run_codex_warmup(
         }
     }
 
-    state.version = si_rs_warmup::WARMUP_STATE_VERSION;
+    state.version = si_warmup::WARMUP_STATE_VERSION;
     state.updated_at = updated_at.to_rfc3339();
     save_warmup_state(&state_path, &state)?;
 
@@ -73372,7 +73370,7 @@ fn apply_codex_tmux_window_identity(
 }
 
 fn build_app_server_status_input(cwd: Option<String>) -> Vec<u8> {
-    build_codex_app_server_status_input("si", si_rs_core::version::current_version(), cwd)
+    build_codex_app_server_status_input("si", si_core::version::current_version(), cwd)
 }
 
 fn parse_app_server_status(raw: &str) -> Result<CodexStatusView> {

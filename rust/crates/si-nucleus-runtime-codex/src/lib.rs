@@ -9,6 +9,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
+use si_codex::{
+    build_codex_app_server_status_input, codex_app_server_status_from_values,
+    codex_profile_fort_runtime_env, parse_codex_app_server_request_id,
+    parse_codex_app_server_status,
+};
 use si_nucleus_core::{
     CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId, WorkerStatus,
 };
@@ -17,12 +22,7 @@ use si_nucleus_runtime::{
     RuntimeRunOutcome, RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec,
     WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
 };
-use si_rs_codex::{
-    build_codex_app_server_status_input, codex_app_server_status_from_values,
-    codex_profile_fort_runtime_env, parse_codex_app_server_request_id,
-    parse_codex_app_server_status,
-};
-use si_rs_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
+use si_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_TURN_MAX_DURATION: Duration = Duration::from_secs(7200);
@@ -271,7 +271,7 @@ impl CodexNucleusRuntime {
             json!({
                 "clientInfo": {
                     "name": "si-nucleus",
-                    "version": si_rs_core::version::current_version(),
+                    "version": si_core::version::current_version(),
                 },
                 "capabilities": {
                     "experimentalApi": false,
@@ -715,7 +715,7 @@ fn command_spec_from_runtime(command: &RuntimeCommand) -> CommandSpec {
 }
 
 fn build_app_server_status_input(cwd: Option<String>) -> Vec<u8> {
-    build_codex_app_server_status_input("si-nucleus", si_rs_core::version::current_version(), cwd)
+    build_codex_app_server_status_input("si-nucleus", si_core::version::current_version(), cwd)
 }
 
 fn parse_app_server_status(raw: &str) -> Result<WorkerProbeResult> {

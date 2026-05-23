@@ -551,8 +551,8 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_codex_app_server_status_input, codex_profile_fort_runtime_env,
-        codex_fort_agent_id, codex_profile_fort_session_paths, codex_tmux_session_name,
+        build_codex_app_server_status_input, codex_fort_agent_id, codex_profile_fort_runtime_env,
+        codex_profile_fort_session_paths, codex_tmux_session_name,
         codex_tmux_session_name_for_slot, codex_worker_instance_name, codex_worker_slot_name,
         parse_codex_app_server_status, parse_prompt_segments_dual, parse_report_capture,
     };

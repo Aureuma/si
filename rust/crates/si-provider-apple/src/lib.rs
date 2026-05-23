@@ -3,7 +3,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{AppleAppStoreAccountEntry, AppleSettings};
+use si_config::settings::{AppleAppStoreAccountEntry, AppleSettings};
 use std::collections::BTreeMap;
 use std::fs;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -335,7 +335,7 @@ pub fn run_api_request(
         .map_err(|err| format!("build apple appstore client: {err}"))?;
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si"));
     let auth = format!("Bearer {}", token.value);
     headers.insert(
         AUTHORIZATION,

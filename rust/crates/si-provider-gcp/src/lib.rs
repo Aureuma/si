@@ -2,7 +2,7 @@ use reqwest::Method;
 use reqwest::blocking::Client;
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{GCPAccountEntry, GCPSettings};
+use si_config::settings::{GCPAccountEntry, GCPSettings};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -201,7 +201,7 @@ pub fn execute_api_request(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|err| format!("failed to build gcp client: {err}"))?;
-    let mut builder = client.request(method, url).header("User-Agent", "si-rs-provider-gcp/1.0");
+    let mut builder = client.request(method, url).header("User-Agent", "si-provider-gcp/1.0");
     if !runtime.access_token.trim().is_empty() {
         builder = builder.bearer_auth(runtime.access_token.trim());
     }

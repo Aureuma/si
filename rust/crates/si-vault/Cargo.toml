@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-vault"
+name = "si-vault"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
+          cargo run --quiet --locked --release -p si-cli -- build self validate --tag "${{ steps.resolve.outputs.tag }}"
 
       - name: Skip ReleaseMind publish automation
         if: steps.resolve.outputs.publish != 'true'
@@ -130,5 +130,5 @@ jobs:
           pull_request_numbers: ${{ needs.validate.outputs.pull_request_numbers }}
           changelog_path: CHANGELOG.md
           publish: ${{ needs.validate.outputs.publish }}
-          preflight_command: cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${{ needs.validate.outputs.tag }}"
+          preflight_command: cargo run --quiet --locked --release -p si-cli -- build self validate --tag "${{ needs.validate.outputs.tag }}"
           post_publish_command: ./.github/scripts/wait-cli-release-assets.sh "${{ needs.validate.outputs.tag }}" "${{ github.repository }}"

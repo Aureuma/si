@@ -48,7 +48,7 @@ Homebrew uses `user/repo/formula` for external taps, so `brew install aureuma/si
 Direct source install remains available and installs the `si` launcher on this host:
 
 ```bash
-cargo run --quiet --locked -p si-rs-cli -- build installer run --force
+cargo run --quiet --locked -p si-cli -- build installer run --force
 ```
 
 ## Quickstart
@@ -167,7 +167,7 @@ cargo test --workspace
 Run installer smoke tests:
 
 ```bash
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
+cargo run --quiet --locked -p si-cli -- build installer smoke-host
 ```
 
 Run strict vault-focused tests:

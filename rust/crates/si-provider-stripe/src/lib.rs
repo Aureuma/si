@@ -2,7 +2,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{StripeAccountEntry, StripeSettings};
+use si_config::settings::{StripeAccountEntry, StripeSettings};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use url::Url;
@@ -385,7 +385,7 @@ pub fn execute_api_request(
             .map_err(|err| format!("build stripe auth header: {err}"))?,
     );
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si"));
     if !runtime.account_id.trim().is_empty() {
         headers.insert(
             "Stripe-Account",
@@ -625,7 +625,7 @@ fn ensure_trailing_newline(mut value: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use si_rs_config::settings::{StripeAccountEntry, StripeSettings};
+    use si_config::settings::{StripeAccountEntry, StripeSettings};
 
     #[test]
     fn list_contexts_applies_defaults_and_sorts() {

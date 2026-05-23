@@ -3,7 +3,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use clap::{ArgAction, Args, Subcommand};
 use ecies::{decrypt as ecies_decrypt, encrypt as ecies_encrypt};
 use serde::{Deserialize, Serialize};
-use si_rs_config::runtime::git_repo_root_from;
+use si_config::runtime::git_repo_root_from;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fs;

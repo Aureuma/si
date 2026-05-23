@@ -90,14 +90,14 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self validate --tag "${tag}"
+          cargo run --quiet --locked --release -p si-cli -- build self validate --tag "${tag}"
 
       - name: Build release archive
         shell: bash
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self asset \
+          cargo run --quiet --locked --release -p si-cli -- build self asset \
             --version "${tag}" \
             --target "${{ matrix.target }}" \
             --out-dir dist
@@ -143,7 +143,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build self verify --version "${tag}" --out-dir dist
+          cargo run --quiet --locked --release -p si-cli -- build self verify --version "${tag}" --out-dir dist
 
       - name: Upload combined release dist artifact
         uses: actions/upload-artifact@v4
@@ -219,7 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
-          cargo run --quiet --locked --release -p si-rs-cli -- build corepack pnpm publish --version "${tag}"
+          cargo run --quiet --locked --release -p si-cli -- build corepack pnpm publish --version "${tag}"
 
   verify-homebrew-local-install:
     name: Verify local Homebrew install path
@@ -249,7 +249,7 @@ jobs:
           SI_INSTALL_SMOKE_ASSETS_DIR: dist
         run: |
           set -euo pipefail
-          cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
+          cargo run --quiet --locked -p si-cli -- build installer smoke-homebrew
 
   update-homebrew-tap:
     name: Update homebrew-si tap formula
@@ -328,7 +328,7 @@ jobs:
             clone_with_token "${token}"
             git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
             git -C "${tap_dir}" config user.name "github-actions[bot]"
-            cargo run --quiet --locked --release -p si-rs-cli -- build homebrew update \
+            cargo run --quiet --locked --release -p si-cli -- build homebrew update \
               --version "${tag}" \
               --checksums dist/checksums.txt \
               --tap-dir "${tap_dir}" \

@@ -25,7 +25,7 @@ fi
 
 if [[ ${needs_build} -eq 1 ]]; then
   mkdir -p "${ROOT}/.artifacts"
-  (cd "${ROOT}" && cargo build --release --locked -p si-rs-cli --bin si --target-dir "${TARGET_DIR}")
+  (cd "${ROOT}" && cargo build --release --locked -p si-cli --bin si --target-dir "${TARGET_DIR}")
   cp "${TARGET_DIR}/release/si" "${BIN}"
 fi
 

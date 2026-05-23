@@ -12,19 +12,12 @@ fn main() -> ExitCode {
     };
 
     let checks: &[&[&str]] = &[
-        &["test", "-p", "si-rs-fort"],
+        &["test", "-p", "si-fort"],
+        &["test", "-p", "si-codex", "tests::codex_fort_agent_id_is_slot_aware", "--", "--exact"],
         &[
             "test",
             "-p",
-            "si-rs-codex",
-            "tests::codex_fort_agent_id_is_slot_aware",
-            "--",
-            "--exact",
-        ],
-        &[
-            "test",
-            "-p",
-            "si-rs-cli",
+            "si-cli",
             "codex_repair_auth_all_provisions_slot_specific_agents_with_30d_ttl",
             "--",
             "--exact",
@@ -32,7 +25,7 @@ fn main() -> ExitCode {
         &[
             "test",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "codex_profile_resolution_forms_are_consistent_across_lifecycle_commands",
             "--",
             "--exact",
@@ -40,7 +33,7 @@ fn main() -> ExitCode {
         &[
             "test",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "codex_lifecycle_commands_reject_dual_profile_forms_and_shell_legacy_positional_profile",
             "--",
             "--exact",
@@ -48,7 +41,7 @@ fn main() -> ExitCode {
         &[
             "test",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "fort_wrapper_rejects_profile_refresh_token_rotation_to_noncanonical_path",
             "--",
             "--exact",
@@ -56,7 +49,7 @@ fn main() -> ExitCode {
         &[
             "test",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "fort_wrapper_rejects_nonprimary_profile_refresh_token_rotation_to_noncanonical_path",
             "--",
             "--exact",

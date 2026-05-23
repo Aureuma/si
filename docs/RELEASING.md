@@ -80,9 +80,9 @@ Do not invent or hand-maintain separate SI versions in crate manifests, provider
 ### 4) Verify and commit the release prep
 ```
 cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-pnpm
-cargo run --quiet --locked -p si-rs-cli -- build installer smoke-homebrew
+cargo run --quiet --locked -p si-cli -- build installer smoke-host
+cargo run --quiet --locked -p si-cli -- build installer smoke-pnpm
+cargo run --quiet --locked -p si-cli -- build installer smoke-homebrew
 ./.artifacts/cargo-target/release/si build self assets --out-dir .artifacts/release-preflight
 ./.artifacts/cargo-target/release/si build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml Cargo.lock

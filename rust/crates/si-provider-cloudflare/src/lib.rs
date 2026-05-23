@@ -4,7 +4,7 @@ use reqwest::header::{
 };
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{CloudflareAccountEntry, CloudflareSettings};
+use si_config::settings::{CloudflareAccountEntry, CloudflareSettings};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use url::Url;
@@ -284,7 +284,7 @@ pub fn execute_api_request(
             .map_err(|err| format!("build cloudflare auth header: {err}"))?,
     );
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si"));
     for (key, value) in &request.headers {
         let key = key.trim();
         if key.is_empty() {
@@ -763,7 +763,7 @@ fn join_sources(values: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use si_rs_config::settings::{CloudflareAccountEntry, CloudflareSettings};
+    use si_config::settings::{CloudflareAccountEntry, CloudflareSettings};
 
     #[test]
     fn list_contexts_sorts_and_marks_default() {

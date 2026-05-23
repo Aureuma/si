@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-process"
+name = "si-process"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

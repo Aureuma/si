@@ -19,9 +19,9 @@ It is intentionally host-shaped instead of unit-test-only. The goal is to catch 
 
 | Scenario | Command | Expected behavior |
 | --- | --- | --- |
-| Installer smoke | `cargo run --quiet --locked -p si-rs-cli -- build installer smoke-host` | local installer build/install/uninstall completes successfully |
-| SI CLI integration | `cargo test -p si-rs-cli --test cli --quiet` | command-surface and integration tests pass |
-| SI vault package | `cargo test -p si-rs-vault --quiet` | vault package tests pass |
+| Installer smoke | `cargo run --quiet --locked -p si-cli -- build installer smoke-host` | local installer build/install/uninstall completes successfully |
+| SI CLI integration | `cargo test -p si-cli --test cli --quiet` | command-surface and integration tests pass |
+| SI vault package | `cargo test -p si-vault --quiet` | vault package tests pass |
 | Fort repo validation | `cargo test --quiet --manifest-path ../fort/Cargo.toml` | sibling `fort` workspace tests pass |
 | Surf repo validation | `cargo test --workspace --quiet --manifest-path ../surf/Cargo.toml` | sibling `surf` workspace tests pass |
 | Live fort wrapper smoke | included in script | `si fort -- --json doctor` reaches a Fort-shaped HTTP stub and returns `health_status=200`, `ready_status=200` |

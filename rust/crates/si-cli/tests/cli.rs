@@ -8,6 +8,7 @@ use reqwest::blocking::Client as BlockingClient;
 use rsa::RsaPrivateKey;
 use rsa::pkcs8::{EncodePrivateKey, LineEnding};
 use serde_json::{Value, json};
+use si_fort::{SessionState, classify_persisted_session_state, load_persisted_session_state};
 use si_nucleus::{NucleusConfig, NucleusService};
 use si_nucleus_core::{
     CanonicalEventSource, CanonicalEventType, EventDataEnvelope, RunStatus, WorkerId, WorkerStatus,
@@ -17,7 +18,6 @@ use si_nucleus_runtime::{
     RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec, WorkerLaunchSpec, WorkerProbeResult,
     WorkerRuntimeView, WorkerStartResult,
 };
-use si_rs_fort::{SessionState, classify_persisted_session_state, load_persisted_session_state};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::fs::File;
@@ -15446,11 +15446,11 @@ fn releasemind_runbook_complete_posts_gate_evidence() {
         assert!(request.contains("\"repo_full_name\":\"Aureuma/si\""));
         assert!(request.contains("\"post_id\":\"post-1\""));
         assert!(request.contains("\"gate_id\":\"tests\""));
-        assert!(request.contains("\"evidence\":\"cargo test -p si-rs-cli releasemind_runbook\""));
+        assert!(request.contains("\"evidence\":\"cargo test -p si-cli releasemind_runbook\""));
         http_json_response(
             "200 OK",
             &[("x-request-id", "req_rm_runbook_complete")],
-            r#"{"ok":true,"runbook":{"post_id":"post-1","repo_id":"repo-1","template_key":"github_release_standard","template_version":1,"gates":[{"id":"tests","title":"Validation checks","status":"complete","required":true,"evidence":"cargo test -p si-rs-cli releasemind_runbook"}]}}"#,
+            r#"{"ok":true,"runbook":{"post_id":"post-1","repo_id":"repo-1","template_key":"github_release_standard","template_version":1,"gates":[{"id":"tests","title":"Validation checks","status":"complete","required":true,"evidence":"cargo test -p si-cli releasemind_runbook"}]}}"#,
         )
     });
     write_releasemind_auth_state(home.path(), "rmses.test.secret", "SHi-ON", "shi-on@example.com");
@@ -15468,7 +15468,7 @@ fn releasemind_runbook_complete_posts_gate_evidence() {
             "post-1",
             "tests",
             "--evidence",
-            "cargo test -p si-rs-cli releasemind_runbook",
+            "cargo test -p si-cli releasemind_runbook",
             "--json",
         ])
         .assert()
@@ -16082,12 +16082,12 @@ fn github_repo_get_json_fetches_repo_with_oauth() {
 fn github_repo_create_json_mutates_via_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /orgs/Aureuma/repos HTTP/1.1\r\n"));
-        assert!(request.contains("\"name\":\"si-rs\""));
+        assert!(request.contains("\"name\":\"si\""));
         assert!(request.contains("\"private\":true"));
         http_json_response(
             "201 Created",
             &[("x-github-request-id", "req_gh_repo_create")],
-            r#"{"id":202,"full_name":"Aureuma/si-rs","private":true}"#,
+            r#"{"id":202,"full_name":"Aureuma/si","private":true}"#,
         )
     });
 
@@ -16098,7 +16098,7 @@ fn github_repo_create_json_mutates_via_api_with_oauth() {
             "github",
             "repo",
             "create",
-            "si-rs",
+            "si",
             "--owner",
             "Aureuma",
             "--param",
@@ -16118,7 +16118,7 @@ fn github_repo_create_json_mutates_via_api_with_oauth() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["status_code"], 201);
     assert_eq!(parsed["request_id"], "req_gh_repo_create");
-    assert_eq!(parsed["data"]["full_name"], "Aureuma/si-rs");
+    assert_eq!(parsed["data"]["full_name"], "Aureuma/si");
     server.join();
 }
 

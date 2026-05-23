@@ -14,7 +14,7 @@ use reqwest::header::{
 };
 use serde::{Serialize, Serializer};
 use serde_json::Value;
-use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
+use si_config::settings::{GitHubAccountEntry, GitHubSettings};
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
@@ -2423,7 +2423,7 @@ fn default_headers(auth_value: &str) -> Result<HeaderMap, String> {
         HeaderName::from_static("x-github-api-version"),
         HeaderValue::from_static("2022-11-28"),
     );
-    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si"));
     headers.insert(
         AUTHORIZATION,
         HeaderValue::from_str(auth_value)
@@ -2746,7 +2746,7 @@ fn or_dash(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
+    use si_config::settings::{GitHubAccountEntry, GitHubSettings};
 
     #[test]
     fn list_contexts_applies_defaults_and_sorts() {
