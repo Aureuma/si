@@ -19,7 +19,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCL
 ## What si covers
 
 - Nucleus control plane: durable local orchestration under `si nucleus ...` for tasks, workers, sessions, runs, the local WebSocket gateway, and OS-native service management.
-- Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `shell`, `tail`, `list`, `remove`, `respawn`, `tmux`, `warmup`).
+- Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `stop`, `remove`, `shell`, `tail`, `list`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
 - Browser runtime: local Playwright browser runtime under `si surf ...`, including optional Fort-backed injection for a stable noVNC viewer password on `si surf start`.
@@ -100,6 +100,7 @@ si codex respawn --profile <profile> --slot review --workspace "$PWD"
 si codex list
 si codex shell --profile <profile> --slot review -- bash
 si codex tail --profile <profile> --slot review
+si codex stop --profile <profile> --slot review
 si codex remove --profile <profile> --slot review
 ```
 

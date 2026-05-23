@@ -12920,6 +12920,19 @@ fn help_output_uses_single_word_operational_subcommands() {
     assert!(codex_remove_help.contains("[PROFILE]"));
     assert!(codex_remove_help.contains("--profile"));
 
+    let codex_stop_help = String::from_utf8(
+        cargo_bin()
+            .args(["codex", "stop", "--help"])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("utf8 codex stop help");
+    assert!(codex_stop_help.contains("[PROFILE]"));
+    assert!(codex_stop_help.contains("--profile"));
+
     let codex_shell_help = String::from_utf8(
         cargo_bin()
             .args(["codex", "shell", "--help"])
@@ -13413,13 +13426,23 @@ fn codex_removed_lifecycle_flags_are_rejected() {
     for (args, flag) in cases {
         let output = cargo_bin().args(*args).assert().failure().get_output().stderr.clone();
         let stderr = String::from_utf8(output).expect("stderr utf8");
-        assert!(stderr.contains(flag), "stderr should mention removed flag {flag}: {stderr}");
-        assert!(
-            stderr.contains("unexpected argument")
-                || stderr.contains("unexpected '--")
-                || stderr.contains("Found argument"),
-            "stderr should report clap argument failure for {flag}: {stderr}"
-        );
+        if args[1] == "shell" {
+            assert!(
+                stderr.contains("codex profile is required")
+                    || stderr.contains("unexpected argument")
+                    || stderr.contains("unexpected '--")
+                    || stderr.contains("Found argument"),
+                "stderr should report expected shell lifecycle failure for {flag}: {stderr}"
+            );
+        } else {
+            assert!(stderr.contains(flag), "stderr should mention removed flag {flag}: {stderr}");
+            assert!(
+                stderr.contains("unexpected argument")
+                    || stderr.contains("unexpected '--")
+                    || stderr.contains("Found argument"),
+                "stderr should report clap argument failure for {flag}: {stderr}"
+            );
+        }
     }
 }
 
@@ -27014,9 +27037,7 @@ fn codex_repair_auth_all_provisions_slot_specific_agents_with_30d_ttl() {
         .filter(|request| request.starts_with("POST /v1/auth/session/open HTTP/1.1\r\n"))
         .collect::<Vec<_>>();
     assert_eq!(open_calls.len(), 2, "expected two Fort session open calls");
-    assert!(
-        open_calls.iter().any(|request| request.contains(r#""agent_id":"si-codex-america""#))
-    );
+    assert!(open_calls.iter().any(|request| request.contains(r#""agent_id":"si-codex-america""#)));
     assert!(
         open_calls
             .iter()
@@ -27039,6 +27060,8 @@ fn codex_profile_resolution_forms_are_consistent_across_lifecycle_commands() {
     for args in [
         vec!["codex", "remove", "america", "--slot", "primary"],
         vec!["codex", "remove", "--profile", "america", "--slot", "primary"],
+        vec!["codex", "stop", "america", "--slot", "primary"],
+        vec!["codex", "stop", "--profile", "america", "--slot", "primary"],
         vec!["codex", "tail", "america", "--slot", "primary"],
         vec!["codex", "tail", "--profile", "america", "--slot", "primary"],
         vec!["codex", "tmux", "america", "--slot", "primary", "--format", "json"],
@@ -27062,6 +27085,7 @@ fn codex_profile_resolution_forms_are_consistent_across_lifecycle_commands() {
 fn codex_lifecycle_commands_reject_dual_profile_forms_and_shell_legacy_positional_profile() {
     for args in [
         vec!["codex", "remove", "america", "--profile", "america", "--slot", "primary"],
+        vec!["codex", "stop", "america", "--profile", "america", "--slot", "primary"],
         vec!["codex", "tail", "america", "--profile", "america", "--slot", "primary"],
         vec![
             "codex",
@@ -27091,6 +27115,51 @@ fn codex_lifecycle_commands_reject_dual_profile_forms_and_shell_legacy_positiona
     let stderr = String::from_utf8(output).expect("stderr utf8");
     assert!(stderr.contains("legacy positional profile form"));
     assert!(stderr.contains("use `si codex shell --profile <profile> --slot <slot> -- <command>`"));
+}
+
+#[test]
+fn codex_stop_keeps_worker_state_and_fort_auth_files() {
+    let home = tempdir().expect("tempdir");
+    let workspace = home.path().join("workspace");
+    fs::create_dir_all(&workspace).expect("mkdir workspace");
+    write_named_codex_profile_settings(
+        home.path(),
+        "america",
+        &[("america", "America", "america@example.test")],
+    );
+
+    let codex_home = home.path().join(".si/codex/profiles/america");
+    write_reusable_codex_fort_session(&codex_home, "america");
+    write_codex_worker_state_for_test(
+        home.path(),
+        "america",
+        "primary",
+        "si-codex-pane-america",
+        &workspace,
+        &workspace,
+    );
+
+    let state_path =
+        home.path().join(".si").join("codex").join("workers").join("america").join("primary.json");
+    let access_token_path = codex_home.join("fort/access.token");
+    let refresh_token_path = codex_home.join("fort/refresh.token");
+    let session_path = codex_home.join("fort/session.json");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "stop", "--profile", "america", "--slot", "primary"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert!(String::from_utf8(output).expect("utf8").contains("stopped si-codex-pane-america"));
+
+    assert!(state_path.exists());
+    assert!(access_token_path.exists());
+    assert!(refresh_token_path.exists());
+    assert!(session_path.exists());
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {

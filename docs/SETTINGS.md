@@ -85,7 +85,7 @@ The metadata file is written by the Nucleus service and advertises the current w
 ### `[codex]`
 Defaults for `si codex` profile-bound worker commands.
 - Every `si codex` worker must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
-- `si codex profile add|show|list|login|swap|remove` manages the profile registry in `~/.si/settings.toml`.
+  - `si codex profile add|show|list|login|swap|remove` manages the profile registry in `~/.si/settings.toml`.
 - `codex.workspace` (string): host path for workspace bind.
   - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
@@ -94,7 +94,7 @@ Defaults for `si codex` profile-bound worker commands.
 - Profile metadata is intentionally narrow here: the entry records identity and auth file location, while actual runtime behavior stays under `si codex ...`.
 - Worker-slot behavior is command-level:
   - `si codex spawn|respawn --profile <profile> --slot <slot>`
-  - `si codex shell|tail|tmux|remove --profile <profile> --slot <slot>`
+  - `si codex shell|tail|tmux|stop|remove --profile <profile> --slot <slot>`
   - `si codex repair-auth --profile <profile> --slot <slot>` for in-place Fort runtime repair
 
 #### `[codex.profiles]`

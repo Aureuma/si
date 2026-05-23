@@ -75,6 +75,7 @@ si nucleus events subscribe --count 1
 
 ```bash
 si codex spawn --profile default --workspace "$PWD"
+si codex stop --profile default --slot review
 si codex list
 ```
 

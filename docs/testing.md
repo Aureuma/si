@@ -180,6 +180,7 @@ si codex list
 si codex shell --profile <profile> --slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
 si codex shell --profile <profile> --slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
 si codex repair-auth --profile <profile> --slot review
+si codex stop --profile <profile> --slot review
 si codex remove --profile <profile> --slot review
 ```
 
