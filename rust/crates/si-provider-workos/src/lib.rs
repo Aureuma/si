@@ -1,7 +1,7 @@
 use reqwest::blocking::Client;
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{WorkOSAccountEntry, WorkOSSettings};
+use si_config::settings::{WorkOSAccountEntry, WorkOSSettings};
 use std::{collections::BTreeMap, time::Duration};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -579,7 +579,7 @@ fn join_sources(values: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use si_rs_config::settings::{WorkOSAccountEntry, WorkOSSettings};
+    use si_config::settings::{WorkOSAccountEntry, WorkOSSettings};
 
     #[test]
     fn list_contexts_applies_defaults() {

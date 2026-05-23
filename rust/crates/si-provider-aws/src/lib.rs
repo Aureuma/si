@@ -4,7 +4,7 @@ use reqwest::blocking::Client;
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use si_rs_config::settings::{AWSAccountEntry, AWSSettings};
+use si_config::settings::{AWSAccountEntry, AWSSettings};
 use std::{collections::BTreeMap, time::Duration};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

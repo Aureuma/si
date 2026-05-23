@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-command-manifest"
+name = "si-command-manifest"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

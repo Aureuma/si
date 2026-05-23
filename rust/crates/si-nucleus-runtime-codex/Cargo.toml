@@ -13,9 +13,9 @@ serde.workspace = true
 serde_json.workspace = true
 si-nucleus-core = { path = "../si-nucleus-core" }
 si-nucleus-runtime = { path = "../si-nucleus-runtime" }
-si-rs-process = { path = "../si-process" }
-si-rs-core = { path = "../si-core" }
-si-rs-codex = { path = "../si-codex" }
+si-process = { path = "../si-process" }
+si-core = { path = "../si-core" }
+si-codex = { path = "../si-codex" }
 
 [lib]
 path = "src/lib.rs"

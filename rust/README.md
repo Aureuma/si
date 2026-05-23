@@ -21,13 +21,13 @@ Current scope:
 Current entrypoint:
 
 ```bash
-cargo run -p si-rs-cli -- version
-cargo run -p si-rs-cli -- help --format json
-cargo run -p si-rs-cli -- nucleus status
-cargo run -p si-rs-cli -- nucleus task list --format json
-cargo run -p si-rs-cli -- settings show --format json
-cargo run -p si-rs-cli -- orbit list --provider github --json
-cargo run -p si-rs-cli -- paths show --format json
+cargo run -p si-cli -- version
+cargo run -p si-cli -- help --format json
+cargo run -p si-cli -- nucleus status
+cargo run -p si-cli -- nucleus task list --format json
+cargo run -p si-cli -- settings show --format json
+cargo run -p si-cli -- orbit list --provider github --json
+cargo run -p si-cli -- paths show --format json
 ```
 
 The repository is now Rust-only for build, test, and runtime flows.

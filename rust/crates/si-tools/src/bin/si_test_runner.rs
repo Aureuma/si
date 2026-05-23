@@ -79,11 +79,11 @@ fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
     }
 
     if quick {
-        println!("Running cargo test -p si-rs-vault (--quick is a compatibility no-op)");
+        println!("Running cargo test -p si-vault (--quick is a compatibility no-op)");
     } else {
-        println!("Running cargo test -p si-rs-vault");
+        println!("Running cargo test -p si-vault");
     }
-    run_command(Command::new("cargo").current_dir(root).arg("test").arg("-p").arg("si-rs-vault"))
+    run_command(Command::new("cargo").current_dir(root).arg("test").arg("-p").arg("si-vault"))
 }
 
 fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
@@ -132,7 +132,7 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--quiet",
             "--locked",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "--",
             "build",
             "installer",
@@ -149,7 +149,7 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--quiet",
             "--locked",
             "-p",
-            "si-rs-cli",
+            "si-cli",
             "--",
             "build",
             "installer",

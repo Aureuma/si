@@ -12,7 +12,7 @@ use rsa::pkcs8::DecodePrivateKey;
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use si_rs_config::settings::{OCIAccountEntry, OCISettings};
+use si_config::settings::{OCIAccountEntry, OCISettings};
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
@@ -357,7 +357,7 @@ pub fn execute_api_request_with_auth(
         .map_err(|err| format!("oci request method: {err}"))?;
     let mut builder = client.request(req_method, endpoint.as_str());
     builder = builder.header(ACCEPT, "application/json");
-    builder = builder.header(USER_AGENT, "si-rs-provider-oci/1.0");
+    builder = builder.header(USER_AGENT, "si-provider-oci/1.0");
     for (key, value) in &request.headers {
         let key = key.trim();
         if key.is_empty() {
@@ -1079,7 +1079,7 @@ mod tests {
 
     #[test]
     fn current_context_reads_profile_values() {
-        let temp = env::temp_dir().join(format!("si-rs-oci-{}", std::process::id()));
+        let temp = env::temp_dir().join(format!("si-oci-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp);
         let config = temp.join("config");
         fs::write(&config, "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nregion=us-phoenix-1\n")
@@ -1100,7 +1100,7 @@ mod tests {
 
     #[test]
     fn auth_status_reads_signature_material() {
-        let temp = env::temp_dir().join(format!("si-rs-oci-auth-{}", std::process::id()));
+        let temp = env::temp_dir().join(format!("si-oci-auth-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp);
         let config = temp.join("config");
         let key = temp.join("keys").join("oci.pem");

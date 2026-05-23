@@ -11,7 +11,7 @@ use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
-use si_rs_config::settings::{
+use si_config::settings::{
     GoogleAccountEntry, GooglePlayAccountEntry, GoogleSettings, GoogleYouTubeAccountEntry,
 };
 use std::collections::BTreeMap;
@@ -476,7 +476,7 @@ pub fn execute_places_api_request(
     let mut builder = client
         .request(method, &url)
         .header("X-Goog-Api-Key", runtime.api_key.trim())
-        .header("User-Agent", "si-rs-provider-google/1.0");
+        .header("User-Agent", "si-provider-google/1.0");
     if !request.field_mask.trim().is_empty() {
         builder = builder.header("X-Goog-FieldMask", request.field_mask.trim());
     }
@@ -519,7 +519,7 @@ pub fn download_places_media(
     let mut builder = client
         .request(Method::GET, &url)
         .header("X-Goog-Api-Key", runtime.api_key.trim())
-        .header("User-Agent", "si-rs-provider-google/1.0");
+        .header("User-Agent", "si-provider-google/1.0");
     if !params.is_empty() {
         builder = builder.query(params);
     }
@@ -786,8 +786,7 @@ pub fn execute_youtube_api_request(
         .map_err(|err| format!("failed to build google youtube client: {err}"))?;
     let url =
         format!("{}{}", runtime.base_url.trim_end_matches('/'), normalize_path(&request.path));
-    let mut builder =
-        client.request(method, &url).header("User-Agent", "si-rs-provider-google/1.0");
+    let mut builder = client.request(method, &url).header("User-Agent", "si-provider-google/1.0");
     let mut params = request.params.clone();
     if runtime.auth_mode == "api-key" && !params.contains_key("key") {
         params.insert("key".to_owned(), runtime.api_key.trim().to_owned());
@@ -858,7 +857,7 @@ pub fn upload_youtube_video(
     let init_response = client
         .post(init_url)
         .bearer_auth(token.clone())
-        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header("User-Agent", "si-provider-google/1.0")
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .header("X-Upload-Content-Length", file_bytes.len().to_string())
         .header(
@@ -894,7 +893,7 @@ pub fn upload_youtube_video(
     let upload_response = client
         .put(location)
         .bearer_auth(token)
-        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header("User-Agent", "si-provider-google/1.0")
         .header(
             reqwest::header::CONTENT_TYPE,
             detect_youtube_content_type(file_path, "application/octet-stream"),
@@ -970,7 +969,7 @@ pub fn download_youtube_caption(
     let response = client
         .get(url)
         .bearer_auth(token)
-        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header("User-Agent", "si-provider-google/1.0")
         .query(&params)
         .send()
         .map_err(|err| format!("google youtube caption download failed: {err}"))?;
@@ -1230,7 +1229,7 @@ pub fn execute_play_api_request(
     let mut builder = client
         .request(method, &url)
         .bearer_auth(token.value)
-        .header("User-Agent", "si-rs-provider-google/1.0");
+        .header("User-Agent", "si-provider-google/1.0");
     if !request.params.is_empty() {
         builder = builder.query(&request.params);
     }
@@ -1436,7 +1435,7 @@ fn upload_youtube_multipart(
         .map_err(|err| format!("failed to read youtube upload file {file_path:?}: {err}"))?;
     let metadata_raw = serde_json::to_vec(metadata)
         .map_err(|err| format!("invalid youtube upload metadata: {err}"))?;
-    let boundary = format!("si-rs-youtube-{}", std::process::id());
+    let boundary = format!("si-youtube-{}", std::process::id());
     let mut body = Vec::new();
     body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
     body.extend_from_slice(b"Content-Type: application/json; charset=UTF-8\r\n\r\n");
@@ -1458,7 +1457,7 @@ fn upload_youtube_multipart(
     let response = client
         .post(url)
         .bearer_auth(token)
-        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header("User-Agent", "si-provider-google/1.0")
         .header(reqwest::header::CONTENT_TYPE, format!("multipart/related; boundary={boundary}"))
         .query(&params)
         .body(body)
@@ -1485,7 +1484,7 @@ fn upload_youtube_media(
     let response = client
         .post(url)
         .bearer_auth(token)
-        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header("User-Agent", "si-provider-google/1.0")
         .header(reqwest::header::CONTENT_TYPE, detect_youtube_content_type(file_path, content_type))
         .header(reqwest::header::CONTENT_LENGTH, file_bytes.len().to_string())
         .query(&params)
@@ -2849,9 +2848,9 @@ mod tests {
         let current = resolve_youtube_current_context(
             &GoogleSettings {
                 default_account: Some("core".to_owned()),
-                youtube: si_rs_config::settings::GoogleYouTubeSettings {
+                youtube: si_config::settings::GoogleYouTubeSettings {
                     default_auth_mode: Some("api-key".to_owned()),
-                    ..si_rs_config::settings::GoogleYouTubeSettings::default()
+                    ..si_config::settings::GoogleYouTubeSettings::default()
                 },
                 ..GoogleSettings::default()
             },

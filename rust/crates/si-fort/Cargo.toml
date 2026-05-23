@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-fort"
+name = "si-fort"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

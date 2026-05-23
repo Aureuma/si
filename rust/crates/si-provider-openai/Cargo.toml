@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-provider-openai"
+name = "si-provider-openai"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,5 +10,5 @@ rust-version.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-si-rs-config = { path = "../si-config" }
+si-config = { path = "../si-config" }
 url.workspace = true

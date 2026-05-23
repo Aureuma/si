@@ -38,7 +38,7 @@ jobs:
 
       - name: Unit tests (Fort/Vault surface)
         run: |
-          cargo test -p si-rs-fort -p si-rs-vault
+          cargo test -p si-fort -p si-vault
 
       - name: SI Fort spawn matrix integration
         run: cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin test-fort-spawn-matrix --

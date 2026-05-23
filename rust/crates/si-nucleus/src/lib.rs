@@ -37,6 +37,11 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::Sha256;
+use si_codex::codex_profile_fort_session_paths;
+use si_fort::{
+    SessionState, SessionStateFileError, build_bootstrap_view, classify_persisted_session_state,
+    load_persisted_session_state,
+};
 use si_nucleus_core::{
     BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType,
     DEFAULT_NUCLEUS_WORKER_SLOT, EventDataEnvelope, EventId, ProfileName, ProfileRecord, RunId,
@@ -46,11 +51,6 @@ use si_nucleus_core::{
 use si_nucleus_runtime::{
     CanonicalEventDraft, NucleusRuntime, RunInputItem, RunTurnSpec, SessionOpenSpec,
     WorkerLaunchSpec, WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
-};
-use si_rs_codex::codex_profile_fort_session_paths;
-use si_rs_fort::{
-    SessionState, SessionStateFileError, build_bootstrap_view, classify_persisted_session_state,
-    load_persisted_session_state,
 };
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
@@ -4997,11 +4997,8 @@ impl NucleusService {
                 let codex_home = record.codex_home.trim();
                 (!codex_home.is_empty()).then(|| PathBuf::from(codex_home))
             });
-        let profile_codex_home = if worker_slot == DEFAULT_NUCLEUS_WORKER_SLOT {
-            profile_codex_home
-        } else {
-            None
-        };
+        let profile_codex_home =
+            if worker_slot == DEFAULT_NUCLEUS_WORKER_SLOT { profile_codex_home } else { None };
         let home_dir = request
             .home_dir
             .or_else(|| {
@@ -7075,16 +7072,17 @@ mod tests {
         DEFAULT_EXTERNAL_TASK_TIMEOUT_SECONDS, GPT_ACTIONS_OPENAPI_PUBLIC_URL, GatewayRequest,
         HookRuleRecord, MAX_WORKER_RESTART_ATTEMPTS, NucleusConfig, NucleusPaths, NucleusService,
         NucleusStore, append_jsonl_with_rotation, cron_due_key, current_persisted_version,
-        default_codex_worker_slot_home_dir,
-        hook_event_key, load_canonical_events, load_canonical_events_for_live_iteration,
-        load_last_event_seq, public_openapi_document, run_failure_requires_session_quarantine,
-        runtime_error_requires_worker_quarantine, stable_workdir_from, write_json_atomic,
+        default_codex_worker_slot_home_dir, hook_event_key, load_canonical_events,
+        load_canonical_events_for_live_iteration, load_last_event_seq, public_openapi_document,
+        run_failure_requires_session_quarantine, runtime_error_requires_worker_quarantine,
+        stable_workdir_from, write_json_atomic,
     };
     use anyhow::{Result, anyhow};
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
     use chrono::{Duration as ChronoDuration, Utc};
     use serde_json::{Value, json};
+    use si_fort::{PersistedSessionState, save_persisted_session_state};
     use si_nucleus_core::{
         BlockedReason, CanonicalEvent, CanonicalEventSource, CanonicalEventType, EventDataEnvelope,
         EventId, ProfileName, ProfileRecord, RunId, RunRecord, RunStatus, SessionId,
@@ -7096,7 +7094,6 @@ mod tests {
         RuntimeRunOutcome, RuntimeStatusSnapshot, SessionOpenResult, SessionOpenSpec,
         WorkerLaunchSpec, WorkerProbeResult, WorkerRuntimeView, WorkerStartResult,
     };
-    use si_rs_fort::{PersistedSessionState, save_persisted_session_state};
     use tempfile::tempdir;
     use tower::util::ServiceExt;
 

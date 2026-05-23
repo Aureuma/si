@@ -33,7 +33,7 @@ fn run() -> Result<(), String> {
                 "--quiet",
                 "--locked",
                 "-p",
-                "si-rs-cli",
+                "si-cli",
                 "--",
                 "build",
                 "installer",
@@ -42,9 +42,9 @@ fn run() -> Result<(), String> {
         )
     })?;
     run_step("si cli integration", || {
-        run_cargo(&root, &["test", "-p", "si-rs-cli", "--test", "cli", "--quiet"])
+        run_cargo(&root, &["test", "-p", "si-cli", "--test", "cli", "--quiet"])
     })?;
-    run_step("si vault package", || run_cargo(&root, &["test", "-p", "si-rs-vault", "--quiet"]))?;
+    run_step("si vault package", || run_cargo(&root, &["test", "-p", "si-vault", "--quiet"]))?;
     run_step("fort workspace", || {
         run_command(Command::new("cargo").args([
             "test",
@@ -152,7 +152,7 @@ fn run_fort_wrapper_smoke(root: &Path) -> Result<(), String> {
                 "run",
                 "--quiet",
                 "--bin",
-                "si-rs",
+                "si",
                 "--",
                 "fort",
                 "--home",

@@ -1,5 +1,5 @@
 [package]
-name = "si-rs-provider-github"
+name = "si-provider-github"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,5 +14,5 @@ jsonwebtoken = "9.3.1"
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-si-rs-config = { path = "../si-config" }
+si-config = { path = "../si-config" }
 url.workspace = true

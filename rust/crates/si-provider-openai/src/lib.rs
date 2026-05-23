@@ -2,7 +2,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use serde::Serialize;
 use serde_json::Value;
-use si_rs_config::settings::{OpenAIAccountEntry, OpenAISettings};
+use si_config::settings::{OpenAIAccountEntry, OpenAISettings};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use url::Url;
