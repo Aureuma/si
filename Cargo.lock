@@ -2241,7 +2241,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "si-cli"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2293,7 +2293,7 @@ dependencies = [
 
 [[package]]
 name = "si-codex"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "serde",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "si-command-manifest"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "regex",
  "serde",
@@ -2311,7 +2311,7 @@ dependencies = [
 
 [[package]]
 name = "si-config"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -2321,11 +2321,11 @@ dependencies = [
 
 [[package]]
 name = "si-core"
-version = "0.59.79"
+version = "0.60.0"
 
 [[package]]
 name = "si-fort"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "libc",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "si-nucleus"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2363,7 +2363,7 @@ dependencies = [
 
 [[package]]
 name = "si-nucleus-core"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "serde",
@@ -2373,7 +2373,7 @@ dependencies = [
 
 [[package]]
 name = "si-nucleus-runtime"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2384,7 +2384,7 @@ dependencies = [
 
 [[package]]
 name = "si-nucleus-runtime-codex"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2399,7 +2399,7 @@ dependencies = [
 
 [[package]]
 name = "si-process"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -2407,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-apple"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "jsonwebtoken",
  "reqwest",
@@ -2419,7 +2419,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-aws"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "hex",
@@ -2434,14 +2434,14 @@ dependencies = [
 
 [[package]]
 name = "si-provider-catalog"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "si-provider-cloudflare"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -2452,7 +2452,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-gcp"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -2462,7 +2462,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-github"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "base64",
  "blake2",
@@ -2477,7 +2477,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-google"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "base64",
  "chrono",
@@ -2491,7 +2491,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-oci"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "base64",
  "httpdate",
@@ -2507,7 +2507,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-openai"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -2518,7 +2518,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-stripe"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -2529,7 +2529,7 @@ dependencies = [
 
 [[package]]
 name = "si-provider-workos"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "reqwest",
  "serde",
@@ -2539,7 +2539,7 @@ dependencies = [
 
 [[package]]
 name = "si-tools"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "libc",
@@ -2553,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "si-vault"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "serde",
@@ -2564,7 +2564,7 @@ dependencies = [
 
 [[package]]
 name = "si-warmup"
-version = "0.59.79"
+version = "0.60.0"
 dependencies = [
  "chrono",
  "serde",
