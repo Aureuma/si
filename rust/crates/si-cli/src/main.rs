@@ -14352,26 +14352,33 @@ enum ReleaseMindReleaseCommand {
         generate_notes: bool,
         #[arg(long)]
         draft: bool,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Base release tag for diff scope.")]
         base_tag: Option<String>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Task guidance for note generation.")]
         task: Option<String>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Target audience for note generation.")]
         audience: Option<String>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Tone guidance for note generation.")]
         tone: Option<String>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Additional custom prompt for note generation.")]
         custom_prompt: Option<String>,
-        #[arg(long = "pull-request", hide = true)]
+        #[arg(long = "pull-request", help = "Optional pull request number to anchor note scope.")]
         pull_request_numbers: Vec<i64>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Optional changelog path for generation context.")]
         changelog_path: Option<String>,
-        #[arg(long, hide = true)]
+        #[arg(long, help = "Backend wait timeout (seconds) for release generation.")]
         timeout_seconds: Option<i64>,
+        #[arg(long, help = "Retry count for transient release-create failures.")]
+        max_retries: Option<u32>,
+        #[arg(long, help = "Retry backoff between transient release-create attempts (seconds).")]
+        retry_backoff_seconds: Option<u64>,
         #[arg(long, help = "Output JSON.")]
         json: bool,
     },
-    #[command(hide = true)]
+    #[command(
+        about = "Prepare a ReleaseMind release post and return its post id for polling.",
+        long_about = None
+    )]
     Prepare {
         #[arg(long = "repo", short = 'R', visible_alias = "repo-ref")]
         repo_ref: Option<String>,
@@ -35733,6 +35740,8 @@ fn main() -> Result<()> {
                     pull_request_numbers,
                     changelog_path,
                     timeout_seconds,
+                    max_retries,
+                    retry_backoff_seconds,
                     json,
                 } => run_releasemind_release_create(
                     release_tag,
@@ -35750,6 +35759,8 @@ fn main() -> Result<()> {
                     pull_request_numbers,
                     changelog_path,
                     timeout_seconds,
+                    max_retries,
+                    retry_backoff_seconds,
                     json,
                 )?,
                 ReleaseMindReleaseCommand::Prepare {
@@ -37597,7 +37608,6 @@ fn run_releasemind_release_prepare(
 ) -> Result<()> {
     let repo_ref = releasemind_repo_ref_infer_or_require(repo_ref)?;
     let (base_url, _) = releasemind_base_url();
-    let (token, _) = releasemind_token(token.as_deref())?;
     let mut body = serde_json::Map::new();
     body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
     if let Some(value) =
@@ -37650,12 +37660,25 @@ fn run_releasemind_release_prepare(
     if let Some(value) = timeout_seconds.filter(|value| *value > 0) {
         body.insert("timeout_seconds".to_owned(), Value::Number(value.into()));
     }
-    let response = releasemind_request(
+    let request_timeout = if wait_for_ready {
+        releasemind_prepare_http_timeout(timeout_seconds)
+    } else {
+        releasemind_default_http_timeout()
+    };
+    let (path, auth_token) = if let Ok((automation_token, _)) = releasemind_token(token.as_deref())
+    {
+        ("/api/automation/releases/prepare", automation_token)
+    } else {
+        let state = require_releasemind_auth_state()?;
+        ("/api/cli/releases/prepare", state.session_token)
+    };
+    let response = releasemind_request_with_timeout(
         Method::POST,
-        "/api/automation/releases/prepare",
+        path,
         Some(Value::Object(body)),
         &base_url,
-        Some(&token),
+        Some(&auth_token),
+        request_timeout,
     )?;
 
     if json {
@@ -37684,6 +37707,8 @@ fn run_releasemind_release_create(
     pull_request_numbers: Vec<i64>,
     changelog_path: Option<String>,
     timeout_seconds: Option<i64>,
+    max_retries: Option<u32>,
+    retry_backoff_seconds: Option<u64>,
     json: bool,
 ) -> Result<()> {
     let release_tag = release_tag
@@ -37697,7 +37722,7 @@ fn run_releasemind_release_create(
     let _ = generate_notes;
     let mut body = serde_json::Map::new();
     body.insert("repo_full_name".to_owned(), Value::String(repo_ref.clone()));
-    body.insert("release_tag".to_owned(), Value::String(release_tag));
+    body.insert("release_tag".to_owned(), Value::String(release_tag.clone()));
     if let Some(value) =
         title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
     {
@@ -37748,13 +37773,76 @@ fn run_releasemind_release_create(
     if let Some(value) = timeout_seconds.filter(|value| *value > 0) {
         body.insert("timeout_seconds".to_owned(), Value::Number(value.into()));
     }
-    let response = releasemind_request(
-        Method::POST,
-        "/api/cli/releases/create",
-        Some(Value::Object(body)),
-        &base_url,
-        Some(state.session_token.as_str()),
-    )?;
+    // /api/cli/releases/create waits on backend prepare generation; keep client timeout
+    // aligned with backend wait window to avoid timing out before completion.
+    let request_timeout = releasemind_prepare_http_timeout(timeout_seconds);
+    let max_retries = releasemind_release_create_max_retries(max_retries);
+    let backoff_seconds = releasemind_release_create_backoff_seconds(retry_backoff_seconds);
+    let response = {
+        let mut attempt = 0_u32;
+        loop {
+            match releasemind_request_with_timeout(
+                Method::POST,
+                "/api/cli/releases/create",
+                Some(Value::Object(body.clone())),
+                &base_url,
+                Some(state.session_token.as_str()),
+                request_timeout,
+            ) {
+                Ok(response) => break response,
+                Err(error) => {
+                    let message = error.to_string();
+                    let transient = releasemind_error_is_transient(&message);
+                    if transient && attempt < max_retries {
+                        attempt = attempt.saturating_add(1);
+                        std::thread::sleep(std::time::Duration::from_secs(backoff_seconds));
+                        continue;
+                    }
+                    if let Some(found) = releasemind_find_post_by_tag(
+                        &repo_ref,
+                        &release_tag,
+                        &base_url,
+                        state.session_token.as_str(),
+                    )? {
+                        let post_id = json_string_field(&found, "post_id").unwrap_or("(none)");
+                        let status = json_string_field(&found, "status").unwrap_or("pending");
+                        let recovery = serde_json::json!({
+                            "ok": false,
+                            "status": status,
+                            "post_id": post_id,
+                            "message": format!(
+                                "Release generation is still running. Use `si orbit releasemind release view --repo {} {}` to poll, then `si orbit releasemind release publish --repo {} {}` when ready.",
+                                repo_ref,
+                                post_id,
+                                repo_ref,
+                                post_id
+                            ),
+                        });
+                        if json {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&serde_json::json!({
+                                    "status_code": 202,
+                                    "request_id": serde_json::Value::Null,
+                                    "data": recovery,
+                                }))?
+                            );
+                            return Ok(());
+                        }
+                        println!("ReleaseMind release accepted");
+                        print_cli_kv("repo_ref", &repo_ref);
+                        print_cli_kv("post_id", post_id);
+                        print_cli_kv("status", status);
+                        if let Some(message) = recovery.get("message").and_then(Value::as_str) {
+                            print_cli_kv("message", message);
+                        }
+                        return Ok(());
+                    }
+                    return Err(error);
+                }
+            }
+        }
+    };
     if json {
         println!("{}", serde_json::to_string_pretty(&releasemind_response_json(&response))?);
         return Ok(());
@@ -38202,8 +38290,72 @@ fn releasemind_request(
     base_url: &str,
     token: Option<&str>,
 ) -> Result<(u16, Option<String>, Value)> {
+    releasemind_request_with_timeout(
+        method,
+        path,
+        body,
+        base_url,
+        token,
+        releasemind_default_http_timeout(),
+    )
+}
+
+const RELEASEMIND_HTTP_TIMEOUT_DEFAULT_SECONDS: u64 = 30;
+const RELEASEMIND_PREPARE_WAIT_TIMEOUT_DEFAULT_SECONDS: u64 = 360;
+const RELEASEMIND_HTTP_TIMEOUT_PADDING_SECONDS: u64 = 30;
+const RELEASEMIND_RELEASE_CREATE_MAX_RETRIES_DEFAULT: u32 = 2;
+const RELEASEMIND_RELEASE_CREATE_RETRY_BACKOFF_SECONDS_DEFAULT: u64 = 5;
+
+fn releasemind_default_http_timeout() -> std::time::Duration {
+    let seconds = env::var("RELEASEMIND_HTTP_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(RELEASEMIND_HTTP_TIMEOUT_DEFAULT_SECONDS);
+    std::time::Duration::from_secs(seconds)
+}
+
+fn releasemind_release_create_max_retries(override_value: Option<u32>) -> u32 {
+    override_value
+        .or_else(|| {
+            env::var("RELEASEMIND_RELEASE_CREATE_MAX_RETRIES")
+                .ok()
+                .and_then(|value| value.trim().parse::<u32>().ok())
+        })
+        .unwrap_or(RELEASEMIND_RELEASE_CREATE_MAX_RETRIES_DEFAULT)
+}
+
+fn releasemind_release_create_backoff_seconds(override_value: Option<u64>) -> u64 {
+    override_value
+        .or_else(|| {
+            env::var("RELEASEMIND_RELEASE_CREATE_RETRY_BACKOFF_SECONDS")
+                .ok()
+                .and_then(|value| value.trim().parse::<u64>().ok())
+        })
+        .filter(|value| *value > 0)
+        .unwrap_or(RELEASEMIND_RELEASE_CREATE_RETRY_BACKOFF_SECONDS_DEFAULT)
+}
+
+fn releasemind_prepare_http_timeout(timeout_seconds: Option<i64>) -> std::time::Duration {
+    let backend_wait_seconds = timeout_seconds
+        .filter(|value| *value > 0)
+        .map(|value| value as u64)
+        .unwrap_or(RELEASEMIND_PREPARE_WAIT_TIMEOUT_DEFAULT_SECONDS);
+    std::time::Duration::from_secs(
+        backend_wait_seconds.saturating_add(RELEASEMIND_HTTP_TIMEOUT_PADDING_SECONDS),
+    )
+}
+
+fn releasemind_request_with_timeout(
+    method: Method,
+    path: &str,
+    body: Option<Value>,
+    base_url: &str,
+    token: Option<&str>,
+    timeout: std::time::Duration,
+) -> Result<(u16, Option<String>, Value)> {
     let client = BlockingHttpClient::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(timeout)
         .build()
         .context("build ReleaseMind HTTP client")?;
     let url = format!("{}{}", base_url.trim_end_matches('/'), path);
@@ -38235,6 +38387,59 @@ fn releasemind_request(
         anyhow::bail!("{message}");
     }
     Ok((status.as_u16(), request_id, payload))
+}
+
+fn releasemind_error_is_transient(message: &str) -> bool {
+    let lowered = message.to_ascii_lowercase();
+    lowered.contains("timed out")
+        || lowered.contains("timeout")
+        || lowered.contains("temporarily unavailable")
+        || lowered.contains("too many requests")
+        || lowered.contains("connection reset")
+        || lowered.contains("connection refused")
+        || lowered.contains("503")
+        || lowered.contains("502")
+}
+
+fn releasemind_find_post_by_tag(
+    repo_ref: &str,
+    release_tag: &str,
+    base_url: &str,
+    session_token: &str,
+) -> Result<Option<Value>> {
+    let client = BlockingHttpClient::builder()
+        .timeout(releasemind_default_http_timeout())
+        .build()
+        .context("build ReleaseMind HTTP client")?;
+    let path = format!(
+        "/api/cli/releases/find?repo_full_name={}&release_tag={}",
+        encode_query_value(repo_ref),
+        encode_query_value(release_tag)
+    );
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let response = client
+        .request(Method::GET, &url)
+        .header("accept", "application/json")
+        .bearer_auth(session_token.trim())
+        .send()
+        .context("send ReleaseMind API request")?;
+    let status = response.status();
+    let body = response.text().context("read ReleaseMind API response body")?;
+    let payload = serde_json::from_str::<Value>(&body).unwrap_or(Value::Null);
+    if status.as_u16() == 404 {
+        return Ok(None);
+    }
+    if !status.is_success() {
+        let message = releasemind_error_message(&payload).unwrap_or_else(|| {
+            if body.trim().is_empty() {
+                format!("ReleaseMind API request failed with status {}", status.as_u16())
+            } else {
+                body
+            }
+        });
+        anyhow::bail!("{message}");
+    }
+    Ok(Some(payload))
 }
 
 fn releasemind_auth_state_path() -> PathBuf {

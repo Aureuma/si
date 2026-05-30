@@ -95,7 +95,8 @@ si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target
 si orbit releasemind auth login
 si orbit releasemind repo ensure-link Aureuma/si --json
 si orbit releasemind token list --json
-si orbit releasemind release create vX.Y.0 --draft --json
+si orbit releasemind release create vX.Y.0 --timeout-seconds 420 --max-retries 3 --json
+si orbit releasemind release prepare --repo Aureuma/si --release-tag vX.Y.0 --wait-for-ready false --json
 si orbit releasemind release view post_123 --json
 si orbit releasemind release publish post_123 --json
 si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
@@ -108,6 +109,7 @@ si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
 - `si orbit releasemind` now exposes the full interactive operator surface: repo ensure-link, token management, GitHub release orchestration, and Google Play plan/publish.
 - ReleaseMind repo, release, and play commands infer `owner/repo` from the current Git checkout when possible.
 - Use ReleaseMind OAuth login for interactive release work.
+- For slow generations, use `release prepare --wait-for-ready false` to capture `post_id`, then poll with `release view` and publish when ready.
 - Keep automation tokens for `si orbit releasemind doctor` and hidden low-level automation flows.
 
 ## Guardrails
