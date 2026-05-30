@@ -225,7 +225,8 @@ an orbit client:
 si orbit releasemind auth login
 si orbit releasemind repo ensure-link Aureuma/si --json
 si orbit releasemind token list --json
-si orbit releasemind release create vX.Y.0 --draft --json
+si orbit releasemind release create vX.Y.0 --timeout-seconds 420 --max-retries 3 --json
+si orbit releasemind release prepare --repo Aureuma/si --release-tag vX.Y.0 --wait-for-ready false --json
 si orbit releasemind release view post_123 --json
 si orbit releasemind release publish post_123 --json
 si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
@@ -236,6 +237,9 @@ dashboard-linked automation tokens only for CI or unattended flows, and inject
 `RELEASEMIND_AUTOMATION_TOKEN` with `si fort` when you need those lower-level
 automation endpoints. The repo, release, and play commands infer `owner/repo` from the current
 Git checkout when possible, so `--repo` is usually unnecessary.
+
+When release generation is slow, use `release prepare --wait-for-ready false` to
+get a post id immediately, then poll with `release view` and publish when ready.
 
 ## License
 
