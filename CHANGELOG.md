@@ -12,21 +12,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
-- Added a first-class Vertex Gemini generation command under `si orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
+- Added a first-class Vertex Gemini generation command under `orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
 - Added `tools/si-cache-governor` and the `docs/CACHE_GOVERNANCE.md` runbook for workspace-wide cache auditing and conservative prune operations.
 
 ### Changed
 - Bumped the working version to `0.59.33` after fixing Vertex global endpoint selection and Bedrock runtime request handling.
 - Bumped the working version to `0.59.25` after adding Vertex Gemini generation and stronger Bedrock runtime converse controls for LLM usage.
-- Expanded `si orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
+- Expanded `orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
 - Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
 ### Fixed
-- Fixed `si orbit gcp vertex generate` so `--location global` now uses the documented global Vertex host instead of an invalid regionalized hostname.
-- Fixed `si orbit gcp vertex generate` to accept `--json-body-file`, allowing large prompt payloads to bypass local argv limits.
+- Fixed `orbit gcp vertex generate` so `--location global` now uses the documented global Vertex host instead of an invalid regionalized hostname.
+- Fixed `orbit gcp vertex generate` to accept `--json-body-file`, allowing large prompt payloads to bypass local argv limits.
 - Fixed Bedrock runtime SigV4 request scope so `invoke`, `converse`, and `count-tokens` sign against the service name AWS expects at runtime.
-- Fixed `si orbit aws bedrock runtime converse` so explicit `--body` and `--body-file` inputs work without also requiring `--prompt`.
+- Fixed `orbit aws bedrock runtime converse` so explicit `--body` and `--body-file` inputs work without also requiring `--prompt`.
 - Fixed Nucleus hardening regression coverage so worker-restart scope tests seed the intended profile lane and direct-run failure smokes no longer assert unrelated concurrent task completion.
 - Fixed Nucleus task execution so the default task ceiling is the real runtime ceiling again; deep tasks no longer fail after a hidden 900-second idle cutoff when they did not ask for one.
 - Fixed Nucleus run-failure projection so runtime-emitted `run.failed` events now quarantine timed-out sessions and worker transport failures the same way direct runtime errors already do.
@@ -48,13 +48,12 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.59.0] - 2026-04-20
 ### Added
-- Added a ReleaseMind-backed GitHub release flow in `si orbit releasemind` with browser-based auth, repo inference from the current GitHub checkout, and release create/view/publish commands.
 - Added SI distribution doctor and release-preflight hardening so the CLI release path has a clearer local verification lane before publishing.
 
 ### Changed
-- Changed the ReleaseMind release-create CLI to align more closely with `gh` by leading with `--repo`, accepting explicit `--generate-notes`, and keeping `--repo-ref` as a compatibility alias.
+- Changed the GitHub release-create CLI to align more closely with `gh` by leading with `--repo`, accepting explicit `--generate-notes`, and keeping `--repo-ref` as a compatibility alias.
 - Removed stale `.sops.*` gitignore exceptions now that SI uses the native `si vault`/Fort secret path instead of a SOPS+age repo workflow.
-- Reverted the SI-local release-bundle helper path so ReleaseMind integration can land through a dedicated orbit client instead of new SI-owned release logic.
+- Reverted the SI-local release-bundle helper path so release orchestration can land through a dedicated orbit client instead of new SI-owned release logic.
 - Added a Fort-backed `si surf` noVNC password injection path so `si surf start` can use a stable viewer secret without storing it in plaintext Surf config.
 - Fixed SI surf-wrapper settings merging so metadata-only `~/.si/surf/si.settings.toml` files no longer wipe Fort-backed surf wrapper configuration from the core settings file.
 
@@ -70,7 +69,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.57.0] - 2026-04-08
 ### Changed
-- Bumped the minor release after wiring `si` to the Releasemind release-runbook workflow for GitHub Releases and downstream asset distribution.
+- Bumped the minor release after wiring `si` to the release-runbook workflow for GitHub Releases and downstream asset distribution.
 - Changed `si codex spawn` to launch Codex with the approvals-and-sandbox bypass flag required by the current worker runtime.
 
 ### Fixed
@@ -230,7 +229,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.47.0] - 2026-02-19
 ### Added
-- Added the historical Orbitals command surface (`si orbits`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
+- Added the historical Orbitals command surface (the historical Orbitals command surface) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
 - Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support, including contract/run/status/restore operations.
 - Added GitHub git-credential helper and remote normalization workflows under `si github git`, plus expanded PAT OAuth guidance for multi-repo operations.
 - Added first-run workspace defaults prompting/persistence and a strict vault-focused regression suite with explicit default vault-file management.
@@ -301,7 +300,7 @@ All notable changes to this project will be documented in this file.
 - Added `si google youtube` command family with API key + OAuth device-flow auth, broad resource coverage, and raw API access.
 - Added `si self` commands to build/upgrade/run `si` from a repo checkout (`si self build`, `si self upgrade`, `si self run`).
 - Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
-- Added dedicated command guides: `docs/VAULT.md`, `docs/GITHUB.md`, `docs/CLOUDFLARE.md`, `docs/GOOGLE_PLACES.md`, and `docs/GOOGLE_YOUTUBE.md`.
+- Added dedicated command guides: `docs/VAULT.md`, provider guide docs, provider guide docs, provider guide docs, and provider guide docs.
 
 ### Changed
 - Renamed `si images` to `si image` (singular) and refreshed help/docs to match.

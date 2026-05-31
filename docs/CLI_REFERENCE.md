@@ -51,7 +51,7 @@ Color control:
 | --- | --- |
 | Runtime and orchestration | `si nucleus`, `si codex`, `si surf`, `si viva` |
 | Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
-| Provider orbits | `si orbit github`, `si orbit cloudflare`, `si orbit gcp`, `si orbit aws`, `si orbit openai`, `si orbit oci`, `si orbit google`, `si orbit workos`, `si orbit apple`, `si orbit stripe`, `si image` |
+| Third-party integrations | Use the standalone `orbit <provider> ...` CLI from `Aureuma/orbit`; `si image` remains in SI for image bridge workflows. |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
 
 ## High-signal workflows
@@ -92,43 +92,31 @@ si viva -- tunnel down --profile dev
 ### Integration readiness
 
 ```bash
-si orbit list --json
-si orbit github doctor --json
-si orbit cloudflare doctor --json
-si orbit gcp doctor --json
-si orbit releasemind doctor Aureuma/si --json
+orbit list --json
+orbit github doctor --json
+orbit cloudflare doctor --json
+orbit gcp doctor --json
 ```
 
 ### Fort runtime secret check
 
 ```bash
 si fort doctor
-si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
+si fort get --repo github --env dev --key RM_GITHUB_TOKEN
 ```
 
 ### Release preflight
 
 ```bash
 si build self assets --out-dir .artifacts/release-preflight
-si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
-si orbit releasemind auth login
-si orbit releasemind repo ensure-link Aureuma/si --json
-si orbit releasemind token list --json
-si orbit releasemind release create vX.Y.0 --draft --json
-si orbit releasemind release view post_123 --json
-si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
+orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
 ```
 
 - `si build self assets` defaults to the canonical SI workspace version from root `Cargo.toml`.
 - For SI itself, release tags come from that same repo-wide version and only minor releases are tagged/published.
-- `si orbit github release create` now verifies the remote tag first.
+- `orbit github release create` now verifies the remote tag first.
 - When the tag is missing, pass `--target <sha>` and SI will create the git tag ref before creating the release.
 - For draft releases, GitHub may still return an `untagged-...` HTML URL until publish; verify with `tag_name` and `git ls-remote --tags`.
-- `si orbit releasemind ...` is a thin client to ReleaseMind APIs; OAuth auth, repo linking, note generation, and publish logic stay in ReleaseMind.
-- `si orbit releasemind` now exposes the broader operator surface in help: `auth`, `doctor`, `repo`, `token`, `release`, and `play`.
-- Repo, release, and play commands infer `owner/repo` from the current Git checkout when possible, so `--repo` is usually unnecessary.
-- Use `si orbit releasemind auth login` for interactive release work.
-- Use automation tokens only for `doctor` and hidden low-level automation endpoints in CI-style flows.
 
 ### Faster Rust iteration
 
@@ -154,7 +142,7 @@ si build self --timings
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.
 - Keep command docs aligned with `si --help` and `si help --format json`.
-`si orbit github release create` now follows the checkout-first default path more closely:
+`orbit github release create` now follows the checkout-first default path more closely:
 - omit the repo argument inside a GitHub checkout and SI infers it from `origin`
 - use `-R, --repo <owner/repo>` when you need an explicit override
 - omit `--title` to reuse the release tag as the title

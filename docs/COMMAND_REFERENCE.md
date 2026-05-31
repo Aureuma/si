@@ -24,33 +24,17 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | `si nucleus` | Local control plane for tasks, workers, sessions, runs, gateway inspection, and service management | `status`, `profile`, `service`, `task`, `worker`, `session`, `run`, `events` | [Nucleus](./NUCLEUS) |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `stop`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
-| `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
+| `si fort` | Wrapper for hosted Fort policy/auth API | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Local Playwright browser runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si viva` | Manage the Viva runtime wrapper | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |
-| `si orbit` | First-party provider orbit namespace | `list`, `github`, `cloudflare`, `aws`, `gcp`, `google`, `openai`, `oci`, `stripe`, `workos`, `apple` | [Providers](./PROVIDERS) |
-| `si image` | Image provider and generation bridge | provider-specific image flows | [Providers](./PROVIDERS) |
-| `si settings` | Show resolved SI settings | none | [CLI Reference](./CLI_REFERENCE) |
+| `si image` | Image provider and generation bridge | provider-specific image flows | [CLI Reference](./CLI_REFERENCE) |
+| `si settings` | Show resolved SI settings | none | [Settings](./SETTINGS) |
 | `si doctor` | Check fresh-machine distribution prerequisites | `--format json` | [Testing](./testing) |
 | `si commands` | List visible SI root commands | `list` | [CLI Reference](./CLI_REFERENCE) |
 
-## Provider and integration command families
+## Third-party integrations
 
-| Integration | Command family | Typical first checks | Detailed guide |
-| --- | --- | --- | --- |
-| GitHub | `si orbit github ...` | `si orbit github auth status`, `si orbit github doctor`, `si orbit github project list Aureuma` | [GitHub](./GITHUB) |
-| Cloudflare | `si orbit cloudflare ...` | `si orbit cloudflare auth status`, `si orbit cloudflare doctor` | [Cloudflare](./CLOUDFLARE) |
-| GCP + Gemini/Vertex | `si orbit gcp ...` | `si orbit gcp auth status`, `si orbit gcp doctor` | [GCP](./GCP) |
-| Google Places | `si orbit google places ...` | `si orbit google places auth status`, `si orbit google places doctor` | [Google Places](./GOOGLE_PLACES) |
-| Google Play | `si orbit google play ...` | `si orbit google play auth status`, `si orbit google play doctor` | [Google Play](./GOOGLE_PLAY) |
-| YouTube Data | `si orbit google youtube ...` | `si orbit google youtube auth status`, `si orbit google youtube doctor` | [Google YouTube](./GOOGLE_YOUTUBE) |
-| AWS | `si orbit aws ...` | `si orbit aws auth status`, `si orbit aws doctor` | [AWS](./AWS) |
-| OpenAI | `si orbit openai ...` | `si orbit openai auth status`, `si orbit openai doctor` | [OpenAI](./OPENAI) |
-| OCI | `si orbit oci ...` | `si orbit oci auth status`, `si orbit oci doctor` | [OCI](./OCI) |
-| Stripe | `si orbit stripe ...` | `si orbit stripe auth status`, `si orbit stripe doctor` | [Stripe](./STRIPE) |
-| WorkOS | `si orbit workos ...` | `si orbit workos auth status`, `si orbit workos doctor` | [WorkOS](./WORKOS) |
-| ReleaseMind | `si orbit releasemind ...` | `si orbit releasemind auth login`, `si orbit releasemind release create vX.Y.0 --draft --json` | ReleaseMind API client |
-| Apple App Store Connect | `si orbit apple store ...` | `si orbit apple store auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
-| Provider inventory | `si orbit list` | `si orbit list`, `si orbit list --provider github --json` | [Providers](./PROVIDERS) |
+Third-party API/provider command families moved to the standalone `Aureuma/orbit` repository and `orbit <provider> ...` CLI. SI no longer owns those command implementations or provider settings.
 
 ## Build, docs, and developer tooling
 
@@ -78,39 +62,11 @@ si --help
 si commands
 ```
 
-### 2. Integration readiness check
-
-```bash
-si orbit list --json
-si orbit github doctor --json
-si orbit cloudflare doctor --json
-si orbit releasemind doctor Aureuma/si --json
-```
-
-### 3. Release maintainer preflight
+### 2. Release maintainer preflight
 
 ```bash
 si build self assets --out-dir .artifacts/release-preflight
-si orbit github release create Aureuma/si --tag vX.Y.0 --title "vX.Y.0" --target "$(git rev-parse HEAD)" --draft
-si orbit releasemind auth login
-si orbit releasemind repo ensure-link Aureuma/si --json
-si orbit releasemind token list --json
-si orbit releasemind release create vX.Y.0 --timeout-seconds 420 --max-retries 3 --json
-si orbit releasemind release prepare --repo Aureuma/si --release-tag vX.Y.0 --wait-for-ready false --json
-si orbit releasemind release view post_123 --json
-si orbit releasemind release publish post_123 --json
-si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
 ```
-
-- `si build self assets` derives the version from root `Cargo.toml [workspace.package].version` when `--version` is omitted.
-- For SI releases, that one workspace version is also the tag/version source of truth.
-- Use `--target <sha>` when creating a release for a tag that does not already exist on the remote.
-- SI creates the tag ref first in that case; if `--target` is omitted, release creation fails clearly.
-- `si orbit releasemind` now exposes the full interactive operator surface: repo ensure-link, token management, GitHub release orchestration, and Google Play plan/publish.
-- ReleaseMind repo, release, and play commands infer `owner/repo` from the current Git checkout when possible.
-- Use ReleaseMind OAuth login for interactive release work.
-- For slow generations, use `release prepare --wait-for-ready false` to capture `post_id`, then poll with `release view` and publish when ready.
-- Keep automation tokens for `si orbit releasemind doctor` and hidden low-level automation flows.
 
 ## Guardrails
 
@@ -118,14 +74,5 @@ si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
 - Prefer `si nucleus service ...` over handwritten service units or launch agents.
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
-- `si fort` runtime auth is file-backed and resolves from the managed Codex profile `CODEX_HOME/fort/` session.
-- Caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` values are not normal `si fort` runtime fallbacks; use `si codex shell --profile <profile> --slot <slot> -- si fort ...` for profile runtime auth.
-- Bootstrap/admin Fort token files are reserved for explicit admin and provisioning commands; runtime secret commands fail loudly instead of falling back to bootstrap/admin auth.
-- Codex profile refresh tokens must be rotated in place.
 - Pass native `fort` flags after `--` when invoking through wrapper.
-- Run integration-specific `doctor` commands before write operations.
 - Run `si help --format json` or `si commands` when updating CLI docs.
-GitHub release commands follow a checkout-first default path:
-- `si orbit github release list|get|create|upload|delete` infer `owner/repo` from the current checkout when possible
-- pass `-R, --repo <owner/repo>` to override inference
-- `si orbit github release create` defaults the release title to the tag when `--title` is omitted

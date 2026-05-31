@@ -66,13 +66,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "orbit",
-        aliases: &[],
-        category: CommandCategory::Provider,
-        summary: "Manage first-party provider integrations.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "image",
         aliases: &["images"],
         category: CommandCategory::Provider,
@@ -164,6 +157,5 @@ mod tests {
     fn aliases_resolve_to_primary_command() {
         assert_eq!(find_root_command("creds").unwrap().name, "vault");
         assert_eq!(find_root_command("images").unwrap().name, "image");
-        assert_eq!(find_root_command("orbit").unwrap().name, "orbit");
     }
 }

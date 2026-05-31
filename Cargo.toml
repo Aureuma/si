@@ -3,7 +3,6 @@ members = [
     "rust/crates/si-core",
     "rust/crates/si-config",
     "rust/crates/si-command-manifest",
-    "rust/crates/si-provider-catalog",
     "rust/crates/si-process",
     "rust/crates/si-fort",
     "rust/crates/si-vault",
@@ -13,23 +12,13 @@ members = [
     "rust/crates/si-nucleus",
     "rust/crates/si-nucleus-runtime",
     "rust/crates/si-nucleus-runtime-codex",
-    "rust/crates/si-provider-github",
-    "rust/crates/si-provider-aws",
-    "rust/crates/si-provider-gcp",
-    "rust/crates/si-provider-google",
-    "rust/crates/si-provider-openai",
-    "rust/crates/si-provider-oci",
-    "rust/crates/si-provider-stripe",
-    "rust/crates/si-provider-workos",
-    "rust/crates/si-provider-cloudflare",
-    "rust/crates/si-provider-apple",
     "rust/crates/si-tools",
     "rust/crates/si-cli",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.60.1"
+version = "0.60.2"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/Aureuma/si"
