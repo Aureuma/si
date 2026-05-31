@@ -22,6 +22,10 @@
         {
           "anchor": "GitHub",
           "href": "https://github.com/Aureuma/si"
+        },
+        {
+          "anchor": "Orbit",
+          "href": "https://github.com/Aureuma/orbit"
         }
       ]
     },
@@ -37,7 +41,6 @@
               "docs/CLI_REFERENCE",
               "docs/COMMAND_REFERENCE",
               "docs/CACHE_GOVERNANCE",
-              "docs/INTEGRATIONS_OVERVIEW",
               "docs/SETTINGS",
               "docs/testing"
             ]
@@ -54,8 +57,6 @@
               "docs/BROWSER",
               "docs/PLUGIN_MARKETPLACE",
               "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
-              "docs/PROVIDERS",
-              "docs/API_CHARACTERISTICS",
               "docs/INTEGRATION_ECOSYSTEM"
             ]
           },
@@ -68,38 +69,14 @@
         ]
       },
       {
-        "tab": "Integrations",
-        "groups": [
-          {
-            "group": "Provider Guides",
-            "pages": [
-              "docs/GITHUB",
-              "docs/CLOUDFLARE",
-              "docs/GCP",
-              "docs/GOOGLE_PLACES",
-              "docs/GOOGLE_PLAY",
-              "docs/GOOGLE_YOUTUBE",
-              "docs/AWS",
-              "docs/OPENAI",
-              "docs/OCI",
-              "docs/STRIPE",
-              "docs/SOCIAL",
-              "docs/WORKOS",
-              "docs/APPLE_APPSTORE",
-              "docs/PUBLISH"
-            ]
-          }
-        ]
-      },
-      {
         "tab": "Release",
         "groups": [
           {
             "group": "Release Docs",
             "pages": [
               "docs/RELEASING",
-              "docs/RELEASE_RUNBOOK",
-              "docs/HOMEBREW_CORE"
+              "docs/HOMEBREW_CORE",
+              "docs/PUBLISH"
             ]
           }
         ]

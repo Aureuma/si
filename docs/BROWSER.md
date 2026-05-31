@@ -6,7 +6,7 @@
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Providers](./PROVIDERS)
+- Orbit provider docs
 
 ## Commands
 

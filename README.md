@@ -12,7 +12,7 @@
   <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Formula: aureuma/si/si"></a>
 </p>
 
-`si` is an AI-first CLI for orchestrating coding agents, provider bridges, and secure runtime workflows.
+`si` is an AI-first CLI for orchestrating coding agents, secure runtime workflows, and build flows.
 
 Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCLEUS.md) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
 
@@ -21,7 +21,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCL
 - Nucleus control plane: durable local orchestration under `si nucleus ...` for tasks, workers, sessions, runs, the local WebSocket gateway, and OS-native service management.
 - Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `stop`, `remove`, `shell`, `tail`, `list`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
-- Provider orbits: first-party integrations under `si orbit <provider> ...` for Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, WorkOS, AWS, GCP, OpenAI, and OCI.
+- Third-party API integrations now live in the standalone `orbit` repo and CLI: `orbit <provider> ...`.
 - Browser runtime: local Playwright browser runtime under `si surf ...`, including optional Fort-backed injection for a stable noVNC viewer password on `si surf start`.
 - Docs workflow: Mintlify content under `docs/`, validated with the external Mintlify CLI.
 
@@ -142,7 +142,7 @@ mintlify dev
 - `si nucleus ...`: local control-plane operations, gateway-facing orchestration, and service management.
 - `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
-- `si orbit ...`: provider bridges and provider capability inventory.
+- `orbit ...`: third-party API integrations in the standalone `Aureuma/orbit` repo.
 - `si surf ...`: Playwright browser runtime.
 - `si build ...`: self-build and release workflows.
 
@@ -217,29 +217,6 @@ Local preflight command:
 - `./.artifacts/cargo-target/release/si build pnpm vault` (vault key: `NPM_GAT_AUREUMA_VANGUARDA`)
 
 These commands default to the current SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached tag/version target.
-
-ReleaseMind automation stays in the ReleaseMind repo and API. SI consumes it as
-an orbit client:
-
-```bash
-si orbit releasemind auth login
-si orbit releasemind repo ensure-link Aureuma/si --json
-si orbit releasemind token list --json
-si orbit releasemind release create vX.Y.0 --timeout-seconds 420 --max-retries 3 --json
-si orbit releasemind release prepare --repo Aureuma/si --release-tag vX.Y.0 --wait-for-ready false --json
-si orbit releasemind release view post_123 --json
-si orbit releasemind release publish post_123 --json
-si orbit releasemind play plan -R Aureuma/si --base-tag vX.Y.0 --json
-```
-
-Use `si orbit releasemind auth login` for interactive operator work. Use
-dashboard-linked automation tokens only for CI or unattended flows, and inject
-`RELEASEMIND_AUTOMATION_TOKEN` with `si fort` when you need those lower-level
-automation endpoints. The repo, release, and play commands infer `owner/repo` from the current
-Git checkout when possible, so `--repo` is usually unnecessary.
-
-When release generation is slow, use `release prepare --wait-for-ready false` to
-get a post id immediately, then poll with `release view` and publish when ready.
 
 ## License
 

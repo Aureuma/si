@@ -53,7 +53,7 @@ git pull --ff-only
 - Make sure you have all remote tags locally before picking the next version.
 - Inspect existing release/tag state before cutting a new release:
 ```
-si orbit github release list Aureuma/si --auth-mode oauth
+orbit github release list Aureuma/si --auth-mode oauth
 git tag -l
 ```
 - Confirm there are no stray patch-version releases such as `vX.Y.1`, no bare-tag releases such as `0.50.0`, and no duplicate release entries for the same minor line.
@@ -111,7 +111,7 @@ git push origin vX.Y.0
 - `gh release create` can auto-create a tag if it doesn't exist; using `--verify-tag` ensures you only release a tag you already created and pushed.
 - If you let `gh release create` auto-create a tag, fetch tags afterward to sync locally: `git fetch --tags origin`.
 - If you do let it auto-create a tag, use `--target <branch|sha>` to pin the release to the desired commit.
-- `si orbit github release create` is stricter: it checks the remote tag first, creates the tag ref only when `--target <sha>` is provided, and otherwise fails clearly.
+- `orbit github release create` is stricter: it checks the remote tag first, creates the tag ref only when `--target <sha>` is provided, and otherwise fails clearly.
 
 ### 7) Prepare release notes and publish release
 If you need a quick summary of commits since the last release:
@@ -125,7 +125,7 @@ Option A: Use the changelog entry as the release body.
 1. Extract the new `vX.Y.0` section into `release-notes.md` (manual or script).
 2. Create the release with a title and notes file:
 ```
-si orbit github release create Aureuma/si \
+orbit github release create Aureuma/si \
   --tag vX.Y.0 \
   --title "vX.Y.0 - Suggested Name" \
   --notes-file release-notes.md \
@@ -133,7 +133,7 @@ si orbit github release create Aureuma/si \
 ```
 3. If the tag is not pushed yet, use:
 ```
-si orbit github release create Aureuma/si \
+orbit github release create Aureuma/si \
   --tag vX.Y.0 \
   --title "vX.Y.0 - Suggested Name" \
   --notes-file release-notes.md \
@@ -170,19 +170,8 @@ Notes:
 - `--generate-notes` uses GitHub’s Release Notes API and can be combined with `--notes`.
 - Add `--notes-start-tag vA.B.0` to define the start tag for generated notes when needed.
 - Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
-- In an SI checkout, `si orbit github release create` can omit the repo argument entirely and infer it from `origin`.
+- In an SI checkout, `orbit github release create` can omit the repo argument entirely and infer it from `origin`.
 - If you omit `--title`, SI uses the tag as the release title by default.
-
-Option D: Use the Releasemind GitHub workflow for draft + publish orchestration.
-1. Add the required repo secrets:
-   - `RELEASEMIND_AUTOMATION_TOKEN`
-2. Push the release tag.
-3. Let `.github/workflows/releasemind-release.yml` create or refresh the draft release notes and publish the release.
-4. The publish step triggers `.github/workflows/cli-release-assets.yml`, and the Releasemind workflow waits for that downstream distribution workflow to complete.
-
-Notes:
-- The Releasemind workflow keeps release publication and asset distribution aligned by waiting on the downstream `CLI Release Assets` release-event workflow.
-- The workflow pins the reusable Releasemind action to a specific commit SHA rather than a moving branch ref.
 
 ### 8) Verify the published release
 ```
@@ -269,7 +258,7 @@ si viva -- doctor
 
 Notes:
 - Viva should follow the same release discipline: tag/version validation, asset verification, and CI green before publishing.
-- Prefer `si orbit github release create Aureuma/viva ...` for Viva releases so the GitHub release flow stays operationally consistent across the stack.
+- Prefer `orbit github release create Aureuma/viva ...` for Viva releases so the GitHub release flow stays operationally consistent across the stack.
 
 ## Tagging Rules
 - Use annotated tags only for minor releases: `git tag -a vX.Y.0 -m "vX.Y.0" <commit>`.

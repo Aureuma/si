@@ -30,17 +30,9 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 
 That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
 
-## Provider orbit validation
+## Orbit validation
 
-Provider-orbit coverage now lives in the normal Rust CLI and provider test suites.
-
-Use focused command tests such as:
-
-```bash
-cargo test -p si-cli orbit
-cargo test -p si-provider-github
-cargo test -p si-provider-aws
-```
+Third-party Orbit integration coverage moved to the standalone `Aureuma/orbit` repo. Run `cargo test --workspace` from that repo for provider integration tests.
 
 ## Installer smoke tests
 To validate the `si` installer script end-to-end, run:
@@ -148,7 +140,7 @@ After CLI command-surface changes, run targeted help checks:
 
 ```bash
 ./si --help
-./si orbit gcp gemini image generate --help
+orbit gcp gemini image generate --help
 ./si surf --help
 ```
 
