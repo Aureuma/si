@@ -75,7 +75,7 @@ Update release version metadata:
 - root `Cargo.toml` `workspace.package.version = "X.Y.0"`
 - `Cargo.lock` follows that same workspace version update in the same commit.
 
-Do not invent or hand-maintain separate SI versions in crate manifests, provider/orbit surfaces, packaging templates, or docs. Those must derive from the root workspace version.
+Do not invent or hand-maintain separate SI versions in crate manifests, packaging templates, or docs. Those must derive from the root workspace version.
 
 ### 4) Verify and commit the release prep
 ```

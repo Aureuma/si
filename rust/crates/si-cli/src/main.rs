@@ -5182,19 +5182,6 @@ fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) 
 fn removed_root_command_replacement(root: &str) -> Option<&'static str> {
     match root {
         "paths" => Some("si settings"),
-        "orbit" => Some("orbit"),
-        "paas" => Some("orbit"),
-        "providers" => Some("orbit list"),
-        "cloudflare" => Some("orbit cloudflare ..."),
-        "apple" => Some("orbit apple ..."),
-        "aws" => Some("orbit aws ..."),
-        "gcp" => Some("orbit gcp ..."),
-        "google" => Some("orbit google ..."),
-        "openai" => Some("orbit openai ..."),
-        "oci" => Some("orbit oci ..."),
-        "stripe" => Some("orbit stripe ..."),
-        "workos" => Some("orbit workos ..."),
-        "github" => Some("orbit github ..."),
         _ => None,
     }
 }
@@ -5897,7 +5884,6 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["vault"] => Some("Vault secret and trust commands."),
         ["vault", "trust"] => Some("Verify trusted vault inputs."),
         ["image"] => Some("Image provider commands."),
-        ["apple", "store"] => Some("App Store Connect commands."),
         _ => None,
     }
 }
@@ -12244,5 +12230,4 @@ mod tests {
         assert!(payload.contains("\"includeLayers\":false"));
         assert!(payload.contains("\"cwd\":\"/tmp/si-work\""));
     }
-
 }

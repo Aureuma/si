@@ -4,10 +4,6 @@
 
 `si surf` manages the local Playwright browser runtime used by SI workflows.
 
-Related:
-- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- Orbit provider docs
-
 ## Commands
 
 ```bash

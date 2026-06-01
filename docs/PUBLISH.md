@@ -11,7 +11,6 @@ description: DistributionKit-backed publishing workflows in SI for Dev.to, Hashn
 
 ## Related docs
 
-- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
 - [Vault](./VAULT)
 - [CLI Reference](./CLI_REFERENCE)
 
