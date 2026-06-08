@@ -151,6 +151,13 @@ SI-owned tunnel profile selection used when wrapping native `viva tunnel ...` co
 - `viva.tunnel.default_profile` (string): default profile appended to native `viva tunnel ...` commands when no native `--profile` argument is present
 - `viva.tunnel.profiles.<name>` (table): stored tunnel profile metadata consumed by the wrapper
 
+CLI behavior:
+
+- `si viva config tunnel show` reads configured tunnel profiles.
+- `si viva config tunnel import --profile <name> --file <PATH> [--set-default]` imports one native Viva tunnel profile table into `~/.si/viva/settings.toml`.
+- `si viva config tunnel default --profile <name>` changes the wrapper default profile and refuses missing profile names.
+- `si viva config tunnel import` copies the raw profile TOML table so native Viva-owned fields are preserved.
+
 ### `[surf]`
 Defaults for the `si surf` wrapper. Native Surf runtime, proxy, tunnel, host, session, and `surf config ...` behavior remains owned by the `surf` binary.
 

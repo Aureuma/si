@@ -1304,6 +1304,18 @@ enum VivaTunnelConfigCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    Import {
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        file: PathBuf,
+        #[arg(long, action = ArgAction::SetTrue)]
+        set_default: bool,
+    },
+    Default {
+        #[arg(long)]
+        profile: String,
+    },
 }
 
 #[derive(Debug, Parser)]
@@ -7237,7 +7249,7 @@ fn render_viva_wrapper_help() {
     println!();
     print_help_section("Wrapper commands");
     print_help_item("config show|set", CliTone::Command);
-    print_help_item("config tunnel show", CliTone::Command);
+    print_help_item("config tunnel show|import|default", CliTone::Command);
     println!();
     print_help_section("Native viva passthrough");
     print_help_item(
@@ -7255,6 +7267,10 @@ fn render_viva_wrapper_help() {
     println!();
     print_help_section("Examples");
     print_help_item("si viva config set --repo ~/Development/viva --build true", CliTone::Command);
+    print_help_item(
+        "si viva config tunnel import --profile dev --file ~/Development/safe/viva/cloudflare.tunnel.dev.toml --set-default",
+        CliTone::Command,
+    );
     print_help_item("si viva config tunnel show --format json", CliTone::Command);
     print_help_item("si viva -- tunnel up --profile dev", CliTone::Command);
 }
@@ -7274,6 +7290,12 @@ fn run_viva_config_command(
         VivaConfigCommand::Tunnel { command } => match command {
             VivaTunnelConfigCommand::Show { format } => {
                 show_viva_tunnel_config(home, settings_file, format)
+            }
+            VivaTunnelConfigCommand::Import { profile, file, set_default } => {
+                import_viva_tunnel_config(home, settings_file, profile, file, set_default)
+            }
+            VivaTunnelConfigCommand::Default { profile } => {
+                set_viva_tunnel_default_profile(home, settings_file, profile)
             }
         },
     }
@@ -7357,6 +7379,103 @@ fn show_viva_tunnel_config(
         }
     }
     Ok(())
+}
+
+fn import_viva_tunnel_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    profile: String,
+    file: PathBuf,
+    set_default: bool,
+) -> Result<()> {
+    let profile = normalize_viva_tunnel_profile_name(&profile)?;
+    let source = fs::read_to_string(&file)
+        .with_context(|| format!("read Viva tunnel profile {}", file.display()))?;
+    let source_document = toml::from_str::<toml::Value>(&source)
+        .with_context(|| format!("parse Viva tunnel profile {}", file.display()))?;
+    let profile_value = extract_viva_tunnel_profile_value(&source_document, &profile)
+        .with_context(|| format!("find Viva tunnel profile {profile} in {}", file.display()))?;
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path =
+        settings_file.unwrap_or_else(|| home.join(".si").join("viva").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+
+    let profiles = ensure_nested_toml_table(&mut document, &["viva", "tunnel", "profiles"])?;
+    profiles.insert(profile.clone(), profile_value);
+    if set_default {
+        let tunnel = ensure_nested_toml_table(&mut document, &["viva", "tunnel"])?;
+        tunnel.insert("default_profile".to_owned(), toml::Value::String(profile));
+    }
+
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn set_viva_tunnel_default_profile(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    profile: String,
+) -> Result<()> {
+    let profile = normalize_viva_tunnel_profile_name(&profile)?;
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path =
+        settings_file.unwrap_or_else(|| home.join(".si").join("viva").join("settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    let Some(profiles) = toml_table_at(&document, &["viva", "tunnel", "profiles"]) else {
+        anyhow::bail!(
+            "cannot set Viva tunnel default profile {profile}: no profiles are configured"
+        );
+    };
+    if !profiles.contains_key(&profile) {
+        anyhow::bail!("cannot set Viva tunnel default profile {profile}: profile does not exist");
+    }
+    let tunnel = ensure_nested_toml_table(&mut document, &["viva", "tunnel"])?;
+    tunnel.insert("default_profile".to_owned(), toml::Value::String(profile));
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
+}
+
+fn normalize_viva_tunnel_profile_name(profile: &str) -> Result<String> {
+    let normalized = profile.trim().to_lowercase();
+    if normalized.is_empty() {
+        anyhow::bail!("Viva tunnel profile name cannot be empty");
+    }
+    Ok(normalized)
+}
+
+fn extract_viva_tunnel_profile_value(document: &toml::Value, profile: &str) -> Result<toml::Value> {
+    if let Some(profile_table) =
+        toml_value_table_at(document, &["viva", "tunnel", "profiles", profile])
+    {
+        return Ok(toml::Value::Table(profile_table.clone()));
+    }
+    if let Some(profiles) = toml_value_table_at(document, &["viva", "tunnel", "profiles"]) {
+        if profiles.len() == 1 {
+            let (_, value) = profiles.iter().next().expect("one profile");
+            if value.as_table().is_some() {
+                return Ok(value.clone());
+            }
+        }
+    }
+    if let Some(root) = document.as_table()
+        && looks_like_viva_tunnel_profile(root)
+    {
+        return Ok(toml::Value::Table(root.clone()));
+    }
+    anyhow::bail!("expected [viva.tunnel.profiles.{profile}] or a single Viva tunnel profile table")
+}
+
+fn looks_like_viva_tunnel_profile(table: &toml::map::Map<String, toml::Value>) -> bool {
+    table.contains_key("routes")
+        || table.contains_key("runtime_name")
+        || table.contains_key("container_name")
+        || table.contains_key("tunnel_id_env_key")
+        || table.contains_key("credentials_env_key")
+        || table.contains_key("fort_env_file")
 }
 
 fn run_native_viva_command(
@@ -8988,6 +9107,45 @@ fn ensure_toml_table<'a>(
     root.get_mut(key)
         .and_then(toml::Value::as_table_mut)
         .ok_or_else(|| anyhow!("settings key {key} must be a table"))
+}
+
+fn ensure_nested_toml_table<'a>(
+    root: &'a mut toml::map::Map<String, toml::Value>,
+    path: &[&str],
+) -> Result<&'a mut toml::map::Map<String, toml::Value>> {
+    let mut current = root;
+    for key in path {
+        if !current.contains_key(*key) {
+            current.insert((*key).to_owned(), toml::Value::Table(toml::map::Map::new()));
+        }
+        current = current
+            .get_mut(*key)
+            .and_then(toml::Value::as_table_mut)
+            .ok_or_else(|| anyhow!("settings key {} must be a table", path.join(".")))?;
+    }
+    Ok(current)
+}
+
+fn toml_table_at<'a>(
+    root: &'a toml::map::Map<String, toml::Value>,
+    path: &[&str],
+) -> Option<&'a toml::map::Map<String, toml::Value>> {
+    let mut current = root;
+    for key in path {
+        current = current.get(*key)?.as_table()?;
+    }
+    Some(current)
+}
+
+fn toml_value_table_at<'a>(
+    root: &'a toml::Value,
+    path: &[&str],
+) -> Option<&'a toml::map::Map<String, toml::Value>> {
+    let mut current = root;
+    for key in path {
+        current = current.as_table()?.get(*key)?;
+    }
+    current.as_table()
 }
 
 fn set_toml_string(
@@ -12285,6 +12443,60 @@ mod tests {
         .expect("resolve explicit bin");
 
         assert_eq!(resolved, explicit_bin);
+    }
+
+    #[test]
+    fn viva_tunnel_import_extracts_named_profile_without_dropping_native_fields() {
+        let document = toml::from_str::<toml::Value>(
+            r#"
+[viva.tunnel.profiles.dev]
+runtime_name = "viva-shared-dev-cloudflared"
+container_name = "viva-shared-dev-cloudflared"
+network_mode = "viva-shared"
+additional_networks = ["viva-ls-dev_default"]
+fort_env_file = "/work/safe/viva/.env.dev"
+
+[[viva.tunnel.profiles.dev.routes]]
+hostname = "dev.example.com"
+service = "http://viva-dev-web:3000"
+"#,
+        )
+        .expect("parse document");
+
+        let profile = extract_viva_tunnel_profile_value(&document, "dev").expect("extract profile");
+        let table = profile.as_table().expect("profile table");
+
+        assert_eq!(
+            table.get("container_name").and_then(toml::Value::as_str),
+            Some("viva-shared-dev-cloudflared")
+        );
+        assert!(table.contains_key("additional_networks"));
+        assert!(table.contains_key("routes"));
+    }
+
+    #[test]
+    fn viva_tunnel_import_accepts_direct_profile_table() {
+        let document = toml::from_str::<toml::Value>(
+            r#"
+runtime_name = "viva-shared-prod-cloudflared"
+fort_env_file = "/work/safe/viva/.env.prod"
+
+[[routes]]
+hostname = "example.com"
+service = "http://viva-prod-web:3000"
+"#,
+        )
+        .expect("parse document");
+
+        let profile =
+            extract_viva_tunnel_profile_value(&document, "prod").expect("extract profile");
+        let table = profile.as_table().expect("profile table");
+
+        assert_eq!(
+            table.get("runtime_name").and_then(toml::Value::as_str),
+            Some("viva-shared-prod-cloudflared")
+        );
+        assert!(table.contains_key("routes"));
     }
 
     #[test]
