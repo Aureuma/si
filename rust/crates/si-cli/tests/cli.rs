@@ -1194,6 +1194,38 @@ fn surf_wrapper_marks_child_process_as_wrapped() {
 }
 
 #[test]
+fn surf_wrapper_trace_prints_resolved_binary_without_args() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let surf_path = bin_dir.path().join("surf");
+    write_executable_shell_script(&surf_path, "#!/bin/sh\nexit 0\n");
+
+    let output = cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--bin",
+            surf_path.to_str().expect("surf path"),
+            "status",
+            "--json",
+        ])
+        .env("SI_WRAPPER_TRACE", "1")
+        .assert()
+        .success()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+
+    assert!(stderr.contains("si wrapper trace: surf binary="));
+    assert!(stderr.contains(surf_path.to_str().expect("surf path")));
+    assert!(!stderr.contains("--json"));
+}
+
+#[test]
 fn surf_wrapper_fetches_vnc_password_from_fort_for_start() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");

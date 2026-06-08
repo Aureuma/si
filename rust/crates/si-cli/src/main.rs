@@ -7090,6 +7090,7 @@ fn run_surf_program(
     home: &Path,
     vnc_password_source: &Option<SurfVncPasswordFortSource>,
 ) -> Result<ExitStatus> {
+    trace_external_tool_program("surf", program);
     let mut command = StdCommand::new(program);
     command.env("SI_SURF_WRAPPED", "1").args(args);
     if let Some(password) = resolve_surf_vnc_password(settings, home, vnc_password_source, args)? {
@@ -7202,6 +7203,7 @@ fn run_fort_capture_stdout(
     settings: &Settings,
     home: &Path,
 ) -> Result<String> {
+    trace_external_tool_program("fort", program);
     let mut command = StdCommand::new(program);
     command.args(build_fort_command_args(program, args, settings, home)?);
     command.env_remove("FORT_HOST");
@@ -7492,6 +7494,7 @@ fn run_native_viva_command(
     let explicit_program = bin.is_some() || repo.is_some() || !settings.viva.bin.trim().is_empty();
     let program = resolve_viva_program(&settings.viva, repo.clone(), build, no_build, bin.clone())?;
     let command_args = build_viva_command_args(args, &settings.viva);
+    trace_external_tool_program("viva", &program);
     let status = match StdCommand::new(&program).args(&command_args).status() {
         Ok(status) => status,
         Err(error)
@@ -7501,6 +7504,7 @@ fn run_native_viva_command(
                 && !explicit_program =>
         {
             let fallback = resolve_viva_build_fallback(&settings.viva)?;
+            trace_external_tool_program("viva", &fallback);
             StdCommand::new(&fallback)
                 .args(&command_args)
                 .status()
@@ -7783,6 +7787,15 @@ fn strip_wrapper_passthrough_marker(mut args: Vec<String>) -> Vec<String> {
     args
 }
 
+fn trace_external_tool_program(name: &str, program: &Path) {
+    let enabled = std::env::var("SI_WRAPPER_TRACE")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false);
+    if enabled {
+        eprintln!("si wrapper trace: {name} binary={}", program.display());
+    }
+}
+
 fn non_empty_string(value: String) -> Option<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() { None } else { Some(trimmed.to_owned()) }
@@ -7986,6 +7999,7 @@ fn run_fort_program(
     settings: &Settings,
     home: &Path,
 ) -> Result<ExitStatus> {
+    trace_external_tool_program("fort", program);
     let mut command = StdCommand::new(program);
     command.args(build_fort_command_args(program, args, settings, home)?);
     command.env_remove("FORT_HOST");
