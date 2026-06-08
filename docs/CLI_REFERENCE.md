@@ -136,7 +136,7 @@ si build self --timings
 
 - For Nucleus deployments protected by `SI_NUCLEUS_AUTH_TOKEN`, all gateway and REST operations require that bearer token; use the same token from CLI clients.
 - CLI endpoint discovery for `si nucleus ...` resolves from `--endpoint`, then `SI_NUCLEUS_WS_ADDR`, then `~/.si/nucleus/gateway/metadata.json`, then the default local websocket URL.
-- On host/admin flows, use `si vault run -- <command>` when secrets are required.
+- On host/admin flows, use `si fort run -- <command>` when secrets are required.
 - For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` wrapper passes explicit Fort file-path auth flags for the managed Codex profile session under `CODEX_HOME/fort/`; caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` values are not normal runtime fallbacks.
 - Runtime secret commands fail loudly when no usable runtime Fort session exists; bootstrap/admin token files are only for explicit admin/provisioning commands.

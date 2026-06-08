@@ -72,7 +72,7 @@ si build self assets --out-dir .artifacts/release-preflight
 
 - Use `si nucleus ...` rather than hidden runtime shortcuts when you need task, worker, session, run, or gateway state.
 - Prefer `si nucleus service ...` over handwritten service units or launch agents.
-- For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
+- For host/admin automation, prefer `si fort run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run `si help --format json` or `si commands` when updating CLI docs.
