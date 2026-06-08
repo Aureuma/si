@@ -132,6 +132,59 @@ CLI and runtime behavior:
   - Fort runtime agent IDs are slot-aware: `si-codex-<profile>` for `primary`, `si-codex-<profile>--<slot>` for non-primary slots
   - profile refresh tokens must be rotated in place.
 
+### `[viva]`
+Defaults for the `si viva` wrapper. Native deploy, tunnel, backup, rollback, status, history, serve, analytics, and notification behavior remains owned by the `viva` binary.
+
+- `viva.repo` (string): source repo path used by `si viva --repo`, configured repo resolution, or build fallback
+- `viva.bin` (string): native Viva binary path used by wrapper execution
+- `viva.build` (bool): default build-before-run behavior for wrapper calls
+
+CLI behavior:
+
+- `si viva config show` reads these wrapper values.
+- `si viva config set --repo <PATH> --bin <PATH> --build <true|false>` writes these wrapper values to `~/.si/viva/settings.toml` unless `--settings-file` is supplied.
+- Wrapper options such as `si viva --repo <PATH> --build -- version` must appear before native Viva args.
+
+#### `[viva.tunnel]`
+SI-owned tunnel profile selection used when wrapping native `viva tunnel ...` commands.
+
+- `viva.tunnel.default_profile` (string): default profile appended to native `viva tunnel ...` commands when no native `--profile` argument is present
+- `viva.tunnel.profiles.<name>` (table): stored tunnel profile metadata consumed by the wrapper
+
+### `[surf]`
+Defaults for the `si surf` wrapper. Native Surf runtime, proxy, tunnel, host, session, and `surf config ...` behavior remains owned by the `surf` binary.
+
+Surf wrapper module path:
+
+```
+~/.si/surf/si.settings.toml
+```
+
+- `surf.repo` (string): source repo path used by `si surf --repo`, configured repo resolution, or build fallback
+- `surf.bin` (string): native Surf binary path used by wrapper execution
+- `surf.build` (bool): default build-before-run behavior for wrapper calls
+- `surf.settings_file` (string): native Surf settings file path passed through where native Surf supports it
+- `surf.state_dir` (string): native Surf state directory path passed through where native Surf supports it
+- `surf.vnc_password_fort_key` (string): Fort key used to inject `SURF_VNC_PASSWORD` for `si surf start`
+- `surf.vnc_password_fort_repo` (string): Fort repo scope for the noVNC password key; defaults to `surf` when a key is configured
+- `surf.vnc_password_fort_env` (string): Fort env scope for the noVNC password key; defaults to `dev` when a key is configured
+
+CLI behavior:
+
+- `si surf wrapper config show` reads SI wrapper values.
+- `si surf wrapper config set --repo <PATH> --bin <PATH> --build <true|false>` writes SI wrapper values to `~/.si/surf/si.settings.toml` unless `--settings-file` is supplied.
+- `si surf config ...` is native Surf config passthrough and does not write SI wrapper settings.
+- Wrapper options such as `si surf --repo <PATH> --build -- version` must appear before native Surf args.
+- `si surf` sets `SI_SURF_WRAPPED=1` for native Surf execution.
+
+#### `[surf.tunnel]`
+Surf tunnel metadata used by compatibility paths. Prefer Fort-backed key naming in new documentation.
+
+- `surf.tunnel.name` (string): Surf tunnel runtime name
+- `surf.tunnel.mode` (string): `quick` or `token`
+- `surf.tunnel.fort_key` (string): Fort key for tunnel token material when supported by native Surf
+- `surf.tunnel.vault_key` (string): legacy compatibility alias for older settings only
+
 ### External orbit settings
 Third-party integration settings moved to the standalone `orbit` repo. SI no longer reads provider account settings such as `[stripe]`, `[github]`, `[cloudflare]`, `[gcp]`, `[google]`, `[openai]`, `[oci]`, `[apple]`, or `[workos]`.
 ## Example
@@ -159,4 +212,3 @@ name = "🧪 Profile Alpha"
 email = "example@example.com"
 auth_path = "~/.si/codex/profiles/profile-alpha/auth.json"
 auth_updated = "2026-01-26T00:00:00Z"
-
