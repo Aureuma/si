@@ -180,4 +180,33 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn command_reference_documents_visible_root_commands() {
+        let command_reference = include_str!("../../../../docs/COMMAND_REFERENCE.md");
+        for spec in root_commands().iter().filter(|spec| !spec.hidden) {
+            let command = format!("si {}", spec.name);
+            assert!(
+                command_reference.contains(&command),
+                "COMMAND_REFERENCE.md does not document visible command {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn settings_reference_documents_wrapper_settings() {
+        let settings_reference = include_str!("../../../../docs/SETTINGS.md");
+        for heading in ["### `[fort]`", "### `[viva]`", "### `[surf]`"] {
+            assert!(
+                settings_reference.contains(heading),
+                "SETTINGS.md missing wrapper settings heading {heading}"
+            );
+        }
+        for field in ["fort.repo", "viva.repo", "surf.repo", "surf.tunnel.fort_key"] {
+            assert!(
+                settings_reference.contains(field),
+                "SETTINGS.md missing wrapper settings field {field}"
+            );
+        }
+    }
 }

@@ -11,6 +11,8 @@ Use this page as the canonical command map for `si`.
 
 ```bash
 si --help
+si help
+si version
 si <command> --help
 si <command> <subcommand> --help
 ```
@@ -35,6 +37,21 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 ## Third-party integrations
 
 Third-party API/provider command families moved to the standalone `Aureuma/orbit` repository and `orbit <provider> ...` CLI. SI no longer owns those command implementations or provider settings.
+
+## Integration ownership
+
+| Integration | Ownership mode | SI responsibility | Owning implementation |
+| --- | --- | --- | --- |
+| `fort` | `native-wrapper` | Resolve/build/run the Fort binary, mediate SI auth/session paths, and expose wrapper config | `fort` repo |
+| `viva` | `native-wrapper` | Resolve/build/run the Viva binary and manage SI wrapper/tunnel settings | `viva` repo |
+| `surf` | `native-wrapper` | Resolve/build/run the Surf binary, set `SI_SURF_WRAPPED=1`, and manage SI wrapper settings | `surf` repo |
+| `image` | `internal-si` / provider bridge | Keep SI-owned image bridge commands in SI | SI repo |
+| `vault` | `internal-si` maintenance | Maintain SI Vault encryption/checking flows; prefer Fort for operator secret runtime work | SI repo |
+| third-party providers | `provider-client` | No SI root command; use `orbit <provider> ...` | `orbit` repo |
+| first-party API clients | `api-client` when present | Thin CLI/request formatting only when SI explicitly owns the client | Owning service backend |
+| catalog-only providers | inventory-only | Do not document as runnable SI command families | Owning catalog/orbit data |
+
+If a standalone adjacent repo owns a stable CLI, add a root SI wrapper only for wrapper concerns. If a service exposes an HTTP API but no stable local CLI, keep business logic, schemas, billing/usage rules, and backend tests in the owning service.
 
 ## Build, docs, and developer tooling
 
