@@ -1226,6 +1226,79 @@ fn surf_wrapper_trace_prints_resolved_binary_without_args() {
 }
 
 #[test]
+fn surf_wrapper_config_round_trip_does_not_call_native_surf() {
+    let home = tempdir().expect("home tempdir");
+    cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "wrapper",
+            "config",
+            "set",
+            "--repo",
+            "/tmp/surf",
+            "--build",
+            "true",
+        ])
+        .assert()
+        .success();
+
+    let output = cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "wrapper",
+            "config",
+            "show",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).expect("parse surf wrapper config");
+
+    assert_eq!(payload.get("repo").and_then(Value::as_str), Some("/tmp/surf"));
+    assert_eq!(payload.get("build").and_then(Value::as_bool), Some(true));
+    assert!(home.path().join(".si/surf/si.settings.toml").is_file());
+}
+
+#[test]
+fn surf_native_config_remains_passthrough() {
+    let home = tempdir().expect("home tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("surf-args.txt");
+    let surf_path = bin_dir.path().join("surf");
+    write_executable_shell_script(
+        &surf_path,
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\n", shell_escape_for_test(&args_file),),
+    );
+
+    cargo_bin()
+        .args([
+            "surf",
+            "--home",
+            home.path().to_str().expect("home path"),
+            "--bin",
+            surf_path.to_str().expect("surf path"),
+            "config",
+            "show",
+            "--json",
+        ])
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(&args_file).expect("read surf args");
+    assert_eq!(args, "config\nshow\n--json\n");
+}
+
+#[test]
 fn surf_wrapper_fetches_vnc_password_from_fort_for_start() {
     let home = tempdir().expect("home tempdir");
     fs::create_dir_all(home.path().join(".si")).expect("mkdir si home");
