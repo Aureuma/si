@@ -346,7 +346,11 @@ impl SurfSettings {
             self.vnc_password_fort_env = "dev".to_owned();
         }
         trim_string(&mut self.tunnel.name);
+        trim_string(&mut self.tunnel.fort_key);
         trim_string(&mut self.tunnel.vault_key);
+        if self.tunnel.fort_key.is_empty() && !self.tunnel.vault_key.is_empty() {
+            self.tunnel.fort_key = self.tunnel.vault_key.clone();
+        }
         self.tunnel.mode = normalize_choice(&self.tunnel.mode, &["quick", "token"]);
     }
 }
@@ -358,6 +362,8 @@ pub struct SurfTunnelSettings {
     #[serde(default)]
     pub mode: String,
     #[serde(default)]
+    pub fort_key: String,
+    #[serde(default)]
     pub vault_key: String,
 }
 
@@ -368,6 +374,9 @@ impl SurfTunnelSettings {
         }
         if !other.mode.is_empty() {
             self.mode = other.mode;
+        }
+        if !other.fort_key.is_empty() {
+            self.fort_key = other.fort_key;
         }
         if !other.vault_key.is_empty() {
             self.vault_key = other.vault_key;
@@ -720,7 +729,24 @@ vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
         assert_eq!(settings.surf.vnc_password_fort_repo, "surf");
         assert_eq!(settings.surf.vnc_password_fort_env, "dev");
         assert_eq!(settings.surf.tunnel.mode, "token");
+        assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
         assert_eq!(settings.surf.tunnel.vault_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
+    }
+
+    #[test]
+    fn loads_surf_tunnel_fort_key_without_legacy_vault_key() {
+        let settings = Settings::from_toml(
+            r#"
+[surf.tunnel]
+mode = "token"
+fort_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
+"#,
+        )
+        .expect("settings should parse");
+
+        assert_eq!(settings.surf.tunnel.mode, "token");
+        assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
+        assert_eq!(settings.surf.tunnel.vault_key, "");
     }
 
     #[test]
@@ -759,5 +785,4 @@ service = "http://127.0.0.1:3000"
         assert_eq!(profile.routes.len(), 1);
         assert_eq!(profile.routes[0].hostname, "dev.example.app");
     }
-
 }

@@ -1306,6 +1306,36 @@ enum VivaTunnelConfigCommand {
     },
 }
 
+#[derive(Debug, Parser)]
+struct SurfWrapperCli {
+    #[command(subcommand)]
+    command: SurfWrapperCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum SurfWrapperCommand {
+    Config {
+        #[command(subcommand)]
+        command: SurfWrapperConfigCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SurfWrapperConfigCommand {
+    Show {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Set {
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        bin: Option<String>,
+        #[arg(long)]
+        build: Option<bool>,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 enum WarmupCommand {
     Run(WarmupRunArgs),
@@ -6818,6 +6848,18 @@ struct VivaConfigView {
     tunnel_default_profile: String,
 }
 
+#[derive(Debug, Serialize)]
+struct SurfWrapperConfigView {
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+    settings_file: Option<String>,
+    state_dir: Option<String>,
+    vnc_password_fort_key: Option<String>,
+    vnc_password_fort_repo: Option<String>,
+    vnc_password_fort_env: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct SurfVncPasswordFortSource {
     key: String,
@@ -6842,6 +6884,9 @@ fn run_surf_wrapper(
         render_surf_wrapper_help();
         return Ok(());
     }
+    if args[0] == "wrapper" {
+        return run_surf_wrapper_command(home, settings_file, args.into_iter().skip(1).collect());
+    }
     run_native_surf_command(
         home,
         settings_file,
@@ -6858,6 +6903,9 @@ fn run_surf_wrapper(
 
 fn render_surf_wrapper_help() {
     print_help_usage("si surf [WRAPPER_OPTIONS] <COMMAND> [ARGS...]");
+    println!();
+    print_help_section("Wrapper commands");
+    print_help_item("wrapper config show|set", CliTone::Command);
     println!();
     print_help_section("Native surf passthrough");
     print_help_item(
@@ -6880,7 +6928,100 @@ fn render_surf_wrapper_help() {
     print_help_item("si surf build", CliTone::Command);
     print_help_item("si surf start", CliTone::Command);
     print_help_item("si surf --vnc-password-fort-key SURF_VNC_PASSWORD start", CliTone::Command);
+    print_help_item(
+        "si surf wrapper config set --repo ~/Development/surf --build true",
+        CliTone::Command,
+    );
     print_help_item("si surf config show", CliTone::Command);
+}
+
+fn run_surf_wrapper_command(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    args: Vec<String>,
+) -> Result<()> {
+    let SurfWrapperCli { command } =
+        parse_fort_parser(std::iter::once("wrapper".to_owned()).chain(args).collect());
+    match command {
+        SurfWrapperCommand::Config { command } => match command {
+            SurfWrapperConfigCommand::Show { format } => {
+                show_surf_wrapper_config(home, settings_file, format)
+            }
+            SurfWrapperConfigCommand::Set { repo, bin, build } => {
+                set_surf_wrapper_config(home, settings_file, repo, bin, build)
+            }
+        },
+    }
+}
+
+fn show_surf_wrapper_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let view = SurfWrapperConfigView {
+        repo: non_empty_string(settings.surf.repo),
+        bin: non_empty_string(settings.surf.bin),
+        build: settings.surf.build,
+        settings_file: non_empty_string(settings.surf.settings_file),
+        state_dir: non_empty_string(settings.surf.state_dir),
+        vnc_password_fort_key: non_empty_string(settings.surf.vnc_password_fort_key),
+        vnc_password_fort_repo: non_empty_string(settings.surf.vnc_password_fort_repo),
+        vnc_password_fort_env: non_empty_string(settings.surf.vnc_password_fort_env),
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            print_cli_kv("repo", render_option_text_value(view.repo.as_deref()));
+            print_cli_kv("bin", render_option_text_value(view.bin.as_deref()));
+            print_cli_kv(
+                "build",
+                view.build.map(|value| value.to_string()).unwrap_or_else(|| "(none)".to_owned()),
+            );
+            print_cli_kv("settings_file", render_option_text_value(view.settings_file.as_deref()));
+            print_cli_kv("state_dir", render_option_text_value(view.state_dir.as_deref()));
+            print_cli_kv(
+                "vnc_password_fort_key",
+                render_option_text_value(view.vnc_password_fort_key.as_deref()),
+            );
+            print_cli_kv(
+                "vnc_password_fort_repo",
+                render_option_text_value(view.vnc_password_fort_repo.as_deref()),
+            );
+            print_cli_kv(
+                "vnc_password_fort_env",
+                render_option_text_value(view.vnc_password_fort_env.as_deref()),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn set_surf_wrapper_config(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    repo: Option<String>,
+    bin: Option<String>,
+    build: Option<bool>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings_path =
+        settings_file.unwrap_or_else(|| home.join(".si").join("surf").join("si.settings.toml"));
+    let mut document = load_settings_document(&settings_path)?;
+    if !document.contains_key("schema_version") {
+        document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+    }
+    let surf = ensure_toml_table(&mut document, "surf")?;
+    set_toml_string(surf, "repo", repo);
+    set_toml_string(surf, "bin", bin);
+    set_toml_bool(surf, "build", build);
+    if surf.is_empty() {
+        document.remove("surf");
+    }
+    write_settings_document(&settings_path, &document)?;
+    Ok(())
 }
 
 fn run_native_surf_command(

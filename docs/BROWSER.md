@@ -18,6 +18,7 @@ si surf proxy
 ## Quickstart
 
 ```bash
+si surf wrapper config set --repo ~/Development/surf --build true
 si surf build
 si surf start
 si surf status
@@ -39,7 +40,9 @@ si surf proxy --upstream http://127.0.0.1:8932
 ## Operational notes
 
 - `si surf start` can build the image automatically unless `--skip-build` is set.
-- `si surf` can inject a stable noVNC password from Fort for `start` when `[surf] vnc_password_fort_*` is configured in `~/.si/settings.toml`, or via one-off wrapper flags such as `si surf --vnc-password-fort-key SURF_VNC_PASSWORD start`.
+- `si surf wrapper config show` reads SI-owned wrapper settings from `~/.si/surf/si.settings.toml`.
+- `si surf config ...` is native Surf config passthrough.
+- `si surf` can inject a stable noVNC password from Fort for `start` when `[surf] vnc_password_fort_*` is configured in `~/.si/surf/si.settings.toml`, or via one-off wrapper flags such as `si surf --vnc-password-fort-key SURF_VNC_PASSWORD start`.
 - Store the actual noVNC password in `safe/surf/.env.dev` and access it through `si fort`; do not persist it in plaintext Surf config.
 - `si surf` may expose an MCP-compatible browser endpoint for external or legacy tooling, but that compatibility surface is not part of the SI Nucleus architecture.
 - Keep profile directories isolated per environment.
