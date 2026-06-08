@@ -141,6 +141,16 @@ mod tests {
     use super::{find_root_command, root_commands};
     use std::collections::BTreeSet;
 
+    const DOCS: &[(&str, &str)] = &[
+        ("BROWSER.md", include_str!("../../../../docs/BROWSER.md")),
+        ("CLI_REFERENCE.md", include_str!("../../../../docs/CLI_REFERENCE.md")),
+        ("COMMAND_REFERENCE.md", include_str!("../../../../docs/COMMAND_REFERENCE.md")),
+        ("SETTINGS.md", include_str!("../../../../docs/SETTINGS.md")),
+        ("VAULT.md", include_str!("../../../../docs/VAULT.md")),
+        ("testing.md", include_str!("../../../../docs/testing.md")),
+        ("index.mdx", include_str!("../../../../docs/index.mdx")),
+    ];
+
     #[test]
     fn manifest_expanded_names_are_unique() {
         let manifest_names = root_commands()
@@ -157,5 +167,17 @@ mod tests {
     fn aliases_resolve_to_primary_command() {
         assert_eq!(find_root_command("creds").unwrap().name, "vault");
         assert_eq!(find_root_command("images").unwrap().name, "image");
+    }
+
+    #[test]
+    fn visible_docs_do_not_advertise_removed_root_commands() {
+        for (doc, source) in DOCS {
+            for removed in ["si publish", "si social", "si remote-control"] {
+                assert!(
+                    !source.contains(removed),
+                    "{doc} advertises removed root command {removed}"
+                );
+            }
+        }
     }
 }
