@@ -139,6 +139,8 @@ enum Command {
         home: Option<PathBuf>,
         #[arg(long)]
         settings_file: Option<PathBuf>,
+        #[arg(long)]
+        repo: Option<PathBuf>,
         #[arg(long, action = ArgAction::SetTrue)]
         build: bool,
         #[arg(long, action = ArgAction::SetTrue)]
@@ -159,6 +161,8 @@ enum Command {
         home: Option<PathBuf>,
         #[arg(long)]
         settings_file: Option<PathBuf>,
+        #[arg(long)]
+        repo: Option<PathBuf>,
         #[arg(long, action = ArgAction::SetTrue)]
         build: bool,
         #[arg(long, action = ArgAction::SetTrue)]
@@ -173,6 +177,8 @@ enum Command {
         home: Option<PathBuf>,
         #[arg(long)]
         settings_file: Option<PathBuf>,
+        #[arg(long)]
+        repo: Option<PathBuf>,
         #[arg(long, action = ArgAction::SetTrue)]
         build: bool,
         #[arg(long, action = ArgAction::SetTrue)]
@@ -5733,6 +5739,7 @@ fn main() -> Result<()> {
         Command::Surf {
             home,
             settings_file,
+            repo,
             build,
             no_build,
             bin,
@@ -5743,6 +5750,7 @@ fn main() -> Result<()> {
         } => run_surf_wrapper(
             home,
             settings_file,
+            repo,
             build,
             no_build,
             bin,
@@ -5751,11 +5759,11 @@ fn main() -> Result<()> {
             vnc_password_fort_env,
             args,
         )?,
-        Command::Viva { home, settings_file, build, no_build, bin, args } => {
-            run_viva_wrapper(home, settings_file, build, no_build, bin, args)?
+        Command::Viva { home, settings_file, repo, build, no_build, bin, args } => {
+            run_viva_wrapper(home, settings_file, repo, build, no_build, bin, args)?
         }
-        Command::Fort { home, settings_file, build, no_build, bin, args } => {
-            run_fort_wrapper(home, settings_file, build, no_build, bin, args)?
+        Command::Fort { home, settings_file, repo, build, no_build, bin, args } => {
+            run_fort_wrapper(home, settings_file, repo, build, no_build, bin, args)?
         }
         Command::Vault { command } => run_vault_command(command)?,
         Command::Image { command } => match command {
@@ -6820,6 +6828,7 @@ struct SurfVncPasswordFortSource {
 fn run_surf_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -6836,6 +6845,7 @@ fn run_surf_wrapper(
     run_native_surf_command(
         home,
         settings_file,
+        repo,
         build,
         no_build,
         bin,
@@ -6858,6 +6868,7 @@ fn render_surf_wrapper_help() {
     print_help_section("Wrapper options");
     print_help_item("--home <PATH>", CliTone::Flag);
     print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--repo <PATH>", CliTone::Flag);
     print_help_item("--build", CliTone::Flag);
     print_help_item("--no-build", CliTone::Flag);
     print_help_item("--bin <PATH>", CliTone::Flag);
@@ -6875,6 +6886,7 @@ fn render_surf_wrapper_help() {
 fn run_native_surf_command(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -6885,8 +6897,8 @@ fn run_native_surf_command(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let explicit_program = bin.is_some() || !settings.surf.bin.trim().is_empty();
-    let program = resolve_surf_program(&settings.surf, build, no_build, bin.clone())?;
+    let explicit_program = bin.is_some() || repo.is_some() || !settings.surf.bin.trim().is_empty();
+    let program = resolve_surf_program(&settings.surf, repo.clone(), build, no_build, bin.clone())?;
     let vnc_password_source = resolve_surf_vnc_password_fort_source(
         &settings.surf,
         vnc_password_fort_key.as_deref(),
@@ -7013,7 +7025,7 @@ fn run_fort_get_secret(
         "raw".to_owned(),
     ];
     let explicit_program = settings.fort.bin.is_some();
-    let program = resolve_fort_program(&settings.fort, false, false, None)?;
+    let program = resolve_fort_program(&settings.fort, None, false, false, None)?;
     match run_fort_capture_stdout(&program, &args, settings, home) {
         Ok(stdout) => Ok(stdout),
         Err(error)
@@ -7060,6 +7072,7 @@ fn run_fort_capture_stdout(
 fn run_viva_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -7074,7 +7087,7 @@ fn run_viva_wrapper(
         "config" => {
             run_viva_config_command(home, settings_file, args.into_iter().skip(1).collect())
         }
-        _ => run_native_viva_command(home, settings_file, build, no_build, bin, &args),
+        _ => run_native_viva_command(home, settings_file, repo, build, no_build, bin, &args),
     }
 }
 
@@ -7094,6 +7107,7 @@ fn render_viva_wrapper_help() {
     print_help_section("Wrapper options");
     print_help_item("--home <PATH>", CliTone::Flag);
     print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--repo <PATH>", CliTone::Flag);
     print_help_item("--build", CliTone::Flag);
     print_help_item("--no-build", CliTone::Flag);
     print_help_item("--bin <PATH>", CliTone::Flag);
@@ -7207,6 +7221,7 @@ fn show_viva_tunnel_config(
 fn run_native_viva_command(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -7214,8 +7229,8 @@ fn run_native_viva_command(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let explicit_program = bin.is_some() || !settings.viva.bin.trim().is_empty();
-    let program = resolve_viva_program(&settings.viva, build, no_build, bin.clone())?;
+    let explicit_program = bin.is_some() || repo.is_some() || !settings.viva.bin.trim().is_empty();
+    let program = resolve_viva_program(&settings.viva, repo.clone(), build, no_build, bin.clone())?;
     let command_args = build_viva_command_args(args, &settings.viva);
     let status = match StdCommand::new(&program).args(&command_args).status() {
         Ok(status) => status,
@@ -7256,83 +7271,108 @@ fn build_viva_command_args(args: &[String], settings: &VivaSettings) -> Vec<Stri
 
 fn resolve_surf_program(
     settings: &SurfSettings,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
 ) -> Result<PathBuf> {
-    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
-    if should_build {
-        return build_surf_binary(resolve_surf_repo(settings)?);
-    }
-    Ok(bin.unwrap_or_else(|| {
-        non_empty_str(&settings.bin).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("surf"))
-    }))
+    resolve_external_tool_program(
+        "surf",
+        repo,
+        non_empty_str(&settings.repo),
+        bin,
+        non_empty_str(&settings.bin),
+        settings.build,
+        build,
+        no_build,
+    )
 }
 
 fn resolve_surf_build_fallback(settings: &SurfSettings) -> Result<PathBuf> {
-    let repo = resolve_surf_repo(settings)?;
-    existing_checkout_binary(&repo, "surf").map(Ok).unwrap_or_else(|| build_surf_binary(repo))
-}
-
-fn resolve_surf_repo(settings: &SurfSettings) -> Result<PathBuf> {
-    non_empty_str(&settings.repo)
-        .map(PathBuf::from)
-        .or_else(discover_checkout_surf_repo)
-        .ok_or_else(|| {
-            anyhow!("si surf build requires [surf].repo in settings or a sibling surf checkout")
-        })
-}
-
-fn discover_checkout_surf_repo() -> Option<PathBuf> {
-    discover_checkout_repo("surf")
-}
-
-fn build_surf_binary(repo: PathBuf) -> Result<PathBuf> {
-    let status = StdCommand::new("cargo")
-        .arg("build")
-        .arg("--quiet")
-        .arg("--bin")
-        .arg("surf")
-        .current_dir(&repo)
-        .status()
-        .with_context(|| format!("build surf binary in {}", repo.display()))?;
-    if !status.success() {
-        anyhow::bail!("cargo build --bin surf failed in {}", repo.display());
-    }
-    Ok(repo.join("target").join("debug").join(if cfg!(windows) { "surf.exe" } else { "surf" }))
+    let repo = resolve_external_tool_repo("surf", None, non_empty_str(&settings.repo))?;
+    existing_checkout_binary(&repo, "surf")
+        .map(Ok)
+        .unwrap_or_else(|| build_external_tool_binary(repo, "surf"))
 }
 
 fn resolve_viva_program(
     settings: &VivaSettings,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
 ) -> Result<PathBuf> {
-    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
-    if should_build {
-        return build_viva_binary(resolve_viva_repo(settings)?);
-    }
-    Ok(bin.unwrap_or_else(|| {
-        non_empty_str(&settings.bin).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("viva"))
-    }))
+    resolve_external_tool_program(
+        "viva",
+        repo,
+        non_empty_str(&settings.repo),
+        bin,
+        non_empty_str(&settings.bin),
+        settings.build,
+        build,
+        no_build,
+    )
 }
 
 fn resolve_viva_build_fallback(settings: &VivaSettings) -> Result<PathBuf> {
-    let repo = resolve_viva_repo(settings)?;
-    existing_checkout_binary(&repo, "viva").map(Ok).unwrap_or_else(|| build_viva_binary(repo))
+    let repo = resolve_external_tool_repo("viva", None, non_empty_str(&settings.repo))?;
+    existing_checkout_binary(&repo, "viva")
+        .map(Ok)
+        .unwrap_or_else(|| build_external_tool_binary(repo, "viva"))
 }
 
-fn resolve_viva_repo(settings: &VivaSettings) -> Result<PathBuf> {
-    non_empty_str(&settings.repo)
-        .map(PathBuf::from)
-        .or_else(discover_checkout_viva_repo)
+fn resolve_external_tool_program(
+    name: &str,
+    explicit_repo: Option<PathBuf>,
+    configured_repo: Option<&str>,
+    explicit_bin: Option<PathBuf>,
+    configured_bin: Option<&str>,
+    configured_build: Option<bool>,
+    build: bool,
+    no_build: bool,
+) -> Result<PathBuf> {
+    if let Some(bin) = explicit_bin {
+        return Ok(bin);
+    }
+    if let Some(bin) = configured_bin {
+        return Ok(PathBuf::from(bin));
+    }
+
+    let repo = explicit_repo.or_else(|| configured_repo.map(PathBuf::from));
+    let should_build = !no_build && (build || configured_build.unwrap_or(false));
+    if should_build {
+        return build_external_tool_binary(resolve_external_tool_repo(name, repo, None)?, name);
+    }
+
+    if let Some(repo) = repo {
+        if let Some(binary) = existing_checkout_binary(&repo, name) {
+            return Ok(binary);
+        }
+        if no_build {
+            anyhow::bail!(
+                "si {name} --no-build could not find {name} binary in {}",
+                repo.display()
+            );
+        }
+        return build_external_tool_binary(repo, name);
+    }
+
+    Ok(PathBuf::from(name))
+}
+
+fn resolve_external_tool_repo(
+    name: &str,
+    explicit_repo: Option<PathBuf>,
+    configured_repo: Option<&str>,
+) -> Result<PathBuf> {
+    explicit_repo
+        .or_else(|| configured_repo.map(PathBuf::from))
+        .or_else(|| discover_checkout_repo(name))
         .ok_or_else(|| {
-            anyhow!("si viva build requires [viva].repo in settings or a sibling viva checkout")
+            anyhow!(
+                "si {name} build requires [{name}].repo in settings or a sibling {name} checkout"
+            )
         })
-}
-
-fn discover_checkout_viva_repo() -> Option<PathBuf> {
-    discover_checkout_repo("viva")
 }
 
 fn discover_checkout_repo(name: &str) -> Option<PathBuf> {
@@ -7401,25 +7441,26 @@ fn configured_checkout_target_dir(repo: &Path) -> Option<PathBuf> {
     Some(if path.is_absolute() { path } else { repo.join(path) })
 }
 
-fn build_viva_binary(repo: PathBuf) -> Result<PathBuf> {
+fn build_external_tool_binary(repo: PathBuf, name: &str) -> Result<PathBuf> {
     let status = StdCommand::new("cargo")
         .arg("build")
         .arg("--quiet")
         .arg("--bin")
-        .arg("viva")
+        .arg(name)
         .current_dir(&repo)
         .status()
-        .with_context(|| format!("build viva binary in {}", repo.display()))?;
+        .with_context(|| format!("build {name} binary in {}", repo.display()))?;
     if !status.success() {
-        anyhow::bail!("cargo build --bin viva failed in {}", repo.display());
+        anyhow::bail!("cargo build --bin {name} failed in {}", repo.display());
     }
-    existing_checkout_binary(&repo, "viva")
-        .ok_or_else(|| anyhow!("built viva binary not found in {}", repo.display()))
+    existing_checkout_binary(&repo, name)
+        .ok_or_else(|| anyhow!("built {name} binary not found in {}", repo.display()))
 }
 
 fn run_fort_wrapper(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -7440,7 +7481,7 @@ fn run_fort_wrapper(
         "config" => {
             run_fort_config_command(home, settings_file, args.into_iter().skip(1).collect())
         }
-        _ => run_native_fort_command(home, settings_file, build, no_build, bin, &args),
+        _ => run_native_fort_command(home, settings_file, repo, build, no_build, bin, &args),
     }
 }
 
@@ -7464,6 +7505,7 @@ fn render_fort_wrapper_help() {
     print_help_section("Wrapper options");
     print_help_item("--home <PATH>", CliTone::Flag);
     print_help_item("--settings-file <PATH>", CliTone::Flag);
+    print_help_item("--repo <PATH>", CliTone::Flag);
     print_help_item("--build", CliTone::Flag);
     print_help_item("--no-build", CliTone::Flag);
     print_help_item("--bin <PATH>", CliTone::Flag);
@@ -7642,6 +7684,7 @@ fn set_fort_config(
 fn run_native_fort_command(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
@@ -7649,8 +7692,8 @@ fn run_native_fort_command(
 ) -> Result<()> {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
-    let explicit_program = bin.is_some() || settings.fort.bin.is_some();
-    let program = resolve_fort_program(&settings.fort, build, no_build, bin.clone())?;
+    let explicit_program = bin.is_some() || repo.is_some() || settings.fort.bin.is_some();
+    let program = resolve_fort_program(&settings.fort, repo.clone(), build, no_build, bin.clone())?;
     let status = match run_fort_program(&program, args, &settings, &home) {
         Ok(status) => status,
         Err(error)
@@ -8591,48 +8634,28 @@ fn remove_stale_fort_refresh_lock(lock_path: &Path) -> Result<bool> {
 
 fn resolve_fort_program(
     settings: &FortSettings,
+    repo: Option<PathBuf>,
     build: bool,
     no_build: bool,
     bin: Option<PathBuf>,
 ) -> Result<PathBuf> {
-    let should_build = if no_build { false } else { build || settings.build.unwrap_or(false) };
-    if should_build {
-        return build_fort_binary(resolve_fort_repo(settings)?);
-    }
-    Ok(bin.unwrap_or_else(|| {
-        settings.bin.as_deref().map(PathBuf::from).unwrap_or_else(|| PathBuf::from("fort"))
-    }))
-}
-
-fn resolve_fort_build_fallback(settings: &FortSettings) -> Result<PathBuf> {
-    let repo = resolve_fort_repo(settings)?;
-    existing_checkout_binary(&repo, "fort").map(Ok).unwrap_or_else(|| build_fort_binary(repo))
-}
-
-fn resolve_fort_repo(settings: &FortSettings) -> Result<PathBuf> {
-    settings.repo.as_deref().map(PathBuf::from).or_else(discover_checkout_fort_repo).ok_or_else(
-        || anyhow!("si fort build requires [fort].repo in settings or a sibling fort checkout"),
+    resolve_external_tool_program(
+        "fort",
+        repo,
+        settings.repo.as_deref(),
+        bin,
+        settings.bin.as_deref(),
+        settings.build,
+        build,
+        no_build,
     )
 }
 
-fn discover_checkout_fort_repo() -> Option<PathBuf> {
-    discover_checkout_repo("fort")
-}
-
-fn build_fort_binary(repo: PathBuf) -> Result<PathBuf> {
-    let status = StdCommand::new("cargo")
-        .arg("build")
-        .arg("--quiet")
-        .arg("--bin")
-        .arg("fort")
-        .current_dir(&repo)
-        .status()
-        .with_context(|| format!("build fort binary in {}", repo.display()))?;
-    if !status.success() {
-        anyhow::bail!("cargo build --bin fort failed in {}", repo.display());
-    }
+fn resolve_fort_build_fallback(settings: &FortSettings) -> Result<PathBuf> {
+    let repo = resolve_external_tool_repo("fort", None, settings.repo.as_deref())?;
     existing_checkout_binary(&repo, "fort")
-        .ok_or_else(|| anyhow!("built fort binary not found in {}", repo.display()))
+        .map(Ok)
+        .unwrap_or_else(|| build_external_tool_binary(repo, "fort"))
 }
 
 fn default_fort_bootstrap_token_path(home: &Path) -> PathBuf {
@@ -12055,6 +12078,72 @@ mod tests {
         fs::write(&binary, "#!/bin/sh\n").expect("write binary");
 
         assert_eq!(existing_checkout_binary(repo.path(), "viva"), Some(binary));
+    }
+
+    #[test]
+    fn external_tool_resolver_uses_explicit_repo_binary() {
+        let repo = tempdir().expect("repo tempdir");
+        let binary = repo.path().join("target").join("debug").join(if cfg!(windows) {
+            "fort.exe"
+        } else {
+            "fort"
+        });
+        fs::create_dir_all(binary.parent().expect("binary parent")).expect("mkdir binary parent");
+        fs::write(&binary, "#!/bin/sh\n").expect("write binary");
+
+        let resolved = resolve_external_tool_program(
+            "fort",
+            Some(repo.path().to_path_buf()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            true,
+        )
+        .expect("resolve explicit repo binary");
+
+        assert_eq!(resolved, binary);
+    }
+
+    #[test]
+    fn external_tool_resolver_rejects_missing_repo_binary_when_no_build() {
+        let repo = tempdir().expect("repo tempdir");
+
+        let error = resolve_external_tool_program(
+            "surf",
+            Some(repo.path().to_path_buf()),
+            None,
+            None,
+            None,
+            None,
+            false,
+            true,
+        )
+        .expect_err("missing binary should fail with no-build")
+        .to_string();
+
+        assert!(error.contains("si surf --no-build could not find surf binary"));
+    }
+
+    #[test]
+    fn external_tool_resolver_prefers_explicit_bin_over_repo() {
+        let repo = tempdir().expect("repo tempdir");
+        let explicit_bin = repo.path().join("custom").join("viva");
+
+        let resolved = resolve_external_tool_program(
+            "viva",
+            Some(repo.path().to_path_buf()),
+            None,
+            Some(explicit_bin.clone()),
+            None,
+            Some(true),
+            true,
+            false,
+        )
+        .expect("resolve explicit bin");
+
+        assert_eq!(resolved, explicit_bin);
     }
 
     #[test]
