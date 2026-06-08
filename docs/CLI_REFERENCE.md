@@ -83,6 +83,8 @@ si codex list
 
 ```bash
 si viva config set --repo ~/Development/viva --build true
+si viva config tunnel import --profile dev --file ~/Development/safe/viva/cloudflare.tunnel.dev.toml --set-default
+si viva config tunnel default --profile dev
 si viva config tunnel show --json
 si viva -- tunnel up --profile dev
 si viva -- tunnel status --profile dev
