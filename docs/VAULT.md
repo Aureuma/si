@@ -93,11 +93,13 @@ Restore last encrypted state:
 si vault restore --env-file .env
 ```
 
-Run commands with decrypted env at runtime:
+Run commands with secrets at runtime through the operator-facing Fort boundary:
 
 ```bash
-si vault run --env-file .env --env dev -- cargo run --bin server
+si fort run --env-file .env --env dev -- cargo run --bin server
 ```
+
+Use `si vault run` only for SI Vault maintenance or implementation debugging where Fort is explicitly not the command boundary.
 
 For SI runtime workers:
 - Use `si fort ...` for secret access.
@@ -133,4 +135,4 @@ It resolves `si` in this order: `SI_BIN`, a repo-local `./si`, then `si` on `PAT
 - `si vault unset`
 - `si vault get`
 - `si vault list` / `si vault ls`
-- `si vault run`
+- `si vault run` (maintenance-only; prefer `si fort run` for operator workflows)
