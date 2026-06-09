@@ -19,6 +19,9 @@ on:
       - "rust/crates/si-tools/**"
       - ".github/workflows/fort-vault-ci.yml"
 
+env:
+  CARGO_BUILD_JOBS: 2
+
 jobs:
   fort-vault:
     runs-on: ubuntu-latest

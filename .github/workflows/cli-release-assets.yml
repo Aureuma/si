@@ -24,6 +24,9 @@ permissions:
   attestations: write
   id-token: write
 
+env:
+  CARGO_BUILD_JOBS: 2
+
 jobs:
   resolve-tag:
     runs-on: ubuntu-latest
