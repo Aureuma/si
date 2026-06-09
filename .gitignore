@@ -21,6 +21,7 @@ data/
 !data/resource-broker/.gitkeep
 !data/infra-broker/.gitkeep
 .artifacts/
+/target/
 /dist/
 /si
 .si/
