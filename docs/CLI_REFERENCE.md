@@ -49,27 +49,12 @@ Color control:
 
 | Domain | Commands |
 | --- | --- |
-| Runtime and orchestration | `si nucleus`, `si codex`, `si surf`, `si viva` |
+| Runtime and orchestration | `si codex`, `si surf`, `si viva` |
 | Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
 | Third-party integrations | Use the standalone `orbit <provider> ...` CLI from `Aureuma/orbit`; `si image` remains in SI for image bridge workflows. |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
 
 ## High-signal workflows
-
-### Nucleus control plane
-
-```bash
-si nucleus status
-si nucleus profile list
-si nucleus task create "Inspect blocked task" "Summarize the current blocked reason and latest checkpoint."
-si nucleus task cancel <task-id>
-si nucleus task list
-si nucleus task prune --older-than-days 30
-si nucleus worker repair-auth <worker-id>
-si nucleus service install
-si nucleus service status --format json
-si nucleus events subscribe --count 1
-```
 
 ### Runtime setup
 
@@ -134,8 +119,6 @@ si build self --timings
 
 ## Safety guidance
 
-- For Nucleus deployments protected by `SI_NUCLEUS_AUTH_TOKEN`, all gateway and REST operations require that bearer token; use the same token from CLI clients.
-- CLI endpoint discovery for `si nucleus ...` resolves from `--endpoint`, then `SI_NUCLEUS_WS_ADDR`, then `~/.si/nucleus/gateway/metadata.json`, then the default local websocket URL.
 - On host/admin flows, use `si fort run -- <command>` when secrets are required.
 - For SI runtime workers, use `si fort ...` for secret access.
 - `si fort` wrapper passes explicit Fort file-path auth flags for the managed Codex profile session under `CODEX_HOME/fort/`; caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` values are not normal runtime fallbacks.

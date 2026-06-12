@@ -20,31 +20,15 @@ All notable changes to this project will be documented in this file.
 - Bumped the working version to `0.59.25` after adding Vertex Gemini generation and stronger Bedrock runtime converse controls for LLM usage.
 - Expanded `orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
-- Removed the completed Nucleus task hardening and transition hardening ticket documents after implementation and validation.
 
 ### Fixed
 - Fixed `orbit gcp vertex generate` so `--location global` now uses the documented global Vertex host instead of an invalid regionalized hostname.
 - Fixed `orbit gcp vertex generate` to accept `--json-body-file`, allowing large prompt payloads to bypass local argv limits.
 - Fixed Bedrock runtime SigV4 request scope so `invoke`, `converse`, and `count-tokens` sign against the service name AWS expects at runtime.
 - Fixed `orbit aws bedrock runtime converse` so explicit `--body` and `--body-file` inputs work without also requiring `--prompt`.
-- Fixed Nucleus hardening regression coverage so worker-restart scope tests seed the intended profile lane and direct-run failure smokes no longer assert unrelated concurrent task completion.
-- Fixed Nucleus task execution so the default task ceiling is the real runtime ceiling again; deep tasks no longer fail after a hidden 900-second idle cutoff when they did not ask for one.
-- Fixed Nucleus run-failure projection so runtime-emitted `run.failed` events now quarantine timed-out sessions and worker transport failures the same way direct runtime errors already do.
-- Fixed Nucleus profile scheduling so tasks pinned to an explicit profile no longer spill onto other profiles when the requested profile is already busy in the current dispatch pass.
-- Hardened Nucleus run failure recovery so timed-out or transport-broken turns break the bound session immediately, worker-channel failures also quarantine the worker, and repeated reuse of poisoned sessions now blocks instead of failing again later.
-- Hardened Nucleus daemon workdir selection so deleted or invalid current directories fall back to a stable absolute path instead of `.`.
-- Throttled repeated Nucleus background-loop warnings so one broken dependency no longer floods the canonical event ledger every 200ms.
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
 - Hardened the Homebrew tap release workflow to retry `homebrew-si` pushes with `GH_PAT_AUREUMA` when a dedicated tap token can clone but cannot push.
-- Fixed Nucleus runtime timeout handling so task and turn submissions now pass `timeout_seconds` through to the runtime instead of always timing out after 15 minutes of silence.
-- Fixed Nucleus canonical event-log recovery so malformed JSONL ledgers are quarantined during startup and live iteration instead of repeatedly breaking recovery.
-- Fixed Nucleus profile resolution so explicit unknown profiles block immediately as `profile_unavailable`, and fresh no-profile tasks can discover local Codex profiles without requiring a pre-existing worker.
-- Fixed the Nucleus OpenAPI maintenance path by adding the missing `si-sync-nucleus-openapi` generator and regenerating the checked-in GPT Actions schema from the canonical runtime document.
-- Fixed Nucleus task intake so blank create requests are rejected as invalid params and deterministic invalid session-bound tasks return blocked immediately instead of pretending to queue first.
-- Fixed Nucleus task/session binding evaluation so task intake, queued dispatch, and direct run submission now share the same deterministic session checks, including immediate blocking and session breakage for missing app-server thread ids.
 - Fixed `run.submit_turn` so tasks already bound to one session cannot be submitted against a different session id.
-- Fixed the public Nucleus cancel-task contract to describe `cancellation_requested` as a live runtime interrupt signal rather than a generic state-change flag.
-- Fixed Nucleus task retry handling so `max_retries` is now enforced instead of ignored, retried tasks expose `attempt_count` and `session_binding_locked`, unlocked tasks drop broken session affinity before retry, and explicit session-bound tasks do not silently hop to a different session.
 
 ## [v0.59.0] - 2026-04-20
 ### Added
@@ -58,11 +42,6 @@ All notable changes to this project will be documented in this file.
 - Fixed SI surf-wrapper settings merging so metadata-only `~/.si/surf/si.settings.toml` files no longer wipe Fort-backed surf wrapper configuration from the core settings file.
 
 ### Fixed
-- Updated the Nucleus architecture ticket to use accepted-state wording now that all tracked phases are closed.
-- Fixed Nucleus validation stability by returning pruned task ids in deterministic order and using the live event-ledger retry reader in runtime-backed id-boundary coverage.
-- Fixed Nucleus cleanup paths so empty hook configuration no longer replays malformed event history and cancelled terminal tasks can be pruned with other old terminal work.
-- Fixed `si-nucleus` startup so duplicate state-dir owners, failed gateway binds, and accidental arguments cannot start runtime loops that write to the Nucleus state root without owning the listener.
-- Fixed Nucleus dispatch so unprofiled tasks that cannot be routed are blocked with an explicit profile-unavailable reason, missing-session tasks surface immediately, and recoverable tasks are re-queued once a single profile can be inferred.
 - Fixed `si codex respawn` to behave as the same remove-then-spawn lifecycle as running `si codex remove` followed by `si codex spawn`.
 - Fixed Cloudflare direct orbit calls so zone-scoped TLS, tiered cache, DNS, origin certificate, and R2 audit paths no longer require raw URL workarounds.
 - Fixed AWS IAM and OCI orbit audit coverage by adding direct read commands for managed-user and core OCI infrastructure resources, and by tolerating OCI private-key files with trailing non-PEM labels.
@@ -78,7 +57,6 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.56.0] - 2026-04-06
 ### Changed
-- Bumped the minor release after completing the current Nucleus architecture and live contract verification set.
 
 ## [v0.55.12] - 2026-04-04
 ### Changed
