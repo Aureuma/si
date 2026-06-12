@@ -40,7 +40,7 @@
 
 - When introducing new SI-owned names for binaries, services, IDs, environment variables, sockets, files, directories, tmux sessions, API resources, or other runtime surfaces, namespace them with the full `si` prefix rather than shortened fragments.
 - Do not introduce abbreviated namespace prefixes such as `nuc`, `wrk`, `sess`, `evt`, `svc`, or similar short forms when the name is intended to represent an SI-owned concept or resource.
-- Prefer full names such as `si-nucleus`, `si-worker`, `si-session`, `si-run`, `si-event`, and `SI_NUCLEUS_*` over compressed tokens.
+- Prefer full names such as `si-worker`, `si-session`, `si-run`, `si-event`, and `SI_CODEx_*` over compressed tokens.
 - This rule applies both to user-facing names and internal implementation identifiers when those identifiers may surface in logs, paths, IDs, configuration, or adjacent-repo integrations.
 - For Viva-managed app Docker runtime names, use `viva-<app_code>-<env>-<component>[-<slot>]`.
 - Use `dev` and `prod` literally for the environment segment.

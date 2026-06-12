@@ -154,15 +154,6 @@ cargo test -p si-tools
 
 Use these suites as the compatibility gate before upgrading Codex-facing flows.
 
-## Multi-slot Codex/Nucleus validation
-Run targeted checks for multi-worker-per-profile behavior:
-
-```bash
-cargo test -p si-codex
-cargo test -p si-nucleus explicit_profile_tasks_do_not_fall_back_when_requested_profile_is_busy -- --nocapture
-cargo test -p si-nucleus session_create_reuses_single_worker_and_codex_home_per_profile -- --nocapture
-```
-
 Manual runtime smoke:
 
 ```bash
