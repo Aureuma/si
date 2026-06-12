@@ -8,17 +8,13 @@ members = [
     "rust/crates/si-vault",
     "rust/crates/si-warmup",
     "rust/crates/si-codex",
-    "rust/crates/si-nucleus-core",
-    "rust/crates/si-nucleus",
-    "rust/crates/si-nucleus-runtime",
-    "rust/crates/si-nucleus-runtime-codex",
     "rust/crates/si-tools",
     "rust/crates/si-cli",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.60.15"
+version = "0.60.16"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/Aureuma/si"
