@@ -34,9 +34,6 @@ si-fort = { path = "../si-fort" }
 si-process = { path = "../si-process" }
 si-vault = { path = "../si-vault" }
 si-warmup = { path = "../si-warmup" }
-si-nucleus-core = { path = "../si-nucleus-core" }
-si-nucleus-runtime = { path = "../si-nucleus-runtime" }
-si-nucleus-runtime-codex = { path = "../si-nucleus-runtime-codex" }
 
 [dev-dependencies]
 assert_cmd.workspace = true
@@ -45,7 +42,6 @@ rsa.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
-si-nucleus = { path = "../si-nucleus" }
 
 [[bin]]
 name = "si"

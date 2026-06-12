@@ -14,11 +14,10 @@
 
 `si` is an AI-first CLI for orchestrating coding agents, secure runtime workflows, and build flows.
 
-Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/NUCLEUS.md`](docs/NUCLEUS.md) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
+Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
 
 ## What si covers
 
-- Nucleus control plane: durable local orchestration under `si nucleus ...` for tasks, workers, sessions, runs, the local WebSocket gateway, and OS-native service management.
 - Codex workers: profile-scoped tmux/App Server lifecycle under `si codex` (`profile`, `spawn`, `stop`, `remove`, `shell`, `tail`, `list`, `respawn`, `tmux`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Third-party API integrations now live in the standalone `orbit` repo and CLI: `orbit <provider> ...`.
@@ -80,16 +79,6 @@ si build self --timings
 
 ## Common workflows
 
-Nucleus control plane:
-
-```bash
-si nucleus status
-si nucleus task create "Investigate release drift" "Summarize the last failed release attempt."
-si nucleus task list
-si nucleus service install
-si nucleus service start
-```
-
 Codex lifecycle:
 
 ```bash
@@ -127,9 +116,6 @@ vnc_password_fort_env = "dev"
 When the Fort-backed wrapper path is configured, keep `browser.vnc_password` empty in the Surf
 runtime settings so the viewer secret only enters the container at start time.
 
-By default, `si nucleus ...` discovers the local gateway via `SI_NUCLEUS_WS_ADDR`,
-then `~/.si/nucleus/gateway/metadata.json`, then `ws://127.0.0.1:4747/ws`.
-
 Mintlify docs tooling:
 
 ```bash
@@ -139,7 +125,6 @@ mintlify dev
 
 ## Command map
 
-- `si nucleus ...`: local control-plane operations, gateway-facing orchestration, and service management.
 - `si codex ...`: agent runtime operations.
 - `si vault ...`: secure secret workflows.
 - `orbit ...`: third-party API integrations in the standalone `Aureuma/orbit` repo.

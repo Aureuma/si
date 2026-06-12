@@ -23,7 +23,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
-| `si nucleus` | Local control plane for tasks, workers, sessions, runs, gateway inspection, and service management | `status`, `profile`, `service`, `task`, `worker`, `session`, `run`, `events` | [Nucleus](./NUCLEUS) |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `stop`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
@@ -68,10 +67,7 @@ If a standalone adjacent repo owns a stable CLI, add a root SI wrapper only for 
 ### 1. New machine bootstrap
 
 ```bash
-si nucleus status
-si nucleus service install
-si nucleus service start
-si nucleus task prune --older-than-days 30
+si codex status
 si build self
 si build self check --timings
 si vault status
@@ -87,8 +83,7 @@ si build self assets --out-dir .artifacts/release-preflight
 
 ## Guardrails
 
-- Use `si nucleus ...` rather than hidden runtime shortcuts when you need task, worker, session, run, or gateway state.
-- Prefer `si nucleus service ...` over handwritten service units or launch agents.
+- Use `si fort` and `si codex` commands directly for task, worker, session, and run control.
 - For host/admin automation, prefer `si fort run -- <cmd>` when a command needs secrets.
 - For SI runtime workers, use `si fort ...` for secret access.
 - Pass native `fort` flags after `--` when invoking through wrapper.
