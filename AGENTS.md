@@ -1,5 +1,4 @@
 # SI Repository Rules
-This repository follows the global instructions in `/home/shawn/Development/AGENTS.md`; local entries below only add repository-specific overrides.
 ## Release Discipline
 - Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
 - Keep exactly one hard-coded source of truth for that SI version: root `Cargo.toml` under `[workspace.package].version`.
