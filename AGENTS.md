@@ -1,7 +1,5 @@
 # SI Repository Rules
-
 # Release Discipline
-
 - Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
 - Keep exactly one hard-coded source of truth for that SI version: root `Cargo.toml` under `[workspace.package].version`.
 - Rust crates, packaging flows, release tooling, docs, and examples must derive from that root workspace version instead of maintaining independent SI version values.
@@ -15,7 +13,5 @@
 - When the SI version changes, that one version change applies everywhere in SI at once.
 - After bumping the version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
 - Prefer rebuild paths that reuse cached Cargo artifacts so incremental follow-up builds stay fast.
-
 # Secrets And Credential Access
-
 - Raw `si vault` use in this repo is limited to Fort/SI Vault implementation or maintenance work. Operator secret access still goes through `si fort`.
