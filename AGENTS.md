@@ -1,7 +1,5 @@
 # SI Repository Rules
 
-- Follow the shared workspace rules in `/home/shawn/Development/AGENTS.md`.
-
 # Release Discipline
 
 - Use one single SI repository version across the whole system rather than separate versions for the gateway, REST API, storage schema, SDK surfaces, or other SI-owned runtime layers.
