@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "si-codex"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "chrono",
  "serde",
@@ -1814,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "si-command-manifest"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "regex",
  "serde",
@@ -1822,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "si-config"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "serde",
  "tempfile",
@@ -1832,11 +1832,11 @@ dependencies = [
 
 [[package]]
 name = "si-core"
-version = "0.60.16"
+version = "0.60.18"
 
 [[package]]
 name = "si-fort"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "chrono",
  "libc",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "si-process"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "si-tools"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "chrono",
  "libc",
@@ -1870,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "si-vault"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "chrono",
  "serde",
@@ -1881,7 +1881,7 @@ dependencies = [
 
 [[package]]
 name = "si-warmup"
-version = "0.60.16"
+version = "0.60.18"
 dependencies = [
  "chrono",
  "serde",
