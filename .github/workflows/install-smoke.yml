@@ -56,7 +56,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Run Rust tests
-        run: cargo test --workspace
+        run: cargo test --workspace --test-threads=2
 
   host-smoke:
     name: Host installer smoke (${{ matrix.os }})
