@@ -52,7 +52,7 @@
           {
             "group": "Runtime",
             "pages": [
-              "docs/VAULT",
+              "docs/FORT",
               "docs/BROWSER",
               "docs/PLUGIN_MARKETPLACE",
               "docs/INTEGRATION_GATEWAY_ARCHITECTURE",

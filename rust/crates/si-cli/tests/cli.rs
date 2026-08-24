@@ -1425,27 +1425,29 @@ fn fort_wrapper_rejects_persistent_local_host_from_settings() {
 }
 
 #[test]
-fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
+fn build_npm_publish_from_vault_uses_standalone_vault_binary() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
 
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("vault-args.txt");
-    let si_path = bin_dir.path().join("si");
+    // Stub the standalone `vault` binary: subcommands are now top-level on it
+    // (`vault check`), not nested under an `si vault` wrapper.
+    let vault_path = bin_dir.path().join("vault");
     fs::write(
-        &si_path,
+        &vault_path,
         format!(
-            "#!/bin/sh\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"check\" ]; then\n  exit 0\nfi\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"list\" ]; then\n  echo 'NPM_GAT_AUREUMA_VANGUARDA masked'\n  exit 0\nfi\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"run\" ]; then\n  printf '%s\\n' \"$@\" > {}\n  exit 0\nfi\nexit 1\n",
+            "#!/bin/sh\nif [ \"$1\" = \"check\" ]; then\n  exit 0\nfi\nif [ \"$1\" = \"list\" ]; then\n  echo 'NPM_GAT_AUREUMA_VANGUARDA masked'\n  exit 0\nfi\nif [ \"$1\" = \"run\" ]; then\n  printf '%s\\n' \"$@\" > {}\n  exit 0\nfi\nexit 1\n",
             shell_escape_for_test(&args_file)
         ),
     )
-    .expect("write si");
+    .expect("write vault");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&si_path).expect("stat si").permissions();
+        let mut perms = fs::metadata(&vault_path).expect("stat vault").permissions();
         perms.set_mode(0o755);
-        fs::set_permissions(&si_path, perms).expect("chmod si");
+        fs::set_permissions(&vault_path, perms).expect("chmod vault");
     }
 
     let path_env =
@@ -1465,7 +1467,6 @@ fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
         .success();
 
     let args = fs::read_to_string(args_file).expect("read vault args");
-    assert!(args.contains("vault"));
     assert!(args.contains("run"));
     assert!(args.contains("build"));
     assert!(args.contains("publish"));
@@ -2532,303 +2533,6 @@ fn fort_session_state_refresh_outcome_unauthorized_clears_session_id() {
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["state"]["session_id"], "");
     assert_eq!(parsed["classification"]["state"], "revoked");
-}
-
-#[test]
-fn vault_trust_lookup_reports_matching_entry() {
-    let store_dir = tempdir().expect("tempdir");
-    let store_path = store_dir.path().join("trust.json");
-    fs::write(
-        &store_path,
-        r#"{
-  "schema_version": 3,
-  "entries": [
-    {
-      "repo_root": "/repo",
-      "file": "/repo/.env",
-      "fingerprint": "deadbeef",
-      "trusted_at": "2030-01-01T00:00:00Z"
-    }
-  ]
-}
-"#,
-    )
-    .expect("write trust store");
-
-    let output = cargo_bin()
-        .args(["vault", "trust", "lookup", "--path"])
-        .arg(&store_path)
-        .args([
-            "--repo-root",
-            "/repo",
-            "--file",
-            "/repo/.env",
-            "--fingerprint",
-            "deadbeef",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["found"], true);
-    assert_eq!(parsed["matches"], true);
-    assert_eq!(parsed["stored_fingerprint"], "deadbeef");
-    assert_eq!(parsed["trusted_at"], "2030-01-01T00:00:00Z");
-}
-
-#[test]
-fn vault_trust_lookup_reports_missing_entry() {
-    let store_dir = tempdir().expect("tempdir");
-    let store_path = store_dir.path().join("missing.json");
-
-    let output = cargo_bin()
-        .args(["vault", "trust", "lookup", "--path"])
-        .arg(&store_path)
-        .args([
-            "--repo-root",
-            "/repo",
-            "--file",
-            "/repo/.env",
-            "--fingerprint",
-            "deadbeef",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-
-    let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["found"], false);
-    assert_eq!(parsed["matches"], false);
-}
-
-#[test]
-fn vault_check_staged_all_reports_plaintext_env_files() {
-    let repo = tempdir().expect("tempdir");
-    run_git(repo.path(), &["init"]);
-    fs::write(repo.path().join(".env.dev"), "FOO=bar\n").expect("write env");
-    run_git(repo.path(), &["add", ".env.dev"]);
-
-    let output = cargo_bin()
-        .current_dir(repo.path())
-        .args(["vault", "check", "--staged", "--all"])
-        .assert()
-        .failure()
-        .get_output()
-        .stderr
-        .clone();
-
-    let stderr = String::from_utf8(output).expect("utf8 stderr");
-    assert!(stderr.contains("plaintext values detected"));
-    assert!(stderr.contains(".env.dev: FOO"));
-}
-
-#[test]
-fn vault_hooks_install_status_and_uninstall_manage_pre_commit() {
-    let repo = tempdir().expect("tempdir");
-    run_git(repo.path(), &["init"]);
-    let hook_path = repo.path().join(".git").join("hooks").join("pre-commit");
-
-    cargo_bin().current_dir(repo.path()).args(["vault", "hooks", "install"]).assert().success();
-
-    let hook = fs::read_to_string(&hook_path).expect("read hook");
-    assert!(hook.contains("si-vault:hook pre-commit v2"));
-    assert!(hook.contains("vault check --staged --all"));
-
-    let status = cargo_bin()
-        .current_dir(repo.path())
-        .args(["vault", "hooks", "status"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let status = String::from_utf8(status).expect("utf8 status");
-    assert!(status.contains("pre-commit: installed"));
-
-    cargo_bin().current_dir(repo.path()).args(["vault", "hooks", "uninstall"]).assert().success();
-    assert!(!hook_path.exists());
-}
-
-#[test]
-fn vault_local_keypair_set_get_list_run_and_status_roundtrip() {
-    let repo = tempdir().expect("tempdir");
-    run_git(repo.path(), &["init"]);
-    let keyring_path = repo.path().join("state").join("si-vault-keyring.json");
-    let env_path = repo.path().join(".env.dev");
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "keypair", "--env-file", ".env.dev", "--format", "json"])
-        .assert()
-        .success();
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "set", "--env-file", ".env.dev", "SECRET_TOKEN", "super-secret"])
-        .assert()
-        .success();
-
-    let raw = fs::read_to_string(&env_path).expect("read env");
-    assert!(raw.contains("SI_VAULT_PUBLIC_KEY="));
-    assert!(raw.contains("SECRET_TOKEN=encrypted:si-vault:"));
-
-    let list_output = cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "list", "--env-file", ".env.dev", "--format", "json"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let list: Value = serde_json::from_slice(&list_output).expect("json list");
-    assert_eq!(list[0]["key"], "SECRET_TOKEN");
-    assert_eq!(list[0]["state"], "encrypted");
-
-    let get_output = cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "get", "--env-file", ".env.dev", "SECRET_TOKEN", "--reveal"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    assert_eq!(String::from_utf8(get_output).expect("utf8 output"), "super-secret\n");
-
-    let run_output = cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args([
-            "vault",
-            "run",
-            "--env-file",
-            ".env.dev",
-            "--",
-            "sh",
-            "-lc",
-            "printf %s \"$SECRET_TOKEN\"",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    assert_eq!(String::from_utf8(run_output).expect("utf8 output"), "super-secret");
-
-    let status_output = cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "status", "--env-file", ".env.dev", "--format", "json"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let status: Value = serde_json::from_slice(&status_output).expect("json status");
-    assert_eq!(status["keypair_present"], true);
-    assert_eq!(status["public_key_header"], true);
-    assert_eq!(status["encrypted_keys"], 1);
-}
-
-#[test]
-fn vault_encrypt_decrypt_and_restore_round_trip() {
-    let repo = tempdir().expect("tempdir");
-    run_git(repo.path(), &["init"]);
-    let keyring_path = repo.path().join("state").join("si-vault-keyring.json");
-    let env_path = repo.path().join(".env.dev");
-    fs::write(&env_path, "PLAIN_TOKEN=abc123\nEMPTY_VALUE=\n").expect("write env");
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "encrypt", "--env-file", ".env.dev"])
-        .assert()
-        .success();
-
-    let encrypted = fs::read_to_string(&env_path).expect("read encrypted env");
-    assert!(encrypted.contains("SI_VAULT_PUBLIC_KEY="));
-    assert!(encrypted.contains("PLAIN_TOKEN=encrypted:si-vault:"));
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "decrypt", "--env-file", ".env.dev", "--inplace"])
-        .assert()
-        .success();
-
-    let decrypted = fs::read_to_string(&env_path).expect("read decrypted env");
-    assert!(decrypted.contains("PLAIN_TOKEN=abc123"));
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "restore", "--env-file", ".env.dev"])
-        .assert()
-        .success();
-
-    let restored = fs::read_to_string(&env_path).expect("read restored env");
-    assert_eq!(restored, encrypted);
-}
-
-#[test]
-fn vault_set_accepts_legacy_stdin_env_and_section_flags() {
-    let repo = tempdir().expect("tempdir");
-    run_git(repo.path(), &["init"]);
-    let keyring_path = repo.path().join("state").join("si-vault-keyring.json");
-    let env_path = repo.path().join(".env.dev");
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "keypair", "--env", "dev"])
-        .assert()
-        .success();
-
-    cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .write_stdin("super-secret-from-stdin")
-        .args([
-            "vault",
-            "set",
-            "--stdin",
-            "--env",
-            "dev",
-            "--format",
-            "--section",
-            "default",
-            "SECRET_TOKEN",
-        ])
-        .assert()
-        .success();
-
-    let raw = fs::read_to_string(&env_path).expect("read env");
-    assert!(raw.contains("SI_VAULT_PUBLIC_KEY="));
-    assert!(raw.contains("SECRET_TOKEN=encrypted:si-vault:"));
-    assert!(!raw.contains("super-secret-from-stdin"));
-
-    let revealed = cargo_bin()
-        .current_dir(repo.path())
-        .env("SI_VAULT_KEYRING_FILE", &keyring_path)
-        .args(["vault", "get", "--env-file", ".env.dev", "SECRET_TOKEN", "--reveal"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    assert_eq!(String::from_utf8(revealed).expect("utf8 revealed"), "super-secret-from-stdin\n");
 }
 
 #[test]

@@ -50,7 +50,7 @@ Color control:
 | Domain | Commands |
 | --- | --- |
 | Runtime and orchestration | `si codex`, `si surf`, `si viva` |
-| Secrets and context | `si vault` (`si creds`), `si fort`, `si settings` |
+| Secrets and context | `si fort`, `si settings` (dotenv encryption: the separate `vault` binary) |
 | Third-party integrations | Use the standalone `orbit <provider> ...` CLI from `Aureuma/orbit`; `si image` remains in SI for image bridge workflows. |
 | Build and release | `si build`, `si commands`, `si version`, `si help` |
 

@@ -6,25 +6,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub const USAGE_TEXT: &str = r#"Import plaintext .env files into si vault (native SI format).
-
-Defaults:
-  --src .
-  --section default
-  --identity-file ~/.si/vault/si-vault-keyring.json
-
-Examples:
-  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --src .
-  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --src . --section app-dev
-  cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin import-dotenv-to-si-vault -- --dry-run
-
-Notes:
-  - This reads plaintext .env files. Use for migration/bootstrap only.
-  - Target env is inferred per file:
-      *.prod*|*.production* -> prod
-      otherwise             -> dev
-  - Requires: the si binary on PATH."#;
-
 pub fn infer_target_env(base: &str) -> &'static str {
     let lower = base.to_ascii_lowercase();
     if lower.contains(".prod") || lower.contains("production") { "prod" } else { "dev" }
