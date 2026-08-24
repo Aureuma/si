@@ -347,10 +347,6 @@ impl SurfSettings {
         }
         trim_string(&mut self.tunnel.name);
         trim_string(&mut self.tunnel.fort_key);
-        trim_string(&mut self.tunnel.vault_key);
-        if self.tunnel.fort_key.is_empty() && !self.tunnel.vault_key.is_empty() {
-            self.tunnel.fort_key = self.tunnel.vault_key.clone();
-        }
         self.tunnel.mode = normalize_choice(&self.tunnel.mode, &["quick", "token"]);
     }
 }
@@ -363,8 +359,6 @@ pub struct SurfTunnelSettings {
     pub mode: String,
     #[serde(default)]
     pub fort_key: String,
-    #[serde(default)]
-    pub vault_key: String,
 }
 
 impl SurfTunnelSettings {
@@ -377,9 +371,6 @@ impl SurfTunnelSettings {
         }
         if !other.fort_key.is_empty() {
             self.fort_key = other.fort_key;
-        }
-        if !other.vault_key.is_empty() {
-            self.vault_key = other.vault_key;
         }
     }
 }
@@ -715,7 +706,7 @@ vnc_password_fort_env = "dev"
 [surf.tunnel]
 name = "surf-cloudflared"
 mode = "token"
-vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
+fort_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
 "#,
         )
         .expect("write surf settings");
@@ -730,11 +721,10 @@ vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
         assert_eq!(settings.surf.vnc_password_fort_env, "dev");
         assert_eq!(settings.surf.tunnel.mode, "token");
         assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
-        assert_eq!(settings.surf.tunnel.vault_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
     }
 
     #[test]
-    fn loads_surf_tunnel_fort_key_without_legacy_vault_key() {
+    fn loads_surf_tunnel_fort_key() {
         let settings = Settings::from_toml(
             r#"
 [surf.tunnel]
@@ -746,7 +736,6 @@ fort_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
 
         assert_eq!(settings.surf.tunnel.mode, "token");
         assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
-        assert_eq!(settings.surf.tunnel.vault_key, "");
     }
 
     #[test]
