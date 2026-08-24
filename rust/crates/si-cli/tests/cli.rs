@@ -1432,7 +1432,7 @@ fn build_npm_publish_from_vault_uses_standalone_vault_binary() {
     let bin_dir = tempdir().expect("bin tempdir");
     let args_file = bin_dir.path().join("vault-args.txt");
     // Stub the standalone `vault` binary: subcommands are now top-level on it
-    // (`vault check`), not nested under an `si vault` wrapper.
+    // (`vault check`), not nested under an `vault` wrapper.
     let vault_path = bin_dir.path().join("vault");
     fs::write(
         &vault_path,
