@@ -239,7 +239,6 @@ Notes:
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
 - Use `si build corepack pnpm publish --dry-run` for local corepack pnpm publish rehearsal.
-- Use `si build pnpm vault` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
 - Use `si build homebrew core --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 - Those commands default to the canonical SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached version target.
 
