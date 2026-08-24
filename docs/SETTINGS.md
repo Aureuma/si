@@ -169,7 +169,6 @@ Surf tunnel metadata used by compatibility paths. Prefer Fort-backed key naming 
 - `surf.tunnel.name` (string): Surf tunnel runtime name
 - `surf.tunnel.mode` (string): `quick` or `token`
 - `surf.tunnel.fort_key` (string): Fort key for tunnel token material when supported by native Surf
-- `surf.tunnel.vault_key` (string): legacy compatibility alias for older settings only
 
 ### External orbit settings
 Third-party integration settings moved to the standalone `orbit` repo. SI no longer reads provider account settings such as `[stripe]`, `[github]`, `[cloudflare]`, `[gcp]`, `[google]`, `[openai]`, `[oci]`, `[apple]`, or `[workos]`.
