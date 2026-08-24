@@ -7,10 +7,6 @@ repository.workspace = true
 publish = false
 
 [[bin]]
-name = "import-dotenv-to-si-vault"
-path = "src/bin/import_dotenv_to_si_vault.rs"
-
-[[bin]]
 name = "test-fort-spawn-matrix"
 path = "src/bin/test_fort_spawn_matrix.rs"
 

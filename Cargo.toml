@@ -5,7 +5,6 @@ members = [
     "rust/crates/si-command-manifest",
     "rust/crates/si-process",
     "rust/crates/si-fort",
-    "rust/crates/si-vault",
     "rust/crates/si-warmup",
     "rust/crates/si-codex",
     "rust/crates/si-tools",

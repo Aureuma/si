@@ -14,4 +14,4 @@
 - After bumping the version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
 - Prefer rebuild paths that reuse cached Cargo artifacts so incremental follow-up builds stay fast.
 # Secrets And Credential Access
-- Raw `si vault` use in this repo is limited to Fort/SI Vault implementation or maintenance work. Operator secret access still goes through `si fort`.
+- Dotenv encryption lives in its own repo and binary (`vault`, github.com/Aureuma/vault); it is not an `si` subcommand. Operator secret access goes through `si fort`.

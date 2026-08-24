@@ -24,7 +24,6 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `stop`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
-| `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Local Playwright browser runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si viva` | Manage the Viva runtime wrapper | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |
@@ -45,7 +44,6 @@ Third-party API/provider command families moved to the standalone `Aureuma/orbit
 | `viva` | `native-wrapper` | Resolve/build/run the Viva binary and manage SI wrapper/tunnel settings | `viva` repo |
 | `surf` | `native-wrapper` | Resolve/build/run the Surf binary, set `SI_SURF_WRAPPED=1`, and manage SI wrapper settings | `surf` repo |
 | `image` | `internal-si` / provider bridge | Keep SI-owned image bridge commands in SI | SI repo |
-| `vault` | `internal-si` maintenance | Maintain SI Vault encryption/checking flows; prefer Fort for operator secret runtime work | SI repo |
 | third-party providers | `provider-client` | No SI root command; use `orbit <provider> ...` | `orbit` repo |
 | first-party API clients | `api-client` when present | Thin CLI/request formatting only when SI explicitly owns the client | Owning service backend |
 | catalog-only providers | inventory-only | Do not document as runnable SI command families | Owning catalog/orbit data |
@@ -70,7 +68,6 @@ If a standalone adjacent repo owns a stable CLI, add a root SI wrapper only for 
 si codex status
 si build self
 si build self check --timings
-si vault status
 si --help
 si commands
 ```

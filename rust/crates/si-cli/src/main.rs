@@ -12,7 +12,6 @@
     clippy::collapsible_if
 )]
 
-mod vault_compat;
 
 use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
@@ -51,7 +50,6 @@ use si_fort::{
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
 };
-use si_vault::TrustStore;
 use si_warmup::{
     WarmupState, classify_autostart_request, default_autostart_marker_path,
     default_disabled_marker_path, default_state_path as default_warmup_state_path,
@@ -77,7 +75,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 use tar::Builder as TarBuilder;
-use vault_compat::{VaultCommand, run_vault_command};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -174,10 +171,6 @@ enum Command {
         bin: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
-    },
-    Vault {
-        #[command(subcommand)]
-        command: VaultCommand,
     },
 }
 
@@ -1287,19 +1280,6 @@ struct CodexWarmupRunProfileView {
     weekly_used_pct: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_reset: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct VaultTrustLookupView {
-    found: bool,
-    matches: bool,
-    repo_root: String,
-    file: String,
-    expected_fingerprint: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stored_fingerprint: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    trusted_at: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -3177,30 +3157,29 @@ fn run_publish_npm_from_vault(
         return Err(anyhow!("--token-env must not be empty"));
     }
 
+    let vault_cmd = resolve_vault_command()?;
     let mut vault_args = Vec::new();
     if let Some(file) = vault_file {
         vault_args.push("--file".to_owned());
         vault_args.push(file.display().to_string());
     }
 
-    let status = StdCommand::new(&si_cmd)
+    let status = StdCommand::new(&vault_cmd)
         .current_dir(&repo_root)
-        .arg("vault")
         .arg("check")
         .args(&vault_args)
         .status()
-        .with_context(|| format!("run {} vault check", si_cmd.display()))?;
+        .with_context(|| format!("run {} check", vault_cmd.display()))?;
     if !status.success() {
         return Err(anyhow!("vault check failed"));
     }
 
-    let output = StdCommand::new(&si_cmd)
+    let output = StdCommand::new(&vault_cmd)
         .current_dir(&repo_root)
-        .arg("vault")
         .arg("list")
         .args(&vault_args)
         .output()
-        .with_context(|| format!("run {} vault list", si_cmd.display()))?;
+        .with_context(|| format!("run {} list", vault_cmd.display()))?;
     if !output.status.success() {
         return Err(anyhow!("vault list failed"));
     }
@@ -3230,16 +3209,15 @@ fn run_publish_npm_from_vault(
         nested_args.push("--dry-run".to_owned());
     }
 
-    let status = StdCommand::new(&si_cmd)
+    let status = StdCommand::new(&vault_cmd)
         .current_dir(&repo_root)
-        .arg("vault")
         .arg("run")
         .args(&vault_args)
         .arg("--")
         .arg(&current_exe)
         .args(&nested_args)
         .status()
-        .with_context(|| format!("run {} vault run", si_cmd.display()))?;
+        .with_context(|| format!("run {} run", vault_cmd.display()))?;
     if !status.success() {
         return Err(anyhow!("vault-run corepack pnpm publish failed"));
     }
@@ -3259,6 +3237,26 @@ fn resolve_si_command(repo_root: &Path) -> Result<PathBuf> {
         }
     }
     Err(anyhow!("si CLI not found (expected <repo>/si or si in PATH)"))
+}
+
+/// The vault tool lives in its own repo (github.com/Aureuma/vault) and is no
+/// longer a subcommand of si, so the npm publish flow shells out to it.
+fn resolve_vault_command() -> Result<PathBuf> {
+    if let Some(explicit) = std::env::var_os("VAULT_BIN").filter(|value| !value.is_empty()) {
+        let candidate = PathBuf::from(explicit);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+        return Err(anyhow!("VAULT_BIN is set but {} does not exist", candidate.display()));
+    }
+    let path = std::env::var_os("PATH").ok_or_else(|| anyhow!("PATH is not set"))?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("vault");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(anyhow!("vault CLI not found (expected vault in PATH or VAULT_BIN set)"))
 }
 
 fn vault_key_exists(output: &str, key: &str) -> bool {
@@ -4003,7 +4001,6 @@ fn main() -> Result<()> {
         Command::Fort { home, settings_file, repo, build, no_build, bin, args } => {
             run_fort_wrapper(home, settings_file, repo, build, no_build, bin, args)?
         }
-        Command::Vault { command } => run_vault_command(command)?,
         Command::Image { command } => match command {
             ImageCommand::Unsplash { command } => {
                 run_image_command(ImageProvider::Unsplash, command)?
@@ -4112,8 +4109,6 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "warmup", "marker", "show"] => Some("Show warmup marker state."),
         ["codex", "warmup", "marker", "enable"] => Some("Write the autostart marker."),
         ["codex", "warmup", "marker", "disable"] => Some("Set the disabled marker."),
-        ["vault"] => Some("Vault secret and trust commands."),
-        ["vault", "trust"] => Some("Verify trusted vault inputs."),
         ["image"] => Some("Image provider commands."),
         _ => None,
     }
@@ -8484,46 +8479,6 @@ fn fort_session_classification_view(
             FortSessionClassificationView { state: "closed".to_owned(), reason: None }
         }
     }
-}
-
-fn show_vault_trust_lookup(
-    path: PathBuf,
-    repo_root: &str,
-    file: &str,
-    fingerprint: &str,
-    format: OutputFormat,
-) -> Result<()> {
-    let store = TrustStore::load(path)?;
-    let entry = store.find(repo_root, file);
-    let view = VaultTrustLookupView {
-        found: entry.is_some(),
-        matches: entry.map(|entry| entry.fingerprint.trim() == fingerprint.trim()).unwrap_or(false),
-        repo_root: repo_root.trim().to_owned(),
-        file: file.trim().to_owned(),
-        expected_fingerprint: fingerprint.trim().to_owned(),
-        stored_fingerprint: entry.map(|entry| entry.fingerprint.clone()),
-        trusted_at: entry.and_then(|entry| {
-            if entry.trusted_at.trim().is_empty() { None } else { Some(entry.trusted_at.clone()) }
-        }),
-    };
-
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("found={}", view.found);
-            println!("matches={}", view.matches);
-            println!("repo_root={}", render_text_value(&view.repo_root));
-            println!("file={}", render_text_value(&view.file));
-            println!("expected_fingerprint={}", render_text_value(&view.expected_fingerprint));
-            println!(
-                "stored_fingerprint={}",
-                render_option_text_value(view.stored_fingerprint.as_deref())
-            );
-            println!("trusted_at={}", render_option_text_value(view.trusted_at.as_deref()));
-        }
-    }
-
-    Ok(())
 }
 
 fn render_fort_session_state_text(state: &PersistedSessionState) {

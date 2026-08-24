@@ -126,7 +126,6 @@ mintlify dev
 ## Command map
 
 - `si codex ...`: agent runtime operations.
-- `si vault ...`: secure secret workflows.
 - `orbit ...`: third-party API integrations in the standalone `Aureuma/orbit` repo.
 - `si surf ...`: Playwright browser runtime.
 - `si build ...`: self-build and release workflows.

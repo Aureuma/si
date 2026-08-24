@@ -44,7 +44,6 @@ fn run() -> Result<(), String> {
     run_step("si cli integration", || {
         run_cargo(&root, &["test", "-p", "si-cli", "--test", "cli", "--quiet"])
     })?;
-    run_step("si vault package", || run_cargo(&root, &["test", "-p", "si-vault", "--quiet"]))?;
     run_step("fort workspace", || {
         run_command(Command::new("cargo").args([
             "test",

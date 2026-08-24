@@ -101,13 +101,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "vault",
-        aliases: &["creds"],
-        category: CommandCategory::Runtime,
-        summary: "Vault encryption, secret validation, and secure env flows.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "__fort-runtime-agent",
         aliases: &[],
         category: CommandCategory::Internal,
@@ -139,7 +132,7 @@ mod tests {
         ("CLI_REFERENCE.md", include_str!("../../../../docs/CLI_REFERENCE.md")),
         ("COMMAND_REFERENCE.md", include_str!("../../../../docs/COMMAND_REFERENCE.md")),
         ("SETTINGS.md", include_str!("../../../../docs/SETTINGS.md")),
-        ("VAULT.md", include_str!("../../../../docs/VAULT.md")),
+        ("FORT.md", include_str!("../../../../docs/FORT.md")),
         ("testing.md", include_str!("../../../../docs/testing.md")),
         ("index.mdx", include_str!("../../../../docs/index.mdx")),
     ];
@@ -158,7 +151,6 @@ mod tests {
 
     #[test]
     fn aliases_resolve_to_primary_command() {
-        assert_eq!(find_root_command("creds").unwrap().name, "vault");
         assert_eq!(find_root_command("images").unwrap().name, "image");
     }
 

@@ -19,7 +19,6 @@ fn main() -> ExitCode {
 
     match args[0].trim() {
         "workspace" => run_workspace(&root, &args[1..]),
-        "vault" => run_vault(&root, &args[1..]),
         "all" => run_all(&root, &args[1..]),
         _ => {
             eprintln!("usage: si-test-runner <workspace|vault|all> [args]");
@@ -62,40 +61,14 @@ fn run_workspace(root: &PathBuf, args: &[String]) -> ExitCode {
     run_command(Command::new("cargo").current_dir(root).arg("test").arg("--workspace"))
 }
 
-fn run_vault(root: &PathBuf, args: &[String]) -> ExitCode {
-    let mut quick = false;
-    for arg in args {
-        match arg.as_str() {
-            "--quick" => quick = true,
-            "--help" | "-h" => {
-                println!("usage: si-test-runner vault");
-                return ExitCode::SUCCESS;
-            }
-            _ => {
-                eprintln!("usage: si-test-runner vault");
-                return ExitCode::from(2);
-            }
-        }
-    }
-
-    if quick {
-        println!("Running cargo test -p si-vault (--quick is a compatibility no-op)");
-    } else {
-        println!("Running cargo test -p si-vault");
-    }
-    run_command(Command::new("cargo").current_dir(root).arg("test").arg("-p").arg("si-vault"))
-}
-
 fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
     let mut skip_workspace = false;
-    let mut skip_vault = false;
     let mut skip_installer = false;
     let mut skip_npm = false;
 
     for arg in args {
         match arg.as_str() {
             "--skip-workspace" => skip_workspace = true,
-            "--skip-vault" => skip_vault = true,
             "--skip-installer" => skip_installer = true,
             "--skip-npm" => skip_npm = true,
             "--help" | "-h" => {
@@ -116,12 +89,6 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
     if !skip_workspace {
         eprintln!("==> Rust workspace tests");
         if run_workspace(root, &[]) != ExitCode::SUCCESS {
-            return ExitCode::from(1);
-        }
-    }
-    if !skip_vault {
-        eprintln!("==> Vault package tests");
-        if run_vault(root, &[]) != ExitCode::SUCCESS {
             return ExitCode::from(1);
         }
     }

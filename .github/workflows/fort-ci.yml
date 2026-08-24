@@ -1,11 +1,10 @@
-name: Fort/Vault CI
+name: fort-ci
 
 on:
   workflow_dispatch:
   push:
     paths:
       - "rust/crates/si-fort/**"
-      - "rust/crates/si-vault/**"
       - "rust/crates/si-config/**"
       - "rust/crates/si-cli/**"
       - "rust/crates/si-tools/**"
@@ -13,7 +12,6 @@ on:
   pull_request:
     paths:
       - "rust/crates/si-fort/**"
-      - "rust/crates/si-vault/**"
       - "rust/crates/si-config/**"
       - "rust/crates/si-cli/**"
       - "rust/crates/si-tools/**"
@@ -41,7 +39,7 @@ jobs:
 
       - name: Unit tests (Fort/Vault surface)
         run: |
-          cargo test --test-threads=2 -p si-fort -p si-vault
+          cargo test --test-threads=2 -p si-fort
 
       - name: SI Fort spawn matrix integration
         run: cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin test-fort-spawn-matrix --
