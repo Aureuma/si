@@ -1425,55 +1425,6 @@ fn fort_wrapper_rejects_persistent_local_host_from_settings() {
 }
 
 #[test]
-fn build_npm_publish_from_vault_uses_standalone_vault_binary() {
-    let repo = tempdir().expect("repo tempdir");
-    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
-
-    let bin_dir = tempdir().expect("bin tempdir");
-    let args_file = bin_dir.path().join("vault-args.txt");
-    // Stub the standalone `vault` binary: subcommands are now top-level on it
-    // (`vault check`), not nested under an `vault` wrapper.
-    let vault_path = bin_dir.path().join("vault");
-    fs::write(
-        &vault_path,
-        format!(
-            "#!/bin/sh\nif [ \"$1\" = \"check\" ]; then\n  exit 0\nfi\nif [ \"$1\" = \"list\" ]; then\n  echo 'NPM_GAT_AUREUMA_VANGUARDA masked'\n  exit 0\nfi\nif [ \"$1\" = \"run\" ]; then\n  printf '%s\\n' \"$@\" > {}\n  exit 0\nfi\nexit 1\n",
-            shell_escape_for_test(&args_file)
-        ),
-    )
-    .expect("write vault");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&vault_path).expect("stat vault").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&vault_path, perms).expect("chmod vault");
-    }
-
-    let path_env =
-        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
-
-    cargo_bin()
-        .args([
-            "build",
-            "npm",
-            "vault",
-            "--repo-root",
-            repo.path().to_str().expect("repo path"),
-            "--dry-run",
-        ])
-        .env("PATH", path_env)
-        .assert()
-        .success();
-
-    let args = fs::read_to_string(args_file).expect("read vault args");
-    assert!(args.contains("run"));
-    assert!(args.contains("build"));
-    assert!(args.contains("publish"));
-    assert!(args.contains("--dry-run"));
-}
-
-#[test]
 fn build_homebrew_render_core_formula_writes_formula() {
     let dir = tempdir().expect("repo tempdir");
     let out = dir.path().join("Formula/si.rb");

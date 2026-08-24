@@ -502,21 +502,6 @@ enum BuildNpmCommand {
         #[arg(long = "dry-run", action = ArgAction::SetTrue)]
         dry_run: bool,
     },
-    #[command(name = "vault", alias = "publishfromvault", alias = "publish-from-vault")]
-    PublishFromVault {
-        #[arg(long = "repo-root")]
-        repo_root: Option<PathBuf>,
-        #[arg(long)]
-        version: Option<String>,
-        #[arg(long = "out-dir")]
-        out_dir: Option<PathBuf>,
-        #[arg(long = "token-env", default_value = "NPM_GAT_AUREUMA_VANGUARDA")]
-        token_env: String,
-        #[arg(long = "file")]
-        file: Option<PathBuf>,
-        #[arg(long = "dry-run", action = ArgAction::SetTrue)]
-        dry_run: bool,
-    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -3142,129 +3127,6 @@ fn override_executable(var: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn run_publish_npm_from_vault(
-    repo_root: Option<PathBuf>,
-    version: Option<String>,
-    out_dir: Option<PathBuf>,
-    token_env: String,
-    vault_file: Option<PathBuf>,
-    dry_run: bool,
-) -> Result<()> {
-    let repo_root = resolve_release_repo_root(repo_root)?;
-    let si_cmd = resolve_si_command(&repo_root)?;
-    let token_env = token_env.trim().to_owned();
-    if token_env.is_empty() {
-        return Err(anyhow!("--token-env must not be empty"));
-    }
-
-    let vault_cmd = resolve_vault_command()?;
-    let mut vault_args = Vec::new();
-    if let Some(file) = vault_file {
-        vault_args.push("--file".to_owned());
-        vault_args.push(file.display().to_string());
-    }
-
-    let status = StdCommand::new(&vault_cmd)
-        .current_dir(&repo_root)
-        .arg("check")
-        .args(&vault_args)
-        .status()
-        .with_context(|| format!("run {} check", vault_cmd.display()))?;
-    if !status.success() {
-        return Err(anyhow!("vault check failed"));
-    }
-
-    let output = StdCommand::new(&vault_cmd)
-        .current_dir(&repo_root)
-        .arg("list")
-        .args(&vault_args)
-        .output()
-        .with_context(|| format!("run {} list", vault_cmd.display()))?;
-    if !output.status.success() {
-        return Err(anyhow!("vault list failed"));
-    }
-    if !vault_key_exists(&String::from_utf8_lossy(&output.stdout), &token_env) {
-        return Err(anyhow!("vault key {token_env} not found"));
-    }
-
-    let current_exe = std::env::current_exe().context("resolve current executable")?;
-    let mut nested_args = vec![
-        "build".to_owned(),
-        "npm".to_owned(),
-        "publish".to_owned(),
-        "--repo-root".to_owned(),
-        repo_root.display().to_string(),
-        "--token-env".to_owned(),
-        token_env.clone(),
-    ];
-    if let Some(version) = version {
-        nested_args.push("--version".to_owned());
-        nested_args.push(version);
-    }
-    if let Some(out_dir) = out_dir {
-        nested_args.push("--out-dir".to_owned());
-        nested_args.push(out_dir.display().to_string());
-    }
-    if dry_run {
-        nested_args.push("--dry-run".to_owned());
-    }
-
-    let status = StdCommand::new(&vault_cmd)
-        .current_dir(&repo_root)
-        .arg("run")
-        .args(&vault_args)
-        .arg("--")
-        .arg(&current_exe)
-        .args(&nested_args)
-        .status()
-        .with_context(|| format!("run {} run", vault_cmd.display()))?;
-    if !status.success() {
-        return Err(anyhow!("vault-run corepack pnpm publish failed"));
-    }
-    Ok(())
-}
-
-fn resolve_si_command(repo_root: &Path) -> Result<PathBuf> {
-    let local = repo_root.join("si");
-    if local.exists() {
-        return Ok(local);
-    }
-    let path = std::env::var_os("PATH").ok_or_else(|| anyhow!("PATH is not set"))?;
-    for dir in std::env::split_paths(&path) {
-        let candidate = dir.join("si");
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    Err(anyhow!("si CLI not found (expected <repo>/si or si in PATH)"))
-}
-
-/// The vault tool lives in its own repo (github.com/Aureuma/vault) and is no
-/// longer a subcommand of si, so the npm publish flow shells out to it.
-fn resolve_vault_command() -> Result<PathBuf> {
-    if let Some(explicit) = std::env::var_os("VAULT_BIN").filter(|value| !value.is_empty()) {
-        let candidate = PathBuf::from(explicit);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-        return Err(anyhow!("VAULT_BIN is set but {} does not exist", candidate.display()));
-    }
-    let path = std::env::var_os("PATH").ok_or_else(|| anyhow!("PATH is not set"))?;
-    for dir in std::env::split_paths(&path) {
-        let candidate = dir.join("vault");
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    Err(anyhow!("vault CLI not found (expected vault in PATH or VAULT_BIN set)"))
-}
-
-fn vault_key_exists(output: &str, key: &str) -> bool {
-    output
-        .lines()
-        .any(|line| line.split_whitespace().next().map(|value| value == key).unwrap_or(false))
-}
-
 fn run_homebrew_render_core_formula(
     repo_root: Option<PathBuf>,
     version: Option<String>,
@@ -3760,16 +3622,6 @@ fn main() -> Result<()> {
                     token_env,
                     dry_run,
                 } => run_publish_npm_package(repo_root, version, out_dir, token_env, dry_run)?,
-                BuildNpmCommand::PublishFromVault {
-                    repo_root,
-                    version,
-                    out_dir,
-                    token_env,
-                    file,
-                    dry_run,
-                } => run_publish_npm_from_vault(
-                    repo_root, version, out_dir, token_env, file, dry_run,
-                )?,
             },
             BuildCommand::Homebrew { command } => match command {
                 BuildHomebrewCommand::RenderCoreFormula { repo_root, version, output, repo } => {
