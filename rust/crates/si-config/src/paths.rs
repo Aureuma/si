@@ -162,6 +162,39 @@ impl SiPaths {
         self.root.join("locks").join("settings.lock")
     }
 
+    /// Slot reservation lock for one worker:
+    /// `<root>/locks/<provider>/<profile>.<slot>.lock`. Unambiguous because
+    /// slugs never contain `.`.
+    pub fn slot_lock_path(&self, provider: Provider, profile: &str, slot: &SlotId) -> PathBuf {
+        guard_profile_key(profile);
+        self.locks_dir(provider).join(format!("{}.{}.lock", profile.trim(), slot.as_str()))
+    }
+
+    /// Private runtime directory for owned sockets: `<root>/runtime/` (0700).
+    pub fn runtime_dir(&self) -> PathBuf {
+        self.root.join("runtime")
+    }
+
+    /// SI-owned tmux socket: `<root>/runtime/tmux.sock`. One per SI root;
+    /// every lifecycle command carries this exact path via `tmux -S`.
+    pub fn tmux_socket_path(&self) -> PathBuf {
+        self.runtime_dir().join("tmux.sock")
+    }
+
+    /// Transient private launch spec for one worker:
+    /// `<root>/<provider>/workers/<profile>/<slot>.spec.json` (0600). Written
+    /// at reservation, read once by the runner, removed with the record.
+    pub fn worker_spec_path(&self, provider: Provider, profile: &str, slot: &SlotId) -> PathBuf {
+        guard_profile_key(profile);
+        self.workers_dir(provider).join(profile.trim()).join(format!("{}.spec.json", slot.as_str()))
+    }
+
+    /// Migration metadata backups: `<root>/backups/`. Metadata only; never
+    /// auth files or native history.
+    pub fn migration_backup_dir(&self) -> PathBuf {
+        self.root.join("backups")
+    }
+
     pub fn load(home: &Path, settings_file: Option<&Path>) -> Result<Self, LoadPathsError> {
         let default_paths = Self::discover(home);
         let path = settings_file.unwrap_or(default_paths.settings_file.as_path());
@@ -327,6 +360,16 @@ codex_profiles_dir = "~/state/si/codex-profiles"
             Path::new("/home/user/.si/locks/codex/personal.worker.lock")
         );
         assert_eq!(paths.settings_lock_path(), Path::new("/home/user/.si/locks/settings.lock"));
+        assert_eq!(
+            paths.slot_lock_path(Provider::Codex, "personal", &slot),
+            Path::new("/home/user/.si/locks/codex/personal.primary.lock")
+        );
+        assert_eq!(paths.tmux_socket_path(), Path::new("/home/user/.si/runtime/tmux.sock"));
+        assert_eq!(
+            paths.worker_spec_path(Provider::Codex, "personal", &slot),
+            Path::new("/home/user/.si/codex/workers/personal/primary.spec.json")
+        );
+        assert_eq!(paths.migration_backup_dir(), Path::new("/home/user/.si/backups"));
     }
 
     #[test]

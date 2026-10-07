@@ -6,4 +6,6 @@
 //! process environment, tmux ownership, and lifecycle records.
 
 pub mod codex;
+pub mod migrate;
+pub mod runner;
 pub mod store;

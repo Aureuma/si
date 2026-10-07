@@ -23,29 +23,21 @@ use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{
     ArgAction, Args, ColorChoice, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum,
 };
-use comfy_table::modifiers::UTF8_ROUND_CORNERS;
-use comfy_table::presets::UTF8_FULL;
-use comfy_table::{Attribute, Cell, Color, ColumnConstraint, ContentArrangement, Table, Width};
 use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use si_codex::{
-    DEFAULT_CODEX_WORKER_SLOT, codex_tmux_session_name_for_slot, codex_worker_name,
-    codex_worker_slot_name,
-};
+use si_codex::codex_worker_slot_name;
 use si_command_manifest::{CommandCategory, CommandSpec, find_root_command, visible_root_commands};
 use si_config::paths::SiPaths;
 use si_config::settings::{FortSettings, Settings, SurfSettings, VivaSettings};
 use si_fort::{
     BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
-    RefreshSuccess, SessionState, acquire_session_lock,
-    apply_refresh_outcome_to_persisted_session_state, build_bootstrap_view,
-    classify_persisted_session_state, clear_persisted_runtime_agent_state,
+    RefreshSuccess, SessionState, apply_refresh_outcome_to_persisted_session_state,
+    build_bootstrap_view, classify_persisted_session_state, clear_persisted_runtime_agent_state,
     clear_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
 };
-use si_process::adapter::ProviderAdapter as _;
 use si_warmup::{
     WarmupState, classify_autostart_request, default_autostart_marker_path,
     default_disabled_marker_path, default_state_path as default_warmup_state_path,
@@ -54,7 +46,6 @@ use si_warmup::{
     set_disabled_marker as set_rust_warmup_disabled_marker,
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
-use std::collections::BTreeMap;
 use std::env;
 use std::fmt;
 use std::fs;
@@ -92,8 +83,16 @@ enum Command {
     },
     Commands(CommandsArgs),
     Doctor {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+        #[arg(long, default_value_t = false)]
+        migration_plan: bool,
+        #[arg(long, default_value_t = false, conflicts_with = "migration_plan")]
+        migrate: bool,
     },
     Settings(SettingsArgs),
     Image {
@@ -157,6 +156,13 @@ enum Command {
         bin: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
+    },
+    /// Internal worker runner. Not a public command: launched by SI-owned
+    /// tmux sessions only, hidden from help.
+    #[command(name = "__worker-run", hide = true)]
+    WorkerRun {
+        #[arg(long)]
+        spec: PathBuf,
     },
 }
 
@@ -262,7 +268,38 @@ struct CodexSpawnStartArgs {
     #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
     workspace: Option<PathBuf>,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    codex_bin: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+    #[arg(last = true)]
+    native: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct CodexRespawnArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    codex_bin: Option<PathBuf>,
+    #[arg(long)]
+    resume_id: Option<String>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
 }
 
 #[derive(Debug, Args)]
@@ -379,7 +416,9 @@ struct CodexTmuxArgs {
     #[arg(long = "slot")]
     worker_slot: Option<String>,
     #[arg(long)]
-    format: Option<OutputFormat>,
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -389,6 +428,12 @@ struct CodexRemoveArgs {
     profile_flag: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    stop: bool,
     #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
     all: bool,
     #[arg(long, default_value = "text")]
@@ -402,6 +447,12 @@ struct CodexStopArgs {
     profile_flag: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    force: bool,
     #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
     all: bool,
     #[arg(long, default_value = "text")]
@@ -415,6 +466,10 @@ struct CodexTailArgs {
     profile_flag: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
     #[arg(long, default_value = "200")]
     tail: String,
 }
@@ -425,6 +480,14 @@ struct CodexShellArgs {
     profile: Option<String>,
     #[arg(long = "slot")]
     worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    workspace: Option<PathBuf>,
+    #[arg(long)]
+    workdir: Option<String>,
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     command: Vec<String>,
 }
@@ -444,6 +507,10 @@ enum CodexCommand {
     Shell(CodexShellArgs),
     Run(CodexRunArgs),
     List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -453,7 +520,7 @@ enum CodexCommand {
         command: WarmupCommand,
     },
     #[command(name = "respawn")]
-    Respawn(CodexSpawnStartArgs),
+    Respawn(CodexRespawnArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -772,25 +839,6 @@ impl fmt::Display for OutputFormat {
     }
 }
 
-fn parse_env_assignments(entries: &[String]) -> Result<BTreeMap<String, String>> {
-    let mut map = BTreeMap::new();
-    for entry in entries {
-        let trimmed = entry.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let Some((key, value)) = trimmed.split_once('=') else {
-            anyhow::bail!("invalid env assignment: {trimmed}");
-        };
-        let key = key.trim();
-        if key.is_empty() {
-            anyhow::bail!("invalid env assignment: {trimmed}");
-        }
-        map.insert(key.to_owned(), value.trim().to_owned());
-    }
-    Ok(map)
-}
-
 #[derive(Debug, Serialize)]
 struct FortSessionClassificationView {
     state: String,
@@ -815,60 +863,6 @@ struct CommandView {
     aliases: Vec<String>,
     category: CommandCategory,
     summary: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct CodexWorkerState {
-    #[serde(default = "default_codex_worker_state_schema_version")]
-    schema_version: u32,
-    pub(crate) profile_id: String,
-    #[serde(default = "default_codex_worker_slot_name")]
-    pub(crate) worker_slot: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    profile_name: Option<String>,
-    pub(crate) session_name: String,
-    workspace: String,
-    workdir: String,
-    updated_at: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexRemoveResultView {
-    name: String,
-    session_name: String,
-    profile_id: Option<String>,
-    output: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexStopResultView {
-    name: String,
-    session_name: String,
-    profile_id: String,
-    output: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexListEntryView {
-    profile_id: String,
-    worker_slot: String,
-    session_name: String,
-    tmux_window_name: String,
-    state: String,
-    workspace: String,
-    workdir: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexRemoveAllResultView {
-    aborted: bool,
-    removed: Vec<CodexRemoveResultView>,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexStopAllResultView {
-    aborted: bool,
-    stopped: Vec<CodexStopResultView>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -897,16 +891,6 @@ struct CodexStatusView {
     weekly_reset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_remaining_minutes: Option<i32>,
-}
-
-#[derive(Debug, Serialize)]
-struct CodexTmuxCommandView {
-    profile_id: String,
-    worker_slot: String,
-    session_name: String,
-    window_name: String,
-    launch_command: String,
-    workspace: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1067,7 +1051,18 @@ fn main() -> Result<()> {
             println!("{}", si_core::version::current_version());
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
-        Command::Doctor { format } => run_distribution_doctor(format)?,
+        Command::Doctor { home, settings_file, format, migration_plan, migrate } => {
+            if migration_plan {
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::migrate::render_migration_plan(&ctx, format)?
+            } else if migrate {
+                let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::migrate::apply_migration(&mut ctx, format)?
+            } else {
+                run_distribution_doctor(format)?
+            }
+        }
+        Command::WorkerRun { spec } => agents::runner::run_worker_entry(&spec)?,
         Command::Commands(args) => match args.command {
             Some(CommandsCommand::List(args)) => show_help(None, args.format)?,
             None => show_help(None, args.default_list.format)?,
@@ -1155,37 +1150,108 @@ fn main() -> Result<()> {
                 profile,
                 profile_flag,
                 worker_slot,
+                home,
+                settings_file,
                 workspace,
+                workdir,
+                codex_bin,
+                format,
+                native,
             }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                show_codex_spawn_start(profile, worker_slot, workspace)?
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::codex::spawn(
+                    &ctx,
+                    requested.as_deref(),
+                    worker_slot.as_deref(),
+                    workspace,
+                    workdir.as_deref(),
+                    codex_bin,
+                    native,
+                    format,
+                )?
             }
             CodexCommand::Remove(CodexRemoveArgs {
                 profile,
                 profile_flag,
                 worker_slot,
+                home,
+                settings_file,
+                stop,
                 all,
                 format,
             }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                run_codex_remove(profile.as_deref(), worker_slot.as_deref(), all, format)?
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                if all {
+                    agents::codex::remove_all(&ctx, stop, format)?
+                } else {
+                    agents::codex::worker_remove(
+                        &ctx,
+                        requested.as_deref(),
+                        worker_slot.as_deref(),
+                        stop,
+                        format,
+                    )?
+                }
             }
             CodexCommand::Stop(CodexStopArgs {
                 profile,
                 profile_flag,
                 worker_slot,
+                home,
+                settings_file,
+                force,
                 all,
                 format,
             }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                run_codex_stop(profile.as_deref(), worker_slot.as_deref(), all, format)?
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                if all {
+                    agents::codex::stop_all(&ctx, force, format)?
+                } else {
+                    agents::codex::stop(
+                        &ctx,
+                        requested.as_deref(),
+                        worker_slot.as_deref(),
+                        force,
+                        format,
+                    )?
+                }
             }
-            CodexCommand::Tail(CodexTailArgs { profile, profile_flag, worker_slot, tail }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                run_codex_tail(profile.as_deref(), worker_slot.as_deref(), &tail)?
+            CodexCommand::Tail(CodexTailArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                tail,
+            }) => {
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                let lines: usize = tail
+                    .parse()
+                    .with_context(|| format!("invalid --tail {tail:?}; want a line count"))?;
+                agents::codex::tail(&ctx, requested.as_deref(), worker_slot.as_deref(), lines)?
             }
-            CodexCommand::Shell(CodexShellArgs { profile, worker_slot, command }) => {
-                run_codex_shell(profile.as_deref(), worker_slot.as_deref(), command)?
+            CodexCommand::Shell(CodexShellArgs {
+                profile,
+                worker_slot,
+                home,
+                settings_file,
+                workspace,
+                workdir,
+                command,
+            }) => {
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::codex::shell(
+                    &ctx,
+                    profile.as_deref(),
+                    worker_slot.as_deref(),
+                    workspace,
+                    workdir.as_deref(),
+                    command,
+                )?
             }
             CodexCommand::Run(CodexRunArgs {
                 profile,
@@ -1199,10 +1265,20 @@ fn main() -> Result<()> {
                 let ctx = agents::store::AgentContext::load(home, settings_file)?;
                 agents::codex::run(&ctx, requested.as_deref(), codex_bin, &native)?
             }
-            CodexCommand::List { format } => run_codex_list(format)?,
-            CodexCommand::Tmux(CodexTmuxArgs { profile, profile_flag, worker_slot, format }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                run_codex_tmux_command(profile.as_deref(), worker_slot.as_deref(), format)?
+            CodexCommand::List { home, settings_file, format } => {
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::codex::list(&ctx, format)?
+            }
+            CodexCommand::Tmux(CodexTmuxArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+            }) => {
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::codex::attach(&ctx, requested.as_deref(), worker_slot.as_deref())?
             }
             CodexCommand::Warmup { command } => match command {
                 WarmupCommand::Decision {
@@ -1257,14 +1333,26 @@ fn main() -> Result<()> {
                     }
                 },
             },
-            CodexCommand::Respawn(CodexSpawnStartArgs {
+            CodexCommand::Respawn(CodexRespawnArgs {
                 profile,
                 profile_flag,
                 worker_slot,
-                workspace,
+                home,
+                settings_file,
+                codex_bin,
+                resume_id,
+                format,
             }) => {
-                let profile = resolve_codex_cli_profile_arg(profile, profile_flag);
-                run_codex_respawn(profile, worker_slot, workspace)?
+                let requested = resolve_codex_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::codex::respawn(
+                    &ctx,
+                    requested.as_deref(),
+                    worker_slot.as_deref(),
+                    codex_bin,
+                    resume_id,
+                    format,
+                )?
             }
         },
         Command::Surf {
@@ -1388,7 +1476,9 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "tmux"] => Some("Attach to a Codex tmux session."),
         ["codex", "warmup"] => Some("Inspect Codex warmup state."),
         ["codex", "warmup", "run"] => Some("Warm configured Codex profiles."),
-        ["codex", "respawn"] => Some("Remove and recreate a Codex worker session."),
+        ["codex", "respawn"] => {
+            Some("Restart a Codex worker on the same profile (reuse or resume).")
+        }
         ["codex", "warmup", "decision"] => Some("Decide whether warmup should run."),
         ["codex", "warmup", "status"] => Some("Show warmup status."),
         ["codex", "warmup", "state"] => Some("Warmup state file commands."),
@@ -1929,10 +2019,6 @@ fn stdout_text(text: &str, tone: CliTone) -> String {
     style_cli_text(text, tone, CliStream::Stdout)
 }
 
-fn stderr_text(text: &str, tone: CliTone) -> String {
-    style_cli_text(text, tone, CliStream::Stderr)
-}
-
 fn print_cli_kv(key: &str, value: impl fmt::Display) {
     println!("{}={value}", stdout_text(key, CliTone::Label));
 }
@@ -1951,18 +2037,6 @@ fn print_help_section(title: &str) {
 
 fn print_help_item(text: &str, tone: CliTone) {
     println!("  {}", stdout_text(text, tone));
-}
-
-fn cli_table_color(tone: CliTone) -> Color {
-    match tone {
-        CliTone::Heading | CliTone::Section | CliTone::Info => Color::Cyan,
-        CliTone::Command => Color::Magenta,
-        CliTone::Flag | CliTone::Warning => Color::DarkYellow,
-        CliTone::Label => Color::Blue,
-        CliTone::Success => Color::Green,
-        CliTone::Danger => Color::Red,
-        CliTone::Muted => Color::DarkGrey,
-    }
 }
 
 fn cli_help_styles() -> Styles {
@@ -4199,15 +4273,6 @@ fn set_toml_bool(table: &mut toml::map::Map<String, toml::Value>, key: &str, val
     }
 }
 
-fn load_codex_runtime_settings(
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-) -> Result<(PathBuf, Settings)> {
-    let home = home.unwrap_or_else(default_home_dir);
-    let settings = Settings::load(&home, settings_file.as_deref())?;
-    Ok((home, settings))
-}
-
 fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     let state = load_persisted_session_state(path)?;
 
@@ -4475,842 +4540,11 @@ fn render_option_number(value: Option<i64>) -> String {
     value.map(|item| item.to_string()).unwrap_or_else(|| "(none)".to_owned())
 }
 
-fn show_codex_spawn_start(
-    profile: Option<String>,
-    worker_slot: Option<String>,
-    workspace: Option<PathBuf>,
-) -> Result<()> {
-    let (settings_home, settings) = load_codex_runtime_settings(None, None)?;
-    let paths = SiPaths::from_settings(&settings_home, &settings);
-    let agent_ctx = agents::store::AgentContext::load(Some(settings_home.clone()), None)?;
-    let profile_id =
-        agent_ctx.resolve_profile(si_config::ids::Provider::Codex, profile.as_deref())?;
-    let workspace = resolve_codex_workspace(workspace, &settings)?;
-    let workdir = resolve_codex_workdir(None, &workspace)?;
-    let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
-    let state = ensure_codex_worker_session(
-        &settings_home,
-        &paths,
-        &settings,
-        &profile_id,
-        &slot,
-        workspace,
-        workdir,
-        &[],
-    )?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&serde_json::json!({
-            "profile_id": state.profile_id,
-            "worker_slot": state.worker_slot,
-            "session_name": state.session_name,
-            "workspace": state.workspace,
-            "workdir": state.workdir,
-            "updated_at": state.updated_at,
-        }))?
-    );
-    Ok(())
-}
-
-fn run_codex_respawn(
-    profile: Option<String>,
-    worker_slot: Option<String>,
-    workspace: Option<PathBuf>,
-) -> Result<()> {
-    let slot = normalize_codex_worker_slot(worker_slot.as_deref())?;
-    let remove_result = run_codex_remove_with_settings(
-        profile.as_deref(),
-        Some(slot.as_str()),
-        false,
-        OutputFormat::Text,
-        None,
-        None,
-    );
-    if let Err(error) = remove_result {
-        let detail = error.to_string();
-        let not_found = detail.contains("no codex worker session found for profile");
-        if !not_found {
-            return Err(error).context("respawn cleanup failed");
-        }
-    }
-    show_codex_spawn_start(profile, Some(slot), workspace)
-}
-
 fn resolve_codex_cli_profile_arg(
     positional: Option<String>,
     flag: Option<String>,
 ) -> Option<String> {
     flag.or(positional).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
-}
-
-fn resolve_codex_workdir(workdir: Option<String>, workspace: &Path) -> Result<PathBuf> {
-    let Some(workdir) = workdir.as_deref().map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(workspace.to_path_buf());
-    };
-    let path = expand_home_path(PathBuf::from(workdir));
-    if path.is_absolute() { Ok(path) } else { Ok(workspace.join(path)) }
-}
-
-fn resolve_codex_workspace(workspace: Option<PathBuf>, settings: &Settings) -> Result<PathBuf> {
-    if let Some(path) = workspace {
-        return resolve_codex_workspace_path(path);
-    }
-    if let Some(configured) = settings.codex.workspace.as_deref() {
-        let trimmed = configured.trim();
-        if !trimmed.is_empty() {
-            return resolve_codex_workspace_path(PathBuf::from(trimmed));
-        }
-    }
-    std::env::current_dir().context("read current dir for codex workspace")
-}
-
-fn resolve_codex_workspace_path(path: PathBuf) -> Result<PathBuf> {
-    let path = expand_home_path(path);
-    if path.is_absolute() {
-        Ok(path)
-    } else {
-        Ok(std::env::current_dir().context("read current dir for codex workspace")?.join(path))
-    }
-}
-
-fn expand_home_path(path: PathBuf) -> PathBuf {
-    let path_str = path.to_string_lossy();
-    if path_str == "~" {
-        return default_home_dir();
-    }
-    if let Some(suffix) = path_str.strip_prefix("~/") {
-        return default_home_dir().join(suffix);
-    }
-    path
-}
-
-fn codex_workers_dir(paths: &SiPaths) -> PathBuf {
-    paths.root.join("codex").join("workers")
-}
-
-fn default_codex_worker_slot_name() -> String {
-    DEFAULT_CODEX_WORKER_SLOT.to_owned()
-}
-
-fn default_codex_worker_state_schema_version() -> u32 {
-    1
-}
-
-fn normalize_codex_worker_slot(slot: Option<&str>) -> Result<String> {
-    let slot = codex_worker_slot_name(slot);
-    if slot == DEFAULT_CODEX_WORKER_SLOT {
-        return Ok(slot);
-    }
-    let valid = slot.chars().enumerate().all(|(index, ch)| {
-        ch.is_ascii_lowercase() || ch.is_ascii_digit() || (ch == '-' && index > 0)
-    });
-    if !valid || slot.starts_with('-') || slot.ends_with('-') {
-        anyhow::bail!(
-            "invalid worker slot {slot:?}; use lowercase letters, digits, and dashes (example: review-2)"
-        );
-    }
-    Ok(slot)
-}
-
-fn codex_worker_legacy_state_path(paths: &SiPaths, profile_id: &str) -> PathBuf {
-    codex_workers_dir(paths).join(format!("{}.json", codex_worker_name(profile_id)))
-}
-
-fn codex_worker_state_path(paths: &SiPaths, profile_id: &str, worker_slot: &str) -> PathBuf {
-    let slot = codex_worker_slot_name(Some(worker_slot));
-    codex_workers_dir(paths).join(codex_worker_name(profile_id)).join(format!("{slot}.json"))
-}
-
-fn ensure_codex_workers_dir(paths: &SiPaths) -> Result<PathBuf> {
-    let dir = codex_workers_dir(paths);
-    fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    Ok(dir)
-}
-
-fn save_codex_worker_state(path: &Path, state: &CodexWorkerState) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    fs::write(path, serde_json::to_vec_pretty(state)?)
-        .with_context(|| format!("write {}", path.display()))?;
-    #[cfg(unix)]
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-        .with_context(|| format!("chmod {}", path.display()))?;
-    Ok(())
-}
-
-fn load_codex_worker_state(path: &Path) -> Result<CodexWorkerState> {
-    let raw = fs::read(path).with_context(|| format!("read {}", path.display()))?;
-    let mut state: CodexWorkerState =
-        serde_json::from_slice(&raw).with_context(|| format!("parse {}", path.display()))?;
-    state.worker_slot = normalize_codex_worker_slot(Some(state.worker_slot.as_str()))?;
-    Ok(state)
-}
-
-fn find_codex_worker_state(
-    paths: &SiPaths,
-    profile_id: &str,
-    worker_slot: Option<&str>,
-) -> Result<Option<CodexWorkerState>> {
-    let slot = normalize_codex_worker_slot(worker_slot)?;
-    let slot_path = codex_worker_state_path(paths, profile_id, &slot);
-    if slot_path.is_file() {
-        return load_codex_worker_state(&slot_path).map(Some);
-    }
-    if slot == DEFAULT_CODEX_WORKER_SLOT {
-        let legacy_path = codex_worker_legacy_state_path(paths, profile_id);
-        if legacy_path.is_file() {
-            return load_codex_worker_state(&legacy_path).map(Some);
-        }
-    }
-    Ok(None)
-}
-
-pub(crate) fn read_codex_worker_states(paths: &SiPaths) -> Result<Vec<CodexWorkerState>> {
-    let dir = codex_workers_dir(paths);
-    if !dir.is_dir() {
-        return Ok(Vec::new());
-    }
-    let items = fs::read_dir(&dir)
-        .with_context(|| format!("read {}", dir.display()))?
-        .filter_map(|entry| entry.ok().map(|value| value.path()))
-        .flat_map(|path| {
-            if path.is_file() {
-                vec![path]
-            } else if path.is_dir() {
-                fs::read_dir(path)
-                    .ok()
-                    .into_iter()
-                    .flat_map(|iter| iter.filter_map(|entry| entry.ok().map(|value| value.path())))
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            }
-        })
-        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("json"))
-        .filter_map(|path| load_codex_worker_state(&path).ok())
-        .collect::<Vec<_>>();
-    let mut merged = BTreeMap::<(String, String), CodexWorkerState>::new();
-    for item in items {
-        let key = (item.profile_id.clone(), item.worker_slot.clone());
-        let replace = merged
-            .get(&key)
-            .is_none_or(|current| item.updated_at.as_str() >= current.updated_at.as_str());
-        if replace {
-            merged.insert(key, item);
-        }
-    }
-    let mut items = merged.into_values().collect::<Vec<_>>();
-    items.sort_by(|left, right| {
-        left.profile_id.cmp(&right.profile_id).then(left.worker_slot.cmp(&right.worker_slot))
-    });
-    Ok(items)
-}
-
-fn shell_single_quote(value: &str) -> String {
-    if value.is_empty() {
-        return "''".to_owned();
-    }
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-fn codex_env_key_protected(key: &str) -> bool {
-    matches!(
-        key,
-        "HOME"
-            | "CODEX_HOME"
-            | "SI_PROVIDER"
-            | "SI_PROFILE"
-            | "SI_WORKER_SLOT"
-            | "SI_CODEX_PROFILE"
-            | "SI_CODEX_WORKER_SLOT"
-    )
-}
-
-fn build_codex_launch_command(
-    home: &Path,
-    codex_home: &Path,
-    workdir: &Path,
-    profile_id: &str,
-    worker_slot: &str,
-    env_entries: &[String],
-) -> String {
-    // Canonical profile home, enforced file credential store, non-secret
-    // labels. No Fort coupling and no forced unsafe mode. (Runner/lease and
-    // owned tmux socket arrive with the worker-lifecycle rework.)
-    let mut exports = format!(
-        "export COLORTERM=truecolor HOME={} CODEX_HOME={} SI_PROVIDER=codex SI_PROFILE={} SI_WORKER_SLOT={}; ",
-        shell_single_quote(&home.display().to_string()),
-        shell_single_quote(&codex_home.display().to_string()),
-        shell_single_quote(profile_id),
-        shell_single_quote(worker_slot),
-    );
-    for entry in env_entries {
-        let Some((key, value)) = entry.split_once('=') else {
-            continue;
-        };
-        let key = key.trim();
-        if key.is_empty() || codex_env_key_protected(key) {
-            continue;
-        }
-        exports.push_str(&format!("export {}={}; ", key, shell_single_quote(value.trim())));
-    }
-    for key in si_codex::adapter::CODEX_AUTH_OVERRIDE_VARS {
-        exports.push_str(&format!("unset {key}; "));
-    }
-    format!(
-        "bash -lc {}",
-        shell_single_quote(&format!(
-            "{exports}cd {} 2>/dev/null || exit 1; codex -c {}; status=$?; printf '\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\n' \"$status\"; exec bash -il",
-            shell_single_quote(&workdir.display().to_string()),
-            si_codex::adapter::CODEX_FILE_STORE_OVERRIDE,
-        ))
-    )
-}
-
-fn ensure_codex_worker_session(
-    home: &Path,
-    paths: &SiPaths,
-    settings: &Settings,
-    profile_id: &str,
-    worker_slot: &str,
-    workspace: PathBuf,
-    workdir: PathBuf,
-    env_entries: &[String],
-) -> Result<CodexWorkerState> {
-    let _ = ensure_codex_workers_dir(paths)?;
-    let worker_slot = normalize_codex_worker_slot(Some(worker_slot))?;
-    let entry = settings.codex.profiles.entries.get(profile_id).ok_or_else(|| {
-        anyhow!(
-            "codex profile {profile_id:?} is not registered; add it with `si codex profile add`"
-        )
-    })?;
-    if let Some(reason) = entry.disabled.as_deref().map(str::trim).filter(|value| !value.is_empty())
-    {
-        anyhow::bail!("codex profile {profile_id:?} is disabled: {reason}");
-    }
-    let profile_name = entry.name.clone();
-    let session_name = codex_tmux_session_name_for_slot(profile_id, &worker_slot);
-    let state_path = codex_worker_state_path(paths, profile_id, &worker_slot);
-    let lock_path = state_path.with_extension("lock");
-    let _state_lock = acquire_session_lock(&lock_path)
-        .with_context(|| format!("acquire worker-state lock {}", lock_path.display()))?;
-    // All slots use the account's canonical native home. No per-slot homes,
-    // no credential copies, no Fort provisioning.
-    let codex_home = agents::codex::canonical_native_home(paths, profile_id, entry)?;
-    fs::create_dir_all(&codex_home).with_context(|| format!("create {}", codex_home.display()))?;
-
-    let existing = find_codex_worker_state(paths, profile_id, Some(&worker_slot))?;
-    let restart_needed = existing.as_ref().is_some_and(|state| {
-        state.workspace != workspace.display().to_string()
-            || state.workdir != workdir.display().to_string()
-    });
-    let tmux_bin = "tmux";
-    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-    if restart_needed {
-        kill_tmux_session_if_present(tmux_bin, &tmux_term, &session_name);
-    }
-    if !tmux_session_exists(tmux_bin, &tmux_term, &session_name)? {
-        let window_name = codex_tmux_window_name(profile_id, profile_name.as_deref(), &worker_slot);
-        let launch_command = build_codex_launch_command(
-            home,
-            &codex_home,
-            &workdir,
-            profile_id,
-            &worker_slot,
-            env_entries,
-        );
-        let status = StdCommand::new(tmux_bin)
-            .env("TERM", &tmux_term)
-            .args(["new-session", "-d", "-s", &session_name, "-n", &window_name, &launch_command])
-            .status()
-            .with_context(|| format!("create tmux session {session_name}"))?;
-        if !status.success() {
-            anyhow::bail!("tmux failed to create session {session_name}");
-        }
-    }
-
-    let state = CodexWorkerState {
-        schema_version: default_codex_worker_state_schema_version(),
-        profile_id: profile_id.to_owned(),
-        worker_slot,
-        profile_name,
-        session_name,
-        workspace: workspace.display().to_string(),
-        workdir: workdir.display().to_string(),
-        updated_at: Utc::now().to_rfc3339(),
-    };
-    save_codex_worker_state(&state_path, &state)?;
-    Ok(state)
-}
-
-fn kill_tmux_session_if_present(tmux_bin: &str, tmux_term: &str, session_name: &str) {
-    if session_name.trim().is_empty() {
-        return;
-    }
-    let Ok(true) = tmux_session_exists(tmux_bin, tmux_term, session_name) else {
-        return;
-    };
-    let _ = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(["kill-session", "-t", session_name])
-        .status();
-}
-
-fn prompt_codex_remove_all(states: &[CodexWorkerState]) -> Result<bool> {
-    eprintln!(
-        "{}",
-        stderr_text(
-            &format!("Remove all {} codex worker sessions?", states.len()),
-            CliTone::Warning,
-        )
-    );
-    for item in states {
-        eprintln!(
-            "{} {} [{}] ({})",
-            stderr_text("-", CliTone::Muted),
-            stderr_text(&item.profile_id, CliTone::Command),
-            stderr_text(&item.worker_slot, CliTone::Label),
-            item.session_name,
-        );
-    }
-    eprint!("{} ", stderr_text("Type 'remove all' to confirm:", CliTone::Heading));
-    io::stderr().flush().context("flush codex remove-all prompt")?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).context("read codex remove-all confirmation")?;
-    Ok(input.trim() == "remove all")
-}
-
-fn stop_codex_worker_state(state: &CodexWorkerState) -> Result<CodexStopResultView> {
-    let tmux_bin = "tmux";
-    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-    kill_tmux_session_if_present(tmux_bin, &tmux_term, &state.session_name);
-    Ok(CodexStopResultView {
-        name: state.profile_id.clone(),
-        session_name: state.session_name.clone(),
-        profile_id: state.profile_id.clone(),
-        output: format!("stopped {}\n", state.session_name),
-    })
-}
-
-fn prompt_codex_stop_all(states: &[CodexWorkerState]) -> Result<bool> {
-    eprintln!(
-        "{}",
-        stderr_text(&format!("Stop all {} codex worker sessions?", states.len()), CliTone::Warning,)
-    );
-    for item in states {
-        eprintln!(
-            "{} {} [{}] ({})",
-            stderr_text("-", CliTone::Muted),
-            stderr_text(&item.profile_id, CliTone::Command),
-            stderr_text(&item.worker_slot, CliTone::Label),
-            item.session_name,
-        );
-    }
-    eprint!("{} ", stderr_text("Type 'stop all' to confirm:", CliTone::Heading));
-    io::stderr().flush().context("flush codex stop-all prompt")?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).context("read codex stop-all confirmation")?;
-    Ok(input.trim() == "stop all")
-}
-
-fn resolve_codex_worker_for_profile(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    purpose: &str,
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-) -> Result<CodexWorkerState> {
-    let (home, settings) = load_codex_runtime_settings(home, settings_file.clone())?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let states = read_codex_worker_states(&paths)?;
-    let requested_slot = worker_slot.map(str::trim).filter(|value| !value.is_empty());
-    let requested_slot = match requested_slot {
-        Some(slot) => Some(normalize_codex_worker_slot(Some(slot))?),
-        None => None,
-    };
-
-    if let Some(query) = profile.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Some(state) = states.iter().find(|item| {
-            item.session_name.eq_ignore_ascii_case(query)
-                && requested_slot
-                    .as_ref()
-                    .is_none_or(|slot| item.worker_slot.eq_ignore_ascii_case(slot))
-        }) {
-            return Ok(state.clone());
-        }
-    }
-
-    let agent_ctx = agents::store::AgentContext::load(Some(home.clone()), settings_file.clone())?;
-    let profile_id = agent_ctx.resolve_profile(si_config::ids::Provider::Codex, profile)?;
-    let mut matches = states
-        .into_iter()
-        .filter(|state| state.profile_id == profile_id)
-        .filter(|state| {
-            requested_slot.as_ref().is_none_or(|slot| state.worker_slot.eq_ignore_ascii_case(slot))
-        })
-        .collect::<Vec<_>>();
-    matches.sort_by(|left, right| left.worker_slot.cmp(&right.worker_slot));
-    match matches.as_slice() {
-        [state] => Ok(state.clone()),
-        [] => {
-            if let Some(slot) = requested_slot {
-                Err(anyhow!(
-                    "no codex worker session found for profile {profile_id:?} slot {slot:?}; run `si codex spawn --profile {profile_id} --slot {slot}` first"
-                ))
-            } else {
-                Err(anyhow!(
-                    "no codex worker session found for profile {profile_id:?}; run `si codex spawn --profile {profile_id}` first"
-                ))
-            }
-        }
-        _ => {
-            let slots = matches
-                .iter()
-                .map(|state| state.worker_slot.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            Err(anyhow!(
-                "multiple codex worker sessions found for profile {profile_id:?} ({slots}); pass --slot"
-            ))
-        }
-    }
-    .with_context(|| format!("resolve codex worker for {purpose}"))
-}
-
-fn remove_codex_worker_state(
-    paths: &SiPaths,
-    state: &CodexWorkerState,
-) -> Result<CodexRemoveResultView> {
-    let tmux_bin = "tmux";
-    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-    kill_tmux_session_if_present(tmux_bin, &tmux_term, &state.session_name);
-    let state_path = codex_worker_state_path(paths, &state.profile_id, &state.worker_slot);
-    if state_path.exists() {
-        fs::remove_file(&state_path).with_context(|| format!("remove {}", state_path.display()))?;
-    }
-    if state.worker_slot == DEFAULT_CODEX_WORKER_SLOT {
-        let legacy_path = codex_worker_legacy_state_path(paths, &state.profile_id);
-        if legacy_path.exists() {
-            fs::remove_file(&legacy_path)
-                .with_context(|| format!("remove {}", legacy_path.display()))?;
-        }
-    }
-    Ok(CodexRemoveResultView {
-        name: state.profile_id.clone(),
-        session_name: state.session_name.clone(),
-        profile_id: Some(state.profile_id.clone()),
-        output: format!("removed {}\n", state.session_name),
-    })
-}
-
-fn run_codex_remove_with_settings(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    all: bool,
-    format: OutputFormat,
-    home: Option<PathBuf>,
-    settings_file: Option<PathBuf>,
-) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(home, settings_file)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    if all {
-        let states = read_codex_worker_states(&paths)?;
-        if states.is_empty() {
-            match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&CodexRemoveAllResultView {
-                        aborted: false,
-                        removed: Vec::new(),
-                    })?
-                ),
-                OutputFormat::Text => println!("no codex worker sessions found"),
-            }
-            return Ok(());
-        }
-        let confirmed = prompt_codex_remove_all(&states)?;
-        if !confirmed {
-            match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&CodexRemoveAllResultView {
-                        aborted: true,
-                        removed: Vec::new(),
-                    })?
-                ),
-                OutputFormat::Text => println!("aborted"),
-            }
-            return Ok(());
-        }
-        let removed = states
-            .iter()
-            .map(|state| remove_codex_worker_state(&paths, state))
-            .collect::<Result<Vec<_>>>()?;
-        match format {
-            OutputFormat::Json => println!(
-                "{}",
-                serde_json::to_string_pretty(&CodexRemoveAllResultView {
-                    aborted: false,
-                    removed,
-                })?
-            ),
-            OutputFormat::Text => {
-                for item in removed {
-                    print!("{}", item.output);
-                }
-            }
-        }
-        return Ok(());
-    }
-
-    let target =
-        resolve_codex_worker_for_profile(profile, worker_slot, "remove", Some(home.clone()), None)?;
-    let view = remove_codex_worker_state(&paths, &target)?;
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => print!("{}", view.output),
-    }
-    Ok(())
-}
-
-fn run_codex_stop_with_settings(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    all: bool,
-    format: OutputFormat,
-    home: Option<PathBuf>,
-) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(home, None)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    if all {
-        let states = read_codex_worker_states(&paths)?;
-        if states.is_empty() {
-            match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&CodexStopAllResultView {
-                        aborted: false,
-                        stopped: Vec::new(),
-                    })?
-                ),
-                OutputFormat::Text => println!("no codex worker sessions found"),
-            }
-            return Ok(());
-        }
-        let confirmed = prompt_codex_stop_all(&states)?;
-        if !confirmed {
-            match format {
-                OutputFormat::Json => println!(
-                    "{}",
-                    serde_json::to_string_pretty(&CodexStopAllResultView {
-                        aborted: true,
-                        stopped: Vec::new(),
-                    })?
-                ),
-                OutputFormat::Text => println!("aborted"),
-            }
-            return Ok(());
-        }
-        let stopped = states.iter().map(stop_codex_worker_state).collect::<Result<Vec<_>>>()?;
-        match format {
-            OutputFormat::Json => println!(
-                "{}",
-                serde_json::to_string_pretty(&CodexStopAllResultView { aborted: false, stopped })?
-            ),
-            OutputFormat::Text => {
-                for item in stopped {
-                    print!("{}", item.output);
-                }
-            }
-        }
-        return Ok(());
-    }
-
-    let target = resolve_codex_worker_for_profile(profile, worker_slot, "stop", None, None)?;
-    let view = stop_codex_worker_state(&target)?;
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => print!("{}", view.output),
-    }
-    Ok(())
-}
-
-fn run_codex_stop(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    all: bool,
-    format: OutputFormat,
-) -> Result<()> {
-    run_codex_stop_with_settings(profile, worker_slot, all, format, None)
-}
-
-fn run_codex_remove(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    all: bool,
-    format: OutputFormat,
-) -> Result<()> {
-    run_codex_remove_with_settings(profile, worker_slot, all, format, None, None)
-}
-
-fn capture_tmux_session_output(session_name: &str, tail: &str) -> Result<String> {
-    let tmux_bin = "tmux";
-    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-    if !tmux_session_exists(tmux_bin, &tmux_term, session_name)? {
-        anyhow::bail!("tmux session {session_name:?} is not running");
-    }
-    let line_count = tail.trim().parse::<i32>().unwrap_or(200).max(1);
-    let start = format!("-{line_count}");
-    let output = StdCommand::new(tmux_bin)
-        .env("TERM", &tmux_term)
-        .args(["capture-pane", "-p", "-t", &format!("{session_name}:0.0"), "-S", &start])
-        .output()
-        .with_context(|| format!("capture tmux output for {session_name}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("tmux capture-pane failed: {}", stderr.trim());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn run_codex_tail(profile: Option<&str>, worker_slot: Option<&str>, tail: &str) -> Result<()> {
-    let target = resolve_codex_worker_for_profile(profile, worker_slot, "tail", None, None)?;
-    print!("{}", capture_tmux_session_output(&target.session_name, tail)?);
-    Ok(())
-}
-
-fn run_codex_shell(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    command: Vec<String>,
-) -> Result<()> {
-    if profile.is_none() && command.len() >= 2 && command[1] == "--" {
-        anyhow::bail!(
-            "legacy positional profile form for `si codex shell` is no longer supported; use `si codex shell --profile <profile> --slot <slot> -- <command>`"
-        );
-    }
-    let (home, settings) = load_codex_runtime_settings(None, None)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let target =
-        resolve_codex_worker_for_profile(profile, worker_slot, "shell", Some(home.clone()), None)?;
-    if command.is_empty() {
-        anyhow::bail!("shell command is required");
-    }
-    let entry = settings
-        .codex
-        .profiles
-        .entries
-        .get(&target.profile_id)
-        .ok_or_else(|| anyhow!("codex profile {:?} is not registered", target.profile_id))?;
-    let codex_home = agents::codex::canonical_native_home(&paths, &target.profile_id, entry)?;
-    let child_env = si_codex::adapter::CodexAdapter.profile_env(&codex_home);
-    let resolved_workdir = PathBuf::from(target.workdir.clone());
-    let mut process = StdCommand::new(&command[0]);
-    process
-        .args(&command[1..])
-        .current_dir(&resolved_workdir)
-        .env("HOME", &home)
-        .env("SI_PROVIDER", "codex")
-        .env("SI_PROFILE", &target.profile_id)
-        .env("SI_WORKER_SLOT", &target.worker_slot)
-        .env("TERM", env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
-    for (key, value) in &child_env.set {
-        process.env(key, value);
-    }
-    for key in &child_env.unset {
-        process.env_remove(key);
-    }
-    let status = process
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
-        .status()
-        .with_context(|| format!("run {}", command[0]))?;
-    if !status.success() {
-        anyhow::bail!("command failed: {status}");
-    }
-    Ok(())
-}
-
-fn run_codex_list(format: OutputFormat) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(None, None)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let tmux_bin = "tmux";
-    let tmux_term = env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-    let items = read_codex_worker_states(&paths)?
-        .into_iter()
-        .map(|item| {
-            let state = match tmux_session_exists(tmux_bin, &tmux_term, &item.session_name) {
-                Ok(true) => "running",
-                Ok(false) => "stopped",
-                Err(_) => "unknown",
-            };
-            let tmux_window_name = codex_tmux_window_name(
-                &item.profile_id,
-                item.profile_name.as_deref(),
-                &item.worker_slot,
-            );
-            CodexListEntryView {
-                profile_id: item.profile_id,
-                worker_slot: item.worker_slot,
-                session_name: item.session_name,
-                tmux_window_name,
-                state: state.to_owned(),
-                workspace: item.workspace,
-                workdir: item.workdir,
-            }
-        })
-        .collect::<Vec<_>>();
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&items)?),
-        OutputFormat::Text => {
-            if items.is_empty() {
-                println!("no codex worker sessions found");
-            } else {
-                let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS)
-                    .set_content_arrangement(ContentArrangement::Dynamic)
-                    .set_truncation_indicator("…");
-                if let Some(width) = env::var("COLUMNS")
-                    .ok()
-                    .and_then(|value| value.trim().parse::<u16>().ok())
-                    .filter(|width| *width > 20)
-                {
-                    table.set_width(width);
-                }
-                table.set_header(vec![
-                    Cell::new("Profile")
-                        .fg(cli_table_color(CliTone::Section))
-                        .add_attribute(Attribute::Bold),
-                    Cell::new("Slot")
-                        .fg(cli_table_color(CliTone::Label))
-                        .add_attribute(Attribute::Bold),
-                    Cell::new("State")
-                        .fg(cli_table_color(CliTone::Success))
-                        .add_attribute(Attribute::Bold),
-                ]);
-                table.set_constraints(vec![
-                    ColumnConstraint::UpperBoundary(Width::Fixed(24)),
-                    ColumnConstraint::UpperBoundary(Width::Fixed(20)),
-                    ColumnConstraint::Absolute(Width::Fixed(12)),
-                ]);
-                for item in items {
-                    let state_tone =
-                        if item.state == "running" { CliTone::Success } else { CliTone::Warning };
-                    table.add_row(vec![
-                        Cell::new(item.profile_id).fg(cli_table_color(CliTone::Section)),
-                        Cell::new(item.worker_slot).fg(cli_table_color(CliTone::Label)),
-                        Cell::new(item.state).fg(cli_table_color(state_tone)),
-                    ]);
-                }
-                println!("{table}");
-            }
-        }
-    }
-    Ok(())
 }
 
 fn run_codex_warmup(
@@ -5355,83 +4589,6 @@ fn codex_warmup_next_due(status: &CodexStatusView, profile_id: &str, now: DateTi
     due_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
-fn run_codex_tmux_command(
-    profile: Option<&str>,
-    worker_slot: Option<&str>,
-    format: Option<OutputFormat>,
-) -> Result<()> {
-    let (home, settings) = load_codex_runtime_settings(None, None)?;
-    let paths = SiPaths::from_settings(&home, &settings);
-    let target =
-        resolve_codex_worker_for_profile(profile, worker_slot, "tmux", Some(home.clone()), None)?;
-    let profile_display_name = target.profile_name.as_deref();
-    let session_name = target.session_name.clone();
-    let window_name =
-        codex_tmux_window_name(&target.profile_id, profile_display_name, &target.worker_slot);
-    let view = CodexTmuxCommandView {
-        profile_id: target.profile_id.clone(),
-        worker_slot: target.worker_slot.clone(),
-        session_name: session_name.clone(),
-        window_name: window_name.clone(),
-        launch_command: format!("tmux attach-session -t {}", shell_single_quote(&session_name)),
-        workspace: target.workspace.clone(),
-    };
-    if let Some(format) = format {
-        match format {
-            OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-            OutputFormat::Text => {
-                print_cli_kv("profile_id", &view.profile_id);
-                print_cli_kv("worker_slot", &view.worker_slot);
-                print_cli_kv("session_name", &view.session_name);
-                print_cli_kv("window_name", &view.window_name);
-                print_cli_kv("workspace", &view.workspace);
-                print_cli_kv("launch_command", &view.launch_command);
-            }
-        }
-        return Ok(());
-    }
-
-    let tmux_bin = "tmux";
-    let term = env::var("TERM").unwrap_or_default();
-    let tmux_term = if term.trim().is_empty() || term.trim() == "dumb" {
-        "xterm-256color"
-    } else {
-        term.trim()
-    };
-    if !tmux_session_exists(tmux_bin, tmux_term, &session_name)? {
-        let workspace = PathBuf::from(target.workspace.clone());
-        let workdir = PathBuf::from(target.workdir.clone());
-        let _ = ensure_codex_worker_session(
-            &home,
-            &paths,
-            &settings,
-            &target.profile_id,
-            &target.worker_slot,
-            workspace,
-            workdir,
-            &[],
-        )?;
-    }
-    apply_codex_tmux_repository_config(tmux_bin, tmux_term);
-    apply_codex_tmux_window_identity(tmux_bin, tmux_term, &session_name, &window_name);
-
-    let tmux_env = env::var_os("TMUX");
-    let attach_args = if tmux_env.is_some() {
-        vec!["switch-client", "-t", session_name.as_str()]
-    } else {
-        vec!["attach-session", "-t", session_name.as_str()]
-    };
-    let status = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(&attach_args)
-        .status()
-        .with_context(|| format!("attach tmux session {session_name}"))?;
-    if !status.success() {
-        anyhow::bail!("tmux failed to attach to session {session_name}");
-    }
-    Ok(())
-}
-
 fn sanitize_codex_tmux_profile_label(raw: &str) -> Option<String> {
     let mut out = String::new();
     let mut last_was_space = false;
@@ -5462,7 +4619,7 @@ fn codex_repo_emoji_for_slot(worker_slot: &str) -> Option<&'static str> {
     }
 }
 
-fn codex_tmux_window_name(
+pub(crate) fn codex_tmux_window_name(
     profile_id: &str,
     profile_display_name: Option<&str>,
     worker_slot: &str,
@@ -5476,58 +4633,6 @@ fn codex_tmux_window_name(
     } else {
         format!("{profile_label} [{slot}]")
     }
-}
-
-pub(crate) fn tmux_session_exists(tmux_bin: &str, tmux_term: &str, session_name: &str) -> Result<bool> {
-    let mut command = std::process::Command::new(tmux_bin);
-    command
-        .env("TERM", tmux_term)
-        .args(["has-session", "-t", session_name])
-        .stderr(std::process::Stdio::null());
-    let status = command.status().with_context(|| format!("check tmux session {session_name}"))?;
-    Ok(status.success())
-}
-
-fn codex_tmux_config_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("repo root from crate manifest")
-        .join("tools")
-        .join("tmux")
-        .join("codex-session.tmux.conf")
-}
-
-fn apply_codex_tmux_repository_config(tmux_bin: &str, tmux_term: &str) {
-    let config_path = codex_tmux_config_path();
-    if !config_path.is_file() {
-        return;
-    }
-    let _ = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(["source-file", &config_path.display().to_string()])
-        .status();
-}
-
-fn apply_codex_tmux_window_identity(
-    tmux_bin: &str,
-    tmux_term: &str,
-    session_name: &str,
-    window_name: &str,
-) {
-    if session_name.trim().is_empty() || window_name.trim().is_empty() {
-        return;
-    }
-    let target_window = format!("{session_name}:0");
-    let target_pane = format!("{session_name}:0.0");
-    let _ = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(["rename-window", "-t", &target_window, window_name])
-        .status();
-    let _ = std::process::Command::new(tmux_bin)
-        .env("TERM", tmux_term)
-        .args(["select-pane", "-t", &target_pane, "-T", window_name])
-        .status();
 }
 
 const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
