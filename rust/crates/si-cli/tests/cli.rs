@@ -3114,3 +3114,138 @@ fn codex_spawn_refuses_legacy_record_until_migrate() {
         .success();
     kill_owned_tmux_server(home.path());
 }
+
+#[test]
+fn codex_run_rejects_credential_argv_before_native_spawn() {
+    let home = tempdir().expect("home tempdir");
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    cargo_bin().args(["codex", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    let dump = bin_dir.path().join("native.dump");
+    write_executable_shell_script(
+        &bin_dir.path().join("codex"),
+        &format!("#!/bin/sh\necho SPAWNED >> {}\nexit 0\n", shell_escape_for_test(&dump)),
+    );
+    let path_env = path_with(bin_dir.path());
+    let jwt = format!("{}.{}.{}", "a".repeat(10), "b".repeat(40), "c".repeat(43));
+
+    let cases: Vec<(Vec<String>, &str)> = vec![
+        (vec!["login".to_owned()], "profile login"),
+        (vec!["logout".to_owned()], "profile logout"),
+        (vec!["--with-api-key".to_owned()], "profile login"),
+        (vec!["exec".to_owned(), "--with-access-token".to_owned()], "profile login"),
+        (vec!["-c".to_owned(), "api_key=x".to_owned(), "exec".to_owned()], "non-auth"),
+        (vec!["--oss".to_owned(), "exec".to_owned()], "enrolled"),
+        (vec!["exec".to_owned(), "sk-abcdefgh12345678".to_owned()], "stdin or files"),
+        (vec!["exec".to_owned(), jwt], "stdin or files"),
+    ];
+    for (argv, fragment) in &cases {
+        let mut full = vec!["codex", "run", "--profile", "a", "--home", home_arg.as_str(), "--"];
+        full.extend(argv.iter().map(String::as_str));
+        let output = cargo_bin()
+            .env("PATH", &path_env)
+            .args(&full)
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8(output).expect("utf8 stderr");
+        assert!(stderr.contains(fragment), "argv {argv:?}: {stderr}");
+    }
+    assert!(!dump.exists(), "rejected argv must never spawn the native");
+}
+
+#[test]
+fn codex_run_strips_all_auth_overrides_and_delivers_metachars_verbatim() {
+    let home = tempdir().expect("home tempdir");
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    cargo_bin().args(["codex", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    let dump = bin_dir.path().join("run.dump");
+    write_executable_shell_script(
+        &bin_dir.path().join("codex"),
+        &format!(
+            "#!/bin/sh\n{{\necho \"CODEX_HOME=$CODEX_HOME\"\necho \"OPENAI_API_KEY=${{OPENAI_API_KEY:-missing}}\"\necho \"CODEX_API_KEY=${{CODEX_API_KEY:-missing}}\"\necho \"CODEX_ACCESS_TOKEN=${{CODEX_ACCESS_TOKEN:-missing}}\"\nprintf 'ARG=<%s>\\n' \"$@\"\n}} >> {}\nexit 0\n",
+            shell_escape_for_test(&dump)
+        ),
+    );
+    let path_env = path_with(bin_dir.path());
+    let marker = bin_dir.path().join("pwned.marker");
+    // One argv token: metacharacters that a shell would execute. SI spawns
+    // directly, so the native must receive it byte-identical and nothing
+    // must execute.
+    let prompt = format!(
+        "explain 2>&1; touch {} | cat && echo $(touch {}) `touch {}` 'sq' \"dq\"",
+        marker.display(),
+        marker.display(),
+        marker.display()
+    );
+
+    cargo_bin()
+        .env("PATH", &path_env)
+        .env("OPENAI_API_KEY", "seeded-openai")
+        .env("CODEX_API_KEY", "seeded-codex")
+        .env("CODEX_ACCESS_TOKEN", "seeded-access")
+        .env("CODEX_HOME", "/hijack")
+        .args(["codex", "run", "--profile", "a", "--home", &home_arg, "--"])
+        .args(["-c", "model=gpt-5", "-p", "cfg", "login", "status", &prompt])
+        .assert()
+        .success();
+    let dumped = fs::read_to_string(&dump).expect("read run dump");
+    assert!(dumped.contains(&format!("CODEX_HOME={}/.si/codex/profiles/a", home.path().display())));
+    assert!(!dumped.contains("/hijack"));
+    for key in ["OPENAI_API_KEY=missing", "CODEX_API_KEY=missing", "CODEX_ACCESS_TOKEN=missing"] {
+        assert!(dumped.contains(key), "dump:\n{dumped}");
+    }
+    for token in ["-c", "model=gpt-5", "-p", "cfg", "login", "status"] {
+        assert!(dumped.contains(&format!("ARG=<{token}>")), "dump:\n{dumped}");
+    }
+    assert!(dumped.contains(&format!("ARG=<{prompt}>")), "dump:\n{dumped}");
+    assert!(!marker.exists(), "metacharacters in argv must never execute");
+}
+
+#[test]
+fn codex_spawn_rejects_credential_argv_without_side_effects() {
+    let home = tempdir().expect("home tempdir");
+    let _guard = TmuxGuard { home: home.path() };
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    let workspace = home.path().join("workspace");
+    fs::create_dir_all(&workspace).expect("mkdir workspace");
+    cargo_bin().args(["codex", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    write_fixture_codex_bin(bin_dir.path(), "exit 0\n");
+    let path_env = path_with(bin_dir.path());
+
+    for (argv, fragment) in [
+        (vec!["login"], "profile login"),
+        (vec!["--with-api-key"], "profile login"),
+        (vec!["-c", "model_provider=azure", "exec"], "non-auth"),
+    ] {
+        let mut full = vec![
+            "codex",
+            "spawn",
+            "--profile",
+            "a",
+            "--home",
+            &home_arg,
+            "--workspace",
+            workspace.to_str().expect("workspace"),
+            "--",
+        ];
+        full.extend(argv.iter().copied());
+        let output = cargo_bin()
+            .env("PATH", &path_env)
+            .args(&full)
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8(output).expect("utf8 stderr");
+        assert!(stderr.contains(fragment), "argv {argv:?}: {stderr}");
+    }
+    assert!(!home.path().join(".si/codex/workers/a/primary.json").exists());
+    assert!(!home.path().join(".si/codex/workers/a/primary.spec.json").exists());
+    assert!(!owned_tmux_server_alive(home.path()));
+}

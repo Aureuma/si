@@ -82,6 +82,54 @@ pub enum AdapterError {
     EmptyArgv,
     #[error("native {flag} overrides the SI-enforced credential store; remove it")]
     ConflictingStoreOverride { flag: String },
+    #[error(
+        "native {flag} would inject credentials into a managed {provider} launch; \
+         authenticate with `si {provider} profile login` or use native stdin facilities instead"
+    )]
+    CredentialSwitch { provider: &'static str, flag: String },
+    #[error(
+        "native `{command}` mutates credentials; use `si {provider} profile login` or \
+         `si {provider} profile logout` instead"
+    )]
+    CredentialMutatingCommand { provider: &'static str, command: String },
+    #[error(
+        "native `-c {key}` would override credential/auth configuration for a managed \
+         {provider} launch; only non-auth `-c` keys (model, sandbox, permissions) \
+         may pass through"
+    )]
+    CredentialConfigKey { provider: &'static str, key: String },
+    #[error(
+        "native {flag} changes the effective provider away from the enrolled {provider} \
+         account; managed launches stay on the enrolled account"
+    )]
+    ProviderOverride { provider: &'static str, flag: String },
+    #[error(
+        "native argv appears to contain credential material; pass secrets via stdin or \
+         files, never as command-line arguments"
+    )]
+    SecretShapedArgument { provider: &'static str },
+    #[error("invalid environment variable name {name:?}")]
+    InvalidEnvName { name: String },
+}
+
+/// Validate one environment variable name: non-empty, ASCII
+/// `[A-Za-z_][A-Za-z0-9_]*`, at most 256 bytes. Rejects shell metacharacters,
+/// whitespace, `=`, and non-ASCII bytes.
+pub fn validate_env_name(name: &str) -> Result<(), AdapterError> {
+    let mut chars = name.chars();
+    let valid = !name.is_empty()
+        && name.len() <= 256
+        && matches!(chars.next(), Some('A'..='Z' | 'a'..='z' | '_'))
+        && chars.all(|c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '_'));
+    if valid { Ok(()) } else { Err(AdapterError::InvalidEnvName { name: name.to_owned() }) }
+}
+
+/// Validate every variable name in a child-environment delta.
+pub fn validate_child_env(env: &ChildEnv) -> Result<(), AdapterError> {
+    for key in env.set.keys().chain(env.unset.iter()) {
+        validate_env_name(key)?;
+    }
+    Ok(())
 }
 
 /// Native command assembly and local status for one provider.
@@ -104,6 +152,11 @@ pub trait ProviderAdapter {
     fn logout_command(&self, program: &Path, native_root: &Path) -> CommandSpec;
 
     /// Managed model invocation: profile env, controlled workdir, typed argv.
+    ///
+    /// Implementations MUST reject credential-mutating argv (login/logout
+    /// subcommands, credential switches, auth `-c` keys, provider changes,
+    /// secret-shaped values) and MUST validate the child env names with
+    /// [`validate_child_env`] before applying them.
     fn run_command(
         &self,
         program: &Path,
@@ -119,7 +172,7 @@ pub trait ProviderAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthStatus, ChildEnv};
+    use super::{AdapterError, AuthStatus, ChildEnv, validate_child_env, validate_env_name};
     use crate::{CommandSpec, ProcessRunner, RunOptions};
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -137,6 +190,44 @@ mod tests {
         let output = ProcessRunner.run(&spec, &RunOptions::default()).expect("run probe");
         assert!(output.status.success());
         assert_eq!(String::from_utf8_lossy(&output.stdout), "/tmp/profiles/a|missing");
+    }
+
+    #[test]
+    fn env_name_validation_accepts_plain_names_and_rejects_metacharacters() {
+        for name in ["CODEX_HOME", "_x", "A1_b2", "Z"] {
+            assert_eq!(validate_env_name(name), Ok(()), "name {name:?} should pass");
+        }
+        for name in [
+            "", "9LIVES", "FOO;BAR", "A B", "A=B", "A$B", "A`B`", "A|B", "A&B", "A(B)", "A*B",
+            "A?B", "A'B", "A\"B", "A\\B", "A/B", "A:B", "A-B", "A.B", "ünicode",
+        ] {
+            assert_eq!(
+                validate_env_name(name),
+                Err(AdapterError::InvalidEnvName { name: name.to_owned() }),
+                "name {name:?} should fail"
+            );
+        }
+        assert_eq!(validate_env_name(&"A".repeat(256)), Ok(()));
+        assert!(matches!(
+            validate_env_name(&"A".repeat(257)),
+            Err(AdapterError::InvalidEnvName { .. })
+        ));
+    }
+
+    #[test]
+    fn child_env_validation_covers_set_and_unset_keys() {
+        let valid = ChildEnv::from_parts(
+            BTreeMap::from([("CODEX_HOME".to_owned(), "/tmp/profiles/a".to_owned())]),
+            BTreeSet::from(["OPENAI_API_KEY".to_owned()]),
+        );
+        assert_eq!(validate_child_env(&valid), Ok(()));
+        let bad_set = ChildEnv::from_parts(
+            BTreeMap::from([("EV;IL".to_owned(), "x".to_owned())]),
+            BTreeSet::new(),
+        );
+        assert!(matches!(validate_child_env(&bad_set), Err(AdapterError::InvalidEnvName { .. })));
+        let bad_unset = ChildEnv::from_parts(BTreeMap::new(), BTreeSet::from(["EV IL".to_owned()]));
+        assert!(matches!(validate_child_env(&bad_unset), Err(AdapterError::InvalidEnvName { .. })));
     }
 
     #[test]
