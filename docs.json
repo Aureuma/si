@@ -52,8 +52,6 @@
           {
             "group": "Runtime",
             "pages": [
-              "docs/FORT",
-              "docs/BROWSER",
               "docs/PLUGIN_MARKETPLACE",
               "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
               "docs/INTEGRATION_ECOSYSTEM"

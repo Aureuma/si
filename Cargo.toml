@@ -4,8 +4,6 @@ members = [
     "rust/crates/si-config",
     "rust/crates/si-command-manifest",
     "rust/crates/si-process",
-    "rust/crates/si-fort",
-    "rust/crates/si-warmup",
     "rust/crates/si-codex",
     "rust/crates/si-muse",
     "rust/crates/si-tools",
@@ -14,7 +12,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.60.30"
+version = "0.60.31"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/Aureuma/si"

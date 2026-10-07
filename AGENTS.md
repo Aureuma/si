@@ -14,7 +14,7 @@
 - After bumping the version, rebuild the SI binary on this host and update the mapped installed locations that SI uses, including the repo-local binary and the host-installed binary when applicable.
 - Prefer rebuild paths that reuse cached Cargo artifacts so incremental follow-up builds stay fast.
 # Secrets And Credential Access
-- Dotenv encryption lives in its own repo and binary (`vault`, github.com/Aureuma/vault); it is not an `si` subcommand. Operator secret access goes through `si fort`.
+- Dotenv encryption lives in its own repo and binary (`vault`, github.com/Aureuma/vault); it is not an `si` subcommand.
 ## Test Safety
 - Tests must never invoke bare `tmux`: always address an explicitly owned `-S` socket, since an inherited `TMUX` overrides `TMUX_TMPDIR` (on 2026-10-07 a test's `tmux kill-server` wiped the developer's live sessions).
 - `kill-server` in tests is only acceptable with `-S` against an owned socket via `TmuxGuard`; see `docs/testing.md` for the isolation rules.

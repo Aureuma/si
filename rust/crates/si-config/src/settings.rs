@@ -14,12 +14,6 @@ pub struct Settings {
     pub codex: CodexSettings,
     #[serde(default)]
     pub muse: MuseSettings,
-    #[serde(default)]
-    pub fort: FortSettings,
-    #[serde(default)]
-    pub surf: SurfSettings,
-    #[serde(default)]
-    pub viva: VivaSettings,
 }
 
 impl Settings {
@@ -42,8 +36,6 @@ impl Settings {
         let core_path =
             settings_file.map(Path::to_path_buf).unwrap_or_else(|| SettingsModule::Core.path(home));
         settings.merge_module_if_exists(SettingsModule::Core, &core_path)?;
-        settings.merge_module_if_exists(SettingsModule::Surf, &SettingsModule::Surf.path(home))?;
-        settings.merge_module_if_exists(SettingsModule::Viva, &SettingsModule::Viva.path(home))?;
         settings.apply_home_defaults(home);
         settings.apply_runtime_defaults();
         Ok(settings)
@@ -66,9 +58,6 @@ impl Settings {
             },
             codex: CodexSettings::default(),
             muse: MuseSettings::default(),
-            fort: FortSettings::default(),
-            surf: SurfSettings::default(),
-            viva: VivaSettings::default(),
         }
     }
 
@@ -111,16 +100,6 @@ impl Settings {
                 self.paths = payload.paths;
                 self.codex = payload.codex;
                 self.muse = payload.muse;
-                self.fort = payload.fort;
-                self.surf = payload.surf;
-            }
-            SettingsModule::Surf => {
-                let payload: SurfSettingsModule = toml::from_str(source)?;
-                self.surf.merge(payload.surf);
-            }
-            SettingsModule::Viva => {
-                let payload: VivaSettingsModule = toml::from_str(source)?;
-                self.viva = payload.viva;
             }
         }
 
@@ -150,9 +129,6 @@ impl Settings {
         normalize_option_string(&mut self.paths.workspace_root);
         self.codex.normalize();
         self.muse.normalize();
-        self.fort.normalize();
-        self.surf.normalize();
-        self.viva.normalize();
     }
 }
 
@@ -165,37 +141,17 @@ struct CoreSettingsModule {
     pub codex: CodexSettings,
     #[serde(default)]
     pub muse: MuseSettings,
-    #[serde(default)]
-    pub fort: FortSettings,
-    #[serde(default)]
-    pub surf: SurfSettings,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-struct SurfSettingsModule {
-    #[serde(default)]
-    pub surf: SurfSettings,
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-struct VivaSettingsModule {
-    #[serde(default)]
-    pub viva: VivaSettings,
 }
 
 #[derive(Clone, Copy, Debug)]
 enum SettingsModule {
     Core,
-    Surf,
-    Viva,
 }
 
 impl SettingsModule {
     fn as_str(self) -> &'static str {
         match self {
             Self::Core => "core",
-            Self::Surf => "surf",
-            Self::Viva => "viva",
         }
     }
 
@@ -203,8 +159,6 @@ impl SettingsModule {
         let root = crate::paths::resolve_si_root(home);
         match self {
             Self::Core => root.join("settings.toml"),
-            Self::Surf => root.join("surf").join("si.settings.toml"),
-            Self::Viva => root.join("viva").join("settings.toml"),
         }
     }
 }
@@ -360,233 +314,6 @@ impl MuseProfileEntry {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct FortSettings {
-    pub repo: Option<String>,
-    pub bin: Option<String>,
-    pub build: Option<bool>,
-    pub host: Option<String>,
-    pub runtime_host: Option<String>,
-}
-
-impl FortSettings {
-    fn normalize(&mut self) {
-        normalize_option_string(&mut self.repo);
-        normalize_option_string(&mut self.bin);
-        normalize_option_string(&mut self.host);
-        normalize_option_string(&mut self.runtime_host);
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct SurfSettings {
-    #[serde(default)]
-    pub repo: String,
-    #[serde(default)]
-    pub bin: String,
-    pub build: Option<bool>,
-    #[serde(default)]
-    pub settings_file: String,
-    #[serde(default)]
-    pub state_dir: String,
-    #[serde(default)]
-    pub vnc_password_fort_key: String,
-    #[serde(default)]
-    pub vnc_password_fort_repo: String,
-    #[serde(default)]
-    pub vnc_password_fort_env: String,
-    #[serde(default)]
-    pub tunnel: SurfTunnelSettings,
-}
-
-impl SurfSettings {
-    fn merge(&mut self, other: Self) {
-        if !other.repo.is_empty() {
-            self.repo = other.repo;
-        }
-        if !other.bin.is_empty() {
-            self.bin = other.bin;
-        }
-        if other.build.is_some() {
-            self.build = other.build;
-        }
-        if !other.settings_file.is_empty() {
-            self.settings_file = other.settings_file;
-        }
-        if !other.state_dir.is_empty() {
-            self.state_dir = other.state_dir;
-        }
-        if !other.vnc_password_fort_key.is_empty() {
-            self.vnc_password_fort_key = other.vnc_password_fort_key;
-        }
-        if !other.vnc_password_fort_repo.is_empty() {
-            self.vnc_password_fort_repo = other.vnc_password_fort_repo;
-        }
-        if !other.vnc_password_fort_env.is_empty() {
-            self.vnc_password_fort_env = other.vnc_password_fort_env;
-        }
-        self.tunnel.merge(other.tunnel);
-    }
-
-    fn normalize(&mut self) {
-        trim_string(&mut self.repo);
-        trim_string(&mut self.bin);
-        trim_string(&mut self.settings_file);
-        trim_string(&mut self.state_dir);
-        trim_string(&mut self.vnc_password_fort_key);
-        trim_string(&mut self.vnc_password_fort_repo);
-        if !self.vnc_password_fort_key.is_empty() && self.vnc_password_fort_repo.is_empty() {
-            self.vnc_password_fort_repo = "surf".to_owned();
-        }
-        self.vnc_password_fort_env = self.vnc_password_fort_env.trim().to_lowercase();
-        if !self.vnc_password_fort_key.is_empty() && self.vnc_password_fort_env.is_empty() {
-            self.vnc_password_fort_env = "dev".to_owned();
-        }
-        trim_string(&mut self.tunnel.name);
-        trim_string(&mut self.tunnel.fort_key);
-        self.tunnel.mode = normalize_choice(&self.tunnel.mode, &["quick", "token"]);
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct SurfTunnelSettings {
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub mode: String,
-    #[serde(default)]
-    pub fort_key: String,
-}
-
-impl SurfTunnelSettings {
-    fn merge(&mut self, other: Self) {
-        if !other.name.is_empty() {
-            self.name = other.name;
-        }
-        if !other.mode.is_empty() {
-            self.mode = other.mode;
-        }
-        if !other.fort_key.is_empty() {
-            self.fort_key = other.fort_key;
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct VivaSettings {
-    #[serde(default)]
-    pub repo: String,
-    #[serde(default)]
-    pub bin: String,
-    pub build: Option<bool>,
-    #[serde(default)]
-    pub tunnel: VivaTunnelSettings,
-}
-
-impl VivaSettings {
-    fn normalize(&mut self) {
-        trim_string(&mut self.repo);
-        trim_string(&mut self.bin);
-        self.tunnel.normalize();
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct VivaTunnelSettings {
-    #[serde(default)]
-    pub default_profile: String,
-    #[serde(default)]
-    pub profiles: BTreeMap<String, VivaTunnelProfile>,
-}
-
-impl VivaTunnelSettings {
-    fn normalize(&mut self) {
-        self.default_profile = self.default_profile.trim().to_lowercase();
-        if self.profiles.is_empty() {
-            return;
-        }
-
-        let mut normalized = BTreeMap::new();
-        for (key, profile) in std::mem::take(&mut self.profiles) {
-            let key = key.trim().to_lowercase();
-            if key.is_empty() {
-                continue;
-            }
-            normalized.insert(key, profile.normalized());
-        }
-        self.profiles = normalized;
-        if self.default_profile.is_empty() && self.profiles.contains_key("dev") {
-            self.default_profile = "dev".to_owned();
-        }
-        if !self.default_profile.is_empty() && !self.profiles.contains_key(&self.default_profile) {
-            self.default_profile.clear();
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct VivaTunnelProfile {
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub runtime_name: String,
-    #[serde(default)]
-    pub tunnel_id_env_key: String,
-    #[serde(default)]
-    pub credentials_env_key: String,
-    #[serde(default)]
-    pub metrics_addr: String,
-    pub no_autoupdate: Option<bool>,
-    #[serde(default)]
-    pub runtime_dir: String,
-    #[serde(default)]
-    pub fort_env_file: String,
-    #[serde(default)]
-    pub routes: Vec<VivaTunnelRoute>,
-}
-
-impl VivaTunnelProfile {
-    fn normalized(mut self) -> Self {
-        trim_string(&mut self.name);
-        trim_string(&mut self.runtime_name);
-        trim_string(&mut self.tunnel_id_env_key);
-        if self.tunnel_id_env_key.is_empty() {
-            self.tunnel_id_env_key = "VIVA_CLOUDFLARE_TUNNEL_ID".to_owned();
-        }
-        trim_string(&mut self.credentials_env_key);
-        if self.credentials_env_key.is_empty() {
-            self.credentials_env_key = "CLOUDFLARE_TUNNEL_CREDENTIALS_JSON".to_owned();
-        }
-        trim_string(&mut self.metrics_addr);
-        if self.no_autoupdate.is_none() {
-            self.no_autoupdate = Some(true);
-        }
-        trim_string(&mut self.runtime_dir);
-        trim_string(&mut self.fort_env_file);
-        self.routes = self
-            .routes
-            .into_iter()
-            .filter_map(|mut route| {
-                trim_string(&mut route.hostname);
-                trim_string(&mut route.service);
-                if route.service.is_empty() {
-                    return None;
-                }
-                Some(route)
-            })
-            .collect();
-        self
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct VivaTunnelRoute {
-    #[serde(default)]
-    pub hostname: String,
-    #[serde(default)]
-    pub service: String,
-}
-
 #[derive(Debug, Error)]
 pub enum LoadSettingsError {
     #[error("read {module} settings {path}: {source}")]
@@ -622,15 +349,6 @@ fn normalize_option_string(value: &mut Option<String>) {
             *current = trimmed.to_owned();
         }
     }
-}
-
-fn trim_string(value: &mut String) {
-    *value = value.trim().to_owned();
-}
-
-fn normalize_choice(raw: &str, allowed: &[&str]) -> String {
-    let normalized = raw.trim().to_lowercase();
-    if allowed.contains(&normalized.as_str()) { normalized } else { String::new() }
 }
 
 #[cfg(test)]
@@ -745,130 +463,5 @@ auth_updated = "2026-03-23T00:00:00Z"
             Some("~/.si/codex/profiles/profile-delta/auth.json")
         );
         assert_eq!(entry.auth_updated.as_deref(), Some("2026-03-23T00:00:00Z"));
-    }
-
-    #[test]
-    fn metadata_only_surf_settings_module_does_not_wipe_core_surf_config() {
-        let home = tempdir().expect("tempdir");
-        let root = home.path().join(".si");
-        let surf_dir = root.join("surf");
-        fs::create_dir_all(&surf_dir).expect("mkdir surf settings dir");
-        fs::write(
-            root.join("settings.toml"),
-            r#"
-schema_version = 1
-
-[surf]
-vnc_password_fort_key = "SURF_VNC_PASSWORD"
-vnc_password_fort_repo = "surf"
-vnc_password_fort_env = "dev"
-"#,
-        )
-        .expect("write core settings");
-        fs::write(
-            surf_dir.join("si.settings.toml"),
-            "schema_version = 1
-
-[metadata]
-updated_at = '2026-03-18T03:19:46Z'
-",
-        )
-        .expect("write metadata-only surf settings");
-
-        let settings = Settings::load(home.path(), None).expect("load settings");
-
-        assert_eq!(settings.surf.vnc_password_fort_key, "SURF_VNC_PASSWORD");
-        assert_eq!(settings.surf.vnc_password_fort_repo, "surf");
-        assert_eq!(settings.surf.vnc_password_fort_env, "dev");
-    }
-
-    #[test]
-    fn loads_surf_settings_module() {
-        let home = tempdir().expect("tempdir");
-        let settings_dir = home.path().join(".si").join("surf");
-        fs::create_dir_all(&settings_dir).expect("mkdir surf settings dir");
-        fs::write(
-            settings_dir.join("si.settings.toml"),
-            r#"
-[surf]
-repo = "/work/surf"
-bin = "/work/surf/bin/surf"
-build = true
-settings_file = "/home/user/.si/surf/settings.toml"
-state_dir = "/home/user/.surf-state"
-vnc_password_fort_key = "SURF_VNC_PASSWORD"
-vnc_password_fort_repo = "surf"
-vnc_password_fort_env = "dev"
-
-[surf.tunnel]
-name = "surf-cloudflared"
-mode = "token"
-fort_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
-"#,
-        )
-        .expect("write surf settings");
-
-        let settings = Settings::load(home.path(), None).expect("load settings");
-
-        assert_eq!(settings.surf.repo, "/work/surf");
-        assert_eq!(settings.surf.bin, "/work/surf/bin/surf");
-        assert_eq!(settings.surf.build, Some(true));
-        assert_eq!(settings.surf.vnc_password_fort_key, "SURF_VNC_PASSWORD");
-        assert_eq!(settings.surf.vnc_password_fort_repo, "surf");
-        assert_eq!(settings.surf.vnc_password_fort_env, "dev");
-        assert_eq!(settings.surf.tunnel.mode, "token");
-        assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
-    }
-
-    #[test]
-    fn loads_surf_tunnel_fort_key() {
-        let settings = Settings::from_toml(
-            r#"
-[surf.tunnel]
-mode = "token"
-fort_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
-"#,
-        )
-        .expect("settings should parse");
-
-        assert_eq!(settings.surf.tunnel.mode, "token");
-        assert_eq!(settings.surf.tunnel.fort_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
-    }
-
-    #[test]
-    fn loads_viva_tunnel_settings_module() {
-        let home = tempdir().expect("tempdir");
-        let settings_dir = home.path().join(".si").join("viva");
-        fs::create_dir_all(&settings_dir).expect("mkdir viva settings dir");
-        fs::write(
-            settings_dir.join("settings.toml"),
-            r#"
-[viva]
-repo = "/work/viva"
-bin = "/work/viva/bin/viva"
-
-[viva.tunnel]
-default_profile = "dev"
-
-[viva.tunnel.profiles.dev]
-runtime_name = "viva-cloudflared-dev-browser"
-fort_env_file = "/work/safe/sampleapp/.env.dev"
-
-[[viva.tunnel.profiles.dev.routes]]
-hostname = "dev.example.app"
-service = "http://127.0.0.1:3000"
-"#,
-        )
-        .expect("write viva settings");
-
-        let settings = Settings::load(home.path(), None).expect("load settings");
-
-        assert_eq!(settings.viva.repo, "/work/viva");
-        assert_eq!(settings.viva.bin, "/work/viva/bin/viva");
-        assert_eq!(settings.viva.tunnel.default_profile, "dev");
-        let profile = settings.viva.tunnel.profiles.get("dev").expect("dev profile");
-        assert_eq!(profile.runtime_name, "viva-cloudflared-dev-browser");
-        assert_eq!(profile.routes.len(), 1);
-        assert_eq!(profile.routes[0].hostname, "dev.example.app");
     }
 }

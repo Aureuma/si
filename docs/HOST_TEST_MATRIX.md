@@ -4,44 +4,40 @@ This is the strong local validation baseline for the Rust-only `si` chain on a r
 Run it from the `si` repo root:
 
 ```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-rust-host-matrix --
+cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all
 ```
 
 The matrix covers the direct runtime dependency chain:
 
-- `si`
-- sibling `fort`
-- sibling `surf`
+- `si` (Codex and Muse multi-account workers)
+- release/installer packaging via the dev-only `si-release` tool
 
-It is intentionally host-shaped instead of unit-test-only. The goal is to catch wrapper, path, process, and repo-to-repo integration regressions that pure package tests can miss.
+It is intentionally host-shaped instead of unit-test-only. The goal is to catch path, process, and packaging regressions that pure package tests can miss.
 
 ## Scenario matrix
 
 | Scenario | Command | Expected behavior |
 | --- | --- | --- |
-| Installer smoke | `cargo run --quiet --locked -p si-cli -- build installer smoke-host` | local installer build/install/uninstall completes successfully |
-| SI CLI integration | `cargo test -p si-cli --test cli --quiet` | command-surface and integration tests pass |
-| Fort repo validation | `cargo test --quiet --manifest-path ../fort/Cargo.toml` | sibling `fort` workspace tests pass |
-| Surf repo validation | `cargo test --workspace --quiet --manifest-path ../surf/Cargo.toml` | sibling `surf` workspace tests pass |
-| Live fort wrapper smoke | included in script | `si fort -- --json doctor` reaches a Fort-shaped HTTP stub and returns `health_status=200`, `ready_status=200` |
+| Rust workspace | `cargo test --workspace` | all package tests pass |
+| Installer smoke | `cargo run --quiet --locked -p si-tools --bin si-release -- installer host` | local installer build/install/uninstall completes successfully |
+| npm smoke | `cargo run --quiet --locked -p si-tools --bin si-release -- installer npm` | launcher package smoke passes |
+| SI CLI integration | `cargo test -p si-cli --test cli` | command-surface and integration tests pass |
+| Distribution doctor | `si doctor` | prerequisites report healthy |
 
 ## Why this exists
 
-- `cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all` is still the broad local stack.
+- `si-test-runner -- all` is the broad local stack.
 - This matrix is the narrower Rust-host gate for the operational chain that must work together on a developer machine.
 - It verifies behavior that previously regressed in practice:
   - stale `.artifacts` binaries shadowing current Rust source
-  - `si fort` failing on hosts without a preinstalled `fort` binary
-  - env-sensitive `surf` tests breaking under real host overrides
+  - installer/packaging drift against the workspace version
 
 ## Requirements
 
 - `cargo`
-- `python3`
-- sibling checkouts at `../fort` and `../surf`
+- `tmux` (for worker lifecycle tests)
 
 ## Failure interpretation
 
-- Installer failures usually mean packaging or wrapper issues.
-- `si fort` smoke failures usually mean wrapper resolution, repo discovery, or Fort request-path regressions.
-- Dependent repo failures should be fixed in the owning repo, then the full matrix rerun.
+- Installer failures usually mean packaging issues.
+- Worker lifecycle failures usually mean tmux socket, lease, or native-adapter regressions.

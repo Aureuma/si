@@ -13,7 +13,7 @@ fn main() -> ExitCode {
 
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
-        eprintln!("usage: si-test-runner <workspace|vault|all> [args]");
+        eprintln!("usage: si-test-runner <workspace|all> [args]");
         return ExitCode::from(2);
     }
 
@@ -21,7 +21,7 @@ fn main() -> ExitCode {
         "workspace" => run_workspace(&root, &args[1..]),
         "all" => run_all(&root, &args[1..]),
         _ => {
-            eprintln!("usage: si-test-runner <workspace|vault|all> [args]");
+            eprintln!("usage: si-test-runner <workspace|all> [args]");
             ExitCode::from(2)
         }
     }
@@ -73,13 +73,13 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--skip-npm" => skip_npm = true,
             "--help" | "-h" => {
                 println!(
-                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm]"
+                    "usage: si-test-runner all [--skip-workspace] [--skip-installer] [--skip-npm]"
                 );
                 return ExitCode::SUCCESS;
             }
             _ => {
                 eprintln!(
-                    "usage: si-test-runner all [--skip-workspace] [--skip-vault] [--skip-installer] [--skip-npm]"
+                    "usage: si-test-runner all [--skip-workspace] [--skip-installer] [--skip-npm]"
                 );
                 return ExitCode::from(2);
             }
@@ -99,9 +99,10 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--quiet",
             "--locked",
             "-p",
-            "si-cli",
+            "si-tools",
+            "--bin",
+            "si-release",
             "--",
-            "build",
             "installer",
             "smokehost",
         ])) != ExitCode::SUCCESS
@@ -116,9 +117,10 @@ fn run_all(root: &PathBuf, args: &[String]) -> ExitCode {
             "--quiet",
             "--locked",
             "-p",
-            "si-cli",
+            "si-tools",
+            "--bin",
+            "si-release",
             "--",
-            "build",
             "installer",
             "smokenpm",
         ])) != ExitCode::SUCCESS

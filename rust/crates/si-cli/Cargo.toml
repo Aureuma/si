@@ -8,32 +8,19 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-base64 = "0.22.1"
 chrono.workspace = true
 clap.workspace = true
 comfy-table = "7.1.4"
-ecies = { version = "0.2.10", default-features = false, features = ["std", "pure"] }
-flate2 = "1.1.2"
-hex = "0.4.3"
 libc.workspace = true
-regex.workspace = true
-reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
-tar = "0.4.44"
-tempfile.workspace = true
 toml.workspace = true
-tungstenite.workspace = true
-url.workspace = true
 si-command-manifest = { path = "../si-command-manifest" }
 si-codex = { path = "../si-codex" }
 si-muse = { path = "../si-muse" }
 si-config = { path = "../si-config" }
 si-core = { path = "../si-core" }
-si-fort = { path = "../si-fort" }
 si-process = { path = "../si-process" }
-si-warmup = { path = "../si-warmup" }
 
 [dev-dependencies]
 assert_cmd.workspace = true
