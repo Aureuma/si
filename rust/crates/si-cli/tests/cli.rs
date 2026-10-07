@@ -84,6 +84,28 @@ fn write_blocking_fixture_codex_bin(dir: &Path, marker: &str) -> PathBuf {
     )
 }
 
+fn write_fixture_muse_bin(dir: &Path, version: &str, behavior: &str) -> PathBuf {
+    let path = dir.join("muse");
+    write_executable_shell_script(
+        &path,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '{version}'; exit 0; fi\n{behavior}\n"
+        ),
+    );
+    path
+}
+
+/// Blocking fixture Muse native: dumps env/argv, prints a marker, sleeps 300s.
+fn write_blocking_fixture_muse_bin(dir: &Path, marker: &str) -> PathBuf {
+    write_fixture_muse_bin(
+        dir,
+        "Muse Code 1.4.3 (1.4.3-R5018.1)",
+        &format!(
+            "if [ -n \"$DUMP\" ]; then echo \"NATIVE_ARGV=$*\" >> \"$DUMP\"; echo \"NATIVE_CONFIG=$XDG_CONFIG_HOME\" >> \"$DUMP\"; echo \"NATIVE_DATA=$XDG_DATA_HOME\" >> \"$DUMP\"; echo \"NATIVE_AUTH_PATH=$MUSE_AUTH_PATH\" >> \"$DUMP\"; echo \"NATIVE_META_KEY=${{META_API_KEY:-missing}}\" >> \"$DUMP\"; echo \"NATIVE_PWD=$PWD\" >> \"$DUMP\"; fi\necho '{marker}'\nexec sleep 300\n"
+        ),
+    )
+}
+
 /// PATH env with `dir` first.
 fn path_with(dir: &Path) -> String {
     format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default())
@@ -3248,4 +3270,259 @@ fn codex_spawn_rejects_credential_argv_without_side_effects() {
     assert!(!home.path().join(".si/codex/workers/a/primary.json").exists());
     assert!(!home.path().join(".si/codex/workers/a/primary.spec.json").exists());
     assert!(!owned_tmux_server_alive(home.path()));
+}
+
+#[test]
+fn muse_run_enforces_env_contract_and_passes_argv_verbatim() {
+    let home = tempdir().expect("home tempdir");
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    cargo_bin().args(["muse", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    let dump = bin_dir.path().join("run.dump");
+    write_executable_shell_script(
+        &bin_dir.path().join("muse"),
+        &format!(
+            "#!/bin/sh\n{{\necho \"XDG_CONFIG_HOME=$XDG_CONFIG_HOME\"\necho \"XDG_DATA_HOME=$XDG_DATA_HOME\"\necho \"MUSE_AUTH_PATH=$MUSE_AUTH_PATH\"\necho \"META_API_KEY=${{META_API_KEY:-missing}}\"\nprintf 'ARG=<%s>\\n' \"$@\"\n}} >> {}\nexit 0\n",
+            shell_escape_for_test(&dump)
+        ),
+    );
+    let path_env = path_with(bin_dir.path());
+
+    cargo_bin()
+        .env("PATH", &path_env)
+        .env("META_API_KEY", "seeded-should-strip")
+        .env("MUSE_AUTH_PATH", "/hijack/auth.json")
+        .env("XDG_CONFIG_HOME", "/hijack-config")
+        .args(["muse", "run", "--profile", "a", "--home", &home_arg, "--"])
+        .args(["exec", "--provider", "echo", "hello"])
+        .assert()
+        .success();
+    let dumped = fs::read_to_string(&dump).expect("read run dump");
+    let root = format!("{}/.si/muse/profiles/a", home.path().display());
+    assert!(dumped.contains(&format!("XDG_CONFIG_HOME={root}/config")), "dump:\n{dumped}");
+    assert!(dumped.contains(&format!("XDG_DATA_HOME={root}/data")), "dump:\n{dumped}");
+    assert!(
+        dumped.contains(&format!("MUSE_AUTH_PATH={root}/config/muse/auth.json")),
+        "dump:\n{dumped}"
+    );
+    assert!(!dumped.contains("/hijack"), "dump:\n{dumped}");
+    assert!(dumped.contains("META_API_KEY=missing"), "dump:\n{dumped}");
+    for token in ["exec", "--provider", "echo", "hello"] {
+        assert!(dumped.contains(&format!("ARG=<{token}>")), "dump:\n{dumped}");
+    }
+}
+
+#[test]
+fn muse_run_rejects_credential_argv_before_native_spawn() {
+    let home = tempdir().expect("home tempdir");
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    cargo_bin().args(["muse", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    let dump = bin_dir.path().join("native.dump");
+    write_executable_shell_script(
+        &bin_dir.path().join("muse"),
+        &format!("#!/bin/sh\necho SPAWNED >> {}\nexit 0\n", shell_escape_for_test(&dump)),
+    );
+    let path_env = path_with(bin_dir.path());
+
+    let cases: Vec<(Vec<&str>, &str)> = vec![
+        (vec!["auth", "set", "--provider", "meta"], "profile login"),
+        (vec!["login"], "profile login"),
+        (vec!["logout"], "profile logout"),
+        (vec!["exec", "--api-key-stdin"], "profile login"),
+        (vec!["exec", "--provider", "local", "x"], "enrolled"),
+        (vec!["exec", "sk-abcdefgh12345678"], "stdin or files"),
+    ];
+    for (argv, fragment) in &cases {
+        let mut full = vec!["muse", "run", "--profile", "a", "--home", home_arg.as_str(), "--"];
+        full.extend(argv.iter().copied());
+        let output = cargo_bin()
+            .env("PATH", &path_env)
+            .args(&full)
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8(output).expect("utf8 stderr");
+        assert!(stderr.contains(fragment), "argv {argv:?}: {stderr}");
+    }
+    assert!(!dump.exists(), "rejected argv must never spawn the native");
+}
+
+#[test]
+fn muse_spawn_rejects_credential_argv_without_side_effects() {
+    let home = tempdir().expect("home tempdir");
+    let _guard = TmuxGuard { home: home.path() };
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+    let workspace = home.path().join("workspace");
+    fs::create_dir_all(&workspace).expect("mkdir workspace");
+    cargo_bin().args(["muse", "profile", "add", "a", "--home", &home_arg]).assert().success();
+    let bin_dir = tempdir().expect("bin tempdir");
+    write_fixture_muse_bin(bin_dir.path(), "Muse Code 1.4.3 (1.4.3-R5018.1)", "exit 0\n");
+    let path_env = path_with(bin_dir.path());
+
+    for (argv, fragment) in [
+        (vec!["login"], "profile login"),
+        (vec!["exec", "--api-key-stdin"], "profile login"),
+        (vec!["exec", "--provider", "local"], "enrolled"),
+    ] {
+        let mut full = vec![
+            "muse",
+            "spawn",
+            "--profile",
+            "a",
+            "--home",
+            &home_arg,
+            "--workspace",
+            workspace.to_str().expect("workspace"),
+            "--",
+        ];
+        full.extend(argv.iter().copied());
+        let output = cargo_bin()
+            .env("PATH", &path_env)
+            .args(&full)
+            .assert()
+            .failure()
+            .get_output()
+            .stderr
+            .clone();
+        let stderr = String::from_utf8(output).expect("utf8 stderr");
+        assert!(stderr.contains(fragment), "argv {argv:?}: {stderr}");
+    }
+    assert!(!home.path().join(".si/muse/workers/a/primary.json").exists());
+    assert!(!home.path().join(".si/muse/workers/a/primary.spec.json").exists());
+    assert!(!owned_tmux_server_alive(home.path()));
+}
+
+#[test]
+fn muse_spawn_stop_remove_lifecycle() {
+    let home = tempdir().expect("home tempdir");
+    let _guard = TmuxGuard { home: home.path() };
+    let workspace = home.path().join("workspace");
+    fs::create_dir_all(&workspace).expect("mkdir workspace");
+    let bin_dir = tempdir().expect("bin tempdir");
+    write_blocking_fixture_muse_bin(bin_dir.path(), "WORKER-M-READY");
+    let dump = bin_dir.path().join("dump.txt");
+    let path_env = path_with(bin_dir.path());
+    let home_arg = home.path().to_str().expect("home path").to_owned();
+
+    cargo_bin().args(["muse", "profile", "add", "a", "--home", &home_arg]).assert().success();
+
+    let spawned: Value = serde_json::from_slice(
+        &cargo_bin()
+            .env("PATH", &path_env)
+            .env("DUMP", &dump)
+            .env("META_API_KEY", "seeded-should-strip")
+            .args([
+                "muse",
+                "spawn",
+                "--profile",
+                "a",
+                "--home",
+                &home_arg,
+                "--workspace",
+                workspace.to_str().expect("workspace"),
+                "--format",
+                "json",
+                "--",
+                "exec",
+                "one",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone(),
+    )
+    .expect("parse spawn output");
+    assert_eq!(spawned["state"], "started");
+    assert_eq!(spawned["session"], "si-muse-pane-a");
+    assert!(owned_tmux_server_alive(home.path()));
+
+    // Foreground run is refused while the worker holds the lease.
+    cargo_bin()
+        .env("PATH", &path_env)
+        .args(["muse", "run", "--profile", "a", "--home", &home_arg, "--", "exec", "x"])
+        .assert()
+        .failure();
+
+    let listed = cargo_bin()
+        .env("PATH", &path_env)
+        .args(["muse", "list", "--home", &home_arg, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let workers: Value = serde_json::from_slice(&listed).expect("parse list output");
+    assert_eq!(workers.as_array().map(Vec::len), Some(1));
+    assert_eq!(workers[0]["profile"], "a");
+
+    cargo_bin()
+        .env("PATH", &path_env)
+        .args(["muse", "stop", "--profile", "a", "--home", &home_arg])
+        .assert()
+        .success();
+    cargo_bin()
+        .env("PATH", &path_env)
+        .args(["muse", "remove", "--profile", "a", "--home", &home_arg])
+        .assert()
+        .success();
+    assert!(!home.path().join(".si/muse/workers/a/primary.json").exists());
+    kill_owned_tmux_server(home.path());
+}
+
+#[test]
+fn doctor_reports_native_provider_support() {
+    let bin_dir = tempdir().expect("bin tempdir");
+    write_fixture_codex_bin(bin_dir.path(), "exit 0\n");
+    write_fixture_muse_bin(bin_dir.path(), "Muse Code 1.4.3 (1.4.3-R5018.1)", "exit 0\n");
+    let path_env = path_with(bin_dir.path());
+
+    let text = cargo_bin()
+        .env("PATH", &path_env)
+        .args(["doctor"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(text).expect("utf8 doctor");
+    assert!(text.contains("native providers:"), "{text}");
+    assert!(text.contains("[supported;"), "{text}");
+    assert!(text.contains("Muse Code 1.4.3 (1.4.3-R5018.1)"), "{text}");
+
+    let json = cargo_bin()
+        .env("PATH", &path_env)
+        .args(["doctor", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let view: Value = serde_json::from_slice(&json).expect("parse doctor json");
+    let native = view["native"].as_array().expect("native array");
+    assert_eq!(native.len(), 2);
+    let muse = native.iter().find(|entry| entry["provider"] == "muse").expect("muse entry");
+    assert_eq!(muse["support"], "supported");
+    assert_eq!(muse["version"], "Muse Code 1.4.3 (1.4.3-R5018.1)");
+    assert_eq!(muse["tested_version"], "Muse Code 1.4.3 (1.4.3-R5018.1)");
+    assert_eq!(muse["platform"], "supported");
+
+    // A version SI has not verified reports unverified, never supported.
+    let bin_dir2 = tempdir().expect("bin tempdir 2");
+    write_fixture_muse_bin(bin_dir2.path(), "Muse Code 9.9.9 (9.9.9-R0000.0)", "exit 0\n");
+    let path_env2 = path_with(bin_dir2.path());
+    let text2 = cargo_bin()
+        .env("PATH", &path_env2)
+        .args(["doctor"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text2 = String::from_utf8(text2).expect("utf8 doctor 2");
+    assert!(text2.contains("[unverified;"), "{text2}");
+    assert!(text2.contains("re-run the auth-destination checks"), "{text2}");
 }

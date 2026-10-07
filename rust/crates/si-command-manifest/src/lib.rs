@@ -5,6 +5,7 @@ use serde::Serialize;
 pub enum CommandCategory {
     Meta,
     Codex,
+    Muse,
     Provider,
     Runtime,
     Developer,
@@ -69,6 +70,13 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         aliases: &[],
         category: CommandCategory::Codex,
         summary: "Manage profile-bound Codex workers and profile registry state.",
+        hidden: false,
+    },
+    CommandSpec {
+        name: "muse",
+        aliases: &[],
+        category: CommandCategory::Muse,
+        summary: "Manage profile-bound Muse workers and profile registry state.",
         hidden: false,
     },
     CommandSpec {

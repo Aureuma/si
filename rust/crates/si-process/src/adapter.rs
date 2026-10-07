@@ -132,6 +132,120 @@ pub fn validate_child_env(env: &ChildEnv) -> Result<(), AdapterError> {
     Ok(())
 }
 
+/// Normalize a `--long` token to its flag name (lowercase, `_` unified to
+/// `-`, value cut at `=`), or `None` for non-long tokens.
+pub fn long_flag_name(arg: &str) -> Option<String> {
+    let body = arg.strip_prefix("--")?;
+    if body.is_empty() || body.starts_with('-') {
+        return None;
+    }
+    let name = body.split('=').next().unwrap_or("");
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_ascii_lowercase().replace('_', "-"))
+}
+
+/// Locate the native subcommand: the first positional token after skipping
+/// global flags and their values. `long_value_flags` holds normalized
+/// long-flag names that consume the following token; `short_value_flags`
+/// holds short-flag bytes with the same behavior (attached values stay on
+/// one token). Unknown flags are skipped singly (fail-open) so future
+/// native flags keep working. Returns the subcommand index.
+pub fn detect_subcommand(
+    argv: &[String],
+    long_value_flags: &[&str],
+    short_value_flags: &[u8],
+) -> Option<usize> {
+    let mut index = 0;
+    let mut end_of_flags = false;
+    while index < argv.len() {
+        let arg = argv[index].as_str();
+        if end_of_flags {
+            return Some(index);
+        }
+        if arg == "--" {
+            end_of_flags = true;
+            index += 1;
+            continue;
+        }
+        if let Some(name) = long_flag_name(arg) {
+            index += 1;
+            if !arg.contains('=') && long_value_flags.contains(&name.as_str()) {
+                index += 1;
+            }
+            continue;
+        }
+        let bytes = arg.as_bytes();
+        if bytes.len() >= 2 && bytes[0] == b'-' && bytes[1] != b'-' {
+            index += 1;
+            if bytes.len() == 2 && short_value_flags.contains(&bytes[1]) {
+                index += 1;
+            }
+            continue;
+        }
+        return Some(index);
+    }
+    None
+}
+
+fn is_b64url_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'
+}
+
+/// JWT/JWE shape: 3+ dot-separated segments, every segment at least 8
+/// base64url bytes, 32+ bytes total. Short dotted tokens (versions, hosts,
+/// small filenames) never match.
+fn looks_like_jwt(token: &str) -> bool {
+    if token.len() < 32 {
+        return false;
+    }
+    let segments: Vec<&str> = token.split('.').collect();
+    segments.len() >= 3
+        && segments.iter().all(|segment| segment.len() >= 8 && segment.bytes().all(is_b64url_byte))
+}
+
+/// Whether a single argv token looks like a bare secret: OpenAI-style
+/// `sk-…`, GitHub `gh*_…` / `github_pat_…`, Slack `xox*-…`, AWS `AKIA…`,
+/// JWT/JWE shapes. Multi-word prompts and `key=value` tokens never match:
+/// prompts contain spaces, and `=`, `/`, `+` are outside every shape
+/// alphabet. Provider-neutral: any leaked secret is rejected in any
+/// managed launch regardless of which provider it targets.
+pub fn looks_like_bare_secret(token: &str) -> bool {
+    const PREFIXED: &[(&str, usize)] = &[
+        ("sk-", 8),
+        ("ghp_", 8),
+        ("gho_", 8),
+        ("ghs_", 8),
+        ("ghr_", 8),
+        ("ghu_", 8),
+        ("github_pat_", 8),
+        ("xoxb-", 8),
+        ("xoxp-", 8),
+        ("xoxa-", 8),
+        ("xoxr-", 8),
+        ("xoxs-", 8),
+    ];
+    if looks_like_jwt(token) {
+        return true;
+    }
+    if let Some(rest) = token.strip_prefix("AKIA")
+        && rest.len() == 16
+        && rest.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+    {
+        return true;
+    }
+    for (prefix, min_tail) in PREFIXED {
+        if let Some(rest) = token.strip_prefix(prefix)
+            && rest.len() >= *min_tail
+            && rest.bytes().all(is_b64url_byte)
+        {
+            return true;
+        }
+    }
+    false
+}
+
 /// Native command assembly and local status for one provider.
 ///
 /// Implementations live in the provider crates (`si-codex`, `si-muse`) and
