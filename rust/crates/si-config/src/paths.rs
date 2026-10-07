@@ -1,4 +1,4 @@
-use crate::ids::{ProfileId, Provider, SlotId};
+use crate::ids::{Provider, SlotId};
 use crate::settings::Settings;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,6 +19,25 @@ pub fn resolve_si_root_with(home: &Path, si_home: Option<String>) -> PathBuf {
     match si_home.map(|raw| raw.trim().to_owned()) {
         Some(raw) if !raw.is_empty() => expand_home(&raw, home),
         _ => home.join(".si"),
+    }
+}
+
+/// Reject profile keys that cannot be embedded in a path (separators, `..`).
+/// Entry points report this as a command error; path helpers panic on it.
+pub fn check_profile_key_for_paths(key: &str) -> Result<(), String> {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return Err("profile key is empty".to_owned());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed == ".." {
+        return Err(format!("profile key {key:?} cannot be used in a path"));
+    }
+    Ok(())
+}
+
+fn guard_profile_key(key: &str) {
+    if let Err(detail) = check_profile_key_for_paths(key) {
+        panic!("{detail}");
     }
 }
 
@@ -48,22 +67,35 @@ impl SiPaths {
     }
 
     pub fn from_settings(home: &Path, settings: &Settings) -> Self {
+        // A set SI_HOME wins over stored path overrides so hermetic roots and
+        // portable installations move as one tree. Otherwise stored settings
+        // win over defaults. (An explicitly passed settings *file* still
+        // selects which file is read; this only resolves derived paths.)
+        let si_home_override = std::env::var(SI_HOME_ENV).is_ok_and(|raw| !raw.trim().is_empty());
         let mut resolved = Self::discover(home);
 
-        if let Some(root) = settings.paths.root.as_deref() {
-            resolved.root = expand_home(root, home);
+        if !si_home_override {
+            if let Some(root) = settings.paths.root.as_deref() {
+                resolved.root = expand_home(root, home);
+            }
         }
-        if let Some(settings_file) = settings.paths.settings_file.as_deref() {
+        if let Some(settings_file) = settings.paths.settings_file.as_deref()
+            && !si_home_override
+        {
             resolved.settings_file = expand_home(settings_file, home);
         } else {
             resolved.settings_file = resolved.root.join("settings.toml");
         }
-        if let Some(codex_profiles_dir) = settings.paths.codex_profiles_dir.as_deref() {
+        if let Some(codex_profiles_dir) = settings.paths.codex_profiles_dir.as_deref()
+            && !si_home_override
+        {
             resolved.codex_profiles_dir = expand_home(codex_profiles_dir, home);
         } else {
             resolved.codex_profiles_dir = resolved.root.join("codex").join("profiles");
         }
-        if let Some(muse_profiles_dir) = settings.paths.muse_profiles_dir.as_deref() {
+        if let Some(muse_profiles_dir) = settings.paths.muse_profiles_dir.as_deref()
+            && !si_home_override
+        {
             resolved.muse_profiles_dir = expand_home(muse_profiles_dir, home);
         } else {
             resolved.muse_profiles_dir = resolved.root.join("muse").join("profiles");
@@ -86,8 +118,12 @@ impl SiPaths {
     }
 
     /// Default canonical native root for a (new) profile: `<profiles>/<id>/`.
-    pub fn default_native_root(&self, provider: Provider, profile: &ProfileId) -> PathBuf {
-        self.profiles_dir(provider).join(profile.as_str())
+    ///
+    /// New IDs are validated slugs; legacy keys pass through after a
+    /// traversal guard so pre-refocus profiles keep working.
+    pub fn default_native_root(&self, provider: Provider, profile: &str) -> PathBuf {
+        guard_profile_key(profile);
+        self.profiles_dir(provider).join(profile.trim())
     }
 
     /// Worker lifecycle records: `<root>/<provider>/workers/`.
@@ -96,13 +132,9 @@ impl SiPaths {
     }
 
     /// One worker record: `<root>/<provider>/workers/<profile>/<slot>.json`.
-    pub fn worker_record_path(
-        &self,
-        provider: Provider,
-        profile: &ProfileId,
-        slot: &SlotId,
-    ) -> PathBuf {
-        self.workers_dir(provider).join(profile.as_str()).join(format!("{}.json", slot.as_str()))
+    pub fn worker_record_path(&self, provider: Provider, profile: &str, slot: &SlotId) -> PathBuf {
+        guard_profile_key(profile);
+        self.workers_dir(provider).join(profile.trim()).join(format!("{}.json", slot.as_str()))
     }
 
     /// Profile locks: `<root>/locks/<provider>/`.
@@ -111,8 +143,23 @@ impl SiPaths {
     }
 
     /// Management lock for one profile: `<root>/locks/<provider>/<profile>.lock`.
-    pub fn profile_lock_path(&self, provider: Provider, profile: &ProfileId) -> PathBuf {
-        self.locks_dir(provider).join(format!("{}.lock", profile.as_str()))
+    pub fn profile_lock_path(&self, provider: Provider, profile: &str) -> PathBuf {
+        guard_profile_key(profile);
+        self.locks_dir(provider).join(format!("{}.lock", profile.trim()))
+    }
+
+    /// Worker-admission lease for one profile:
+    /// `<root>/locks/<provider>/<profile>.worker.lock`. Held for the whole
+    /// duration of a credential-using worker; one holder per profile until
+    /// same-profile concurrency is proven for the native version.
+    pub fn worker_lease_path(&self, provider: Provider, profile: &str) -> PathBuf {
+        guard_profile_key(profile);
+        self.locks_dir(provider).join(format!("{}.worker.lock", profile.trim()))
+    }
+
+    /// Global settings write lock: `<root>/locks/settings.lock`.
+    pub fn settings_lock_path(&self) -> PathBuf {
+        self.root.join("locks").join("settings.lock")
     }
 
     pub fn load(home: &Path, settings_file: Option<&Path>) -> Result<Self, LoadPathsError> {
@@ -260,21 +307,35 @@ codex_profiles_dir = "~/state/si/codex-profiles"
 
     #[test]
     fn derives_provider_lock_and_worker_paths() {
-        use crate::ids::{ProfileId, Provider, SlotId};
+        use crate::ids::{Provider, SlotId};
         let paths = SiPaths::from_home(Path::new("/home/user"));
-        let profile = ProfileId::parse("personal").expect("profile");
         let slot = SlotId::or_primary(None).expect("slot");
         assert_eq!(
-            paths.default_native_root(Provider::Muse, &profile),
+            paths.default_native_root(Provider::Muse, "personal"),
             Path::new("/home/user/.si/muse/profiles/personal")
         );
         assert_eq!(
-            paths.worker_record_path(Provider::Codex, &profile, &slot),
+            paths.worker_record_path(Provider::Codex, "personal", &slot),
             Path::new("/home/user/.si/codex/workers/personal/primary.json")
         );
         assert_eq!(
-            paths.profile_lock_path(Provider::Muse, &profile),
+            paths.profile_lock_path(Provider::Muse, "personal"),
             Path::new("/home/user/.si/locks/muse/personal.lock")
         );
+        assert_eq!(
+            paths.worker_lease_path(Provider::Codex, "personal"),
+            Path::new("/home/user/.si/locks/codex/personal.worker.lock")
+        );
+        assert_eq!(paths.settings_lock_path(), Path::new("/home/user/.si/locks/settings.lock"));
+    }
+
+    #[test]
+    fn profile_key_guard_rejects_traversal() {
+        use super::check_profile_key_for_paths;
+        assert!(check_profile_key_for_paths("personal").is_ok());
+        assert!(check_profile_key_for_paths("legacy display name").is_ok());
+        assert!(check_profile_key_for_paths("a/b").is_err());
+        assert!(check_profile_key_for_paths("..").is_err());
+        assert!(check_profile_key_for_paths("  ").is_err());
     }
 }

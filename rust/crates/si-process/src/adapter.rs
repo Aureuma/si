@@ -80,6 +80,8 @@ pub enum AdapterError {
     EmptyProgram,
     #[error("native argv is empty")]
     EmptyArgv,
+    #[error("native {flag} overrides the SI-enforced credential store; remove it")]
+    ConflictingStoreOverride { flag: String },
 }
 
 /// Native command assembly and local status for one provider.

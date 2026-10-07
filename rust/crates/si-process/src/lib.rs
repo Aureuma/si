@@ -202,6 +202,27 @@ impl ProcessRunner {
 
         Ok(CommandOutput { status, stdout, stderr })
     }
+
+    /// Spawn with fully inherited stdio, wait, and return the exit status.
+    ///
+    /// Used for interactive native login and foreground `run`, where the
+    /// child owns the terminal and SI only forwards the outcome.
+    pub fn status_inherit(&self, spec: &CommandSpec) -> Result<ExitStatus, ProcessError> {
+        let mut command = Command::new(&spec.program);
+        command.args(&spec.args);
+        if let Some(current_dir) = &spec.current_dir {
+            command.current_dir(current_dir);
+        }
+        for (key, value) in &spec.env {
+            command.env(key, value);
+        }
+        for key in &spec.env_remove {
+            command.env_remove(key);
+        }
+        command.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        let mut child = spawn_command_with_retry(command, &spec.program)?;
+        child.wait().map_err(|source| ProcessError::Wait { program: spec.program.clone(), source })
+    }
 }
 
 fn spawn_command_with_retry(mut command: Command, program: &str) -> Result<Child, ProcessError> {
@@ -407,6 +428,13 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn inherit_forwards_exit_status() {
+        let runner = ProcessRunner;
+        let status = runner.status_inherit(&sh("exit 7")).expect("run process");
+        assert_eq!(status.code(), Some(7));
     }
 
     #[test]

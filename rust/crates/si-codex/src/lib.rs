@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+pub mod adapter;
 
 use chrono::{Local, TimeZone};
 use serde::Deserialize;
@@ -8,20 +7,6 @@ use thiserror::Error;
 
 pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 pub const DEFAULT_CODEX_WORKER_SLOT: &str = "primary";
-pub const CODEX_PROFILE_FORT_DIR_NAME: &str = "fort";
-pub const CODEX_PROFILE_FORT_SESSION_FILE_NAME: &str = "session.json";
-pub const CODEX_PROFILE_FORT_ACCESS_TOKEN_FILE_NAME: &str = "access.token";
-pub const CODEX_PROFILE_FORT_REFRESH_TOKEN_FILE_NAME: &str = "refresh.token";
-pub const CODEX_PROFILE_FORT_RUNTIME_LOCK_FILE_NAME: &str = "runtime.lock";
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CodexProfileFortSessionPaths {
-    pub dir: PathBuf,
-    pub session_path: PathBuf,
-    pub access_token_path: PathBuf,
-    pub refresh_token_path: PathBuf,
-    pub lock_path: PathBuf,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PromptSegment {
@@ -103,35 +88,6 @@ pub fn codex_tmux_session_name_for_slot(profile_id: &str, worker_slot: &str) -> 
     } else {
         format!("{TMUX_SESSION_PREFIX}{suffix}")
     }
-}
-
-pub fn codex_fort_agent_id(profile_id: &str, worker_slot: &str) -> String {
-    let profile = profile_id.trim();
-    let slot = codex_worker_slot_name(Some(worker_slot));
-    if slot == DEFAULT_CODEX_WORKER_SLOT {
-        format!("si-codex-{profile}")
-    } else {
-        format!("si-codex-{profile}--{slot}")
-    }
-}
-
-pub fn codex_profile_fort_session_paths(codex_home: &Path) -> CodexProfileFortSessionPaths {
-    let dir = codex_home.join(CODEX_PROFILE_FORT_DIR_NAME);
-    CodexProfileFortSessionPaths {
-        session_path: dir.join(CODEX_PROFILE_FORT_SESSION_FILE_NAME),
-        access_token_path: dir.join(CODEX_PROFILE_FORT_ACCESS_TOKEN_FILE_NAME),
-        refresh_token_path: dir.join(CODEX_PROFILE_FORT_REFRESH_TOKEN_FILE_NAME),
-        lock_path: dir.join(CODEX_PROFILE_FORT_RUNTIME_LOCK_FILE_NAME),
-        dir,
-    }
-}
-
-pub fn codex_profile_fort_runtime_env(codex_home: &Path) -> BTreeMap<String, String> {
-    let paths = codex_profile_fort_session_paths(codex_home);
-    BTreeMap::from([
-        ("FORT_TOKEN_PATH".to_owned(), paths.access_token_path.display().to_string()),
-        ("FORT_REFRESH_TOKEN_PATH".to_owned(), paths.refresh_token_path.display().to_string()),
-    ])
 }
 
 pub fn build_codex_app_server_status_input(
@@ -551,13 +507,11 @@ fn is_transient_report(lines: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_codex_app_server_status_input, codex_fort_agent_id, codex_profile_fort_runtime_env,
-        codex_profile_fort_session_paths, codex_tmux_session_name,
+        build_codex_app_server_status_input, codex_tmux_session_name,
         codex_tmux_session_name_for_slot, codex_worker_instance_name, codex_worker_slot_name,
         parse_codex_app_server_status, parse_prompt_segments_dual, parse_report_capture,
     };
     use serde_json::json;
-    use std::path::Path;
 
     #[test]
     fn codex_tmux_session_name_uses_profile_slug() {
@@ -583,50 +537,6 @@ mod tests {
         assert_eq!(
             codex_tmux_session_name_for_slot("ferma", "review"),
             "si-codex-pane-ferma-review"
-        );
-    }
-
-    #[test]
-    fn codex_fort_agent_id_is_slot_aware() {
-        assert_eq!(codex_fort_agent_id("ferma", "primary"), "si-codex-ferma");
-        assert_eq!(codex_fort_agent_id("ferma", "review"), "si-codex-ferma--review");
-    }
-
-    #[test]
-    fn codex_profile_fort_session_paths_are_under_codex_home() {
-        let paths =
-            codex_profile_fort_session_paths(Path::new("/tmp/home/.si/codex/profiles/cadma"));
-
-        assert_eq!(paths.dir, Path::new("/tmp/home/.si/codex/profiles/cadma/fort"));
-        assert_eq!(
-            paths.session_path,
-            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/session.json")
-        );
-        assert_eq!(
-            paths.access_token_path,
-            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/access.token")
-        );
-        assert_eq!(
-            paths.refresh_token_path,
-            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/refresh.token")
-        );
-        assert_eq!(
-            paths.lock_path,
-            Path::new("/tmp/home/.si/codex/profiles/cadma/fort/runtime.lock")
-        );
-    }
-
-    #[test]
-    fn codex_profile_fort_runtime_env_exports_token_paths() {
-        let env = codex_profile_fort_runtime_env(Path::new("/tmp/home/.si/codex/profiles/cadma"));
-
-        assert_eq!(
-            env.get("FORT_TOKEN_PATH").map(String::as_str),
-            Some("/tmp/home/.si/codex/profiles/cadma/fort/access.token")
-        );
-        assert_eq!(
-            env.get("FORT_REFRESH_TOKEN_PATH").map(String::as_str),
-            Some("/tmp/home/.si/codex/profiles/cadma/fort/refresh.token")
         );
     }
 
