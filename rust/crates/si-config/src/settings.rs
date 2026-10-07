@@ -13,6 +13,8 @@ pub struct Settings {
     #[serde(default)]
     pub codex: CodexSettings,
     #[serde(default)]
+    pub muse: MuseSettings,
+    #[serde(default)]
     pub fort: FortSettings,
     #[serde(default)]
     pub surf: SurfSettings,
@@ -48,9 +50,10 @@ impl Settings {
     }
 
     pub fn with_home_defaults(home: &Path) -> Self {
-        let root = home.join(".si");
+        let root = crate::paths::resolve_si_root(home);
         let settings_file = root.join("settings.toml");
         let codex_profiles_dir = root.join("codex").join("profiles");
+        let muse_profiles_dir = root.join("muse").join("profiles");
 
         Self {
             schema_version: default_schema_version(),
@@ -58,9 +61,11 @@ impl Settings {
                 root: Some(path_string(&root)),
                 settings_file: Some(path_string(&settings_file)),
                 codex_profiles_dir: Some(path_string(&codex_profiles_dir)),
+                muse_profiles_dir: Some(path_string(&muse_profiles_dir)),
                 workspace_root: None,
             },
             codex: CodexSettings::default(),
+            muse: MuseSettings::default(),
             fort: FortSettings::default(),
             surf: SurfSettings::default(),
             viva: VivaSettings::default(),
@@ -105,6 +110,7 @@ impl Settings {
                 }
                 self.paths = payload.paths;
                 self.codex = payload.codex;
+                self.muse = payload.muse;
                 self.fort = payload.fort;
                 self.surf = payload.surf;
             }
@@ -135,11 +141,15 @@ impl Settings {
         if self.paths.codex_profiles_dir.is_none() {
             self.paths.codex_profiles_dir = defaults.paths.codex_profiles_dir;
         }
+        if self.paths.muse_profiles_dir.is_none() {
+            self.paths.muse_profiles_dir = defaults.paths.muse_profiles_dir;
+        }
     }
 
     fn apply_runtime_defaults(&mut self) {
         normalize_option_string(&mut self.paths.workspace_root);
         self.codex.normalize();
+        self.muse.normalize();
         self.fort.normalize();
         self.surf.normalize();
         self.viva.normalize();
@@ -153,6 +163,8 @@ struct CoreSettingsModule {
     pub paths: SettingsPaths,
     #[serde(default)]
     pub codex: CodexSettings,
+    #[serde(default)]
+    pub muse: MuseSettings,
     #[serde(default)]
     pub fort: FortSettings,
     #[serde(default)]
@@ -188,7 +200,7 @@ impl SettingsModule {
     }
 
     fn path(self, home: &Path) -> PathBuf {
-        let root = home.join(".si");
+        let root = crate::paths::resolve_si_root(home);
         match self {
             Self::Core => root.join("settings.toml"),
             Self::Surf => root.join("surf").join("si.settings.toml"),
@@ -202,6 +214,7 @@ pub struct SettingsPaths {
     pub root: Option<String>,
     pub settings_file: Option<String>,
     pub codex_profiles_dir: Option<String>,
+    pub muse_profiles_dir: Option<String>,
     pub workspace_root: Option<String>,
 }
 
@@ -252,6 +265,16 @@ pub struct CodexProfileEntry {
     pub email: Option<String>,
     pub auth_path: Option<String>,
     pub auth_updated: Option<String>,
+    /// Canonical native home for this account (post-migration shape).
+    pub native_root: Option<String>,
+    /// Short identity summary bound at enrollment (display hint, not a secret).
+    pub identity: Option<String>,
+    /// How `identity` was verified, or `identity_unverified`.
+    pub identity_source: Option<String>,
+    /// RFC3339 enrollment timestamp.
+    pub enrolled_at: Option<String>,
+    /// Set with a reason when launch is disabled for this profile.
+    pub disabled: Option<String>,
 }
 
 impl CodexProfileEntry {
@@ -260,6 +283,80 @@ impl CodexProfileEntry {
         normalize_option_string(&mut self.email);
         normalize_option_string(&mut self.auth_path);
         normalize_option_string(&mut self.auth_updated);
+        normalize_option_string(&mut self.native_root);
+        normalize_option_string(&mut self.identity);
+        normalize_option_string(&mut self.identity_source);
+        normalize_option_string(&mut self.enrolled_at);
+        normalize_option_string(&mut self.disabled);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MuseSettings {
+    pub workspace: Option<String>,
+    pub workdir: Option<String>,
+    pub profile: Option<String>,
+    #[serde(default)]
+    pub profiles: MuseProfilesSettings,
+}
+
+impl MuseSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.workspace);
+        normalize_option_string(&mut self.workdir);
+        normalize_option_string(&mut self.profile);
+        self.profiles.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MuseProfilesSettings {
+    pub active: Option<String>,
+    #[serde(default)]
+    pub entries: BTreeMap<String, MuseProfileEntry>,
+}
+
+impl MuseProfilesSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.active);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.entries) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.entries = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MuseProfileEntry {
+    pub name: Option<String>,
+    pub email: Option<String>,
+    /// Canonical native root for this account (holds config/data/cache/state).
+    pub native_root: Option<String>,
+    /// Short identity summary bound at enrollment (display hint, not a secret).
+    pub identity: Option<String>,
+    /// How `identity` was verified, or `identity_unverified`.
+    pub identity_source: Option<String>,
+    /// RFC3339 enrollment timestamp.
+    pub enrolled_at: Option<String>,
+    /// Set with a reason when launch is disabled for this profile.
+    pub disabled: Option<String>,
+}
+
+impl MuseProfileEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.email);
+        normalize_option_string(&mut self.native_root);
+        normalize_option_string(&mut self.identity);
+        normalize_option_string(&mut self.identity_source);
+        normalize_option_string(&mut self.enrolled_at);
+        normalize_option_string(&mut self.disabled);
     }
 }
 

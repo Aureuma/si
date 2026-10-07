@@ -1,3 +1,7 @@
+pub mod adapter;
+pub mod lease;
+pub mod lock;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};

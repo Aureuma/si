@@ -2176,4 +2176,3 @@ fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> Str
     response.push_str(body);
     response
 }
-
