@@ -5,10 +5,16 @@
 //! behave as used here. Every credential-using invocation forces
 //! `cli_auth_credentials_store="file"` via CLI override and rejects user `-c`
 //! values that conflict with it, so SI never depends on argument-order folklore
-//! or on ambient config for the auth-store contract.
+//! or on ambient config for the auth-store contract. Managed-launch argv is
+//! further validated: credential switches, credential-mutating subcommands
+//! (except read-only `login status`), auth `-c` keys, provider changes, and
+//! secret-shaped bare tokens are rejected; user models, permissions,
+//! `-p` config profiles, and prompts pass through verbatim.
 
 use serde_json::Value;
-use si_process::adapter::{AdapterError, AuthStatus, ChildEnv, ProviderAdapter};
+use si_process::adapter::{
+    AdapterError, AuthStatus, ChildEnv, ProviderAdapter, validate_child_env,
+};
 use si_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -103,10 +109,12 @@ impl ProviderAdapter for CodexAdapter {
         }
         // Empty argv is the bare interactive native (operator TUI sessions).
         // Headless `run` requires argv at the CLI layer instead.
-        reject_conflicting_store_override(argv)?;
+        validate_native_argv(argv)?;
+        let env = self.profile_env(native_root);
+        validate_child_env(&env)?;
         let mut full_argv = file_store_argv();
         full_argv.extend(argv.iter().cloned());
-        Ok(self.profile_env(native_root).apply_to(
+        Ok(env.apply_to(
             CommandSpec::new(program.display().to_string()).args(full_argv).current_dir(workdir),
         ))
     }
@@ -141,11 +149,161 @@ fn file_store_argv() -> Vec<String> {
     vec!["-c".to_owned(), CODEX_FILE_STORE_OVERRIDE.to_owned()]
 }
 
-/// Reject user `-c`/`--config` values that override the enforced store key.
-///
-/// Accepts `-c value`, `-cvalue`, `--config value`, and `--config=value`
-/// spellings; anything else passes through untouched.
-fn reject_conflicting_store_override(argv: &[String]) -> Result<(), AdapterError> {
+/// Long flags (normalized: lowercase, `--` stripped, `_` unified to `-`,
+/// value cut at `=`) that inject credentials into a launch. Verified against
+/// `codex --help` and `codex login --help` on Codex CLI 0.160.0; the extra
+/// names are fail-closed against native aliases and future additions.
+const CODEX_CREDENTIAL_SWITCHES: &[&str] = &[
+    "with-api-key",
+    "with-access-token",
+    "api-key-stdin",
+    "api-key",
+    "access-token",
+    "auth-token",
+    "refresh-token",
+    "id-token",
+    "client-secret",
+    "remote-auth-token-env",
+];
+
+/// Long flags that move the launch off the enrolled account's provider.
+const CODEX_PROVIDER_SWITCHES: &[&str] = &["oss", "local-provider"];
+
+/// Case-insensitive infixes that mark a `-c` config key as credential/auth
+/// material. Only the KEY is scanned, never the value, so model names or
+/// prompts containing these substrings pass through untouched.
+const CODEX_AUTH_KEY_INFIXES: &[&str] =
+    &["auth", "token", "key", "secret", "credential", "password", "provider"];
+
+/// Global long flags that consume the following argv token as their value
+/// (normalized names). Used only to locate the subcommand position; unknown
+/// flags are skipped singly (fail-open) so future native flags keep working.
+const CODEX_VALUE_FLAGS: &[&str] = &[
+    "config",
+    "profile",
+    "cd",
+    "local-provider",
+    "color",
+    "enable",
+    "disable",
+    "remote-auth-token-env",
+];
+
+/// Global short flags that consume a value (`-c`, `-p`, `-C`).
+const CODEX_SHORT_VALUE_FLAGS: &[u8; 3] = b"cpC";
+
+/// Validate managed-launch argv: credential switches, credential-mutating
+/// subcommands, auth `-c` keys, provider changes, and secret-shaped bare
+/// tokens are rejected. Everything else — subcommands, `-p` config profiles,
+/// non-auth `-c` keys, prompts — passes through verbatim, including shell
+/// metacharacters: SI spawns the native directly (CLI argv, or spec JSON to
+/// `__worker-run`, then `exec`), so metacharacters in argv values are inert
+/// by construction and rejecting them would only break legitimate prompts.
+fn validate_native_argv(argv: &[String]) -> Result<(), AdapterError> {
+    reject_credential_switches(argv)?;
+    reject_credential_subcommand(argv)?;
+    reject_credential_config_keys(argv)?;
+    reject_secret_shaped_values(argv)?;
+    Ok(())
+}
+
+/// Normalize a `--long` token to its flag name, or `None` for non-longs.
+fn long_flag_name(arg: &str) -> Option<String> {
+    let body = arg.strip_prefix("--")?;
+    if body.is_empty() || body.starts_with('-') {
+        return None;
+    }
+    let name = body.split('=').next().unwrap_or("");
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_ascii_lowercase().replace('_', "-"))
+}
+
+fn reject_credential_switches(argv: &[String]) -> Result<(), AdapterError> {
+    for arg in argv {
+        let Some(name) = long_flag_name(arg) else { continue };
+        // Echo the flag only, never anything after `=`: a value there could
+        // itself be secret material.
+        let flag = arg.split('=').next().unwrap_or(arg.as_str());
+        if CODEX_CREDENTIAL_SWITCHES.contains(&name.as_str()) {
+            return Err(AdapterError::CredentialSwitch {
+                provider: "codex",
+                flag: flag.to_owned(),
+            });
+        }
+        if CODEX_PROVIDER_SWITCHES.contains(&name.as_str()) {
+            return Err(AdapterError::ProviderOverride {
+                provider: "codex",
+                flag: flag.to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Locate the native subcommand: the first positional token after skipping
+/// global flags and their values. Returns the subcommand index.
+fn detect_subcommand(argv: &[String]) -> Option<usize> {
+    let mut index = 0;
+    let mut end_of_flags = false;
+    while index < argv.len() {
+        let arg = argv[index].as_str();
+        if end_of_flags {
+            return Some(index);
+        }
+        if arg == "--" {
+            end_of_flags = true;
+            index += 1;
+            continue;
+        }
+        if let Some(name) = long_flag_name(arg) {
+            index += 1;
+            if !arg.contains('=') && CODEX_VALUE_FLAGS.contains(&name.as_str()) {
+                index += 1;
+            }
+            continue;
+        }
+        let bytes = arg.as_bytes();
+        if bytes.len() >= 2 && bytes[0] == b'-' && bytes[1] != b'-' {
+            index += 1;
+            if bytes.len() == 2 && CODEX_SHORT_VALUE_FLAGS.contains(&bytes[1]) {
+                index += 1;
+            }
+            continue;
+        }
+        return Some(index);
+    }
+    None
+}
+
+/// Route credential-mutating subcommands through profile login/logout.
+/// `login status` is read-only and stays allowed.
+fn reject_credential_subcommand(argv: &[String]) -> Result<(), AdapterError> {
+    let Some(at) = detect_subcommand(argv) else { return Ok(()) };
+    match argv[at].as_str() {
+        "login" => {
+            if argv.get(at + 1).map(String::as_str) == Some("status") {
+                Ok(())
+            } else {
+                Err(AdapterError::CredentialMutatingCommand {
+                    provider: "codex",
+                    command: "login".to_owned(),
+                })
+            }
+        }
+        "logout" => Err(AdapterError::CredentialMutatingCommand {
+            provider: "codex",
+            command: "logout".to_owned(),
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// Collect `-c`/`--config` overrides as (flag token, value) pairs. Accepts
+/// `-c value`, `-cvalue`, `--config value`, and `--config=value` spellings.
+fn config_override_values(argv: &[String]) -> Vec<(&str, &str)> {
+    let mut out = Vec::new();
     let mut index = 0;
     while index < argv.len() {
         let arg = argv[index].as_str();
@@ -154,18 +312,97 @@ fn reject_conflicting_store_override(argv: &[String]) -> Result<(), AdapterError
             argv.get(index).map(String::as_str)
         } else if let Some(rest) = arg.strip_prefix("--config=") {
             Some(rest)
-        } else if let Some(rest) = arg.strip_prefix("-c") {
-            if rest.is_empty() { None } else { Some(rest) }
         } else {
-            None
+            arg.strip_prefix("-c").filter(|rest| !rest.is_empty())
         };
         if let Some(value) = value {
-            let key = value.split('=').next().unwrap_or("").trim();
-            if key == CODEX_STORE_CONFIG_KEY {
-                return Err(AdapterError::ConflictingStoreOverride { flag: arg.to_owned() });
-            }
+            out.push((arg, value));
         }
         index += 1;
+    }
+    out
+}
+
+/// Reject `-c` overrides of the enforced store key and of any
+/// credential/auth/provider config key. Non-auth keys (model, sandbox,
+/// permissions, profiles) pass through.
+fn reject_credential_config_keys(argv: &[String]) -> Result<(), AdapterError> {
+    for (flag, value) in config_override_values(argv) {
+        let key = value.split('=').next().unwrap_or("").trim();
+        if key.eq_ignore_ascii_case(CODEX_STORE_CONFIG_KEY) {
+            return Err(AdapterError::ConflictingStoreOverride { flag: flag.to_owned() });
+        }
+        let lowered = key.to_ascii_lowercase();
+        if CODEX_AUTH_KEY_INFIXES.iter().any(|infix| lowered.contains(infix)) {
+            return Err(AdapterError::CredentialConfigKey {
+                provider: "codex",
+                key: key.to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn is_b64url_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'
+}
+
+/// JWT/JWE shape: 3+ dot-separated segments, every segment at least 8
+/// base64url bytes, 32+ bytes total. Short dotted tokens (versions, hosts,
+/// small filenames) never match.
+fn looks_like_jwt(token: &str) -> bool {
+    if token.len() < 32 {
+        return false;
+    }
+    let segments: Vec<&str> = token.split('.').collect();
+    segments.len() >= 3
+        && segments.iter().all(|segment| segment.len() >= 8 && segment.bytes().all(is_b64url_byte))
+}
+
+/// Bare single-token secrets: OpenAI-style `sk-…`, GitHub `gh*_…` /
+/// `github_pat_…`, Slack `xox*-…`, AWS `AKIA…`, JWT/JWE shapes. Multi-word
+/// prompts and `key=value` tokens never match: prompts contain spaces, and
+/// `=`, `/`, `+` are outside every shape alphabet.
+fn looks_like_bare_secret(token: &str) -> bool {
+    const PREFIXED: &[(&str, usize)] = &[
+        ("sk-", 8),
+        ("ghp_", 8),
+        ("gho_", 8),
+        ("ghs_", 8),
+        ("ghr_", 8),
+        ("ghu_", 8),
+        ("github_pat_", 8),
+        ("xoxb-", 8),
+        ("xoxp-", 8),
+        ("xoxa-", 8),
+        ("xoxr-", 8),
+        ("xoxs-", 8),
+    ];
+    if looks_like_jwt(token) {
+        return true;
+    }
+    if let Some(rest) = token.strip_prefix("AKIA")
+        && rest.len() == 16
+        && rest.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+    {
+        return true;
+    }
+    for (prefix, min_tail) in PREFIXED {
+        if let Some(rest) = token.strip_prefix(prefix)
+            && rest.len() >= *min_tail
+            && rest.bytes().all(is_b64url_byte)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn reject_secret_shaped_values(argv: &[String]) -> Result<(), AdapterError> {
+    for arg in argv {
+        if looks_like_bare_secret(arg) {
+            return Err(AdapterError::SecretShapedArgument { provider: "codex" });
+        }
     }
     Ok(())
 }
@@ -356,10 +593,10 @@ pub fn session_known(native_root: &Path, id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        CODEX_AUTH_FILE_NAME, CODEX_FILE_STORE_OVERRIDE, CodexAdapter, CodexLoginMode,
-        local_email_from_auth_file,
+        CODEX_AUTH_FILE_NAME, CODEX_AUTH_OVERRIDE_VARS, CODEX_FILE_STORE_OVERRIDE, CodexAdapter,
+        CodexLoginMode, local_email_from_auth_file, validate_native_argv,
     };
-    use si_process::adapter::{AdapterError, AuthStatus, ProviderAdapter};
+    use si_process::adapter::{AdapterError, AuthStatus, ProviderAdapter, validate_child_env};
     use std::path::Path;
 
     fn adapter() -> CodexAdapter {
@@ -451,6 +688,192 @@ mod tests {
             adapter()
                 .run_command(Path::new("codex"), Path::new("/h"), Path::new("/w"), &argv)
                 .expect("unrelated flags must pass");
+        }
+    }
+
+    fn argv(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| word.to_string()).collect()
+    }
+
+    #[test]
+    fn argv_rejects_credential_switches_in_every_spelling() {
+        for words in [
+            vec!["exec", "--with-api-key", "prompt"],
+            vec!["--with-api-key"],
+            vec!["--with-api-key=true"],
+            vec!["--with_api_key"],
+            vec!["--WITH-API-KEY"],
+            vec!["exec", "--with-access-token"],
+            vec!["--api-key-stdin"],
+            vec!["--api-key", "sk-test"],
+            vec!["exec", "--remote-auth-token-env", "MY_TOKEN"],
+            vec!["--remote-auth-token-env=MY_TOKEN"],
+            vec!["--refresh-token", "x"],
+        ] {
+            let args = argv(&words);
+            let err = validate_native_argv(&args).expect_err("credential switch must fail");
+            assert!(matches!(err, AdapterError::CredentialSwitch { .. }), "{args:?} gave {err:?}");
+            let detail = err.to_string();
+            assert!(detail.contains("si codex profile login"), "{args:?}: {detail}");
+            assert!(!detail.contains("sk-test"), "{args:?}: error must not echo values");
+        }
+    }
+
+    #[test]
+    fn argv_rejects_provider_changes() {
+        for words in [
+            vec!["--oss"],
+            vec!["exec", "--oss", "prompt"],
+            vec!["--local-provider", "ollama"],
+            vec!["--local-provider=ollama"],
+        ] {
+            let args = argv(&words);
+            let err = validate_native_argv(&args).expect_err("provider change must fail");
+            assert!(matches!(err, AdapterError::ProviderOverride { .. }), "{args:?} gave {err:?}");
+            assert!(err.to_string().contains("enrolled"), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn argv_routes_login_and_logout_but_allows_login_status() {
+        for words in [
+            vec!["login"],
+            vec!["login", "--device-auth"],
+            vec!["-c", "model=x", "login"],
+            vec!["-p", "cfg", "logout"],
+            vec!["logout"],
+        ] {
+            let args = argv(&words);
+            let err = validate_native_argv(&args).expect_err("mutating command must fail");
+            assert!(
+                matches!(err, AdapterError::CredentialMutatingCommand { .. }),
+                "{args:?} gave {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn argv_allows_read_only_status_and_prompt_positions() {
+        for words in [
+            vec!["login", "status"],
+            vec!["login", "status", "--json"],
+            vec!["-c", "model=x", "login", "status"],
+            vec!["exec", "login"],
+            vec!["exec", "logout"],
+            vec!["exec", "please login to staging and check"],
+            vec!["exec", "logout of everything now"],
+            vec!["resume", "0192abcd-0000-4000-8000-000000000000"],
+            vec!["exec", "--output-last-message", "login"],
+            vec!["--", "login", "status"],
+        ] {
+            let args = argv(&words);
+            assert!(validate_native_argv(&args).is_ok(), "{args:?} must pass");
+        }
+    }
+
+    #[test]
+    fn argv_rejects_auth_config_keys_but_keeps_model_and_permissions() {
+        for words in [
+            vec!["-c", "api_key=x"],
+            vec!["-c", "model_provider=azure"],
+            vec!["-c", "model_providers.azure.api_key=x"],
+            vec!["--config=auth.json=y"],
+            vec!["-csecret=z"],
+            vec!["-c", "credentials_store=os"],
+            vec!["exec", "-c", "sandbox_auth=bypass"],
+        ] {
+            let args = argv(&words);
+            let err = validate_native_argv(&args).expect_err("auth key must fail");
+            assert!(
+                matches!(err, AdapterError::CredentialConfigKey { .. }),
+                "{args:?} gave {err:?}"
+            );
+        }
+        for words in [
+            vec!["-c", "model=gpt-5"],
+            vec!["-c", "model=gpt-key"],
+            vec!["-c", "sandbox_mode=read-only"],
+            vec!["-c", "approval_policy=never"],
+            vec!["-c", "shell_environment_policy.inherit=all"],
+            vec!["-p", "myprofile"],
+            vec!["--ignore-user-config"],
+            vec!["exec", "--json", "prompt"],
+            vec!["--max-tokens", "5"],
+            vec!["-C", "/tmp/work"],
+        ] {
+            let args = argv(&words);
+            assert!(validate_native_argv(&args).is_ok(), "{args:?} must pass");
+        }
+    }
+
+    #[test]
+    fn argv_rejects_secret_shaped_bare_tokens_without_echoing_them() {
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dGVzdHNpZ25hdHVyZXhhbXBsZQ";
+        for secret in [
+            "sk-abcdefgh12345678",
+            "sk-proj-abcdefgh12345678",
+            "ghp_abcdefgh12345678",
+            "github_pat_abcdefgh12345678",
+            "xoxb-12345678-abcdefgh",
+            "AKIAIOSFODNN7EXAMPLE",
+            jwt,
+        ] {
+            let args = argv(&["exec", secret]);
+            let err = validate_native_argv(&args).expect_err("secret shape must fail");
+            assert!(
+                matches!(err, AdapterError::SecretShapedArgument { .. }),
+                "{secret} gave {err:?}"
+            );
+            assert!(!err.to_string().contains(secret), "error must not echo the secret");
+        }
+        for innocent in [
+            "hello world, use the api key from stdin",
+            "1.2.3",
+            "archive.tar.gz",
+            "v1.2.3-rc.1",
+            "model=gpt-key",
+            "sk-",
+            "sk-short",
+            "AKIA123",
+            "not-a-secret",
+        ] {
+            let args = argv(&["exec", innocent]);
+            assert!(validate_native_argv(&args).is_ok(), "{innocent:?} must pass");
+        }
+    }
+
+    #[test]
+    fn argv_passes_shell_metacharacters_through_verbatim() {
+        // Metacharacters are inert: SI spawns the native directly, never via
+        // a shell. Rejecting them would only break legitimate prompts.
+        let prompt = "explain 2>&1; echo a|b && c$(d)`e`'f'\"g\"\\h";
+        let args = argv(&["exec", prompt]);
+        assert!(validate_native_argv(&args).is_ok());
+        let spec = adapter()
+            .run_command(Path::new("codex"), Path::new("/h"), Path::new("/w"), &args)
+            .expect("metachar prompt must pass");
+        assert!(spec.args_slice().contains(&prompt.to_owned()));
+    }
+
+    #[test]
+    fn run_validates_child_env_and_strips_every_auth_override() {
+        let env = adapter().profile_env(Path::new("/si/codex/profiles/a"));
+        validate_child_env(&env).expect("profile env names must validate");
+        let spec = adapter()
+            .run_command(
+                Path::new("codex"),
+                Path::new("/si/codex/profiles/a"),
+                Path::new("/work"),
+                &argv(&["exec", "hi"]),
+            )
+            .expect("run spec");
+        assert_eq!(
+            spec.env_map().get("CODEX_HOME").map(String::as_str),
+            Some("/si/codex/profiles/a")
+        );
+        for key in CODEX_AUTH_OVERRIDE_VARS {
+            assert!(spec.env_remove_set().contains(*key), "{key} must be removed");
+            assert!(!spec.env_map().contains_key(*key), "{key} must not be set");
         }
     }
 

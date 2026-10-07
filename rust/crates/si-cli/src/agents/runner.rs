@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use si_config::ids::{Provider, SlotId};
 use si_config::io::{create_private_dir_all, write_private_file};
 use si_config::paths::SiPaths;
+use si_process::adapter::validate_env_name;
 use si_process::lease::{Lease, LeaseError};
 use si_process::{CommandSpec, ProcessRunner};
 use std::collections::BTreeMap;
@@ -840,6 +841,31 @@ pub fn launch_worker(request: LaunchRequest<'_>) -> Result<LaunchOutcome> {
 /// lease (fail-fast), applies the profile environment immediately before
 /// native execution, records PID/startup/exit, and releases the lease.
 /// Exits with the native exit code so remain-on-exit panes retain it.
+/// Refuse specs whose exec fields a hand-made or tampered spec could use to
+/// panic the runner: invalid env names, or interior NUL bytes (which panic
+/// `std::process::Command` at spawn). Runs before the record is touched, so a
+/// refusal leaves the reservation for the normal launch-timeout rollback.
+fn validate_spec_exec_fields(spec: &WorkerSpec) -> Result<()> {
+    for key in spec.env_set.keys().chain(spec.env_unset.iter()) {
+        validate_env_name(key)
+            .map_err(|source| anyhow::anyhow!("runner: bad spec env name: {source}"))?;
+    }
+    for (key, value) in &spec.env_set {
+        if value.bytes().any(|byte| byte == 0) {
+            anyhow::bail!("runner: spec env value for {key:?} contains NUL");
+        }
+    }
+    if spec.argv.iter().any(|arg| arg.bytes().any(|byte| byte == 0)) {
+        anyhow::bail!("runner: spec argv contains NUL");
+    }
+    for (label, path) in [("program", &spec.program), ("workdir", &spec.workdir)] {
+        if path.as_os_str().to_string_lossy().contains('\0') {
+            anyhow::bail!("runner: spec {label} contains NUL");
+        }
+    }
+    Ok(())
+}
+
 pub fn run_worker_entry(spec_path: &Path) -> Result<()> {
     let raw = std::fs::read(spec_path)
         .with_context(|| format!("runner: read spec {}", spec_path.display()))?;
@@ -865,6 +891,7 @@ pub fn run_worker_entry(spec_path: &Path) -> Result<()> {
     if !spec_canonical.starts_with(&root_canonical) {
         anyhow::bail!("runner: spec {} escapes SI root", spec_path.display());
     }
+    validate_spec_exec_fields(&spec)?;
 
     let mut record = load_record(&spec.record_path)?.ok_or_else(|| {
         anyhow::anyhow!("runner: reservation for {} slot {:?} is gone", spec.profile, spec.slot)
@@ -1407,10 +1434,58 @@ fn contract_argv(contract: &str) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PaneInfo, WorkerState, contract_argv, launch_contract, new_generation, parse_pane_line,
-        shell_quote,
+        PaneInfo, WORKER_RECORD_SCHEMA_VERSION, WorkerSpec, WorkerState, contract_argv,
+        launch_contract, new_generation, parse_pane_line, shell_quote, validate_spec_exec_fields,
     };
-    use std::path::Path;
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+
+    fn valid_spec() -> WorkerSpec {
+        WorkerSpec {
+            schema_version: WORKER_RECORD_SCHEMA_VERSION,
+            provider: "codex".to_owned(),
+            profile: "a".to_owned(),
+            slot: "main".to_owned(),
+            si_root: PathBuf::from("/si"),
+            native_root: PathBuf::from("/si/codex/profiles/a"),
+            program: PathBuf::from("/bin/codex"),
+            program_version: None,
+            argv: vec!["-c".to_owned(), "cli_auth_credentials_store=\"file\"".to_owned()],
+            env_set: BTreeMap::from([("CODEX_HOME".to_owned(), "/si/codex/profiles/a".to_owned())]),
+            env_unset: vec!["OPENAI_API_KEY".to_owned()],
+            workdir: PathBuf::from("/work"),
+            workspace: PathBuf::from("/ws"),
+            socket: PathBuf::from("/si/runtime/tmux.sock"),
+            session_name: "si-codex-a-main".to_owned(),
+            owner: "owner".to_owned(),
+            generation: "gen".to_owned(),
+            record_path: PathBuf::from("/si/record.json"),
+            lease_path: PathBuf::from("/si/lease"),
+            resume_id: None,
+            contract: "{}".to_owned(),
+        }
+    }
+
+    #[test]
+    fn spec_exec_fields_reject_bad_names_and_nul_bytes() {
+        assert!(validate_spec_exec_fields(&valid_spec()).is_ok());
+        let mut bad_name = valid_spec();
+        bad_name.env_set.insert("EV;IL".to_owned(), "x".to_owned());
+        assert!(validate_spec_exec_fields(&bad_name).is_err());
+        let mut bad_unset = valid_spec();
+        bad_unset.env_unset.push("A=B".to_owned());
+        assert!(validate_spec_exec_fields(&bad_unset).is_err());
+        let mut bad_value = valid_spec();
+        bad_value.env_set.insert("OK".to_owned(), "a\0b".to_owned());
+        let err = validate_spec_exec_fields(&bad_value).expect_err("NUL value must fail");
+        assert!(err.to_string().contains("NUL"), "{err}");
+        let mut bad_argv = valid_spec();
+        bad_argv.argv.push("a\0b".to_owned());
+        assert!(validate_spec_exec_fields(&bad_argv).is_err());
+        let mut bad_program = valid_spec();
+        bad_program.program = PathBuf::from("/bin/co\0dex");
+        assert!(validate_spec_exec_fields(&bad_program).is_err());
+    }
 
     #[test]
     fn pane_line_parses_live_and_dead_panes() {
