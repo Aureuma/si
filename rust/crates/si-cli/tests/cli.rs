@@ -4,11 +4,7 @@ use chrono::Utc;
 use serde_json::{Value, json};
 use si_fort::{SessionState, classify_persisted_session_state, load_persisted_session_state};
 use std::fs;
-use std::io::{Read, Write};
-use std::net::TcpListener;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use tempfile::tempdir;
 
 fn cargo_bin() -> Command {
@@ -1795,16 +1791,8 @@ fn fort_session_state_refresh_outcome_unauthorized_clears_session_id() {
 }
 
 #[test]
-fn codex_profile_swap_requires_logged_in_profile() {
+fn codex_profile_swap_and_repair_auth_are_removed() {
     let home = tempdir().expect("tempdir");
-    write_named_codex_profile_settings(
-        home.path(),
-        "profile-gamma",
-        &[("profile-gamma", "🛰 Profile Gamma", "gamma@example.test")],
-    );
-    let host_codex_home = home.path().join(".codex");
-    fs::create_dir_all(&host_codex_home).expect("mkdir host codex home");
-    fs::write(host_codex_home.join("config.toml"), "model = \"gpt-5\"\n").expect("write config");
 
     let output = cargo_bin()
         .args(["codex", "profile", "swap", "profile-gamma", "--home"])
@@ -1815,32 +1803,54 @@ fn codex_profile_swap_requires_logged_in_profile() {
         .stderr
         .clone();
     let stderr = String::from_utf8(output).expect("utf8 stderr");
-    assert!(stderr.contains("is not Logged-In"));
-    assert_eq!(
-        fs::read_to_string(host_codex_home.join("config.toml")).expect("read config"),
-        "model = \"gpt-5\"\n"
-    );
-    assert!(!host_codex_home.join("auth.json").exists());
+    assert!(stderr.contains("unrecognized subcommand 'swap'"));
+
+    let output = cargo_bin()
+        .args(["codex", "repair-auth", "--home"])
+        .arg(home.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8(output).expect("utf8 stderr");
+    assert!(stderr.contains("unrecognized subcommand 'repair-auth'"));
+
+    assert!(!home.path().join(".codex").exists());
+    assert!(!home.path().join(".si").exists());
 }
 
 #[test]
-fn codex_profile_list_preserves_logged_in_state_when_live_probe_fails() {
+fn codex_profile_list_reports_unverified_credential_without_live_probe() {
     let home = tempdir().expect("tempdir");
-    write_named_codex_profile_settings(
-        home.path(),
-        "america",
-        &[("america", "America", "america@example.test")],
-    );
+    cargo_bin()
+        .args([
+            "codex",
+            "profile",
+            "add",
+            "america",
+            "--name",
+            "America",
+            "--email",
+            "america@example.test",
+            "--home",
+        ])
+        .arg(home.path())
+        .assert()
+        .success();
     write_codex_auth_file(
         &home.path().join(".si/codex/profiles/america/auth.json"),
         "america@example.test",
     );
 
+    // list/show must not invoke the native binary at all: the sentinel proves
+    // the shim was never executed, and the state never claims a verified login.
     let bin_dir = tempdir().expect("bin tempdir");
+    let sentinel = bin_dir.path().join("invoked");
     let codex_path = bin_dir.path().join("codex");
     write_executable_shell_script(
         &codex_path,
-        "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = \"app-server\" ]; then\n  printf 'temporary app-server failure\\n' >&2\n  exit 1\nfi\nprintf 'unexpected codex invocation\\n' >&2\nexit 1\n",
+        &format!("#!/bin/sh\nset -eu\necho invoked >> {}\nexit 1\n", sentinel.display()),
     );
     let path_env =
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
@@ -1868,121 +1878,143 @@ fn codex_profile_list_preserves_logged_in_state_when_live_probe_fails() {
         .iter()
         .find(|profile| profile["profile"] == "america")
         .expect("america profile");
-    assert_eq!(profile["state"], "Logged-In");
-    assert!(profile["five_hour_left_pct"].is_null());
-    assert!(profile["weekly_left_pct"].is_null());
+    assert_eq!(profile["auth_state"], "credential_present_unverified");
+    assert_eq!(profile["email"], "america@example.test");
+    assert!(profile["identity"].is_null());
+    assert!(!sentinel.exists());
+    assert!(!home.path().join(".codex").exists());
 }
 
 #[test]
-fn codex_repair_auth_all_provisions_slot_specific_agents_with_30d_ttl() {
-    let home = tempdir().expect("home tempdir");
-    let workspace = home.path().join("workspace");
-    fs::create_dir_all(&workspace).expect("mkdir workspace");
-    let codex_profiles_dir = home.path().join(".si/codex/profiles");
-    fs::create_dir_all(&codex_profiles_dir).expect("mkdir codex profiles");
-
-    write_codex_worker_state_for_test(
-        home.path(),
-        "america",
-        "primary",
-        "si-codex-pane-america",
-        &workspace,
-        &workspace,
-    );
-    write_codex_worker_state_for_test(
-        home.path(),
-        "america",
-        "review",
-        "si-codex-pane-america-review",
-        &workspace,
-        &workspace,
-    );
-
-    let requests_seen = Arc::new(Mutex::new(Vec::<String>::new()));
-    let seen_clone = Arc::clone(&requests_seen);
-    let call_index = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let call_index_clone = Arc::clone(&call_index);
-    let server = start_http_server_with_body(8, move |request| {
-        seen_clone.lock().expect("requests lock").push(request.clone());
-        let call = call_index_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if request.starts_with("GET /v1/agents/si-codex-america HTTP/1.1\r\n")
-            || request.starts_with("GET /v1/agents/si-codex-america--review HTTP/1.1\r\n")
-        {
-            return http_json_response("404 Not Found", &[], r#"{"error":"not found"}"#);
-        }
-        if request.starts_with("POST /v1/agents HTTP/1.1\r\n") {
-            return http_json_response("201 Created", &[], r#"{"ok":true}"#);
-        }
-        if request.starts_with("PUT /v1/agents/si-codex-america/policy HTTP/1.1\r\n")
-            || request.starts_with("PUT /v1/agents/si-codex-america--review/policy HTTP/1.1\r\n")
-        {
-            return http_json_response("200 OK", &[], r#"{"ok":true}"#);
-        }
-        if request.starts_with("POST /v1/auth/session/open HTTP/1.1\r\n") {
-            let body = format!(
-                r#"{{"access_token":"{}","refresh_token":"rft-{call}","session_id":"session-{call}","access_expires_at":"2030-01-01T00:00:00Z","refresh_expires_at":"2030-01-31T00:00:00Z"}}"#,
-                fake_jwt(json!({"exp": Utc::now().timestamp() + 3600}))
-            );
-            return http_json_response("200 OK", &[], &body);
-        }
-        panic!("unexpected request: {}", request.lines().next().unwrap_or("<empty>"));
-    });
-
-    fs::create_dir_all(home.path().join(".si/fort/bootstrap")).expect("mkdir fort bootstrap");
-    fs::write(
-        home.path().join(".si/fort/bootstrap/admin.token"),
-        format!("{}\n", fake_jwt(json!({"exp": Utc::now().timestamp() + 3600}))),
-    )
-    .expect("write bootstrap token");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            home.path().join(".si/fort/bootstrap/admin.token"),
-            fs::Permissions::from_mode(0o600),
-        )
-        .expect("chmod bootstrap token");
-    }
-    fs::write(
-        home.path().join(".si/settings.toml"),
-        format!(
-            "schema_version = 1\n[paths]\ncodex_profiles_dir = {:?}\n[codex]\nprofile = \"america\"\n[codex.profiles]\nactive = \"america\"\n[codex.profiles.entries.america]\nname = \"America\"\nemail = \"america@example.test\"\nauth_path = {:?}\n[fort]\nhost = {:?}\n",
-            codex_profiles_dir,
-            codex_profiles_dir.join("america").join("auth.json"),
-            server.base_url,
-        ),
-    )
-    .expect("write settings");
-
+fn codex_profile_add_list_select_show_remove_roundtrip() {
+    let home = tempdir().expect("tempdir");
     let output = cargo_bin()
-        .env("HOME", home.path())
-        .env("SI_FORT_ALLOW_INSECURE_HOST", "1")
-        .args(["codex", "repair-auth", "--all", "--format", "json"])
+        .args([
+            "codex",
+            "profile",
+            "add",
+            "work",
+            "--name",
+            "Work",
+            "--email",
+            "work@example.test",
+            "--home",
+        ])
+        .arg(home.path())
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
-    let parsed: Value = serde_json::from_slice(&output).expect("parse repair output");
-    let repaired = parsed["repaired"].as_array().expect("repaired array");
-    assert_eq!(repaired.len(), 2);
-    assert!(repaired.iter().any(|item| item["agent_id"] == "si-codex-america"));
-    assert!(repaired.iter().any(|item| item["agent_id"] == "si-codex-america--review"));
+    let added: Value = serde_json::from_slice(&output).expect("parse add output");
+    assert_eq!(added["profile"], "work");
+    assert_eq!(added["auth_state"], "not_logged_in");
+    assert_eq!(added["selected"], false);
 
-    let requests = requests_seen.lock().expect("requests lock");
-    let open_calls = requests
-        .iter()
-        .filter(|request| request.starts_with("POST /v1/auth/session/open HTTP/1.1\r\n"))
-        .collect::<Vec<_>>();
-    assert_eq!(open_calls.len(), 2, "expected two Fort session open calls");
-    assert!(open_calls.iter().any(|request| request.contains(r#""agent_id":"si-codex-america""#)));
-    assert!(
-        open_calls
-            .iter()
-            .any(|request| request.contains(r#""agent_id":"si-codex-america--review""#))
+    cargo_bin()
+        .args(["codex", "profile", "add", "personal", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "add", "work", "--home"])
+        .arg(home.path())
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(String::from_utf8(output).expect("utf8 stderr").contains("already exists"));
+
+    cargo_bin()
+        .args(["codex", "profile", "select", "work", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "show", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let shown: Value = serde_json::from_slice(&output).expect("parse show output");
+    assert_eq!(shown["profile"], "work");
+    assert_eq!(shown["selected"], true);
+
+    cargo_bin()
+        .args(["codex", "profile", "remove", "personal", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+    assert!(home.path().join(".si/codex/profiles/personal").is_dir());
+
+    let output = cargo_bin()
+        .args(["codex", "profile", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let profiles: Value = serde_json::from_slice(&output).expect("parse list");
+    assert_eq!(profiles.as_array().expect("profile array").len(), 1);
+}
+
+#[test]
+fn codex_run_enforces_env_contract_and_passes_exit_code() {
+    let home = tempdir().expect("tempdir");
+    cargo_bin()
+        .args(["codex", "profile", "add", "a", "--home"])
+        .arg(home.path())
+        .assert()
+        .success();
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let dump = bin_dir.path().join("env.dump");
+    let codex_path = bin_dir.path().join("codex");
+    write_executable_shell_script(
+        &codex_path,
+        &format!(
+            "#!/bin/sh\nset -eu\necho \"CODEX_HOME=$CODEX_HOME\" >> {dump}\necho \"OPENAI_API_KEY=${{OPENAI_API_KEY:-missing}}\" >> {dump}\necho \"ARGS=$*\" >> {dump}\necho \"SI=$SI_PROVIDER/$SI_PROFILE\" >> {dump}\nexit 3\n",
+            dump = dump.display(),
+        ),
     );
-    assert!(open_calls.iter().all(|request| request.contains(r#""refresh_ttl":"30d""#)));
-    server.join();
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+
+    let output = cargo_bin()
+        .env("PATH", path_env)
+        .env("OPENAI_API_KEY", "seeded")
+        .args(["codex", "run", "--profile", "a", "--home"])
+        .arg(home.path())
+        .args(["--", "exec", "--json"])
+        .assert()
+        .failure()
+        .get_output()
+        .clone();
+    assert_eq!(output.status.code(), Some(3));
+    let dumped = fs::read_to_string(&dump).expect("read env dump");
+    assert!(dumped.contains(&format!("CODEX_HOME={}/.si/codex/profiles/a", home.path().display())));
+    assert!(dumped.contains("OPENAI_API_KEY=missing"));
+    assert!(dumped.contains("-c cli_auth_credentials_store=\"file\" exec --json"));
+    assert!(dumped.contains("SI=codex/a"));
+
+    let output = cargo_bin()
+        .args(["codex", "run", "--profile", "a", "--home"])
+        .arg(home.path())
+        .args(["--", "-c", "cli_auth_credentials_store=os", "exec"])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(String::from_utf8(output).expect("utf8 stderr").contains("enforced credential store"));
 }
 
 #[test]
@@ -2102,77 +2134,4 @@ fn codex_stop_keeps_worker_state_and_fort_auth_files() {
 
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
-}
-
-struct TestHttpServer {
-    base_url: String,
-    handle: Option<thread::JoinHandle<()>>,
-}
-
-impl TestHttpServer {
-    fn join(mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.join().expect("server thread should join");
-        }
-    }
-}
-
-fn start_http_server_with_body<F>(requests: usize, handler: F) -> TestHttpServer
-where
-    F: Fn(String) -> String + Send + Sync + 'static,
-{
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
-    let addr = listener.local_addr().expect("local addr");
-    let handler = std::sync::Arc::new(handler);
-    let handle = thread::spawn(move || {
-        for _ in 0..requests {
-            let (mut stream, _) = listener.accept().expect("accept");
-            let mut request = Vec::new();
-            let mut buffer = [0_u8; 4096];
-            let mut content_length = 0_usize;
-            let mut header_end = None;
-            loop {
-                let read = stream.read(&mut buffer).expect("read request");
-                if read == 0 {
-                    break;
-                }
-                request.extend_from_slice(&buffer[..read]);
-                if header_end.is_none()
-                    && let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n")
-                {
-                    header_end = Some(pos + 4);
-                    let headers = String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
-                    for line in headers.lines() {
-                        if let Some(value) = line.strip_prefix("content-length:") {
-                            content_length = value.trim().parse::<usize>().unwrap_or(0);
-                            break;
-                        }
-                    }
-                }
-                if let Some(end) = header_end
-                    && request.len() >= end + content_length
-                {
-                    break;
-                }
-            }
-            let request = String::from_utf8(request).expect("request utf8");
-            let response = handler(request);
-            stream.write_all(response.as_bytes()).expect("write response");
-            stream.flush().expect("flush response");
-        }
-    });
-    TestHttpServer { base_url: format!("http://{addr}"), handle: Some(handle) }
-}
-
-fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
-    let mut response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n",
-        body.len()
-    );
-    for (key, value) in headers {
-        response.push_str(&format!("{key}: {value}\r\n"));
-    }
-    response.push_str("\r\n");
-    response.push_str(body);
-    response
 }
