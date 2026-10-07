@@ -1,0 +1,374 @@
+# SI: isolated Codex and Muse accounts, repository refocus, and next release
+
+Date: 2026-10-06. Repository: [Aureuma/si](https://github.com/Aureuma/si).
+Audited checkout: `2b0ef26b25e095f0b038b007767382f20696753b`, branch `main`, workspace version `0.60.19`.
+Status: research and implementation plan only. Application code has not been changed, and no release has been created.
+
+## 1. Outcome and decisions
+
+Turn SI into a small local account and coding-agent manager. Keep Codex account management and tmux lifecycle operations, add the same operations for Muse Code, and remove unrelated product commands and integrations. Two different accounts must be able to run their native CLI simultaneously under the same Unix user without selecting, overwriting, logging out, or resuming the other account.
+
+Use a separate provider-native directory tree for each account. An SI profile means one account of one provider; a worker slot means one running agent associated with that profile. The native CLI owns login, credentials, renewal, model requests, and conversation persistence. SI owns profile metadata, process environment, tmux ownership, and lifecycle records. No auth proxy, token broker, vault, web service, quota scheduler, or conversation-sharing layer is needed.
+
+Decisions for the first release:
+
+- Retain the `si codex` namespace and introduce `si muse`; use matching profile and worker commands rather than inventing another top-level orchestration interface.
+- Leave the real `HOME`, Git/SSH identity, working tree, and ordinary native installations intact. Set provider-specific paths in each child process. Never change host-wide auth files or tmux server-wide environment.
+- Keep one authoritative native credential store per profile. Do not distribute copies of its refresh credentials to worker homes and do not copy credentials back after a run.
+- Default profile selection affects future SI launches only. Running workers retain their provider, profile, home, and conversation association.
+- A missing, expired, revoked, or exhausted account produces an error or a native reauthentication path for that account. Never retry with another account automatically.
+- Linux is the initial supported Muse multi-account platform. Retain Darwin SI packages for Codex. Enable Muse account isolation on Darwin only after a supported credential-backend contract and real two-account tests prove Keychain isolation; otherwise `si muse` must report that platform limitation before launching an account-managed process.
+- Multiple different profiles can run concurrently. Multiple native workers sharing one profile are a separate capability: enable it only after native refresh/write concurrency is verified for the supported CLI version. Until then, admit one credential-using worker per profile and return a clear busy error for additional slots. This conservative fallback still satisfies concurrent use of multiple accounts.
+- Keep native approval and sandbox defaults. A user may deliberately pass native unsafe-mode flags for a particular launch; SI must not insert them automatically.
+- Initial browser/device approval and a later provider-required reapproval cannot be invented or bypassed. Once accounts are enrolled, agents can run tests and manage their own native credential lifecycle with the correct profile environment.
+
+## 2. Work already performed and evidence boundaries
+
+The requested order was followed: cloned `si` first into `/home/maria/Development/si`, then unarchived `Aureuma/si` using `gh api --method PATCH repos/Aureuma/si -F archived=false`. A subsequent GitHub API read confirmed `archived: false`. HTTPS cloning used the existing `gh` credential helper after SSH host-key verification failed; SSH checking and account configuration were not weakened.
+
+Installed tools audited on this host: Muse Code `1.4.3 (1.4.3-R5018.1)`, Codex CLI `0.160.0`, and tmux `3.6`. Muse is launched by `/home/maria/.local/bin/muse`, with a versioned native binary beside it. Several existing Muse processes use the default account paths; their existence does not demonstrate multiple accounts. Only one existing Muse credential store was found in the inspected user locations, and one default Codex auth file was found. No default credential was copied, replaced, logged out, or printed.
+
+The Muse launcher reads `MUSE_AUTH_PATH`, otherwise `$XDG_CONFIG_HOME/muse/auth.json`, otherwise `~/.config/muse/auth.json`. A file-traced test showed that **native `muse auth set` writes to `$XDG_CONFIG_HOME/muse/auth.json` even when `MUSE_AUTH_PATH` names a different file**. Consequently, setting only `MUSE_AUTH_PATH` is insufficient. Align it with the native XDG path for every SI entry point. This observation is specific to the installed version and the tested command, not a claim about every future Muse command.
+
+| Audit performed | Actual result | What it establishes |
+| --- | --- | --- |
+| Two fake-key Muse auth writes in separate profile trees | Each wrote its own `config/muse/auth.json`, mode `0600` | Credential-writer path isolation; fake keys were never used as live credentials |
+| Repeat auth writes without `TBH_CREDENTIAL_BACKEND` | Both succeeded with separate files, mode `0600` | Linux file storage did not require the SDK's internal forced-backend test variable |
+| Two Muse `exec --provider echo` runs in separate tmux sessions on a temporary socket | Process lifetimes overlapped; both exited `0`; each created one session log under its own data directory | Concurrent native execution and separate local session storage |
+| Export profile A's own session UUID | Exit `0` | Native lookup works in its owning store |
+| Export A's UUID from profile B | Rejected; no export created | UUID lookup did not search the other profile's session store |
+| Native logout in fixture profile A | A's Meta credentials cleared; B's file unchanged; default auth path absent from file trace | Logout scope with aligned profile paths |
+| Codex `login status` with two empty `CODEX_HOME` directories and file storage forced | Both reported not logged in, checked their own auth path, and did not access default `~/.codex/auth.json` | Profile-local file lookup and no fallback to the default account |
+| Two distinct authenticated Muse accounts and real automatic renewal | Not run: only one existing account was available | Still mandatory live acceptance gates; do not label the fixture results as live authentication success |
+
+Private audit summaries are currently at `/tmp/si-muse-audit-08f8n1zm/summary.json`, `/tmp/si-muse-public-env-audit-mxto0fcx/summary.json`, and `/tmp/si-codex-isolation-audit-r_lrlpyf/summary.json`. These paths are temporary, so the findings above are the durable record. Audit tmux sessions used a separate socket and were cleaned up. Existing tmux sessions and agents were left running. The echo tests used the official SDK's hermetic-test convention, including telemetry/feature-fetch suppression and, for that first test, file-backend forcing. These internal `TBH_*` variables are test fixtures, not a public production integration contract.
+
+The existing Muse credential's non-secret schema reported OAuth/device-code origin and had `api_key` and `access_token` fields, with no `refresh_token` field. This does **not** prove either that Muse cannot refresh or that it automatically refreshes this credential type. Verify native behavior in the live phase; do not implement Meta OAuth exchange logic in SI to fill this evidence gap.
+
+## 3. Research informing the design
+
+OpenAI documents cached file or OS-store credentials, automatic token renewal during normal use, and file storage under `CODEX_HOME` when `cli_auth_credentials_store = "file"`. This provides the native foundation for Codex profiles. It does not, by itself, guarantee race-free renewal by multiple processes in one home. [Official Codex authentication](https://learn.chatgpt.com/docs/auth), [official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+The official Muse SDK uses isolated XDG paths and an offline echo provider in its own QA harness. Its changelog also describes macOS Keychain credential storage. Follow the isolated-path testing example, while treating backend flags as internal test controls and checking the installed CLI rather than assuming the public SDK exposes the CLI's full auth implementation. The audited SDK checkout was `53e1ec712c0c428ab8f6ad1cd24b3cd0a6270c17`, independent of the installed CLI's version. [Official Muse SDK](https://github.com/meta-models/muse-code-sdk), [QA environment example](https://github.com/meta-models/muse-code-sdk/blob/53e1ec712c0c428ab8f6ad1cd24b3cd0a6270c17/clients/sdk-ts/qa/recorder.ts), [SDK changelog](https://github.com/meta-models/muse-code-sdk/blob/53e1ec712c0c428ab8f6ad1cd24b3cd0a6270c17/CHANGELOG.md).
+
+Community implementations are useful comparisons, not provider guarantees:
+
+- [Ducksss/codex-profiles](https://github.com/Ducksss/codex-profiles) uses named native homes and independent logins without copying tokens. Adopt that boundary and refusal of unknown profile names. Do not add its Desktop UI or shell-startup integration to SI.
+- [rmqg/codex-multi-account](https://github.com/rmqg/codex-multi-account/blob/main/docs/README.en.md) deliberately shares histories and can hand a conversation to another account on quota failure. Both behaviors conflict with this request. Do not copy its shared-session symlinks, account fallback, or automatic project-trust behavior.
+- [levi-qiao/herdr-agent-usage](https://github.com/levi-qiao/herdr-agent-usage) illustrates why reading the current local auth store is not enough to attribute multiple tmux panes to separate accounts. SI should expose its own profile-to-worker association, without adding a quota dashboard or installing another manager.
+
+Recheck native versions and their current help/docs before implementation. Record the tested executable and versions in a compatibility report. Do not depend on an undocumented `MUSE_HOME`, on binary string guesses, or on a third-party wrapper's claims when local file traces disagree.
+
+## 4. Audit findings that must be corrected
+
+At the audited commit, these functions are in `rust/crates/si-cli/src/main.rs`; names are more useful than line numbers after the refactor:
+
+| Existing behavior | Required correction |
+| --- | --- |
+| `swap_codex_profile` calls `reset_host_codex_home`, deleting most default home contents, then installs a copied profile credential there | Remove the destructive swap path entirely. `profile select` writes only SI's selected-profile metadata |
+| `codex_profile_worker_slot_home_dir` creates per-slot native homes; `sync_codex_profile_auth_to_home` copies canonical auth into them on preparation | All new slots use the account's canonical native home. Never overwrite an agent-refreshed credential with an older source copy |
+| `prepare_codex_profile_runtime` requires `ensure_codex_profile_fort_session` | Remove Fort from launch, shell, stop, status, and all profile operations |
+| `repair-auth` repairs Fort state | Remove it; expose native account login/logout through profile commands instead |
+| `build_codex_launch_command` always inserts `--dangerously-bypass-approvals-and-sandbox`, builds shell exports, then drops into a login shell | Launch a typed argv/environment through an SI runner. Do not force unsafe mode, evaluate user environment keys as shell syntax, or silently leave an untracked agent-capable shell |
+| Login expects a file without enforcing file credential storage, and can delete a mismatched login result | Enforce the provider's supported storage contract, bind account identity, and report mismatch without deleting unrelated native state |
+| Custom `auth_path` is treated as a home's parent, with copying when the filename differs | Store a canonical native-home path; refuse ambiguous custom filenames or resolve them explicitly during migration |
+| Config loading automatically includes Surf/Viva modules; manifest/tests include unrelated product docs | Load only account-manager configuration after migration; remove unrelated schemas, includes, tests, and dependencies |
+| Most profile/tmux logic lives in a very large CLI `main.rs`; lifecycle locks come from Fort | Extract small account/tmux modules and move the needed generic advisory-lock helper into a surviving module |
+| Release/install workflows call the public `si build` command | Extract release/installer tooling before removing that command; validate the replacement workflows |
+| README still describes vault/browser/image/secrets capabilities that no longer match the desired product | Rewrite the public description, examples, command reference, and package metadata together |
+
+Do not execute the old swap/reset routines as migration helpers or tests against this host.
+
+## 5. Public command contract
+
+Keep only `codex`, `muse`, `doctor`, `help`, and `version`/`--version` at the public root. Replace broad settings/commands menus with profile commands and ordinary nested `--help`; `doctor --format json` supplies relevant machine-readable diagnostics. Internal runner entry points may exist solely for launching and tracking SI-owned workers.
+
+Implement the following for both provider namespaces:
+
+| Command | Contract |
+| --- | --- |
+| `profile add <id> [--name <label>] [--email <expected-email>]` | Creates an empty native tree and metadata; never silently imports the default account |
+| `profile list`, `profile show <id> [--format json]` | Local metadata, selected profile, native storage location, and accurately qualified auth state; no tokens or network request on an ordinary list |
+| `profile login <id>` | Executes the provider's native login with the exact same profile environment as run/spawn; initial identity must match any expected identity |
+| `profile logout <id>` | Native logout scoped to that profile; refuse while credential-using workers of that profile are active |
+| `profile select <id>` | Changes only the future-launch default for that provider |
+| `profile remove <id>` | Unregisters an idle profile and clears its default selection; preserves native data/credentials on disk and prints their path |
+| `run --profile <id> -- <native arguments>` | Foreground native invocation with a tracked profile lease and inherited terminal/exit status; supports headless testing |
+| `spawn --profile <id> [--slot <id>] --workspace <path> -- <native arguments>` | Starts one owned tmux worker; duplicate active slot is idempotent only for the same launch contract, otherwise an error |
+| `list [--format json]`, `tail --profile <id> [--slot <id>]` | Registry plus actual tmux/native liveness; tail is an explicit local operation, not automatic secret-bearing log upload |
+| `tmux --profile <id> [--slot <id>]` | Attaches to the specific owned worker; never selects an account based on another pane |
+| `shell --profile <id> [--slot <id>] -- <command>` | Runs a diagnostic/helper command with that profile's controlled environment; interactive shell use is explicit |
+| `stop`, `remove`, `respawn`, each with explicit profile/slot | Stop native execution, remove idle lifecycle metadata/tmux pane, or restart the same account; never delete native conversation history |
+
+Default slot: `primary`, matching the existing `DEFAULT_CODEX_WORKER_SLOT`; use it for Muse too. Preserve familiar existing Codex flags where they satisfy this contract, including `--slot`, `--workspace`, and `--workdir`. Use explicit profiles for scripts; interactive default selection is optional convenience. Do not confuse an SI account profile with Codex's native `-p/--profile` configuration profile.
+
+Proposed acceptance workflow (after implementation):
+
+```sh
+si muse profile add personal --email personal@example.invalid
+si muse profile add work --email work@example.invalid
+si muse profile login personal
+si muse profile login work
+si muse spawn --profile personal --workspace /path/to/project-a
+si muse spawn --profile work --workspace /path/to/project-b
+si muse list --format json
+si muse tmux --profile personal
+```
+
+Those email addresses are examples, not credentials. Use the equivalent `si codex` commands for independently logged-in ChatGPT accounts. Removed root commands must fail as unknown commands, and old `profile swap` documentation must point to `profile select`; no compatibility shim may perform global auth swapping.
+
+## 6. Storage, identity, and child environment
+
+Keep the existing `~/.si` root and `settings.toml` for compatibility. Add an `SI_HOME` override for hermetic tests and portable installations. It controls SI's own root only and does not change the real user `HOME`. Reuse `codex.profiles.entries` and add `muse.profiles.entries`, with one selected profile per provider. Increment the config schema for this migration; this format marker is not another independently released SI product version.
+
+Default layout:
+
+```text
+~/.si/settings.toml                         # metadata, native executable paths, defaults
+~/.si/codex/profiles/<id>/                   # canonical CODEX_HOME; preserve existing path
+  auth.json                                # written only by native Codex
+  config.toml, sessions/, ...               # native per-account state
+~/.si/muse/profiles/<id>/
+  config/muse/auth.json                     # written only by native Muse
+  config/muse/...                           # native settings/trust
+  data/muse/...                            # sessions/index/plugins/runtime/history
+  cache/, state/                           # account-local XDG directories
+~/.si/<provider>/workers/<profile>/<slot>.json
+~/.si/locks/<provider>/<profile>.lock
+```
+
+Profile metadata: provider-scoped immutable ID, display name, optional expected email, canonical native root, identity summary/verification source, enrollment timestamp, and disabled/error state. Store no access token, refresh token, API key, device code, full JWT, or secret derived from them. A local parsed email is a display hint, not independently server-verified identity. If native identity verification is unavailable, say `identity_unverified`; do not manufacture an account ID.
+
+Worker records: provider/profile/slot, unique run generation, absolute native root and executable, native version, workspace/workdir, tmux socket/session/pane IDs, native session ID when known, launch time, PID plus a start-time discriminator where available, exit status, and lifecycle state. Store no complete process environment or raw token-bearing arguments. Give launches a private record for required non-secret argv; reject credentials on argv and direct users to native login/stdin facilities.
+
+Environment contract:
+
+| Provider | SI supplies | SI removes or rejects in the child |
+| --- | --- | --- |
+| Codex | `CODEX_HOME=<canonical profile home>` and enforced `cli_auth_credentials_store="file"` for every credential-using native operation | Inherited `OPENAI_API_KEY`, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN`, conflicting `CODEX_HOME`, and any other auth precedence variables demonstrated by that supported version |
+| Muse | `XDG_CONFIG_HOME=<root>/config`, `XDG_DATA_HOME=<root>/data`, `XDG_CACHE_HOME=<root>/cache`, `XDG_STATE_HOME=<root>/state`, `MUSE_AUTH_PATH=<root>/config/muse/auth.json` | Inherited `META_API_KEY` (native help says it takes priority over account login), conflicting Muse/XDG path overrides, and any other auth override actually supported by that version |
+| Both | Actual user `HOME`, caller's useful ordinary environment, controlled working directory, and non-secret `SI_PROVIDER`, `SI_PROFILE`, `SI_WORKER_SLOT` labels | Profile path changes via `--env`; invalid environment names; options that override the enforced credential-storage contract |
+
+Resolve the actual native binary/launcher before spawn; detect an SI wrapper pointing back to itself. Use typed `Command` arguments and environment removal, preferably through the existing `si-process::CommandSpec`. For Codex enforce file storage in the final effective configuration and reject conflicting passthrough `-c` values rather than relying on argument-order folklore. For Muse put `exec` first when using headless flags: the audit found that inserting a root-only option before `exec` can route the invocation into TUI parsing instead. Test argv handling for each native subcommand.
+
+The first release manages native account-login profiles. Route credential-mutating native commands through `profile login/logout` so their locking and identity checks cannot be bypassed through SI's `run` or `spawn` parser. Reject credential-input switches such as `--with-api-key`, `--with-access-token`, and `--api-key-stdin` in managed model launches, as well as effective provider/auth-store changes that conflict with the enrolled account. Do not turn this into a general custom-provider/API-key account system. Offline native auth-set fixtures bypass this production route deliberately and remain labelled fixtures. Users invoking native binaries themselves still control their own files; SI cannot police arbitrary same-user shell activity.
+
+Do not set production `TBH_*` internals or disable Muse updates for users by default. For reproducible tests set `MUSE_NO_AUTO_UPDATE=1` and record the binary version. The existing Muse launcher has an installation update lock; SI should share the installation, preserve that native updater, and recheck the path contract when a later version is detected. Do not use a new account as an excuse to download and maintain a separate CLI installation for every profile.
+
+Create SI-owned private directories with `0700` and metadata/private launch files with `0600`, under a restrictive creation mask. Refuse another user's storage, overlapping canonical roots, duplicate real paths through symlinks, and paths that escape the chosen root through profile IDs. New IDs/slots should use a bounded, validated ASCII slug; legacy display names can remain labels. Detect collisions instead of silently removing punctuation. Write config and records through locked, atomic replacement. Native credentials remain native-owned; SI must not rewrite their JSON or chmod another user's shared installation tree.
+
+XDG isolation also changes where tools launched by Muse look for some user configuration. Preserve `HOME`, Git/SSH paths, and ordinary tool discovery, and test representative subprocesses. Document how to opt in to selected non-secret native settings/plugins for a profile. Do not link full config/data trees across accounts or copy auth, history, MCP credentials, sessions, trust, and logs as a generic convenience.
+
+This is cooperative account separation under one OS user. It is not a security boundary against an agent with permission to read arbitrary files owned by that same user. Native sandbox permissions govern workspace actions; stronger hostile-agent separation would require another OS identity/container and is outside this release. Native explicit-file session export can read a deliberately supplied file path: the tested UUID separation must not be overstated as filesystem access denial.
+
+## 7. Native authentication and refresh lifecycle
+
+1. Profile creation makes only an empty store. Ordinary `list`/`doctor` must not start a login, refresh a token, create a second credential copy, or run a model prompt.
+2. Take a profile management lock for login/logout and enrollment changes. Reject login/logout while a native credential-using worker for that profile is active; report the exact workers to stop. Other profiles remain usable. Hold a separate worker-admission lease for native runtime concurrency; native internal refresh cannot be serialized by a short SI metadata lock.
+3. Codex login runs native `login --device-auth` with the enforced file store; support normal browser login as an explicit native option where device auth is unavailable. Muse login runs native `muse login` in the aligned XDG/auth environment. Inherit the terminal; device codes are not SI structured logs or CI artifacts.
+4. Validate native success and the destination store. Bind the profile to the account returned by the native login flow or supported read-only native identity facility. Compare any expected identity and an existing bound identity. A mismatch disables launch and returns a clear error; never retarget an existing profile to the different account. If a provider offers no server-confirmed identity read, retain that explicit limitation and require distinct native enrollment results for the live test rather than claiming hashes prove distinct accounts.
+5. All future runs use that same directory. Let native automatic refresh update its own credentials there. Status is based on native results, not file existence: distinguish `credential_present_unverified`, `not_logged_in`, `authenticated`, `reauth_required`, network failure, and provider quota failure.
+6. Reauthentication uses the same native login path after stopping only the affected workers. Resume only that profile's recorded native session IDs once the identity is confirmed unchanged. Do not restore an old auth backup after a token family has rotated.
+7. If the installed Muse credential mechanism lacks silent renewal, explicitly document native re-login as its recovery behavior. SI must not advertise unattended renewal until it is observed with that mechanism. No private auth endpoint reverse engineering or custom refresh daemon is part of the fix.
+8. On a managed Codex configuration that prevents per-home file storage, fail with the effective policy diagnostic. Do not silently fall back to a shared OS store. On Muse/macOS, fail the unsupported isolation gate until the native backend has documented, tested account scoping.
+
+An agent can run `si <provider> profile login <its-profile>` or a native login in its controlled environment; the provider may still require the account holder's approval. Do not pass provider web passwords or refresh tokens in agent prompts to automate that approval. A login procedure is not a quota-reset mechanism.
+
+## 8. tmux ownership and session lifecycle
+
+Use one SI-owned tmux socket per SI root, selected with an absolute socket path under a private runtime directory or a collision-resistant name derived from that root. All commands carry the same socket. This avoids applying global options to the user's ordinary tmux server and lets fixtures run on their own disposable socket. Do not kill the normal tmux server or load SI's old Codex-wide config into it.
+
+Give sessions provider/profile/slot-derived names and store ownership/run-generation labels as tmux user options. A lifecycle command must verify socket, session/pane IDs, ownership label, and registry generation before acting. An unrelated session with a matching display name is a conflict, not an object to replace. Do not trust a reused PID or tmux name alone.
+
+Create a worker reservation under the slot lock, launch a small internal SI runner, then commit the running record only after ownership and native startup are confirmed. The runner reads only its own private launch specification, applies profile environment immediately before native execution, records actual exit status, and releases the profile lease. A launch failure rolls back its reservation and its own newly created tmux session. It does not touch account auth or another worker. A supervisor/lease-holder may wait for the native child; SI must not become an LLM process supervisor or add automatic task scheduling.
+
+Use `remain-on-exit` for owned panes so failures can be inspected without silently starting a new login shell. `list` reconciles exited/missing tmux state without calling a model. `stop` sends a graceful interrupt to the owned native process, waits a bounded time, and permits an explicit force option for the owned process group. `remove` stops only when explicitly requested and removes lifecycle state, not account history. `respawn` reuses the same profile and optionally its native session ID; never silently create a new conversation when an explicit resume ID fails.
+
+For profile-scoped resume, accept an ID known in that profile's native store/record; refuse another profile's ID and ambiguous `--last` operations over merged storage. SI will not implement cross-profile export/import, shared history symlinks, cross-account handoff, peer messaging, or a central conversation database. The raw native CLI retains its own capabilities, but SI's managed resume flow must not offer cross-account routing.
+
+An explicit interactive `shell` should use a controlled environment and avoid a login-shell startup sequence that can silently overwrite profile paths. It remains a user's shell, not an isolation sandbox. Test the supported shell path, print profile identity in a non-secret prompt/label, and recommend `si ... run` for credential-using helpers. Native saved conversations survive pane removal; tmux does not restore an arbitrary live process after server/host death. Restart/resume must use native persisted history.
+
+## 9. Repository changes and removal map
+
+Do the refactor in small commits while retaining the existing Rust/Cargo architecture. Do not replace it with a Node service or adopt a third-party multi-account manager as a runtime dependency.
+
+| Area | Implementation work |
+| --- | --- |
+| `rust/crates/si-cli/src/main.rs` | Reduce root dispatch; extract `agents` modules for profile operations, runner, tmux lifecycle, and reconciliation; delete Fort/Surf/Viva/Image/Build dispatch and hidden Fort runtime paths |
+| `rust/crates/si-codex` | Retain native status parsing and useful profile/session helpers; remove Fort constants/env/session helpers and auth-copy behavior; implement the Codex provider adapter |
+| New `rust/crates/si-muse` | Small adapter for environment, native login/logout/exec argv, local auth-state qualification, and supported-version/platform checks; no MSP daemon or SDK dependency needed to launch a CLI |
+| `si-config` | Provider-scoped profile metadata and paths, migration reader, defaults, atomic writes; remove automatic Surf/Viva/Fort module loading and obsolete settings after migration |
+| `si-process` / shared CLI modules | Reuse typed subprocess execution; move the required file-lock primitive out of Fort and add the profile/worker lease behavior |
+| `si-command-manifest` | Retain only the new public contract; remove unrelated doc `include_str!` references and stale categories |
+| `si-fort`, `si-warmup` | Remove workspace membership, direct/transitive dependencies, source, product tests, and runtime hooks after extracting the genuinely generic lock code |
+| `si-tools` | Keep dev/release/installer and relevant agent test utilities; remove Fort/vault/browser host-matrix/init helpers that no longer exercise the product; add native-isolation and opt-in live test runners |
+| Root `Cargo.toml`, `Cargo.lock` | Add only the small Muse adapter and remove dependencies no longer used after the cuts; derive all SI versions from the workspace version |
+| `.github/workflows/fort-ci.yml` | Remove and replace its useful coverage with provider isolation/tmux tests in normal SI CI; no Fort service provisioning |
+| Release/install workflows, `.github/scripts`, `tools/si-dev` | Call extracted development tooling; keep a cached source build path and the existing native distribution targets |
+| `tools/si-cache-governor`, unrelated tmux config | Remove from the product/developer setup if no retained SI test/build depends on it; retain only account-worker-specific tmux settings scoped to owned sessions |
+| README, docs, assets, npm/Homebrew metadata, `AGENTS.md` | Rewrite scope and examples; remove Fort/Browser/Vault/Image/Viva/Warmup pages and links, stale branding examples, and the instruction requiring `si fort` for operator secrets; retain release/version rules and the existing license |
+
+Search beyond command dispatch: deprecated names occur in help manifests, CLI tests, installer payloads, shell snippets, npm README/description, Homebrew formula, docs site navigation, and CI path filters. Update `docs/CLI_REFERENCE.md`, `COMMAND_REFERENCE.md`, `SETTINGS.md`, `testing.md`, `HOST_TEST_MATRIX.md`, `RELEASING.md`, `HOMEBREW_CORE.md`, and `docs/index.mdx` consistently. Collapse obsolete cache/governance material if no longer relevant. Do not remove unrelated historical Git commits or delete user Fort/vault/browser data on disk.
+
+## 10. Non-destructive upgrade and migration
+
+Implement a narrow `si doctor --migration-plan --format json` dry-run and `si doctor --migrate` apply operation for this schema transition. These are account-manager maintenance, not a resurrected general settings subsystem.
+
+1. Inventory legacy `~/.si/settings.toml`, configured Codex profile auth paths, worker records and per-slot homes. Read only the necessary metadata. Report active owned workers and ambiguous account/path mappings. Preserve a private backup of metadata, not a release/CI artifact containing auth files.
+2. Refuse apply while relevant old SI-managed workers run; offer exact targeted stop commands. Do not stop unrelated default Codex/Muse processes. Existing unmanaged/default accounts remain outside migration.
+3. Keep each normal legacy Codex profile directory as its canonical native home. Convert ordinary `auth_path=<home>/auth.json` into the native-home field. Reject two profiles resolving to one canonical store. For an arbitrary custom credential filename or divergent per-slot credentials, do not choose by mtime or copy one over another. Mark the profile for native enrollment into a single canonical store after the user/agent has selected the intended account.
+4. Do not read a refresh token into SI configuration, revive a stale credential backup, or reuse the old reset/swap code. One-time native re-login is safer than guessing which fork of an OAuth credential is still valid.
+5. Preserve all old native session data. For Codex per-slot histories belonging to the **same** verified profile, implement an offline migration of supported native log files to the canonical native session tree, preserving IDs and detecting duplicate-content/conflicting-ID cases. Prove the native CLI can discover/resume migrated logs on representative fixtures before enabling the operation. Do not merge native SQLite databases by SQL or import histories from another profile. If the installed native format cannot be safely ingested, leave that history read-only in its original location and report the exact limitation; never delete it or silently start a fresh conversation in its place.
+6. Convert worker records into provider-scoped records as stopped/legacy entries, preserving workspace and native IDs. Do not pretend a new dedicated-socket worker owns an already running legacy tmux pane.
+7. Write the new metadata atomically and retain obsolete config sections in the metadata backup. Running the migration a second time must produce no changes. Failed validation leaves the original metadata and every native auth/history file intact.
+8. Tell the user that future plain `codex`/`muse` invocations still use their normal defaults; SI does not install PATH interceptors, write shell startup files, or maintain a global active token.
+
+Normal new setup should use fresh native logins per SI profile. A generic default-auth import command is unnecessary for the first release. Legacy ambiguous stores may require account-holder approval during reenrollment; report that specific need rather than hiding it behind a fake success state.
+
+## 11. Implementation order and completion gates
+
+### Phase A — baseline and packaging extraction
+
+1. Re-read root `AGENTS.md`, inspect current branch/worktree and new upstream commits, and capture root version/latest release. Use a feature branch; do not overwrite another agent's edits. This plan was written without an application commit. `plans/` is ignored by the current `.gitignore`; explicitly force-add this file if it is to be committed for handoff, or add a narrow tracked exception as part of that documentation commit.
+2. Inventory root/hidden commands, Fort dependencies, installer/release callbacks, docs links, and native executable resolution. Record known destructive routines so they cannot be used accidentally.
+3. Move the existing release archive validation/build/verification, npm rendering/publish, Homebrew rendering, and installer smoke logic out of public `si build` into a development-only `si-tools` binary, e.g. `si-release`. Change every CI caller and run its validation-only path before deleting the old dispatch. Avoid a parallel version source or separate release-service dependency.
+4. Run a baseline offline test subset with isolated `SI_HOME` and a temporary tmux socket. Fix malformed Cargo test invocations in the retained workflows: test harness arguments follow `--`, e.g. `cargo test --workspace --locked -- --test-threads=2`.
+
+Gate: replacement developer tooling can make/verify local assets and run installer smoke tests without a published release, and no CI job still requires the soon-to-be-removed command.
+
+### Phase B — shared profile and lifecycle core
+
+5. Implement provider/profile/slot IDs, canonical paths, schema migration dry-run, atomic metadata/locks, structured diagnostics, and provider adapter interfaces. Keep shared interfaces limited to capabilities actually used: native environment, login/logout, invocation, and qualified status.
+6. Correct Codex native-home usage, eliminate global swap and copied worker credentials, force supported file storage, and delete Fort launch coupling. Add profile selection and controlled foreground `run`.
+7. Implement the owned tmux socket, runner/lease, reservation/exit recording, stop/remove/respawn/attach/tail behavior, and stale-state reconciliation. Preserve workspace/slot semantics. Reject conflicting identities, homes, and existing sessions.
+8. Add native credential override protection and argument/environment validation. Preserve user-selected native models/permissions unless they conflict with account scoping; do not translate SI account selection into native model configuration profiles.
+
+Gate: offline account A/B tests demonstrate independent stores and lifecycle actions, and a regression fixture proves default `~/.codex` is never reset or overwritten.
+
+### Phase C — Muse adapter and product cuts
+
+9. Add Muse native commands with aligned XDG/auth paths and version/platform diagnostics. Test auth-set/login/logout destination behavior with the actual installed native version before claiming a compatible release range.
+10. Reproduce the audited echo and UUID-isolation tests through SI itself, then repeat credential-path tests without forced backend internals on Linux. Verify a failed login/launch never falls back to the normal user's Muse store.
+11. Remove all unrelated public/hidden command branches, crates, dependencies, workflows, tests, stale settings loaders, and documentation from the removal map. Do not retain Fort under a different name or keep broad product build menus just to avoid updating CI.
+12. Rewrite onboarding and troubleshooting for two profiles per provider, native credential renewal/re-login, precise auth-state labels, persistent native history, and the Linux/Darwin support matrix. Add breaking-change and migration guidance to the changelog.
+
+Gate: shipped `--help` exposes only the intended root commands, removed commands fail, the workspace builds without removed crates, all docs/examples match the actual parser, and native Linux fixture tests pass.
+
+### Phase D — real accounts and refresh acceptance
+
+13. Enroll two distinct authorized Muse accounts and two distinct authorized Codex accounts in dedicated test profiles. Initial native account approval is the only expected manual step if no approved profiles exist. Do not clone the existing account's auth twice and call that a two-account test.
+14. Run the live matrix below through the candidate SI binary and the recorded native versions. Verify identity using supported provider/native evidence; do not infer distinct accounts from different filenames or token hashes.
+15. Exercise native renewal across process exit/restart and account A/B overlap. Evaluate same-profile concurrency separately. Keep that capability disabled for a provider/version unless supported native locking behavior and stress tests prove it; never solve a failed test by forking credentials into more homes.
+16. Produce a redacted compatibility/acceptance report. A missing second account or an unobserved renewal remains an explicit failed/incomplete gate, not a green or skipped test being marketed as successful authentication.
+
+Gate: real simultaneous accounts work, A's credential lifecycle never changes B's identity/store, no cross-account resume/fallback occurs, and the actual supported renewal or re-login behavior is documented truthfully.
+
+### Phase E — candidate validation, release, and post-release smoke
+
+17. Run retained workspace checks once against the final candidate, then the host/native/installer matrix. Re-run only checks affected by later corrections. Build candidate artifacts from the exact proposed release commit.
+18. Follow the release procedure in section 13. Publish only after the live/core/package gates pass. The current task authorizes planning, cloning, and unarchiving; it does not perform an implementation commit, tag, publish, npm release, or Homebrew push.
+19. Install each advertised distribution into a temporary prefix/profile, verify its version/help and account isolation, and retain a safe recovery path. Produce release evidence containing versions, commit, platform, and pass/fail results only.
+
+## 12. Tests the implementing agent must run
+
+### Offline CI: realistic lifecycle and failure tests
+
+Use private temporary `SI_HOME`, dummy native executables that record only non-secret environment/argv, and a dedicated tmux socket. Never run integration tests against `~/.codex`, the user's default Muse XDG paths, or the normal tmux server.
+
+- Start Codex A/B and Muse A/B simultaneously; record a process overlap barrier, exact environment/working directory, provider/profile ownership, and distinct state roots. Explicitly seed inherited auth/path overrides with fake values and prove children ignore or reject them rather than selecting another account.
+- Simulate native credential replacement in A, exit, then restart A: the new credential stays in its canonical store and is not overwritten by SI. B remains byte-identical. This tests SI behavior, not the provider's real OAuth endpoint.
+- Test each login/logout/status/run/spawn/shell path for the same environment contract. Separate native JSON data from provider identity evidence; malformed/unknown auth formats become a qualified unknown state, not a crash or false login success.
+- Test simultaneous duplicate-slot requests, conflicting launch requests, two profile paths resolving to the same store, invalid IDs, shell-metacharacter environment keys, workspace paths with spaces, symlink escapes, missing binaries, and native startup failure. Assert no partial live worker or default-account fallback remains.
+- Test stop/remove/respawn while the other profile is active, worker crash, stale registry record, reused PID, unrelated tmux name collision, and tampered ownership label. Assert only the owned worker is affected, native histories survive, and actual exit status is retained.
+- Test account identity mismatch, unsupported credential backend/platform, model quota error, and network failure. No case should switch account, share a history, or endlessly respawn.
+- Test dry-run/no-op migration, legacy normal/custom paths, divergent worker credentials, active workers, same-profile history conflicts, and failure rollback. Sentinel auth/history files in the default homes must remain unchanged.
+- Parser/help coverage must assert the small public root, removed command rejection, matching provider commands, and native passthrough semantics. Verify Codex's native config `--profile` is not mistaken for an SI account ID.
+
+Required retained checks: `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked -- --test-threads=2`, plus the extracted tooling's relevant tests. Check workflow syntax/references and docs links. No test should provision Fort or need live login for ordinary PR CI.
+
+### Installed native CLI tests: no real-account claims
+
+Build a harness that can acquire the official native executable when available, pin/record its version, and fail with a useful prerequisite diagnostic. The generic CI stub suite remains portable; actual-native tests must be reported separately rather than silently equated with stubs.
+
+For Muse: auth-set fake stdin keys into A/B aligned stores, verify `0600`; run two tmux `exec --provider echo` workers with `--disable-shell --disable-write --disable-web-tools --disable-reminders --no-foreign-personal-context`; verify overlap, independent JSONL/session-index locations, own UUID export success, foreign UUID rejection, and A logout preserving B. Repeat writer tests without `TBH_CREDENTIAL_BACKEND` on Linux. Trace file opens without dumping file contents; explicitly check for reads/writes of default auth and foreign profile paths. The echo provider does not use Meta auth and is not a login/model integration test.
+
+For Codex: `login status` in empty homes with file storage forced must be unauthenticated; default auth must not be read. Use local fake provider/credential fixtures only for deterministic adapter/error tests, never to claim successful ChatGPT authentication. Verify native session lookup under separate homes and the migrated native log format before applying real history migration.
+
+### Opt-in live acceptance: two genuinely different accounts
+
+Add a development-only runner such as `si-live-accounts --provider muse --profile-a test-a --profile-b test-b`. It consumes already enrolled profile names, not token arguments. It must reject identical canonical stores or identical confirmed provider account identities. Run on a trusted host holding those native account stores; regular public/fork PR runners must not receive subscription credentials. Raw tmux captures/device codes/native auth files must not be uploaded. Machine-readable reports contain assertions and redacted identity labels only.
+
+| Test | Automated actions and pass condition |
+| --- | --- |
+| Independent real enrollment | Native login in A and B; confirm intended distinct identity using the native provider flow/read where available; store evidence provenance, not full auth output |
+| Simultaneous real requests | Launch A and B behind a barrier, using the actual subscription provider; both requests complete while process lifetimes overlap, under their expected account/native root |
+| Tiny headless model response | Generate a random marker and request only that marker; parse the native final assistant-result event, not an echoed input prompt; require success exit and expected response |
+| Stop/respawn A while B works | Record B's live generation/identity; stop then resume A's own native ID; B keeps its generation/store and completes a further real request |
+| Logout A with B active | Stop A only, native logout A, verify A cannot make an authenticated request, and B still can; do not judge only by disappearance of a local file |
+| Re-login A, unchanged account | Re-enroll the same account, validate identity, resume A's own history, and show B remains authenticated and unchanged |
+| Native renewal | Observe a genuine native refresh/renewal when the mechanism supports it, then restart from the same store and make another real request; no manual token copy or cross-account fallback |
+| Independent expiry/revocation | Use dedicated test profiles/accounts or a supported provider test mechanism to make A require reauth; A reports that condition while B continues; never revoke the user's normal working credential |
+| Session association | Resume A's known native ID in A; managed resume in B must reject A's ID without making a model call or creating a replacement session |
+| Same-profile concurrency capability | If enabling multiple slots, overlap two workers and native renewal in one profile repeatedly, then restart both; no corrupted auth, invalidated refresh fork, wrong identity, or lost update |
+| Normal subprocess use | In a disposable workspace, verify ordinary Git/tool discovery and intended profile-local settings; native auth still uses the profile paths after subprocess/shell startup |
+
+Use short prompts, an ordinary account-supported model, and native permissions that disable workspace writes/tools for authentication smoke tests. For the installed versions the core invocation shapes are:
+
+```sh
+si muse run --profile test-a -- exec --provider meta --json \
+  --workspace /private/test-workspace-a --disable-shell --disable-write \
+  --disable-web-tools --disable-reminders --no-foreign-personal-context \
+  'Return only the supplied unique marker.'
+
+si codex run --profile test-a -- exec --json --sandbox read-only \
+  --skip-git-repo-check 'Return only the supplied unique marker.'
+```
+
+The runner supplies an actual randomized marker and a private workspace, validates available flags against that native version, caps retries/time/cost, and parses terminal events. A failed/unauthenticated call must fail the gate even if the input prompt appears in stdout. For a more conclusive real-request overlap test, use a small repeated sequence while the other process remains alive; do not introduce expensive benchmark tasks.
+
+Renewal tests must use a supported native hook/test mechanism or wait for genuine expiry while preserving the provider's credential format. Do not edit JWT claims, invent refresh tokens, or treat a changed mtime as renewal proof. Read-only expiry scheduling and a resumable long-running test are acceptable. If Muse's mechanism has no silent refresh, report its native re-login requirement and test that recovery; the release must not promise an unavailable silent-refresh capability. Native API-key-only fixtures do not establish OAuth renewal. Initial/reapproval steps may be pending until the account holder approves them; all independent fixture, build, and packaging work can proceed meanwhile.
+
+## 13. Release plan
+
+The latest GitHub release at audit time is `v0.60.0`, published 2026-06-01. The proposed next release is **`v0.61.0`**, provided no later minor release appears before execution. Suggested title: `SI: isolated Codex and Muse accounts`. Explicitly describe removed commands and the migration path as breaking behavior within this pre-1.0 release.
+
+Follow root `AGENTS.md`: one hard-coded SI version in root `[workspace.package].version`; each implementation/documentation commit changing SI bumps the patch in that commit, updates the lockfile as needed, and rebuilds/updates mapped local installations where applicable. Only the release commit advances the minor and resets patch to zero. Only that commit gets a canonical `vX.Y.0` tag. Do not publish/tag `0.60.20`, use a bare tag, or create separate Muse/Codex adapter versions. If this plan is committed before implementation, that documentation commit also follows the patch/rebuild rule.
+
+Keep the existing distribution contract:
+
+- Linux amd64/arm64 and Darwin amd64/arm64 SI archives, with provider capability limits stated separately from binary-install support.
+- Archive names `si_<version>_<linux|darwin>_<amd64|arm64>.tar.gz` and `checksums.txt`; the npm downloader currently constructs this exact underscore-based name.
+- `@aureuma/si` stays a thin native-binary downloader/launcher. Homebrew stays the SI formula in `Aureuma/homebrew-si`. Neither package includes native provider credentials, session data, or a bundled Muse/Codex installation.
+- Preserve checksum validation and the current artifact provenance attestation where supported. Test archives for expected members, executable format, version, and absence of private profile artifacts.
+
+Simplify release orchestration while extracting `si build`: replace the external ReleaseMind dependency with deterministic release notes and a single controlled candidate/publish pipeline, or remove its workflow entirely when the replacement is ready. The current ReleaseMind workflow references separate service credentials, and the currently listed repository secret names are `GH_PAT_AUREUMA`, `HOMEBREW_TAP_PUSH_TOKEN`, and `NPM_TOKEN`; names alone do not prove validity or exhaust organization/environment secrets. No external release-note service is required for this CLI.
+
+Release steps:
+
+1. Generate changelog/release notes from every commit since the prior canonical minor release, including `0.60.1` through `0.60.19` and the new refactor commits; explain removal of global swap, Fort/warmup/browser/image/vault remnants, provider data isolation, native renewal limits, and migration.
+2. Create the release commit/version only after final CI and live account gates pass. Derive package/formula versions from root Cargo metadata. Rebuild the repository-local binary and any deliberately mapped host SI installation without replacing native `muse` or `codex`.
+3. Build candidate archives and checksum/provenance artifacts from that exact commit on the existing four-target matrix. Validation dispatch must resolve and compare the requested tag/commit/workspace version; the existing dispatch checks out `GITHUB_SHA`, which must not accidentally publish assets from a different commit under a supplied tag.
+4. Run local archive, direct-install, npm/pnpm downloader, and Homebrew formula smoke tests using temporary prefixes and fixture homes. Include missing `tmux`/native-CLI diagnostics and removed-command checks. Verify package description/README match the focused product. On Darwin, test Codex file profiles and the explicit Muse unsupported gate unless real Keychain isolation has passed.
+5. Create the canonical tag on the validated release commit and a draft GitHub release. Upload all archives and checksums to that draft, verify downloads/content/commit association, then publish it. Make the pipeline's draft/build/promotion stages explicit so publishing does not create a public release with missing assets or trigger a second competing build.
+6. Publish the derived npm package only after public assets are available, then update the Homebrew tap using those exact checksums. Test configured secret access without printing it. An expected channel's absent/invalid token is a failed distribution step, not a successful skipped publish. Keep channel retries idempotent without silently replacing an immutable npm version.
+7. Keep GitHub credentials out of clone URL/argv and recorded Git remotes when updating the tap; use `gh`/a credential helper or appropriate scoped checkout credentials. The current workflow embeds a token in an HTTPS clone URL; correct that while moving the release tools.
+8. Verify the public release tag/commit/assets, npm resolved version and clean install, tap formula checksums/install, `si --version`, minimal root help, and a two-profile native smoke test on the target host. Record separate success/failure for each channel.
+9. Retain the previous binary and pre-migration metadata for diagnosis, but do not resume account operations with the audited old binary: its global swap and copied-credential behavior remain unsafe for this design. Prefer a last verified safe build if one exists. Otherwise stop affected SI workers and use the native CLI directly with the account's canonical environment from section 6 while fixing SI forward. That fallback works because SI does not own or transform native credentials/history. A metadata rollback happens only with workers stopped and must not restore stale native credentials or delete new histories. Do not claim that a new SI version can prohibit someone explicitly running an older executable. If a distribution channel fails, fix/retry that channel or issue the next proper release as necessary; do not retag a published version to a different commit.
+
+No release or implementation is performed by this planning task. The repository is already unarchived, so a later authorized implementation/release run does not need to repeat that mutation.
+
+## 14. Definition of done for the coding agent
+
+- SI's shipped functionality is account/agent management for Codex and Muse, with help/version and relevant diagnostics only; unrelated code, dependencies, docs, and CI coupling are removed.
+- Two distinct real Muse accounts and two distinct real Codex accounts can run simultaneously on the supported host with separate canonical auth and native data stores. Ordinary native default installations continue to function independently.
+- Login/logout/renewal or required native re-login, stop/respawn, session association, and failure paths affect only their owning profile. No global swapping, per-worker token copies, account fallback, or cross-account history sharing remains.
+- Fixture tests, installed-native tests, real-account tests, and supported-platform claims are reported separately and accurately. Same-profile concurrency is enabled only when proven.
+- Migration is idempotent, does not silently destroy or overwrite credentials/history, and reports ambiguous legacy stores explicitly.
+- Release tooling works after `si build` is removed; the root-version/tag policy, exact artifact naming, package/tap smoke tests, provenance/checksums, release notes, and rollback rules are satisfied.
+- A final implementation report links the changed files, exact native/SI versions, redacted test results, known provider limitations, and published distribution URLs. No incomplete live gate is hidden behind a successful unit-test count.
+
+## 15. SiC execution log (append-only; plan history above is preserved)
+
+- 2026-10-07T14:50Z `SiC done` STEP 0: effort set to `max` (saved `reasoning_effort=max` + per-model `max` in Muse settings.json, verified by reread; current session unchanged, effective next launch). Permission profile already `:unrestricted`.
+- 2026-10-07T14:50Z `SiC done` Phase A step 1: branch `sic/codex-muse-refocus-release` created from `main@2b0ef26b` (clean tree). Root version at audit `0.60.19`; latest GitHub release `v0.60.0` (2026-06-01); no newer minor exists, so release target stays `v0.61.0`. `plans/` stays ignored; this file force-added for handoff (narrow `!plans/...` exception tested ineffective under ignored-dir rule, reverted).
+- 2026-10-07T14:50Z `SiC done` Phase A step 2: inventory complete via 4 parallel collectors (Workflow). Confirmed: `Command` enum has Version/Help/Build/Commands/Doctor/Settings/Image/Codex/Surf/Viva/Fort (`main.rs:96-175`); hidden `__fort-runtime-agent` in si-command-manifest (`lib.rs:104-109`); `si-cli` depends on `si-fort`+`si-warmup`; `si build` callers in `cli-release-assets.yml` (validate/asset/verify/publish/smoke-homebrew/homebrew-update); destructive routines `reset_host_codex_home` (:7619), `swap_codex_profile` (:8079), `sync_codex_profile_auth_to_home` (:8722), unsafe `build_codex_launch_command` (:8685); 5th workflow file identified as `workflow-sanity.yml`. Truncated tails to re-read before edit: wrapper parsers (:700-900), `prepare_codex*` (:8750+), `releasemind-release.yml` body.
