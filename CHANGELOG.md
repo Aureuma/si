@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
-## [Unreleased]
+## [0.61.0] - 2026-10-07
 ### Added
 - Added a first-class Vertex Gemini generation command under `orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
 - Added `tools/si-cache-governor` and the `docs/CACHE_GOVERNANCE.md` runbook for workspace-wide cache auditing and conservative prune operations.
