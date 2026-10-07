@@ -38,6 +38,10 @@ path = "src/bin/codex_interactive_driver.rs"
 name = "si-release"
 path = "src/bin/si_release.rs"
 
+[[bin]]
+name = "si-live-accounts"
+path = "src/bin/si_live_accounts.rs"
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
