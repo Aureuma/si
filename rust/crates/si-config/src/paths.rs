@@ -1,25 +1,54 @@
+use crate::ids::{ProfileId, Provider, SlotId};
 use crate::settings::Settings;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+
+/// Environment override for SI's own root (hermetic tests, portable installs).
+///
+/// It controls SI's root only and never changes the real user `HOME`.
+pub const SI_HOME_ENV: &str = "SI_HOME";
+
+/// Resolve SI's root: `$SI_HOME` when set and non-empty, else `~/.si`.
+pub fn resolve_si_root(home: &Path) -> PathBuf {
+    resolve_si_root_with(home, std::env::var(SI_HOME_ENV).ok())
+}
+
+/// Pure helper behind [`resolve_si_root`]: `si_home` is the raw env value.
+pub fn resolve_si_root_with(home: &Path, si_home: Option<String>) -> PathBuf {
+    match si_home.map(|raw| raw.trim().to_owned()) {
+        Some(raw) if !raw.is_empty() => expand_home(&raw, home),
+        _ => home.join(".si"),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SiPaths {
     pub root: PathBuf,
     pub settings_file: PathBuf,
     pub codex_profiles_dir: PathBuf,
+    pub muse_profiles_dir: PathBuf,
 }
 
 impl SiPaths {
     pub fn from_home(home: &Path) -> Self {
-        let root = home.join(".si");
+        Self::from_si_root(home.join(".si"))
+    }
+
+    pub fn from_si_root(root: PathBuf) -> Self {
         let settings_file = root.join("settings.toml");
         let codex_profiles_dir = root.join("codex").join("profiles");
-        Self { root, settings_file, codex_profiles_dir }
+        let muse_profiles_dir = root.join("muse").join("profiles");
+        Self { root, settings_file, codex_profiles_dir, muse_profiles_dir }
+    }
+
+    /// Resolve paths honoring the `SI_HOME` override.
+    pub fn discover(home: &Path) -> Self {
+        Self::from_si_root(resolve_si_root(home))
     }
 
     pub fn from_settings(home: &Path, settings: &Settings) -> Self {
-        let mut resolved = Self::from_home(home);
+        let mut resolved = Self::discover(home);
 
         if let Some(root) = settings.paths.root.as_deref() {
             resolved.root = expand_home(root, home);
@@ -34,12 +63,60 @@ impl SiPaths {
         } else {
             resolved.codex_profiles_dir = resolved.root.join("codex").join("profiles");
         }
+        if let Some(muse_profiles_dir) = settings.paths.muse_profiles_dir.as_deref() {
+            resolved.muse_profiles_dir = expand_home(muse_profiles_dir, home);
+        } else {
+            resolved.muse_profiles_dir = resolved.root.join("muse").join("profiles");
+        }
 
         resolved
     }
 
+    /// Provider state directory: `<root>/<provider>/`.
+    pub fn provider_dir(&self, provider: Provider) -> PathBuf {
+        self.root.join(provider.as_str())
+    }
+
+    /// Canonical profiles directory for a provider.
+    pub fn profiles_dir(&self, provider: Provider) -> PathBuf {
+        match provider {
+            Provider::Codex => self.codex_profiles_dir.clone(),
+            Provider::Muse => self.muse_profiles_dir.clone(),
+        }
+    }
+
+    /// Default canonical native root for a (new) profile: `<profiles>/<id>/`.
+    pub fn default_native_root(&self, provider: Provider, profile: &ProfileId) -> PathBuf {
+        self.profiles_dir(provider).join(profile.as_str())
+    }
+
+    /// Worker lifecycle records: `<root>/<provider>/workers/`.
+    pub fn workers_dir(&self, provider: Provider) -> PathBuf {
+        self.provider_dir(provider).join("workers")
+    }
+
+    /// One worker record: `<root>/<provider>/workers/<profile>/<slot>.json`.
+    pub fn worker_record_path(
+        &self,
+        provider: Provider,
+        profile: &ProfileId,
+        slot: &SlotId,
+    ) -> PathBuf {
+        self.workers_dir(provider).join(profile.as_str()).join(format!("{}.json", slot.as_str()))
+    }
+
+    /// Profile locks: `<root>/locks/<provider>/`.
+    pub fn locks_dir(&self, provider: Provider) -> PathBuf {
+        self.root.join("locks").join(provider.as_str())
+    }
+
+    /// Management lock for one profile: `<root>/locks/<provider>/<profile>.lock`.
+    pub fn profile_lock_path(&self, provider: Provider, profile: &ProfileId) -> PathBuf {
+        self.locks_dir(provider).join(format!("{}.lock", profile.as_str()))
+    }
+
     pub fn load(home: &Path, settings_file: Option<&Path>) -> Result<Self, LoadPathsError> {
-        let default_paths = Self::from_home(home);
+        let default_paths = Self::discover(home);
         let path = settings_file.unwrap_or(default_paths.settings_file.as_path());
         if !path.exists() {
             return Ok(default_paths);
@@ -93,6 +170,7 @@ mod tests {
         assert_eq!(paths.root, Path::new("/tmp/test-home/.si"));
         assert_eq!(paths.settings_file, Path::new("/tmp/test-home/.si/settings.toml"));
         assert_eq!(paths.codex_profiles_dir, Path::new("/tmp/test-home/.si/codex/profiles"));
+        assert_eq!(paths.muse_profiles_dir, Path::new("/tmp/test-home/.si/muse/profiles"));
     }
 
     #[test]
@@ -162,5 +240,41 @@ codex_profiles_dir = "~/state/si/codex-profiles"
             LoadPathsError::ParseSettings { path, .. } => assert_eq!(path, settings_path),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn si_home_override_controls_root_only() {
+        use super::resolve_si_root_with;
+        let home = Path::new("/home/user");
+        assert_eq!(
+            resolve_si_root_with(home, Some("/tmp/isolated-si".to_owned())),
+            Path::new("/tmp/isolated-si")
+        );
+        assert_eq!(resolve_si_root_with(home, Some("  ".to_owned())), home.join(".si"));
+        assert_eq!(resolve_si_root_with(home, None), home.join(".si"));
+        assert_eq!(
+            resolve_si_root_with(home, Some("~/portable/si".to_owned())),
+            home.join("portable/si")
+        );
+    }
+
+    #[test]
+    fn derives_provider_lock_and_worker_paths() {
+        use crate::ids::{ProfileId, Provider, SlotId};
+        let paths = SiPaths::from_home(Path::new("/home/user"));
+        let profile = ProfileId::parse("personal").expect("profile");
+        let slot = SlotId::or_primary(None).expect("slot");
+        assert_eq!(
+            paths.default_native_root(Provider::Muse, &profile),
+            Path::new("/home/user/.si/muse/profiles/personal")
+        );
+        assert_eq!(
+            paths.worker_record_path(Provider::Codex, &profile, &slot),
+            Path::new("/home/user/.si/codex/workers/personal/primary.json")
+        );
+        assert_eq!(
+            paths.profile_lock_path(Provider::Muse, &profile),
+            Path::new("/home/user/.si/locks/muse/personal.lock")
+        );
     }
 }
