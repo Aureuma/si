@@ -42,14 +42,29 @@ path = "src/bin/codex_stdout_parser.rs"
 name = "codex-interactive-driver"
 path = "src/bin/codex_interactive_driver.rs"
 
+[[bin]]
+name = "si-release"
+path = "src/bin/si_release.rs"
+
 [dependencies]
+anyhow.workspace = true
 chrono.workspace = true
+clap.workspace = true
+flate2 = "1.1.2"
 libc.workspace = true
 regex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+sha2.workspace = true
+tar = "0.4.44"
 tempfile.workspace = true
+toml.workspace = true
+url.workspace = true
+si-config = { path = "../si-config" }
 
 [dev-dependencies]
+assert_cmd.workspace = true
+tar = "0.4.44"
 tempfile.workspace = true
