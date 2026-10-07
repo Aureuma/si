@@ -30,6 +30,26 @@ cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin
 
 That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
 
+## tmux isolation in tests
+Tests that spawn tmux must never address the developer's live server.
+On 2026-10-07 a test's bare `tmux kill-server` destroyed the developer's
+sessions because `TMUX` inherited from the surrounding pane takes precedence
+over `TMUX_TMPDIR` — the "isolated" server was never isolated.
+
+Rules:
+- Always pass `-S <owned socket>` (usually `<home>/.si/runtime/tmux.sock`).
+  `TMUX_TMPDIR` alone does not isolate: any inherited `TMUX` overrides it.
+- Never run bare `tmux new-session`, `kill-session`, or `kill-server` in a
+  test. `kill-server` is only acceptable with `-S` against an owned socket,
+  and owned-server cleanup belongs in `TmuxGuard`.
+- Use the `tmux_ok`/`tmux_command` helpers in `si-cli/tests/cli.rs`, which
+  scrub `TMUX` from the child environment. Do not add new raw
+  `Command::new("tmux")` call sites.
+- Production `legacy_default_server_workers` intentionally reads the ambient
+  server (read-only `ls`) to find pre-migration workers; tests must not
+  depend on ambient-server state. Helper isolation is locked by
+  `tmux_helper_ignores_inherited_tmux_env`.
+
 ## Orbit validation
 
 Third-party Orbit integration coverage moved to the standalone `Aureuma/orbit` repo. Run `cargo test --workspace` from that repo for provider integration tests.
