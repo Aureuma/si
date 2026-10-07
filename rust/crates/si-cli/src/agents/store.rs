@@ -163,3 +163,50 @@ impl SettingsDoc {
         Ok(Self { path: path.to_path_buf(), document: crate::load_settings_document(path)? })
     }
 }
+
+/// Resolve a native provider program: explicit `--<name>-bin` wins, else PATH.
+/// Refuses to run SI itself as the native CLI.
+pub fn resolve_native_program(explicit: Option<PathBuf>, name: &str) -> Result<PathBuf> {
+    let program = match explicit {
+        Some(path) => {
+            if !path.is_file() {
+                anyhow::bail!("native {name} not found at {}", path.display());
+            }
+            path
+        }
+        None => crate::resolve_program_on_path(name)
+            .ok_or_else(|| anyhow::anyhow!("native {name} not found on PATH; pass --{name}-bin"))?,
+    };
+    if let (Ok(candidate), Ok(current)) =
+        (program.canonicalize(), std::env::current_exe().and_then(|exe| exe.canonicalize()))
+    {
+        if candidate == current {
+            anyhow::bail!(
+                "refusing to run SI itself ({}) as the native {name} CLI",
+                program.display()
+            );
+        }
+    }
+    Ok(program)
+}
+
+/// Expand a leading `~` against the real user home.
+pub fn expand_home(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if text == "~" {
+        return default_home_dir();
+    }
+    if let Some(suffix) = text.strip_prefix("~/") {
+        return default_home_dir().join(suffix);
+    }
+    path
+}
+
+/// Workdir: explicit flag (relative joins the workspace), else workspace.
+pub fn resolve_workdir(workdir: Option<&str>, workspace: &Path) -> Result<PathBuf> {
+    let Some(workdir) = workdir.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(workspace.to_path_buf());
+    };
+    let path = expand_home(PathBuf::from(workdir));
+    if path.is_absolute() { Ok(path) } else { Ok(workspace.join(path)) }
+}

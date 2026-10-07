@@ -7,5 +7,6 @@
 
 pub mod codex;
 pub mod migrate;
+pub mod muse;
 pub mod runner;
 pub mod store;

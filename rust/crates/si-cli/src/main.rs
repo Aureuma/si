@@ -38,6 +38,7 @@ use si_fort::{
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
 };
+use si_muse::muse_worker_slot_name;
 use si_warmup::{
     WarmupState, classify_autostart_request, default_autostart_marker_path,
     default_disabled_marker_path, default_state_path as default_warmup_state_path,
@@ -102,6 +103,10 @@ enum Command {
     Codex {
         #[command(subcommand)]
         command: Box<CodexCommand>,
+    },
+    Muse {
+        #[command(subcommand)]
+        command: Box<MuseCommand>,
     },
     Surf {
         #[arg(long)]
@@ -522,6 +527,262 @@ enum CodexCommand {
     #[command(name = "respawn")]
     Respawn(CodexRespawnArgs),
 }
+#[derive(Debug, Args)]
+struct MuseSpawnStartArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    workspace: Option<PathBuf>,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(long)]
+    muse_bin: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+    #[arg(last = true)]
+    native: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct MuseRespawnArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    muse_bin: Option<PathBuf>,
+    #[arg(long)]
+    resume_id: Option<String>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileListArgs {
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileShowArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileAddArgs {
+    profile: String,
+    #[arg(long)]
+    name: Option<String>,
+    #[arg(long)]
+    email: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "json")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileRemoveArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileLoginArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    muse_bin: Option<PathBuf>,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileLogoutArgs {
+    profile: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    muse_bin: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct MuseProfileSelectArgs {
+    profile: String,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct MuseRunArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    muse_bin: Option<PathBuf>,
+    #[arg(last = true, required = true)]
+    native: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+enum MuseProfileCommand {
+    List(MuseProfileListArgs),
+    Show(MuseProfileShowArgs),
+    Add(MuseProfileAddArgs),
+    Remove(MuseProfileRemoveArgs),
+    Login(MuseProfileLoginArgs),
+    Logout(MuseProfileLogoutArgs),
+    Select(MuseProfileSelectArgs),
+}
+
+#[derive(Debug, Args)]
+struct MuseTmuxArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct MuseRemoveArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    stop: bool,
+    #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
+    all: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseStopArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    force: bool,
+    #[arg(long, default_value_t = false, conflicts_with_all = ["profile", "profile_flag", "worker_slot"])]
+    all: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Args)]
+struct MuseTailArgs {
+    profile: Option<String>,
+    #[arg(long = "profile", conflicts_with = "profile")]
+    profile_flag: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long, default_value = "200")]
+    tail: String,
+}
+
+#[derive(Debug, Args)]
+struct MuseShellArgs {
+    #[arg(long = "profile")]
+    profile: Option<String>,
+    #[arg(long = "slot")]
+    worker_slot: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    workspace: Option<PathBuf>,
+    #[arg(long)]
+    workdir: Option<String>,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    command: Vec<String>,
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Subcommand)]
+enum MuseCommand {
+    #[command(name = "profile", alias = "profiles")]
+    Profile {
+        #[command(subcommand)]
+        command: MuseProfileCommand,
+    },
+    Spawn(MuseSpawnStartArgs),
+    Remove(MuseRemoveArgs),
+    Stop(MuseStopArgs),
+    Tail(MuseTailArgs),
+    Shell(MuseShellArgs),
+    Run(MuseRunArgs),
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Tmux(MuseTmuxArgs),
+    #[command(name = "respawn")]
+    Respawn(MuseRespawnArgs),
+}
 
 #[derive(Debug, Parser)]
 struct FortSessionStateCli {
@@ -929,6 +1190,89 @@ struct DistributionDoctorView {
     version: String,
     binary: String,
     checks: Vec<DistributionDoctorCheck>,
+    native: Vec<NativeDoctorEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct NativeDoctorEntry {
+    provider: String,
+    program: String,
+    version: String,
+    tested_version: String,
+    support: String,
+    platform: String,
+    detail: String,
+}
+
+fn codex_native_doctor_entry() -> NativeDoctorEntry {
+    let blank = |detail: &str| NativeDoctorEntry {
+        provider: "codex".to_owned(),
+        program: String::new(),
+        version: String::new(),
+        tested_version: String::new(),
+        support: "missing".to_owned(),
+        platform: "supported".to_owned(),
+        detail: detail.to_owned(),
+    };
+    match resolve_program_on_path("codex") {
+        None => blank("native codex not found on PATH"),
+        Some(program) => {
+            let version = si_codex::adapter::probe_native_version(&program).unwrap_or_default();
+            NativeDoctorEntry {
+                provider: "codex".to_owned(),
+                program: program.display().to_string(),
+                version,
+                tested_version: String::new(),
+                support: "managed".to_owned(),
+                platform: "supported".to_owned(),
+                detail: "file-store forcing applies to any native version".to_owned(),
+            }
+        }
+    }
+}
+
+fn muse_native_doctor_entry() -> NativeDoctorEntry {
+    let blank = |detail: &str| NativeDoctorEntry {
+        provider: "muse".to_owned(),
+        program: String::new(),
+        version: String::new(),
+        tested_version: si_muse::adapter::MUSE_TESTED_VERSION.to_owned(),
+        support: "missing".to_owned(),
+        platform: match si_muse::adapter::ensure_muse_platform_supported() {
+            Ok(()) => "supported".to_owned(),
+            Err(detail) => detail.to_string(),
+        },
+        detail: detail.to_owned(),
+    };
+    let program = match resolve_program_on_path("muse") {
+        None => return blank("native muse not found on PATH"),
+        Some(program) => program,
+    };
+    let version = si_muse::adapter::probe_native_version(&program).unwrap_or_default();
+    let (support, detail) = match si_muse::adapter::muse_version_support(&version) {
+        si_muse::adapter::MuseVersionSupport::Supported => {
+            ("supported".to_owned(), "auth-path contract verified against this native".to_owned())
+        }
+        si_muse::adapter::MuseVersionSupport::Unverified => (
+            "unverified".to_owned(),
+            format!(
+                "re-run the auth-destination checks before trusting isolation on this native (verified: {})",
+                si_muse::adapter::MUSE_TESTED_VERSION
+            ),
+        ),
+    };
+    NativeDoctorEntry {
+        provider: "muse".to_owned(),
+        program: program.display().to_string(),
+        version,
+        tested_version: si_muse::adapter::MUSE_TESTED_VERSION.to_owned(),
+        support,
+        platform: match si_muse::adapter::ensure_muse_platform_supported() {
+            Ok(()) => "supported".to_owned(),
+            Err(detail) => detail.to_string(),
+        },
+        detail,
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -964,7 +1308,8 @@ fn run_distribution_doctor(format: OutputFormat) -> Result<()> {
         env::current_exe().map(|path| path.display().to_string()).unwrap_or_else(|_| String::new());
     let mut checks = vec![
         distribution_doctor_check("codex", "Codex tmux operator sessions"),
-        distribution_doctor_check("tmux", "operator Codex sessions"),
+        distribution_doctor_check("muse", "Muse tmux operator sessions"),
+        distribution_doctor_check("tmux", "operator sessions"),
         distribution_doctor_check("tar", "npm launcher archive extraction"),
         distribution_doctor_check("git", "source install and repo workflows"),
         distribution_doctor_check("cargo", "source install"),
@@ -977,6 +1322,7 @@ fn run_distribution_doctor(format: OutputFormat) -> Result<()> {
         version: si_core::version::current_version().to_owned(),
         binary,
         checks,
+        native: vec![codex_native_doctor_entry(), muse_native_doctor_entry()],
     };
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
@@ -988,6 +1334,18 @@ fn run_distribution_doctor(format: OutputFormat) -> Result<()> {
                 let state = if check.ok { "OK" } else { "MISS" };
                 let detail = if check.path.is_empty() { &check.detail } else { &check.path };
                 println!("  {state:<4} {:<8} {:<34} {detail}", check.name, check.required_for);
+            }
+            println!("native providers:");
+            for native in &view.native {
+                let program =
+                    if native.program.is_empty() { "(not found)" } else { native.program.as_str() };
+                let version =
+                    if native.version.is_empty() { "(unprobed)" } else { native.version.as_str() };
+                println!(
+                    "  {:<8} {} {} [{}; platform: {}]",
+                    native.provider, program, version, native.support, native.platform
+                );
+                println!("    {}", native.detail);
             }
         }
     }
@@ -1355,6 +1713,224 @@ fn main() -> Result<()> {
                 )?
             }
         },
+        Command::Muse { command } => match *command {
+            MuseCommand::Profile { command } => match command {
+                MuseProfileCommand::List(MuseProfileListArgs { home, settings_file, format }) => {
+                    let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_list(&ctx, format)?
+                }
+                MuseProfileCommand::Show(MuseProfileShowArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    format,
+                }) => {
+                    let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_show(&ctx, profile.as_deref(), format)?
+                }
+                MuseProfileCommand::Add(MuseProfileAddArgs {
+                    profile,
+                    name,
+                    email,
+                    home,
+                    settings_file,
+                    format,
+                }) => {
+                    let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_add(&mut ctx, &profile, name, email, format)?
+                }
+                MuseProfileCommand::Remove(MuseProfileRemoveArgs {
+                    profile,
+                    home,
+                    settings_file,
+                }) => {
+                    let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_remove(&mut ctx, profile.as_deref())?
+                }
+                MuseProfileCommand::Login(MuseProfileLoginArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    muse_bin,
+                    format,
+                }) => {
+                    let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_login(&mut ctx, profile.as_deref(), muse_bin, format)?
+                }
+                MuseProfileCommand::Logout(MuseProfileLogoutArgs {
+                    profile,
+                    home,
+                    settings_file,
+                    muse_bin,
+                }) => {
+                    let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_logout(&mut ctx, profile.as_deref(), muse_bin)?
+                }
+                MuseProfileCommand::Select(MuseProfileSelectArgs {
+                    profile,
+                    home,
+                    settings_file,
+                }) => {
+                    let mut ctx = agents::store::AgentContext::load(home, settings_file)?;
+                    agents::muse::profile_select(&mut ctx, &profile)?
+                }
+            },
+            MuseCommand::Spawn(MuseSpawnStartArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                workspace,
+                workdir,
+                muse_bin,
+                format,
+                native,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::spawn(
+                    &ctx,
+                    requested.as_deref(),
+                    worker_slot.as_deref(),
+                    workspace,
+                    workdir.as_deref(),
+                    muse_bin,
+                    native,
+                    format,
+                )?
+            }
+            MuseCommand::Remove(MuseRemoveArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                stop,
+                all,
+                format,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                if all {
+                    agents::muse::remove_all(&ctx, stop, format)?
+                } else {
+                    agents::muse::worker_remove(
+                        &ctx,
+                        requested.as_deref(),
+                        worker_slot.as_deref(),
+                        stop,
+                        format,
+                    )?
+                }
+            }
+            MuseCommand::Stop(MuseStopArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                force,
+                all,
+                format,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                if all {
+                    agents::muse::stop_all(&ctx, force, format)?
+                } else {
+                    agents::muse::stop(
+                        &ctx,
+                        requested.as_deref(),
+                        worker_slot.as_deref(),
+                        force,
+                        format,
+                    )?
+                }
+            }
+            MuseCommand::Tail(MuseTailArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                tail,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                let lines: usize = tail
+                    .parse()
+                    .with_context(|| format!("invalid --tail {tail:?}; want a line count"))?;
+                agents::muse::tail(&ctx, requested.as_deref(), worker_slot.as_deref(), lines)?
+            }
+            MuseCommand::Shell(MuseShellArgs {
+                profile,
+                worker_slot,
+                home,
+                settings_file,
+                workspace,
+                workdir,
+                command,
+            }) => {
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::shell(
+                    &ctx,
+                    profile.as_deref(),
+                    worker_slot.as_deref(),
+                    workspace,
+                    workdir.as_deref(),
+                    command,
+                )?
+            }
+            MuseCommand::Run(MuseRunArgs {
+                profile,
+                profile_flag,
+                home,
+                settings_file,
+                muse_bin,
+                native,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::run(&ctx, requested.as_deref(), muse_bin, &native)?
+            }
+            MuseCommand::List { home, settings_file, format } => {
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::list(&ctx, format)?
+            }
+            MuseCommand::Tmux(MuseTmuxArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::attach(&ctx, requested.as_deref(), worker_slot.as_deref())?
+            }
+            MuseCommand::Respawn(MuseRespawnArgs {
+                profile,
+                profile_flag,
+                worker_slot,
+                home,
+                settings_file,
+                muse_bin,
+                resume_id,
+                format,
+            }) => {
+                let requested = resolve_muse_cli_profile_arg(profile, profile_flag);
+                let ctx = agents::store::AgentContext::load(home, settings_file)?;
+                agents::muse::respawn(
+                    &ctx,
+                    requested.as_deref(),
+                    worker_slot.as_deref(),
+                    muse_bin,
+                    resume_id,
+                    format,
+                )?
+            }
+        },
         Command::Surf {
             home,
             settings_file,
@@ -1486,6 +2062,19 @@ fn command_help_override(path: &[&str]) -> Option<&'static str> {
         ["codex", "warmup", "marker", "show"] => Some("Show warmup marker state."),
         ["codex", "warmup", "marker", "enable"] => Some("Write the autostart marker."),
         ["codex", "warmup", "marker", "disable"] => Some("Set the disabled marker."),
+        ["muse"] => Some("Manage Muse profiles and worker sessions."),
+        ["muse", "profile"] => Some("Manage Muse profiles."),
+        ["muse", "spawn"] => Some("Start a Muse worker for a chosen profile."),
+        ["muse", "remove"] => Some("Remove a Muse worker session."),
+        ["muse", "stop"] => Some("Stop a Muse worker session."),
+        ["muse", "tail"] => Some("Tail Muse worker session output."),
+        ["muse", "shell"] => Some("Run a shell command with a Muse worker environment."),
+        ["muse", "run"] => Some("Run a native Muse command in the foreground."),
+        ["muse", "profile", "select"] => Some("Select the default Muse profile."),
+        ["muse", "profile", "logout"] => Some("Log a Muse profile out natively."),
+        ["muse", "list"] => Some("List Muse worker sessions."),
+        ["muse", "tmux"] => Some("Attach to a Muse tmux session."),
+        ["muse", "respawn"] => Some("Restart a Muse worker on the same profile (reuse or resume)."),
         ["image"] => Some("Image provider commands."),
         _ => None,
     }
@@ -4547,6 +5136,13 @@ fn resolve_codex_cli_profile_arg(
     flag.or(positional).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
 }
 
+fn resolve_muse_cli_profile_arg(
+    positional: Option<String>,
+    flag: Option<String>,
+) -> Option<String> {
+    flag.or(positional).map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+}
+
 fn run_codex_warmup(
     profile: Option<String>,
     _all: bool,
@@ -4589,7 +5185,7 @@ fn codex_warmup_next_due(status: &CodexStatusView, profile_id: &str, now: DateTi
     due_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
-fn sanitize_codex_tmux_profile_label(raw: &str) -> Option<String> {
+fn sanitize_tmux_profile_label(raw: &str) -> Option<String> {
     let mut out = String::new();
     let mut last_was_space = false;
     for ch in raw.chars() {
@@ -4625,7 +5221,7 @@ pub(crate) fn codex_tmux_window_name(
     worker_slot: &str,
 ) -> String {
     let profile_label = profile_display_name
-        .and_then(sanitize_codex_tmux_profile_label)
+        .and_then(sanitize_tmux_profile_label)
         .unwrap_or_else(|| profile_id.trim().to_owned());
     let slot = codex_worker_slot_name(Some(worker_slot));
     if let Some(emoji) = codex_repo_emoji_for_slot(&slot) {
@@ -4633,6 +5229,18 @@ pub(crate) fn codex_tmux_window_name(
     } else {
         format!("{profile_label} [{slot}]")
     }
+}
+
+pub(crate) fn muse_tmux_window_name(
+    profile_id: &str,
+    profile_display_name: Option<&str>,
+    worker_slot: &str,
+) -> String {
+    let profile_label = profile_display_name
+        .and_then(sanitize_tmux_profile_label)
+        .unwrap_or_else(|| profile_id.trim().to_owned());
+    let slot = muse_worker_slot_name(Some(worker_slot));
+    format!("{profile_label} [{slot}]")
 }
 
 const CODEX_WARMUP_WEEKLY_JITTER_MAX_SECS: i64 = 300;
@@ -4748,6 +5356,7 @@ fn format_category(category: CommandCategory) -> &'static str {
     match category {
         CommandCategory::Meta => "meta",
         CommandCategory::Codex => "codex",
+        CommandCategory::Muse => "muse",
         CommandCategory::Provider => "provider",
         CommandCategory::Runtime => "runtime",
         CommandCategory::Developer => "developer",
@@ -4942,6 +5551,15 @@ service = "http://viva-prod-web:3000"
             codex_tmux_window_name("america", Some(" Ada :\nLovelace  "), " ReView "),
             "Ada Lovelace [review]"
         );
+    }
+
+    #[test]
+    fn muse_tmux_window_name_includes_profile_and_slot() {
+        assert_eq!(
+            muse_tmux_window_name("personal", Some(" Ada :\nLovelace  "), " ReView "),
+            "Ada Lovelace [review]"
+        );
+        assert_eq!(muse_tmux_window_name("work", None, "primary"), "work [primary]");
     }
 
     #[test]

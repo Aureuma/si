@@ -24,6 +24,7 @@ Color semantics for help and text-mode output are documented in [CLI Reference](
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
 | `si codex` | Manage profile-bound Codex workers and profile registry state | `profile`, `spawn`, `stop`, `remove`, `tail`, `shell`, `list`, `tmux`, `warmup`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
+| `si muse` | Manage profile-bound Muse workers and profile registry state | `profile`, `spawn`, `stop`, `remove`, `tail`, `shell`, `run`, `list`, `tmux`, `respawn` | [CLI Reference](./CLI_REFERENCE) |
 | `si fort` | Wrapper for hosted Fort policy/auth API | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si surf` | Local Playwright browser runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si viva` | Manage the Viva runtime wrapper | `config`, passthrough runtime helpers | [CLI Reference](./CLI_REFERENCE) |

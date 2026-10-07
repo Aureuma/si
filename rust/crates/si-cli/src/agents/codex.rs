@@ -68,32 +68,6 @@ pub fn canonical_native_home(
     Ok(paths.default_native_root(PROVIDER, key))
 }
 
-/// Resolve the native `codex` program: explicit `--codex-bin` wins, else PATH.
-/// Refuses to run SI itself as the native CLI.
-pub fn resolve_native_program(explicit: Option<PathBuf>, name: &str) -> Result<PathBuf> {
-    let program = match explicit {
-        Some(path) => {
-            if !path.is_file() {
-                anyhow::bail!("native {name} not found at {}", path.display());
-            }
-            path
-        }
-        None => crate::resolve_program_on_path(name)
-            .ok_or_else(|| anyhow::anyhow!("native {name} not found on PATH; pass --{name}-bin"))?,
-    };
-    if let (Ok(candidate), Ok(current)) =
-        (program.canonicalize(), std::env::current_exe().and_then(|exe| exe.canonicalize()))
-    {
-        if candidate == current {
-            anyhow::bail!(
-                "refusing to run SI itself ({}) as the native {name} CLI",
-                program.display()
-            );
-        }
-    }
-    Ok(program)
-}
-
 /// One active credential-using worker of a profile.
 pub struct ActiveWorker {
     pub slot: String,
@@ -337,7 +311,7 @@ pub fn profile_login(
     let _lease = acquire_management_lease(ctx, &key, "login")?;
     refuse_if_workers_active(ctx, &key, "log in")?;
 
-    let program = resolve_native_program(codex_bin, "codex")?;
+    let program = super::store::resolve_native_program(codex_bin, "codex")?;
     let mode = if browser { CodexLoginMode::Browser } else { CodexLoginMode::Device };
     let spec = adapter()
         .login_command_with_mode(&program, &native_root, mode)
@@ -472,7 +446,7 @@ pub fn profile_logout(
     let _lease = acquire_management_lease(ctx, &key, "logout")?;
     refuse_if_workers_active(ctx, &key, "log out")?;
 
-    let program = resolve_native_program(codex_bin, "codex")?;
+    let program = super::store::resolve_native_program(codex_bin, "codex")?;
     let spec = adapter()
         .logout_command(&program, &native_root)
         .env("SI_PROVIDER", PROVIDER.as_str())
@@ -615,7 +589,7 @@ fn run_with_lease(
 ) -> Result<()> {
     // NOTE: the caller holds the worker-admission lease across this call; the
     // flock releases on process exit even though `exit` skips destructors.
-    let program = resolve_native_program(codex_bin, "codex")?;
+    let program = super::store::resolve_native_program(codex_bin, "codex")?;
     let workdir = std::env::current_dir().context("read current dir")?;
     let spec = adapter()
         .run_command(&program, native_root, &workdir, argv)
@@ -680,17 +654,6 @@ pub fn resolve_slot(raw: Option<&str>) -> Result<si_config::ids::SlotId> {
         .map_err(|detail| anyhow::anyhow!("invalid slot: {detail}"))
 }
 
-fn expand_home(path: PathBuf) -> PathBuf {
-    let text = path.to_string_lossy();
-    if text == "~" {
-        return super::store::default_home_dir();
-    }
-    if let Some(suffix) = text.strip_prefix("~/") {
-        return super::store::default_home_dir().join(suffix);
-    }
-    path
-}
-
 /// Workspace: explicit flag, else configured default, else current dir.
 /// Relative paths resolve against the current dir. Workspaces live outside
 /// the SI root by design; only profile IDs are root-confined.
@@ -702,21 +665,12 @@ pub fn resolve_workspace(workspace: Option<PathBuf>, ctx: &AgentContext) -> Resu
             _ => std::env::current_dir().context("read current dir for codex workspace")?,
         },
     };
-    let path = expand_home(path);
+    let path = super::store::expand_home(path);
     if path.is_absolute() {
         Ok(path)
     } else {
         Ok(std::env::current_dir().context("read current dir for codex workspace")?.join(path))
     }
-}
-
-/// Workdir: explicit flag (relative joins the workspace), else workspace.
-pub fn resolve_workdir(workdir: Option<&str>, workspace: &Path) -> Result<PathBuf> {
-    let Some(workdir) = workdir.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(workspace.to_path_buf());
-    };
-    let path = expand_home(PathBuf::from(workdir));
-    if path.is_absolute() { Ok(path) } else { Ok(workspace.join(path)) }
 }
 
 fn resolve_launch_target(
@@ -755,8 +709,8 @@ pub fn spawn(
     let (key, entry, native_root) = resolve_launch_target(ctx, profile)?;
     let slot = resolve_slot(slot)?;
     let workspace = resolve_workspace(workspace, ctx)?;
-    let workdir = resolve_workdir(workdir, &workspace)?;
-    let program = resolve_native_program(codex_bin, "codex")?;
+    let workdir = super::store::resolve_workdir(workdir, &workspace)?;
+    let program = super::store::resolve_native_program(codex_bin, "codex")?;
     let launch = CodexLaunch;
     let version = launch.probe_version(&program);
     let outcome = super::runner::launch_worker(super::runner::LaunchRequest {
@@ -901,7 +855,7 @@ pub fn respawn(
 ) -> Result<()> {
     let (key, entry, native_root) = resolve_launch_target(ctx, profile)?;
     let slot = resolve_slot(slot)?;
-    let program = resolve_native_program(codex_bin, "codex")?;
+    let program = super::store::resolve_native_program(codex_bin, "codex")?;
     let launch = CodexLaunch;
     let version = launch.probe_version(&program);
     let outcome = super::runner::respawn_worker(super::runner::RespawnRequest {
@@ -1155,7 +1109,7 @@ pub fn shell(
     let (key, _, native_root) = resolve_launch_target(ctx, profile)?;
     let slot = resolve_slot(slot)?;
     let workspace = resolve_workspace(workspace, ctx)?;
-    let workdir = resolve_workdir(workdir, &workspace)?;
+    let workdir = super::store::resolve_workdir(workdir, &workspace)?;
     eprintln!(
         "[codex profile {key:?} slot {:?}] native root {}",
         slot.as_str(),

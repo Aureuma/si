@@ -13,7 +13,8 @@
 
 use serde_json::Value;
 use si_process::adapter::{
-    AdapterError, AuthStatus, ChildEnv, ProviderAdapter, validate_child_env,
+    AdapterError, AuthStatus, ChildEnv, ProviderAdapter, detect_subcommand, long_flag_name,
+    looks_like_bare_secret, validate_child_env,
 };
 use si_process::{CommandSpec, ProcessRunner, RunOptions, StdinBehavior};
 use std::collections::BTreeMap;
@@ -207,19 +208,6 @@ fn validate_native_argv(argv: &[String]) -> Result<(), AdapterError> {
     Ok(())
 }
 
-/// Normalize a `--long` token to its flag name, or `None` for non-longs.
-fn long_flag_name(arg: &str) -> Option<String> {
-    let body = arg.strip_prefix("--")?;
-    if body.is_empty() || body.starts_with('-') {
-        return None;
-    }
-    let name = body.split('=').next().unwrap_or("");
-    if name.is_empty() {
-        return None;
-    }
-    Some(name.to_ascii_lowercase().replace('_', "-"))
-}
-
 fn reject_credential_switches(argv: &[String]) -> Result<(), AdapterError> {
     for arg in argv {
         let Some(name) = long_flag_name(arg) else { continue };
@@ -242,45 +230,12 @@ fn reject_credential_switches(argv: &[String]) -> Result<(), AdapterError> {
     Ok(())
 }
 
-/// Locate the native subcommand: the first positional token after skipping
-/// global flags and their values. Returns the subcommand index.
-fn detect_subcommand(argv: &[String]) -> Option<usize> {
-    let mut index = 0;
-    let mut end_of_flags = false;
-    while index < argv.len() {
-        let arg = argv[index].as_str();
-        if end_of_flags {
-            return Some(index);
-        }
-        if arg == "--" {
-            end_of_flags = true;
-            index += 1;
-            continue;
-        }
-        if let Some(name) = long_flag_name(arg) {
-            index += 1;
-            if !arg.contains('=') && CODEX_VALUE_FLAGS.contains(&name.as_str()) {
-                index += 1;
-            }
-            continue;
-        }
-        let bytes = arg.as_bytes();
-        if bytes.len() >= 2 && bytes[0] == b'-' && bytes[1] != b'-' {
-            index += 1;
-            if bytes.len() == 2 && CODEX_SHORT_VALUE_FLAGS.contains(&bytes[1]) {
-                index += 1;
-            }
-            continue;
-        }
-        return Some(index);
-    }
-    None
-}
-
 /// Route credential-mutating subcommands through profile login/logout.
 /// `login status` is read-only and stays allowed.
 fn reject_credential_subcommand(argv: &[String]) -> Result<(), AdapterError> {
-    let Some(at) = detect_subcommand(argv) else { return Ok(()) };
+    let Some(at) = detect_subcommand(argv, CODEX_VALUE_FLAGS, CODEX_SHORT_VALUE_FLAGS) else {
+        return Ok(());
+    };
     match argv[at].as_str() {
         "login" => {
             if argv.get(at + 1).map(String::as_str) == Some("status") {
@@ -341,61 +296,6 @@ fn reject_credential_config_keys(argv: &[String]) -> Result<(), AdapterError> {
         }
     }
     Ok(())
-}
-
-fn is_b64url_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'
-}
-
-/// JWT/JWE shape: 3+ dot-separated segments, every segment at least 8
-/// base64url bytes, 32+ bytes total. Short dotted tokens (versions, hosts,
-/// small filenames) never match.
-fn looks_like_jwt(token: &str) -> bool {
-    if token.len() < 32 {
-        return false;
-    }
-    let segments: Vec<&str> = token.split('.').collect();
-    segments.len() >= 3
-        && segments.iter().all(|segment| segment.len() >= 8 && segment.bytes().all(is_b64url_byte))
-}
-
-/// Bare single-token secrets: OpenAI-style `sk-…`, GitHub `gh*_…` /
-/// `github_pat_…`, Slack `xox*-…`, AWS `AKIA…`, JWT/JWE shapes. Multi-word
-/// prompts and `key=value` tokens never match: prompts contain spaces, and
-/// `=`, `/`, `+` are outside every shape alphabet.
-fn looks_like_bare_secret(token: &str) -> bool {
-    const PREFIXED: &[(&str, usize)] = &[
-        ("sk-", 8),
-        ("ghp_", 8),
-        ("gho_", 8),
-        ("ghs_", 8),
-        ("ghr_", 8),
-        ("ghu_", 8),
-        ("github_pat_", 8),
-        ("xoxb-", 8),
-        ("xoxp-", 8),
-        ("xoxa-", 8),
-        ("xoxr-", 8),
-        ("xoxs-", 8),
-    ];
-    if looks_like_jwt(token) {
-        return true;
-    }
-    if let Some(rest) = token.strip_prefix("AKIA")
-        && rest.len() == 16
-        && rest.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
-    {
-        return true;
-    }
-    for (prefix, min_tail) in PREFIXED {
-        if let Some(rest) = token.strip_prefix(prefix)
-            && rest.len() >= *min_tail
-            && rest.bytes().all(is_b64url_byte)
-        {
-            return true;
-        }
-    }
-    false
 }
 
 fn reject_secret_shaped_values(argv: &[String]) -> Result<(), AdapterError> {
