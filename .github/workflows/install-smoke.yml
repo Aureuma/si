@@ -75,7 +75,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.94.0
 
       - name: Run host installer smoke tests
-        run: cargo run --quiet --locked -p si-cli -- build installer smoke-host
+        run: cargo run --quiet --locked -p si-tools --bin si-release -- installer smoke-host
 
   npm-smoke:
     name: npm installer smoke (ubuntu)
@@ -95,4 +95,4 @@ jobs:
           node-version: 20
 
       - name: Run npm installer smoke tests
-        run: cargo run --quiet --locked -p si-cli -- build installer smoke-pnpm
+        run: cargo run --quiet --locked -p si-tools --bin si-release -- installer smoke-pnpm

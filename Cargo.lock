@@ -1768,7 +1768,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "si-cli"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1803,7 +1803,7 @@ dependencies = [
 
 [[package]]
 name = "si-codex"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "chrono",
  "serde",
@@ -1813,7 +1813,7 @@ dependencies = [
 
 [[package]]
 name = "si-command-manifest"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "regex",
  "serde",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "si-config"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "serde",
  "tempfile",
@@ -1831,11 +1831,11 @@ dependencies = [
 
 [[package]]
 name = "si-core"
-version = "0.60.20"
+version = "0.60.21"
 
 [[package]]
 name = "si-fort"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "chrono",
  "libc",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "si-process"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "tempfile",
  "thiserror",
@@ -1856,20 +1856,30 @@ dependencies = [
 
 [[package]]
 name = "si-tools"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
+ "anyhow",
+ "assert_cmd",
  "chrono",
+ "clap",
+ "flate2",
  "libc",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
+ "si-config",
+ "tar",
  "tempfile",
+ "toml",
+ "url",
 ]
 
 [[package]]
 name = "si-warmup"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "chrono",
  "serde",

@@ -7,7 +7,6 @@ pub enum CommandCategory {
     Codex,
     Provider,
     Runtime,
-    Build,
     Developer,
     Profile,
     Internal,
@@ -35,13 +34,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         aliases: &["-h", "--help"],
         category: CommandCategory::Meta,
         summary: "Show top-level command help.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "build",
-        aliases: &[],
-        category: CommandCategory::Build,
-        summary: "Build binaries and release assets.",
         hidden: false,
     },
     CommandSpec {

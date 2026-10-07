@@ -1,3 +1,5 @@
+pub mod release;
+
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
