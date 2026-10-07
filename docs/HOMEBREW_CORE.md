@@ -12,7 +12,7 @@ This doc tracks the source-formula path needed for eventual submission to Homebr
 ## Refresh the core formula template
 
 ```bash
-si build homebrew core \
+cargo run --quiet --locked -p si-tools --bin si-release -- homebrew core \
   --output packaging/homebrew-core/si.rb
 ```
 

@@ -80,17 +80,17 @@ Do not invent or hand-maintain separate SI versions in crate manifests, packagin
 ### 4) Verify and commit the release prep
 ```
 cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- workspace
-cargo run --quiet --locked -p si-cli -- build installer smoke-host
-cargo run --quiet --locked -p si-cli -- build installer smoke-pnpm
-cargo run --quiet --locked -p si-cli -- build installer smoke-homebrew
-./.artifacts/cargo-target/release/si build self assets --out-dir .artifacts/release-preflight
-./.artifacts/cargo-target/release/si build self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
+cargo run --quiet --locked -p si-tools --bin si-release -- installer host
+cargo run --quiet --locked -p si-tools --bin si-release -- installer npm
+cargo run --quiet --locked -p si-tools --bin si-release -- installer homebrew
+cargo run --quiet --locked -p si-tools --bin si-release -- self assets --out-dir .artifacts/release-preflight
+cargo run --quiet --locked -p si-tools --bin si-release -- self verify --version vX.Y.0 --out-dir .artifacts/release-preflight
 git add CHANGELOG.md Cargo.toml Cargo.lock
 git commit -m "release: vX.Y.0"
 ```
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
-- `si build self assets` reads the canonical version from root `Cargo.toml` when `--version` is omitted.
+- `si-release self assets` reads the canonical version from root `Cargo.toml` when `--version` is omitted.
 - Include the pnpm smoke lane so user-owned global-prefix installs stay verified before release.
 - Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary.
 
@@ -205,7 +205,7 @@ builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` is configured, or by fallback to `GH_PAT_AUREUMA` when that token has tap push access)
 - verifies release assets + package + Homebrew sync in a final gate job
-- runs a macOS Homebrew smoke install lane through `si build installer smoke-homebrew`
+- runs a macOS Homebrew smoke install lane through `si-release installer homebrew`
 
 Supported targets:
 - `linux/amd64`
@@ -235,29 +235,12 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 Notes:
 - The workflow validates that the workspace `Cargo.toml` version matches the release tag.
 - Release assets are built by explicit GitHub Actions target jobs for Linux AMD64, Linux ARM64, macOS AMD64, and macOS ARM64.
-- `si build self verify` checks checksums, archive contents, and binary format before upload.
+- `si-release self verify` checks checksums, archive contents, and binary format before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
-- Use `si build corepack pnpm publish --dry-run` for local corepack pnpm publish rehearsal.
-- Use `si build homebrew core --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
+- Use `cargo run --quiet --locked -p si-tools --bin si-release -- npm publish --dry-run` for local corepack pnpm publish rehearsal.
+- Use `cargo run --quiet --locked -p si-tools --bin si-release -- homebrew core --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 - Those commands default to the canonical SI workspace version from root `Cargo.toml`; pass `--version` only when you intentionally need a detached version target.
-
-### 10) Verify repo-boundary stability for Viva integrations
-When a release changes `si viva`, Viva-related settings, or shared orchestration/config behavior, validate the adjacent Viva repo before closing the release:
-
-```bash
-cd /home/<user>/Development/viva
-cargo fmt --all --check
-cargo test --locked --quiet
-cd /home/<user>/Development/si
-si viva config set --repo /home/<user>/Development/viva --build true
-si viva -- version
-si viva -- doctor
-```
-
-Notes:
-- Viva should follow the same release discipline: tag/version validation, asset verification, and CI green before publishing.
-- Prefer `orbit github release create Aureuma/viva ...` for Viva releases so the GitHub release flow stays operationally consistent across the stack.
 
 ## Tagging Rules
 - Use annotated tags only for minor releases: `git tag -a vX.Y.0 -m "vX.Y.0" <commit>`.

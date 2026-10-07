@@ -78,7 +78,7 @@ Rules:
 ## Cross-linking policy
 
 - Link each integration page back to the integration hub.
-- Link command guides to related operational docs (Vault, Settings, Browser, Providers).
+- Link command guides to related operational docs (Settings, Command Reference).
 - Avoid orphan pages.
 - Prefer relative Mintlify paths (`./PAGE_NAME`).
 

@@ -59,13 +59,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         hidden: false,
     },
     CommandSpec {
-        name: "image",
-        aliases: &["images"],
-        category: CommandCategory::Provider,
-        summary: "Image pipeline and generation bridge commands.",
-        hidden: false,
-    },
-    CommandSpec {
         name: "codex",
         aliases: &[],
         category: CommandCategory::Codex,
@@ -78,34 +71,6 @@ const ROOT_COMMANDS: &[CommandSpec] = &[
         category: CommandCategory::Muse,
         summary: "Manage profile-bound Muse workers and profile registry state.",
         hidden: false,
-    },
-    CommandSpec {
-        name: "surf",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Manage the Surf browser runtime bridge.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "viva",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Manage the Viva runtime wrapper.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "fort",
-        aliases: &[],
-        category: CommandCategory::Runtime,
-        summary: "Access Fort runtime and configuration flows.",
-        hidden: false,
-    },
-    CommandSpec {
-        name: "__fort-runtime-agent",
-        aliases: &[],
-        category: CommandCategory::Internal,
-        summary: "Internal Fort runtime refresher entrypoint.",
-        hidden: true,
     },
 ];
 
@@ -128,11 +93,9 @@ mod tests {
     use std::collections::BTreeSet;
 
     const DOCS: &[(&str, &str)] = &[
-        ("BROWSER.md", include_str!("../../../../docs/BROWSER.md")),
         ("CLI_REFERENCE.md", include_str!("../../../../docs/CLI_REFERENCE.md")),
         ("COMMAND_REFERENCE.md", include_str!("../../../../docs/COMMAND_REFERENCE.md")),
         ("SETTINGS.md", include_str!("../../../../docs/SETTINGS.md")),
-        ("FORT.md", include_str!("../../../../docs/FORT.md")),
         ("testing.md", include_str!("../../../../docs/testing.md")),
         ("index.mdx", include_str!("../../../../docs/index.mdx")),
     ];
@@ -151,13 +114,24 @@ mod tests {
 
     #[test]
     fn aliases_resolve_to_primary_command() {
-        assert_eq!(find_root_command("images").unwrap().name, "image");
+        assert_eq!(find_root_command("--version").unwrap().name, "version");
+        assert_eq!(find_root_command("--help").unwrap().name, "help");
     }
 
     #[test]
     fn visible_docs_do_not_advertise_removed_root_commands() {
         for (doc, source) in DOCS {
-            for removed in ["si publish", "si social", "si remote-control"] {
+            for removed in [
+                "si publish",
+                "si social",
+                "si remote-control",
+                "si fort",
+                "si surf",
+                "si viva",
+                "si image",
+                "si build",
+                "warmup",
+            ] {
                 assert!(
                     !source.contains(removed),
                     "{doc} advertises removed root command {removed}"
@@ -179,18 +153,18 @@ mod tests {
     }
 
     #[test]
-    fn settings_reference_documents_wrapper_settings() {
+    fn settings_reference_documents_agent_profiles() {
         let settings_reference = include_str!("../../../../docs/SETTINGS.md");
-        for heading in ["### `[fort]`", "### `[viva]`", "### `[surf]`"] {
+        for heading in ["### `[codex]`", "#### `[codex.profiles]`"] {
             assert!(
                 settings_reference.contains(heading),
-                "SETTINGS.md missing wrapper settings heading {heading}"
+                "SETTINGS.md missing agent settings heading {heading}"
             );
         }
-        for field in ["fort.repo", "viva.repo", "surf.repo", "surf.tunnel.fort_key"] {
+        for removed in ["### `[fort]`", "### `[viva]`", "### `[surf]`", "fort.repo"] {
             assert!(
-                settings_reference.contains(field),
-                "SETTINGS.md missing wrapper settings field {field}"
+                !settings_reference.contains(removed),
+                "SETTINGS.md still documents removed settings section {removed}"
             );
         }
     }

@@ -6,7 +6,7 @@
 ~/.si/settings.toml
 ```
 
-This file is created automatically on first use. `si codex profile ...` writes Codex profile metadata here so profile registry state, Fort profile binding, and default runtime selection all share one source of truth.
+This file is created automatically on first use. `si codex profile ...` and `si muse profile ...` write profile metadata here so profile registry state and default runtime selection share one source of truth.
 
 ## Precedence
 When supported by a command, values resolve in this order:
@@ -18,16 +18,12 @@ When supported by a command, values resolve in this order:
 
 ## CLI color output
 
-SI CLI help and text-mode output share one semantic color palette:
+SI CLI runtime text output shares one semantic color palette:
 
-- section headings: cyan
 - commands/examples: magenta
-- flags/prompts: yellow
 - labels: blue
-- success: green
-- warnings: yellow
-- errors: red
-- muted text: gray
+
+Clap-rendered `--help` output keeps its own styled headers, usage lines, and literals.
 
 Color control is environment-driven:
 
@@ -51,20 +47,10 @@ Reference paths for the local `.si` directory layout.
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
 - `paths.workspace_root` (string): optional host directory containing sibling repos. Used by SI runtime commands when flags are omitted.
 
-Warmup runtime files are also stored under `~/.si`:
-- `~/.si/warmup/state.json` (reconcile state/feedback loop)
-- `~/.si/warmup/autostart.v1` (warmup scheduler enabled marker)
-- `~/.si/warmup/disabled.v1` (warmup scheduler disabled marker)
-- `~/.si/logs/warmup.log` (JSONL operational log)
-
-Warmup scheduling is auto-enabled once SI sees cached codex profile auth on disk, and it can also be controlled explicitly with `si codex warmup ...`.
-Warmup only inspects persistent Codex worker status and schedules the next run from the reported reset windows with a small jitter.
-Warmup only reports a profile as warmed once the live weekly quota drops below `100%` left.
-
 ### `[codex]`
 Defaults for `si codex` profile-bound worker commands.
 - Every `si codex` worker must resolve to a predefined entry under `[codex.profiles.entries.<id>]`.
-  - `si codex profile add|show|list|login|swap|remove` manages the profile registry in `~/.si/settings.toml`.
+  - `si codex profile add|show|list|login|logout|select|remove` manages the profile registry in `~/.si/settings.toml`.
 - `codex.workspace` (string): host path for workspace bind.
   - If unset, `si codex spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
@@ -74,11 +60,10 @@ Defaults for `si codex` profile-bound worker commands.
 - Worker-slot behavior is command-level:
   - `si codex spawn|respawn --profile <profile> --slot <slot>`
   - `si codex shell|tail|tmux|stop|remove --profile <profile> --slot <slot>`
-  - `si codex repair-auth --profile <profile> --slot <slot>` for in-place Fort runtime repair
 
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
-- `codex.profiles.active` (string): the most recently swapped/selected profile for profile-scoped Fort runtime auth and related host state
+- `codex.profiles.active` (string): the most recently selected profile for profile-scoped commands and related host state
 
 ##### `[codex.profiles.entries.<id>]`
 Per-profile entry keyed by profile ID (for example `profile-alpha`). These entries are created and updated by `si codex profile add` and any later profile metadata sync flows.
@@ -86,89 +71,6 @@ Per-profile entry keyed by profile ID (for example `profile-alpha`). These entri
 - `email` (string): profile email
 - `auth_path` (string): path to auth.json
 - `auth_updated` (string): RFC3339 timestamp of auth.json
-
-### `[fort]`
-Defaults for the `si fort` wrapper (hosted Fort API access).
-- `fort.repo` (string): source repo path used when `si fort --build` is enabled
-- `fort.bin` (string): fort binary path used by wrapper execution
-- `fort.build` (bool): default build-before-run behavior for wrapper calls
-- `fort.host` (string): hosted Fort endpoint URL (must be HTTPS for production runtime)
-- `fort.runtime_host` (string): Fort endpoint URL intended for runtime workers (defaults to `fort.host` when unset)
-
-CLI and runtime behavior:
-- `si fort config show` reads these values.
-- `si fort config set ...` writes these values to settings.
-- `si fort` injects `--host` from `[fort].host` when no explicit native `--host` flag is passed.
-- `si fort` prefers the profile Fort session under `CODEX_HOME/fort/` when `CODEX_HOME` is set by a managed Codex profile runtime.
-- `si fort` does not accept caller-supplied `FORT_TOKEN_PATH` / `FORT_REFRESH_TOKEN_PATH` as a normal runtime fallback and does not fall back to the active Codex profile outside `si codex spawn` / `si codex shell`.
-- `si fort` fails loudly for runtime secret commands when no usable runtime session exists or runtime refresh fails; it does not silently fall back to host/bootstrap admin auth.
-- `si fort` uses host/bootstrap admin token files at `~/.si/fort/bootstrap/admin.token` and `~/.si/fort/bootstrap/admin.refresh.token` only for explicit admin/provisioning commands.
-- Treat bootstrap/admin auth as recovery-only; day-to-day Fort use should run through profile-scoped runtime token files provisioned by `si codex spawn` or `si codex shell`.
-- Codex profile provisioning explicitly requests a `30d` Fort refresh-session TTL even if Fort's general default refresh-session TTL is shorter.
-- Runtime worker token state remains file-backed under:
-  - `~/.si/codex/profiles/<profile>/fort/` for the `primary` slot
-  - `~/.si/codex/profiles/<profile>/workers/<slot>/fort/` for non-primary slots
-  - Fort runtime agent IDs are slot-aware: `si-codex-<profile>` for `primary`, `si-codex-<profile>--<slot>` for non-primary slots
-  - profile refresh tokens must be rotated in place.
-
-### `[viva]`
-Defaults for the `si viva` wrapper. Native deploy, tunnel, backup, rollback, status, history, serve, analytics, and notification behavior remains owned by the `viva` binary.
-
-- `viva.repo` (string): source repo path used by `si viva --repo`, configured repo resolution, or build fallback
-- `viva.bin` (string): native Viva binary path used by wrapper execution
-- `viva.build` (bool): default build-before-run behavior for wrapper calls
-
-CLI behavior:
-
-- `si viva config show` reads these wrapper values.
-- `si viva config set --repo <PATH> --bin <PATH> --build <true|false>` writes these wrapper values to `~/.si/viva/settings.toml` unless `--settings-file` is supplied.
-- Wrapper options such as `si viva --repo <PATH> --build -- version` must appear before native Viva args.
-
-#### `[viva.tunnel]`
-SI-owned tunnel profile selection used when wrapping native `viva tunnel ...` commands.
-
-- `viva.tunnel.default_profile` (string): default profile appended to native `viva tunnel ...` commands when no native `--profile` argument is present
-- `viva.tunnel.profiles.<name>` (table): stored tunnel profile metadata consumed by the wrapper
-
-CLI behavior:
-
-- `si viva config tunnel show` reads configured tunnel profiles.
-- `si viva config tunnel import --profile <name> --file <PATH> [--set-default]` imports one native Viva tunnel profile table into `~/.si/viva/settings.toml`.
-- `si viva config tunnel default --profile <name>` changes the wrapper default profile and refuses missing profile names.
-- `si viva config tunnel import` copies the raw profile TOML table so native Viva-owned fields are preserved.
-
-### `[surf]`
-Defaults for the `si surf` wrapper. Native Surf runtime, proxy, tunnel, host, session, and `surf config ...` behavior remains owned by the `surf` binary.
-
-Surf wrapper module path:
-
-```
-~/.si/surf/si.settings.toml
-```
-
-- `surf.repo` (string): source repo path used by `si surf --repo`, configured repo resolution, or build fallback
-- `surf.bin` (string): native Surf binary path used by wrapper execution
-- `surf.build` (bool): default build-before-run behavior for wrapper calls
-- `surf.settings_file` (string): native Surf settings file path passed through where native Surf supports it
-- `surf.state_dir` (string): native Surf state directory path passed through where native Surf supports it
-- `surf.vnc_password_fort_key` (string): Fort key used to inject `SURF_VNC_PASSWORD` for `si surf start`
-- `surf.vnc_password_fort_repo` (string): Fort repo scope for the noVNC password key; defaults to `surf` when a key is configured
-- `surf.vnc_password_fort_env` (string): Fort env scope for the noVNC password key; defaults to `dev` when a key is configured
-
-CLI behavior:
-
-- `si surf wrapper config show` reads SI wrapper values.
-- `si surf wrapper config set --repo <PATH> --bin <PATH> --build <true|false>` writes SI wrapper values to `~/.si/surf/si.settings.toml` unless `--settings-file` is supplied.
-- `si surf config ...` is native Surf config passthrough and does not write SI wrapper settings.
-- Wrapper options such as `si surf --repo <PATH> --build -- version` must appear before native Surf args.
-- `si surf` sets `SI_SURF_WRAPPED=1` for native Surf execution.
-
-#### `[surf.tunnel]`
-Surf tunnel metadata used by compatibility paths. Prefer Fort-backed key naming in new documentation.
-
-- `surf.tunnel.name` (string): Surf tunnel runtime name
-- `surf.tunnel.mode` (string): `quick` or `token`
-- `surf.tunnel.fort_key` (string): Fort key for tunnel token material when supported by native Surf
 
 ### External orbit settings
 Third-party integration settings moved to the standalone `orbit` repo. SI no longer reads provider account settings such as `[stripe]`, `[github]`, `[cloudflare]`, `[gcp]`, `[google]`, `[openai]`, `[oci]`, `[apple]`, or `[workos]`.
@@ -183,8 +85,6 @@ codex_profiles_dir = "~/.si/codex/profiles"
 workspace_root = "~/code"
 
 [codex]
-image = "aureuma/si:local"
-network = "si"
 workspace = "/path/to/your/repo"
 workdir = "/workspace"
 profile = "profile-alpha"

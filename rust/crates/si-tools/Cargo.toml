@@ -7,10 +7,6 @@ repository.workspace = true
 publish = false
 
 [[bin]]
-name = "test-fort-spawn-matrix"
-path = "src/bin/test_fort_spawn_matrix.rs"
-
-[[bin]]
 name = "si-test-runner"
 path = "src/bin/si_test_runner.rs"
 
@@ -21,10 +17,6 @@ path = "src/bin/si_install_smoke_root.rs"
 [[bin]]
 name = "si-install-smoke-nonroot"
 path = "src/bin/si_install_smoke_nonroot.rs"
-
-[[bin]]
-name = "si-rust-host-matrix"
-path = "src/bin/si_rust_host_matrix.rs"
 
 [[bin]]
 name = "si-codex-init"

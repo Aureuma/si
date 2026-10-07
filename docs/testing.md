@@ -22,13 +22,7 @@ For one-command local coverage of the standard test stack, run:
 cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- all
 ```
 
-For the direct Rust host matrix across `si`, sibling `fort`, and sibling `surf`, run:
-
-```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-rust-host-matrix --
-```
-
-That matrix is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md) and is the best local gate after wrapper/runtime changes.
+Scenario coverage for the remaining suites is documented in [HOST_TEST_MATRIX.md](./HOST_TEST_MATRIX.md).
 
 ## tmux isolation in tests
 Tests that spawn tmux must never address the developer's live server.
@@ -58,110 +52,32 @@ Third-party Orbit integration coverage moved to the standalone `Aureuma/orbit` r
 To validate the `si` installer script end-to-end, run:
 
 ```bash
-cargo run --quiet --locked -p si-cli -- build installer smoke-host
+cargo run --quiet --locked -p si-tools --bin si-release -- installer host
 ```
-
-Use `si build installer host --help` for a quick usage reminder.
 
 To validate the pnpm launcher package end-to-end, run:
 
 ```bash
-cargo run --quiet --locked -p si-cli -- build installer smoke-pnpm
+cargo run --quiet --locked -p si-tools --bin si-release -- installer npm
 ```
 
 To validate the Homebrew tap install path end-to-end, run:
 
 ```bash
-cargo run --quiet --locked -p si-cli -- build installer smoke-homebrew
+cargo run --quiet --locked -p si-tools --bin si-release -- installer homebrew
 ```
-
-## Vault strict suite
-Run the dedicated vault suite:
-
-```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- vault
-```
-
-Compatibility flag:
-
-```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin si-test-runner -- vault --quick
-```
-
-`--quick` is retained as a compatibility no-op; the Rust vault lane already runs as a single package suite.
-
-## Fort codex runtime security matrix
-Run the Fort integration matrix:
-
-```bash
-cargo run --quiet --locked --manifest-path rust/crates/si-tools/Cargo.toml --bin test-fort-spawn-matrix --
-```
-
-This matrix validates:
-- slot-scoped Fort agent auth bootstrap in `si codex spawn` (`si-codex-<profile>` for primary, `si-codex-<profile>--<slot>` for non-primary)
-- hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
-- host-side bootstrap admin token files are used for provisioning/admin flows only
-- runtime token-path flow remains file-backed under `CODEX_HOME/fort/`; use `si codex shell --profile <profile> --slot <slot> -- si fort ...` for profile runtime auth
-- runtime secret commands fail loudly when profile-scoped Fort token files are missing or cannot refresh
-- worker-shell access through `si codex shell` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
-- strict token file modes/ownership (`0600` files, `0700` fort state dir)
-- policy allow/deny behavior across multiple profiles and repo/env bindings
-- `si codex respawn` auth continuity
-- ciphertext-at-rest plus manual ECIES decrypt parity with `fort get`
-
-For local-only integration harnesses that use HTTP Fort endpoints, set:
-
-```bash
-SI_FORT_ALLOW_INSECURE_HOST=1
-```
-
-Bootstrap token file requirements:
-
-```bash
-~/.si/fort/bootstrap/admin.token
-
-chmod 600 ~/.si/fort/bootstrap/admin.token
-chmod 700 ~/.si/fort/bootstrap
-```
-
-Runtime session token file requirements:
-
-```bash
-/path/to/access.token
-/path/to/refresh.token
-
-stat -c "%a %n" /path/to/access.token /path/to/refresh.token
-```
-
-Wrapper reminder:
-- `si fort` is a wrapper around `fort`.
-- If `fort` is not already on `PATH`, the wrapper can build and run the sibling `../fort` checkout when build fallback is allowed.
-- If a flag belongs to `fort` itself, pass it after `--` (for example: `si fort -- --host https://fort.aureuma.ai doctor`).
 
 ## CI notes
 GitHub Actions workflows use docs-only change detection to skip heavy test jobs
 when only docs/markdown files are modified.
-
-## Static analysis
-Run static analysis from the repo root:
-
-```bash
-./si analyze
-```
-
-Use non-failing mode for local iteration while keeping CI strict with default `./si analyze`:
-
-```bash
-./si analyze --no-fail
-```
 
 ## CLI help smoke checks
 After CLI command-surface changes, run targeted help checks:
 
 ```bash
 ./si --help
-orbit gcp gemini image generate --help
-./si surf --help
+./si codex --help
+./si muse --help
 ```
 
 ## Codex upgrade compatibility check
@@ -180,9 +96,8 @@ Manual runtime smoke:
 si codex spawn --profile <profile> --slot primary --workspace "$PWD"
 si codex spawn --profile <profile> --slot review --workspace "$PWD"
 si codex list
-si codex shell --profile <profile> --slot primary -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
-si codex shell --profile <profile> --slot review -- env | rg 'CODEX_HOME|FORT_TOKEN_PATH|SI_CODEX_WORKER_SLOT'
-si codex repair-auth --profile <profile> --slot review
+si codex shell --profile <profile> --slot primary -- env | rg 'CODEX_HOME|SI_CODEX_WORKER_SLOT'
+si codex shell --profile <profile> --slot review -- env | rg 'CODEX_HOME|SI_CODEX_WORKER_SLOT'
 si codex stop --profile <profile> --slot review
 si codex remove --profile <profile> --slot review
 ```
