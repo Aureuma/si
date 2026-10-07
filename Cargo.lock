@@ -1768,7 +1768,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "si-cli"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "si-codex"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "base64",
  "chrono",
@@ -1817,7 +1817,7 @@ dependencies = [
 
 [[package]]
 name = "si-command-manifest"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "regex",
  "serde",
@@ -1825,7 +1825,7 @@ dependencies = [
 
 [[package]]
 name = "si-config"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "serde",
  "tempfile",
@@ -1835,11 +1835,11 @@ dependencies = [
 
 [[package]]
 name = "si-core"
-version = "0.60.29"
+version = "0.60.30"
 
 [[package]]
 name = "si-fort"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "chrono",
  "libc",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "si-muse"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "base64",
  "serde",
@@ -1864,7 +1864,7 @@ dependencies = [
 
 [[package]]
 name = "si-process"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "libc",
  "serde",
@@ -1875,7 +1875,7 @@ dependencies = [
 
 [[package]]
 name = "si-tools"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1898,7 +1898,7 @@ dependencies = [
 
 [[package]]
 name = "si-warmup"
-version = "0.60.29"
+version = "0.60.30"
 dependencies = [
  "chrono",
  "serde",
