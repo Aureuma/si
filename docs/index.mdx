@@ -1,11 +1,12 @@
 ---
 title: si Documentation
-description: Canonical docs for SI CLI runtime, integrations, and release workflows.
+description: Canonical docs for SI multi-account agent runtime controls and release workflows.
 ---
 
 # si Documentation
 
-SI is an operations-first CLI that combines multi-account agent runtime controls (Codex and Muse) and release workflows.
+SI is an operations-first CLI for running Codex and Muse workers across
+multiple isolated accounts per provider.
 
 Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[workspace.package].version`. Patch bumps happen on every SI commit; only minor releases are tagged and published.
 
@@ -16,6 +17,7 @@ Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[work
    - Homebrew: `brew install aureuma/si/si`
 2. Build and verify your local binary from source when needed: `cargo build -p si-cli --release`
 3. Inspect command surface: `si --help`
+4. Enroll two profiles per provider: [CLI Reference](./CLI_REFERENCE#onboarding-two-profiles-per-provider)
 5. Validate docs before publishing changes with the external Mintlify CLI: `mintlify validate`
 
 ## Documentation entry points
@@ -24,6 +26,7 @@ Repo versioning uses one SI-wide source of truth: root `Cargo.toml` under `[work
 
 - [CLI Reference](./CLI_REFERENCE)
 - [Command Reference](./COMMAND_REFERENCE)
+- [Troubleshooting](./TROUBLESHOOTING)
 - [Cache Governance](./CACHE_GOVERNANCE)
 - [Settings](./SETTINGS)
 

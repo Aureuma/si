@@ -60,6 +60,45 @@ si codex stop --profile default --slot review
 si codex list
 ```
 
+### Onboarding two profiles per provider
+
+Enroll each real account once under its own profile id, then log in.
+Browser/device approval during `login` is the only expected manual step.
+
+```bash
+# Codex accounts A and B
+si codex profile add work --email work@example.com
+si codex profile add personal --email personal@example.com
+si codex profile login work
+si codex profile login personal
+
+# Muse accounts A and B (Linux only; see Troubleshooting)
+si muse profile add work --email work@example.com
+si muse profile add personal --email personal@example.com
+si muse profile login work
+si muse profile login personal
+```
+
+Verify isolation before doing real work:
+
+```bash
+si codex profile list
+si muse profile list
+si codex spawn --profile work --workspace "$PWD"
+si codex spawn --profile personal --workspace "$PWD"
+si codex list
+```
+
+Rules the CLI enforces:
+
+- Each profile owns a canonical native store; A's credential lifecycle never
+  touches B's identity or store.
+- `login` binds the observed identity to the profile. A mismatch disables
+  launch until you re-login; SI never deletes native state to "fix" it.
+- Do not clone one account's auth into two profiles and call that a
+  two-account setup.
+- Profile ids and slots are validated slugs; slots default to `primary`.
+
 ### Integration readiness
 
 ```bash

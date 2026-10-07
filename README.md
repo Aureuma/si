@@ -90,6 +90,32 @@ si codex stop --profile <profile> --slot review
 si codex remove --profile <profile> --slot review
 ```
 
+Enroll two profiles per provider (browser/device approval at `login` is the
+only manual step), then verify isolation:
+
+```bash
+si codex profile add work --email work@example.com
+si codex profile add personal --email personal@example.com
+si codex profile login work
+si codex profile login personal
+si muse profile add work --email work@example.com
+si muse profile add personal --email personal@example.com
+si muse profile login work
+si muse profile login personal
+si codex profile list
+si muse profile list
+```
+
+Muse lifecycle mirrors Codex:
+
+```bash
+si muse spawn --profile <profile> --workspace "$PWD"
+si muse list
+si muse tail --profile <profile> --slot review
+si muse stop --profile <profile> --slot review
+si muse remove --profile <profile> --slot review
+```
+
 Mintlify docs tooling:
 
 ```bash
