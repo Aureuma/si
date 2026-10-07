@@ -39,28 +39,10 @@
               "docs/index",
               "docs/CLI_REFERENCE",
               "docs/COMMAND_REFERENCE",
+              "docs/TROUBLESHOOTING",
               "docs/CACHE_GOVERNANCE",
               "docs/SETTINGS",
               "docs/testing"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Core Runtime",
-        "groups": [
-          {
-            "group": "Runtime",
-            "pages": [
-              "docs/PLUGIN_MARKETPLACE",
-              "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
-              "docs/INTEGRATION_ECOSYSTEM"
-            ]
-          },
-          {
-            "group": "Operations",
-            "pages": [
-              "docs/operations/agents"
             ]
           }
         ]
@@ -72,8 +54,7 @@
             "group": "Release Docs",
             "pages": [
               "docs/RELEASING",
-              "docs/HOMEBREW_CORE",
-              "docs/PUBLISH"
+              "docs/HOMEBREW_CORE"
             ]
           }
         ]

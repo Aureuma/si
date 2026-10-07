@@ -14,12 +14,30 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Added a first-class Vertex Gemini generation command under `orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.
 - Added `tools/si-cache-governor` and the `docs/CACHE_GOVERNANCE.md` runbook for workspace-wide cache auditing and conservative prune operations.
+- Added a first-class `si muse` tree mirroring `si codex`: profile registry (`add`, `show`, `list`, `login`, `logout`, `select`, `remove`) plus `run`, `spawn`, `stop`, `remove`, `respawn`, `tail`, `attach`, `list`, `tmux`, and `shell` over aligned per-profile XDG stores.
+- Added an owned-socket tmux runner: every worker runs on `<si-root>/runtime/tmux.sock` with slot locks, per-profile credential leases, private launch specs, exit recording, and foreign-session conflict detection.
+- Added `si doctor --migration-plan` (dry run) and `si doctor --migrate` (validate-first, idempotent) for schema-2 profile migration.
+- Added native provider diagnostics to `si doctor` (program, version, support verdict, platform gate, text and JSON).
+- Added native credential-override protection: managed launches reject credential switches, credential-mutating subcommands, auth `-c` keys, provider overrides, and secret-shaped argv values with actionable errors.
+- Added `docs/TROUBLESHOOTING.md` with exact auth-state labels, renewal/re-login flows, and the Linux/Darwin support matrix.
 
 ### Changed
 - Bumped the working version to `0.59.33` after fixing Vertex global endpoint selection and Bedrock runtime request handling.
 - Bumped the working version to `0.59.25` after adding Vertex Gemini generation and stronger Bedrock runtime converse controls for LLM usage.
 - Expanded `orbit aws bedrock runtime converse` so Anthropic/Claude-style Bedrock calls can set system prompts and inference controls without hand-writing request JSON.
 - Bumped the working version to `0.59.22` after untracking local ticket documents and keeping `tickets/` ignored.
+- Changed `si codex` to canonical per-profile native homes with enforced file credential storage; removed global swap, copied worker credentials, bypass flags, and Fort launch coupling.
+- Changed release/packaging flows to the dev-only `si-release` tool (`cargo run -p si-tools --bin si-release -- ...`), which is never shipped; `si build` no longer exists.
+- Changed settings schema to version 2 with `native_root`, `identity`, `identity_source`, `enrolled_at`, and `disabled` profile fields.
+- Changed CLI text styling to a two-role runtime palette (commands, labels); clap `--help` keeps its own styling.
+- Removed the `tools/si-cache-governor` binary; `docs/CACHE_GOVERNANCE.md` now records manual retention rules.
+
+### Removed
+- Removed `si fort`, `si surf`, `si viva`, `si image`, and `si build` root commands (they now fail fast with a pointer to `si --help`).
+- Removed `si codex warmup`, `si codex status`, `si codex profile swap`, and `si codex repair-auth`.
+- Removed the `si-fort` and `si-warmup` crates, the `fort-ci.yml` workflow, the `si-rust-host-matrix` and `test-fort-spawn-matrix` binaries, and the `docs/FORT.md` / `docs/BROWSER.md` pages.
+- Removed `[fort]`, `[viva]`, and `[surf]` settings sections and their loaders; leftover sections in existing settings files are ignored.
+- Removed the orphan dyad `profiles/` actor/critic persona directory.
 
 ### Fixed
 - Fixed `orbit gcp vertex generate` so `--location global` now uses the documented global Vertex host instead of an invalid regionalized hostname.
@@ -29,6 +47,14 @@ All notable changes to this project will be documented in this file.
 - Fixed the Homebrew installer smoke to exercise a real local tap flow, matching current Homebrew tap requirements.
 - Hardened the Homebrew tap release workflow to retry `homebrew-si` pushes with `GH_PAT_AUREUMA` when a dedicated tap token can clone but cannot push.
 - Fixed `run.submit_turn` so tasks already bound to one session cannot be submitted against a different session id.
+- Fixed profile status to never claim login from credential files alone (`credential_present_unverified` until a native result confirms).
+
+### Migration to v0.61.0
+- Run `si doctor --migration-plan` to preview, then `si doctor --migrate` to convert pre-schema-2 records. Native auth, history, and config files are left byte-identical in place.
+- Re-enroll removed profile state with `si <provider> profile add <id>` followed by `si <provider> profile login <id>`; browser/device approval at login is the only manual step.
+- Replace `si build ...` invocations with the `si-release` equivalents (`cargo run -p si-tools --bin si-release -- ...`); replace `si fort ...` secret access with the standalone `vault` binary.
+- Delete stale `[fort]`/`[viva]`/`[surf]` sections from `~/.si/settings.toml` at your convenience; SI ignores them.
+- SI never deletes user data on disk during upgrade: old Fort/vault/browser state stays untouched (see Troubleshooting for the removed-command errors).
 
 ## [v0.59.0] - 2026-04-20
 ### Added

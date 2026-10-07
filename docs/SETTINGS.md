@@ -71,6 +71,36 @@ Per-profile entry keyed by profile ID (for example `profile-alpha`). These entri
 - `email` (string): profile email
 - `auth_path` (string): path to auth.json
 - `auth_updated` (string): RFC3339 timestamp of auth.json
+- `native_root` (string): canonical native home for this account
+- `identity` (string): short identity summary bound at enrollment
+- `identity_source` (string): how `identity` was verified, or `identity_unverified`
+- `enrolled_at` (string): RFC3339 enrollment timestamp
+- `disabled` (string): set with a reason when launch is disabled for this profile
+
+### `[muse]`
+Defaults for `si muse` profile-bound worker commands. Mirrors `[codex]`.
+- Every `si muse` worker must resolve to a predefined entry under `[muse.profiles.entries.<id>]`.
+  - `si muse profile add|show|list|login|logout|select|remove` manages the profile registry in `~/.si/settings.toml`.
+- `muse.workspace` (string): host path for workspace bind.
+- `muse.workdir` (string): worker working directory
+- `muse.profile` (string): legacy compatibility field for the most recently selected Muse profile.
+- Worker-slot behavior is command-level:
+  - `si muse spawn|respawn --profile <profile> --slot <slot>`
+  - `si muse shell|tail|tmux|stop|remove --profile <profile> --slot <slot>`
+
+#### `[muse.profiles]`
+Profile metadata tracked in settings.
+- `muse.profiles.active` (string): the most recently selected profile for profile-scoped commands and related host state
+
+##### `[muse.profiles.entries.<id>]`
+Per-profile entry keyed by profile ID. These entries are created and updated by `si muse profile add` and any later profile metadata sync flows.
+- `name` (string): profile display name
+- `email` (string): profile email
+- `native_root` (string): canonical native root for this account (holds config/data/cache/state)
+- `identity` (string): short identity summary bound at enrollment
+- `identity_source` (string): how `identity` was verified, or `identity_unverified`
+- `enrolled_at` (string): RFC3339 enrollment timestamp
+- `disabled` (string): set with a reason when launch is disabled for this profile
 
 ### External orbit settings
 Third-party integration settings moved to the standalone `orbit` repo. SI no longer reads provider account settings such as `[stripe]`, `[github]`, `[cloudflare]`, `[gcp]`, `[google]`, `[openai]`, `[oci]`, `[apple]`, or `[workos]`.
