@@ -20,6 +20,7 @@ use si_process::lease::{Lease, LeaseError};
 use si_process::{ProcessRunner, RunOptions};
 use std::path::{Path, PathBuf};
 
+use super::runner::ProviderLaunch as _;
 use super::store::{AgentContext, SettingsDoc};
 use crate::{OutputFormat, ensure_toml_table, set_toml_string};
 
@@ -99,20 +100,17 @@ pub struct ActiveWorker {
     pub session: String,
 }
 
-/// Workers to stop before login/logout/remove: live tmux records plus any
-/// holder of the worker-admission lease (foreground `run` leaves no record).
+/// Workers to stop before login/logout/remove: reconciled live records on
+/// the owned socket, plus any holder of the worker-admission lease
+/// (foreground `run` leaves no record).
 pub fn active_workers(ctx: &AgentContext, key: &str) -> Result<Vec<ActiveWorker>> {
     let mut active = Vec::new();
-    for state in crate::read_codex_worker_states(&ctx.paths)? {
-        if state.profile_id != key {
+    for row in super::runner::list_workers(&ctx.paths, &CodexLaunch)? {
+        if row.profile != key {
             continue;
         }
-        let term = std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned());
-        if crate::tmux_session_exists("tmux", &term, &state.session_name)? {
-            active.push(ActiveWorker {
-                slot: state.worker_slot.clone(),
-                session: state.session_name.clone(),
-            });
+        if row.state == "running" || row.state == "reserved" {
+            active.push(ActiveWorker { slot: row.slot.clone(), session: row.session.clone() });
         }
     }
     match Lease::try_acquire(&ctx.paths.worker_lease_path(PROVIDER, key), "probe")? {
@@ -183,7 +181,10 @@ pub fn profile_add(
     let _settings_lock = Lease::acquire(&ctx.paths.settings_lock_path(), "codex profile add")?;
     let mut doc = SettingsDoc::load(&ctx.settings_path)?;
     if !doc.document.contains_key("schema_version") {
-        doc.document.insert("schema_version".to_owned(), toml::Value::Integer(1));
+        doc.document.insert(
+            "schema_version".to_owned(),
+            toml::Value::Integer(si_config::migration::MIGRATION_TARGET_SCHEMA_VERSION as i64),
+        );
     }
     let codex = ensure_toml_table(&mut doc.document, "codex")?;
     let profiles = ensure_toml_table(codex, "profiles")?;
@@ -623,4 +624,567 @@ fn run_with_lease(
         .env("SI_PROFILE", key);
     let status = ProcessRunner.status_inherit(&spec)?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Codex [`ProviderLaunch`]: canonical homes, file-store forcing, native
+/// resume argv, session-index resume validation.
+pub struct CodexLaunch;
+
+impl super::runner::ProviderLaunch for CodexLaunch {
+    fn provider(&self) -> Provider {
+        PROVIDER
+    }
+
+    fn session_name(&self, profile: &str, slot: &si_config::ids::SlotId) -> String {
+        si_codex::codex_tmux_session_name_for_slot(profile, slot.as_str())
+    }
+
+    fn window_name(
+        &self,
+        profile: &str,
+        display: Option<&str>,
+        slot: &si_config::ids::SlotId,
+    ) -> String {
+        crate::codex_tmux_window_name(profile, display, slot.as_str())
+    }
+
+    fn build_command(
+        &self,
+        program: &Path,
+        native_root: &Path,
+        workdir: &Path,
+        argv: &[String],
+    ) -> Result<si_process::CommandSpec, String> {
+        adapter()
+            .run_command(program, native_root, workdir, argv)
+            .map_err(|detail| detail.to_string())
+    }
+
+    fn resume_argv(&self, session_id: &str) -> Vec<String> {
+        si_codex::adapter::resume_argv(session_id)
+    }
+
+    fn session_known(&self, native_root: &Path, id: &str) -> bool {
+        si_codex::adapter::session_known(native_root, id)
+    }
+
+    fn probe_version(&self, program: &Path) -> Option<String> {
+        si_codex::adapter::probe_native_version(program)
+    }
+}
+
+/// Normalize (trim/lowercase/default-primary) then strictly validate a slot.
+pub fn resolve_slot(raw: Option<&str>) -> Result<si_config::ids::SlotId> {
+    let normalized = si_codex::codex_worker_slot_name(raw);
+    si_config::ids::SlotId::parse(&normalized)
+        .map_err(|detail| anyhow::anyhow!("invalid slot: {detail}"))
+}
+
+fn expand_home(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if text == "~" {
+        return super::store::default_home_dir();
+    }
+    if let Some(suffix) = text.strip_prefix("~/") {
+        return super::store::default_home_dir().join(suffix);
+    }
+    path
+}
+
+/// Workspace: explicit flag, else configured default, else current dir.
+/// Relative paths resolve against the current dir. Workspaces live outside
+/// the SI root by design; only profile IDs are root-confined.
+pub fn resolve_workspace(workspace: Option<PathBuf>, ctx: &AgentContext) -> Result<PathBuf> {
+    let path = match workspace {
+        Some(path) => path,
+        None => match ctx.settings.codex.workspace.as_deref().map(str::trim) {
+            Some(configured) if !configured.is_empty() => PathBuf::from(configured),
+            _ => std::env::current_dir().context("read current dir for codex workspace")?,
+        },
+    };
+    let path = expand_home(path);
+    if path.is_absolute() {
+        Ok(path)
+    } else {
+        Ok(std::env::current_dir().context("read current dir for codex workspace")?.join(path))
+    }
+}
+
+/// Workdir: explicit flag (relative joins the workspace), else workspace.
+pub fn resolve_workdir(workdir: Option<&str>, workspace: &Path) -> Result<PathBuf> {
+    let Some(workdir) = workdir.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(workspace.to_path_buf());
+    };
+    let path = expand_home(PathBuf::from(workdir));
+    if path.is_absolute() { Ok(path) } else { Ok(workspace.join(path)) }
+}
+
+fn resolve_launch_target(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+) -> Result<(String, CodexProfileEntry, PathBuf)> {
+    let key = ctx.resolve_profile(PROVIDER, profile)?;
+    let entry = ctx
+        .settings
+        .codex
+        .profiles
+        .entries
+        .get(&key)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("codex profile {key:?} is not registered"))?;
+    if let Some(reason) = entry.disabled.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        anyhow::bail!("codex profile {key:?} is disabled: {reason}");
+    }
+    let native_root = canonical_native_home(&ctx.paths, &key, &entry)?;
+    create_private_dir_all(&native_root)?;
+    Ok((key, entry, native_root))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn spawn(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    workspace: Option<PathBuf>,
+    workdir: Option<&str>,
+    codex_bin: Option<PathBuf>,
+    argv: Vec<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (key, entry, native_root) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    let workspace = resolve_workspace(workspace, ctx)?;
+    let workdir = resolve_workdir(workdir, &workspace)?;
+    let program = resolve_native_program(codex_bin, "codex")?;
+    let launch = CodexLaunch;
+    let version = launch.probe_version(&program);
+    let outcome = super::runner::launch_worker(super::runner::LaunchRequest {
+        paths: &ctx.paths,
+        launch: &launch,
+        profile: &key,
+        slot: &slot,
+        display_name: entry.name.as_deref(),
+        native_root: &native_root,
+        program: &program,
+        program_version: version,
+        argv,
+        workdir,
+        workspace,
+        resume_id: None,
+    })?;
+    match format {
+        OutputFormat::Json => {
+            let (state, session, pane, generation) = match outcome {
+                super::runner::LaunchOutcome::Started { session, pane, generation } => {
+                    ("started", session, pane, generation)
+                }
+                super::runner::LaunchOutcome::AlreadyRunning { session, pane, generation } => {
+                    ("already_running", session, pane, generation)
+                }
+            };
+            println!(
+                "{}",
+                serde_json::json!({
+                    "profile": key,
+                    "state": state,
+                    "session": session,
+                    "pane": pane,
+                    "generation": generation,
+                })
+            );
+        }
+        OutputFormat::Text => match outcome {
+            super::runner::LaunchOutcome::Started { session, pane, generation } => {
+                println!(
+                    "started codex worker for profile {key:?} (session {session}, pane {pane}, generation {generation})"
+                );
+            }
+            super::runner::LaunchOutcome::AlreadyRunning { session, pane, generation } => {
+                println!(
+                    "codex worker for profile {key:?} already running (session {session}, pane {pane}, generation {generation})"
+                );
+            }
+        },
+    }
+    Ok(())
+}
+
+pub fn stop(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    force: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let (key, _, _) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    let outcome = super::runner::stop_worker(&ctx.paths, &CodexLaunch, &key, &slot, force)?;
+    match format {
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::json!({
+                "profile": key,
+                "slot": slot.as_str(),
+                "outcome": match outcome {
+                    super::runner::StopOutcome::Stopped { exit } => serde_json::json!({"state": "stopped", "exit": exit}),
+                    super::runner::StopOutcome::AlreadyExited { exit } => serde_json::json!({"state": "already_exited", "exit": exit}),
+                },
+            })
+        ),
+        OutputFormat::Text => match outcome {
+            super::runner::StopOutcome::Stopped { exit } => {
+                println!(
+                    "stopped codex worker for profile {key:?} slot {:?} (exit {})",
+                    slot.as_str(),
+                    exit.map_or("(unknown)".to_owned(), |code| code.to_string())
+                );
+            }
+            super::runner::StopOutcome::AlreadyExited { exit } => {
+                println!(
+                    "codex worker for profile {key:?} slot {:?} already exited (exit {})",
+                    slot.as_str(),
+                    exit.map_or("(unknown)".to_owned(), |code| code.to_string())
+                );
+            }
+        },
+    }
+    Ok(())
+}
+
+pub fn worker_remove(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    stop_first: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let (key, _, _) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    let outcome = super::runner::remove_worker(&ctx.paths, &CodexLaunch, &key, &slot, stop_first)?;
+    match format {
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::json!({
+                "profile": key,
+                "slot": slot.as_str(),
+                "outcome": match &outcome {
+                    super::runner::RemoveOutcome::Removed { native_root, workspace } => serde_json::json!({
+                        "state": "removed",
+                        "native_root": native_root.display().to_string(),
+                        "workspace": workspace.display().to_string(),
+                    }),
+                },
+            })
+        ),
+        OutputFormat::Text => match outcome {
+            super::runner::RemoveOutcome::Removed { native_root, workspace } => {
+                println!(
+                    "removed codex worker for profile {key:?} slot {:?}; native data preserved at {}, workspace {} untouched",
+                    slot.as_str(),
+                    native_root.display(),
+                    workspace.display()
+                );
+            }
+        },
+    }
+    Ok(())
+}
+
+pub fn respawn(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    codex_bin: Option<PathBuf>,
+    resume_id: Option<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (key, entry, native_root) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    let program = resolve_native_program(codex_bin, "codex")?;
+    let launch = CodexLaunch;
+    let version = launch.probe_version(&program);
+    let outcome = super::runner::respawn_worker(super::runner::RespawnRequest {
+        paths: &ctx.paths,
+        launch: &launch,
+        profile: &key,
+        slot: &slot,
+        display_name: entry.name.as_deref(),
+        native_root: &native_root,
+        program: &program,
+        program_version: version,
+        resume_id,
+    })?;
+    match format {
+        OutputFormat::Json => {
+            let (state, session, pane, generation) = match outcome {
+                super::runner::LaunchOutcome::Started { session, pane, generation } => {
+                    ("started", session, pane, generation)
+                }
+                super::runner::LaunchOutcome::AlreadyRunning { session, pane, generation } => {
+                    ("already_running", session, pane, generation)
+                }
+            };
+            println!(
+                "{}",
+                serde_json::json!({
+                    "profile": key,
+                    "slot": slot.as_str(),
+                    "state": state,
+                    "session": session,
+                    "pane": pane,
+                    "generation": generation,
+                })
+            );
+        }
+        OutputFormat::Text => match outcome {
+            super::runner::LaunchOutcome::Started { session, pane, generation } => {
+                println!(
+                    "respawned codex worker for profile {key:?} slot {:?} (session {session}, pane {pane}, generation {generation})",
+                    slot.as_str()
+                );
+            }
+            super::runner::LaunchOutcome::AlreadyRunning { session, pane, generation } => {
+                println!(
+                    "codex worker for profile {key:?} slot {:?} already running (session {session}, pane {pane}, generation {generation})",
+                    slot.as_str()
+                );
+            }
+        },
+    }
+    Ok(())
+}
+
+pub fn tail(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    lines: usize,
+) -> Result<()> {
+    let (key, _, _) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    print!("{}", super::runner::tail_worker(&ctx.paths, &CodexLaunch, &key, &slot, lines)?);
+    Ok(())
+}
+
+pub fn attach(ctx: &AgentContext, profile: Option<&str>, slot: Option<&str>) -> Result<()> {
+    let (key, _, _) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    super::runner::attach_worker(&ctx.paths, &CodexLaunch, &key, &slot)
+}
+
+pub fn list(ctx: &AgentContext, format: OutputFormat) -> Result<()> {
+    let rows = super::runner::list_workers(&ctx.paths, &CodexLaunch)?;
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&rows)?);
+        }
+        OutputFormat::Text => {
+            let mut table = comfy_table::Table::new();
+            table.set_header(["PROFILE", "SLOT", "STATE", "SESSION", "PID", "EXIT", "WORKSPACE"]);
+            for row in &rows {
+                let pid = row.pid.map_or("-".to_owned(), |pid| pid.to_string());
+                let exit = row.exit_code.map_or("-".to_owned(), |code| code.to_string());
+                table.add_row([
+                    row.profile.as_str(),
+                    row.slot.as_str(),
+                    row.state.as_str(),
+                    row.session.as_str(),
+                    pid.as_str(),
+                    exit.as_str(),
+                    row.workspace.as_str(),
+                ]);
+            }
+            println!("{table}");
+            for row in rows.iter().filter(|row| row.conflict.is_some()) {
+                eprintln!(
+                    "warning: {} [{}]: {}",
+                    row.profile,
+                    row.slot,
+                    row.conflict.as_deref().unwrap_or("conflict")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Stop every worker of the provider. Continues past per-worker errors
+/// and reports them all; exits nonzero when anything failed.
+pub fn stop_all(ctx: &AgentContext, force: bool, format: OutputFormat) -> Result<()> {
+    let rows = super::runner::list_workers(&ctx.paths, &CodexLaunch)?;
+    let live: Vec<_> =
+        rows.iter().filter(|row| row.state == "running" || row.state == "reserved").collect();
+    if live.is_empty() {
+        match format {
+            OutputFormat::Json => println!("{}", serde_json::json!([])),
+            OutputFormat::Text => println!("no running codex workers"),
+        }
+        return Ok(());
+    }
+    let mut outcomes = Vec::new();
+    let mut failed = false;
+    for row in live {
+        let outcome = super::runner::stop_worker(
+            &ctx.paths,
+            &CodexLaunch,
+            &row.profile,
+            &resolve_slot(Some(&row.slot))?,
+            force,
+        );
+        match (&outcome, format) {
+            (Ok(super::runner::StopOutcome::Stopped { exit }), OutputFormat::Text) => {
+                println!(
+                    "stopped {} [{}] (exit {})",
+                    row.profile,
+                    row.slot,
+                    exit.map_or("(unknown)".to_owned(), |code| code.to_string())
+                );
+            }
+            (Ok(super::runner::StopOutcome::AlreadyExited { .. }), OutputFormat::Text) => {
+                println!("{} [{}] already exited", row.profile, row.slot);
+            }
+            (Err(source), OutputFormat::Text) => {
+                failed = true;
+                eprintln!("warning: stop {} [{}] failed: {source:#}", row.profile, row.slot);
+            }
+            _ => {}
+        }
+        outcomes.push(serde_json::json!({
+            "profile": row.profile,
+            "slot": row.slot,
+            "result": match &outcome {
+                Ok(super::runner::StopOutcome::Stopped { exit }) => serde_json::json!({"state": "stopped", "exit": exit}),
+                Ok(super::runner::StopOutcome::AlreadyExited { exit }) => serde_json::json!({"state": "already_exited", "exit": exit}),
+                Err(source) => {
+                    failed = true;
+                    serde_json::json!({"state": "error", "detail": format!("{source:#}")})
+                }
+            },
+        }));
+    }
+    if matches!(format, OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(&outcomes)?);
+    }
+    if failed {
+        anyhow::bail!("one or more workers failed to stop");
+    }
+    Ok(())
+}
+
+/// Remove every worker record after an explicit typed confirmation.
+/// Active workers are removed only with `stop_first`.
+pub fn remove_all(ctx: &AgentContext, stop_first: bool, format: OutputFormat) -> Result<()> {
+    let rows = super::runner::list_workers(&ctx.paths, &CodexLaunch)?;
+    if rows.is_empty() {
+        match format {
+            OutputFormat::Json => println!("{}", serde_json::json!([])),
+            OutputFormat::Text => println!("no codex worker sessions"),
+        }
+        return Ok(());
+    }
+    eprintln!("Remove all {} codex worker sessions?", rows.len());
+    for row in &rows {
+        eprintln!("  - {} [{}] ({})", row.profile, row.slot, row.session);
+    }
+    eprint!("Type 'remove all' to confirm: ");
+    use std::io::Write as _;
+    std::io::stderr().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    if input.trim() != "remove all" {
+        anyhow::bail!("remove --all not confirmed");
+    }
+    let mut outcomes = Vec::new();
+    let mut failed = false;
+    for row in &rows {
+        let outcome = super::runner::remove_worker(
+            &ctx.paths,
+            &CodexLaunch,
+            &row.profile,
+            &resolve_slot(Some(&row.slot))?,
+            stop_first,
+        );
+        match (&outcome, format) {
+            (Ok(_), OutputFormat::Text) => {
+                println!("removed {} [{}]", row.profile, row.slot);
+            }
+            (Err(source), OutputFormat::Text) => {
+                failed = true;
+                eprintln!("warning: remove {} [{}] failed: {source:#}", row.profile, row.slot);
+            }
+            _ => {}
+        }
+        outcomes.push(serde_json::json!({
+            "profile": row.profile,
+            "slot": row.slot,
+            "result": match &outcome {
+                Ok(_) => serde_json::json!({"state": "removed"}),
+                Err(source) => {
+                    failed = true;
+                    serde_json::json!({"state": "error", "detail": format!("{source:#}")})
+                }
+            },
+        }));
+    }
+    if matches!(format, OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(&outcomes)?);
+    }
+    if failed {
+        anyhow::bail!("one or more workers failed to remove");
+    }
+    Ok(())
+}
+
+/// Diagnostic/helper command with the profile's controlled environment.
+///
+/// Runs the command directly (never through a login shell, so shell startup
+/// files cannot silently overwrite profile paths) and labels the profile on
+/// stderr. Credential-using helpers belong in `run`, not here.
+pub fn shell(
+    ctx: &AgentContext,
+    profile: Option<&str>,
+    slot: Option<&str>,
+    workspace: Option<PathBuf>,
+    workdir: Option<&str>,
+    command: Vec<String>,
+) -> Result<()> {
+    if command.is_empty() {
+        anyhow::bail!("shell command is required");
+    }
+    let (key, _, native_root) = resolve_launch_target(ctx, profile)?;
+    let slot = resolve_slot(slot)?;
+    let workspace = resolve_workspace(workspace, ctx)?;
+    let workdir = resolve_workdir(workdir, &workspace)?;
+    eprintln!(
+        "[codex profile {key:?} slot {:?}] native root {}",
+        slot.as_str(),
+        native_root.display()
+    );
+    let child_env = adapter().profile_env(&native_root);
+    let mut process = std::process::Command::new(&command[0]);
+    process
+        .args(&command[1..])
+        .current_dir(&workdir)
+        .env("HOME", &ctx.home)
+        .env("SI_PROVIDER", PROVIDER.as_str())
+        .env("SI_PROFILE", &key)
+        .env("SI_WORKER_SLOT", slot.as_str())
+        .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_owned()));
+    for (key, value) in &child_env.set {
+        process.env(key, value);
+    }
+    for key in &child_env.unset {
+        process.env_remove(key);
+    }
+    let status = process
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .status()
+        .with_context(|| format!("run {}", command[0]))?;
+    if !status.success() {
+        anyhow::bail!("command failed: {status}");
+    }
+    Ok(())
 }

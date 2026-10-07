@@ -75,6 +75,14 @@ impl CommandSpec {
     pub fn current_dir_path(&self) -> Option<&Path> {
         self.current_dir.as_deref()
     }
+
+    pub fn env_map(&self) -> &BTreeMap<String, String> {
+        &self.env
+    }
+
+    pub fn env_remove_set(&self) -> &BTreeSet<String> {
+        &self.env_remove
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -201,6 +209,26 @@ impl ProcessRunner {
         join_stdin_writer(stdin)?;
 
         Ok(CommandOutput { status, stdout, stderr })
+    }
+
+    /// Spawn with fully inherited stdio and return the live child.
+    ///
+    /// Used by the worker runner, which records the native PID, waits, and
+    /// reports the exit status itself.
+    pub fn spawn_inherit(&self, spec: &CommandSpec) -> Result<Child, ProcessError> {
+        let mut command = Command::new(&spec.program);
+        command.args(&spec.args);
+        if let Some(current_dir) = &spec.current_dir {
+            command.current_dir(current_dir);
+        }
+        for (key, value) in &spec.env {
+            command.env(key, value);
+        }
+        for key in &spec.env_remove {
+            command.env_remove(key);
+        }
+        command.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        spawn_command_with_retry(command, &spec.program)
     }
 
     /// Spawn with fully inherited stdio, wait, and return the exit status.
@@ -435,6 +463,15 @@ mod tests {
         let runner = ProcessRunner;
         let status = runner.status_inherit(&sh("exit 7")).expect("run process");
         assert_eq!(status.code(), Some(7));
+    }
+
+    #[test]
+    fn spawn_inherit_returns_live_child_with_pid() {
+        let runner = ProcessRunner;
+        let mut child = runner.spawn_inherit(&sh("exit 3")).expect("spawn process");
+        assert!(child.id() > 0);
+        let status = child.wait().expect("wait");
+        assert_eq!(status.code(), Some(3));
     }
 
     #[test]

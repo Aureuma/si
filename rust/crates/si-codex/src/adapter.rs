@@ -101,9 +101,8 @@ impl ProviderAdapter for CodexAdapter {
         if program.as_os_str().is_empty() {
             return Err(AdapterError::EmptyProgram);
         }
-        if argv.is_empty() {
-            return Err(AdapterError::EmptyArgv);
-        }
+        // Empty argv is the bare interactive native (operator TUI sessions).
+        // Headless `run` requires argv at the CLI layer instead.
         reject_conflicting_store_override(argv)?;
         let mut full_argv = file_store_argv();
         full_argv.extend(argv.iter().cloned());
@@ -258,6 +257,102 @@ pub fn auth_file_path(native_root: &Path) -> PathBuf {
     native_root.join(CODEX_AUTH_FILE_NAME)
 }
 
+/// Native per-account session index (JSONL with `id`/`thread_name`).
+pub const CODEX_SESSION_INDEX_FILE_NAME: &str = "session_index.jsonl";
+
+/// Native per-account session tree root (`sessions/YYYY/MM/DD/...`).
+pub const CODEX_SESSIONS_DIR_NAME: &str = "sessions";
+
+/// `resume <session-id>` argv fragment for managed resume (file-store `-c`
+/// prefix is added by [`ProviderAdapter::run_command`]).
+pub fn resume_argv(session_id: &str) -> Vec<String> {
+    vec!["resume".to_owned(), session_id.to_owned()]
+}
+
+/// Best-effort native version string: first line of `<program> --version`,
+/// trimmed and capped. `None` when the probe fails or prints nothing.
+pub fn probe_native_version(program: &Path) -> Option<String> {
+    let output = ProcessRunner
+        .run(
+            &CommandSpec::new(program.display().to_string()).args(["--version"]),
+            &RunOptions {
+                timeout: Some(std::time::Duration::from_secs(10)),
+                ..RunOptions::default()
+            },
+        )
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let line =
+        String::from_utf8_lossy(&output.stdout).lines().next().unwrap_or("").trim().to_owned();
+    if line.is_empty() {
+        return None;
+    }
+    let mut capped = line;
+    capped.truncate(128);
+    Some(capped)
+}
+
+/// Whether `id` names a session known in this profile's native store.
+///
+/// Accepts an `id` or `thread_name` entry from the profile's
+/// `session_index.jsonl`, or a rollout filename under its `sessions/` tree.
+/// Scans are bounded; unreadable stores report unknown rather than failing.
+/// This answers "known here" only; the native CLI resolves UUID-vs-name
+/// precedence itself.
+pub fn session_known(native_root: &Path, id: &str) -> bool {
+    const MAX_INDEX_LINES: usize = 4_000;
+    const MAX_SESSION_FILES: usize = 8_000;
+    const MAX_SCAN_DEPTH: usize = 6;
+
+    let id = id.trim();
+    if id.is_empty() || id.contains('/') || id.contains('\\') || id == ".." {
+        return false;
+    }
+    let index_path = native_root.join(CODEX_SESSION_INDEX_FILE_NAME);
+    if let Ok(raw) = std::fs::read_to_string(&index_path) {
+        for line in raw.lines().take(MAX_INDEX_LINES) {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(entry) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if entry.get("id").and_then(Value::as_str) == Some(id)
+                || entry.get("thread_name").and_then(Value::as_str) == Some(id)
+            {
+                return true;
+            }
+        }
+    }
+    let sessions_root = native_root.join(CODEX_SESSIONS_DIR_NAME);
+    let mut stack = vec![(sessions_root, 0_usize)];
+    let mut seen = 0_usize;
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > MAX_SCAN_DEPTH {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            seen += 1;
+            if seen > MAX_SESSION_FILES {
+                return false;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                stack.push((entry.path(), depth + 1));
+            } else if name.contains(id) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -319,6 +414,20 @@ mod tests {
     }
 
     #[test]
+    fn run_accepts_empty_argv_as_bare_interactive_native() {
+        let spec = adapter()
+            .run_command(
+                Path::new("codex"),
+                Path::new("/si/codex/profiles/a"),
+                Path::new("/work"),
+                &[],
+            )
+            .expect("bare run spec");
+        let argv = spec.args_slice();
+        assert_eq!(argv, &["-c".to_owned(), CODEX_FILE_STORE_OVERRIDE.to_owned()]);
+    }
+
+    #[test]
     fn run_rejects_conflicting_store_overrides_in_every_spelling() {
         for argv in [
             vec!["-c", "cli_auth_credentials_store=\"os\""],
@@ -374,5 +483,52 @@ mod tests {
         assert_eq!(local_email_from_auth_file(&path).as_deref(), Some("a@example.invalid"));
         std::fs::write(&path, r#"{"tokens":{}}"#).expect("write empty tokens");
         assert_eq!(local_email_from_auth_file(&path), None);
+    }
+
+    #[test]
+    fn resume_argv_names_session_id() {
+        assert_eq!(super::resume_argv("abc-123"), vec!["resume".to_owned(), "abc-123".to_owned()]);
+    }
+
+    #[test]
+    fn probe_native_version_reads_first_line() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let program = temp.path().join("codex");
+        std::fs::write(&program, "#!/bin/sh\necho 'codex-cli 0.160.0'\n").expect("write");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod");
+        }
+        assert_eq!(super::probe_native_version(&program).as_deref(), Some("codex-cli 0.160.0"));
+        assert_eq!(super::probe_native_version(temp.path().join("missing").as_path()), None);
+    }
+
+    #[test]
+    fn session_known_matches_index_and_rollout_names_only() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("a");
+        std::fs::create_dir_all(root.join("sessions").join("2026").join("10")).expect("mkdir");
+        std::fs::write(
+            root.join(super::CODEX_SESSION_INDEX_FILE_NAME),
+            "{\"id\":\"uuid-1\",\"thread_name\":\"Fix bug\",\"updated_at\":\"2026-10-07T00:00:00Z\"}\n\
+             not-json\n\
+             {\"id\":\"uuid-2\",\"thread_name\":\"Other\",\"updated_at\":\"2026-10-07T00:00:00Z\"}\n",
+        )
+        .expect("write index");
+        std::fs::write(
+            root.join("sessions").join("2026").join("10").join("rollout-uuid-3.jsonl"),
+            "{}\n",
+        )
+        .expect("write rollout");
+
+        assert!(super::session_known(&root, "uuid-1"));
+        assert!(super::session_known(&root, "Fix bug"));
+        assert!(super::session_known(&root, "uuid-3"));
+        assert!(!super::session_known(&root, "uuid-9"));
+        assert!(!super::session_known(&root, ""));
+        assert!(!super::session_known(&root, "../escape"));
+        assert!(!super::session_known(temp.path().join("missing").as_path(), "uuid-1"));
     }
 }
