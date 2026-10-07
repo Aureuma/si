@@ -1558,12 +1558,12 @@ pub fn run_installer_smoke_host() -> Result<()> {
         run_command_checked(
             &root,
             "cargo",
-            ["test", "-p", "si-cli", "build_installer_settings_helper_"],
+            ["test", "-p", "si-tools", "--test", "si_release", "build_installer_settings_helper_"],
         )?;
     }
 
     eprintln!("==> help output");
-    run_path_command_checked(&root, &installer_runner, &["build", "installer", "run", "--help"])?;
+    run_path_command_checked(&root, &installer_runner, &["installer", "run", "--help"])?;
 
     let tmp = tempfile::tempdir().context("create temp dir")?;
     eprintln!("==> dry-run: linux/amd64 install-dir with spaces");
@@ -1573,7 +1573,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1590,7 +1589,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1611,7 +1609,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1627,7 +1624,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1643,7 +1639,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1660,7 +1655,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1677,7 +1671,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1696,7 +1689,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--dry-run",
@@ -1714,7 +1706,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--source-dir",
@@ -1737,7 +1728,6 @@ pub fn run_installer_smoke_host() -> Result<()> {
         &root,
         &installer_runner,
         &[
-            "build",
             "installer",
             "run",
             "--install-dir",
@@ -1792,7 +1782,6 @@ pub fn run_installer_smoke_npm() -> Result<()> {
                 &root,
                 &self_bin,
                 &[
-                    "build",
                     "self",
                     "asset",
                     "--version",
@@ -1821,7 +1810,6 @@ pub fn run_installer_smoke_npm() -> Result<()> {
             &root,
             &self_bin,
             &[
-                "build",
                 "npm",
                 "package",
                 "--version",
@@ -1903,7 +1891,6 @@ pub fn run_installer_smoke_homebrew() -> Result<()> {
                     &root,
                     &self_bin,
                     &[
-                        "build",
                         "self",
                         "assets",
                         "--version",
@@ -1926,7 +1913,6 @@ pub fn run_installer_smoke_homebrew() -> Result<()> {
                 &root,
                 &self_bin,
                 &[
-                    "build",
                     "self",
                     "assets",
                     "--version",
