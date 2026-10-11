@@ -447,7 +447,7 @@ fn codex_run_enforces_env_contract_and_passes_exit_code() {
         format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
 
     let output = cargo_bin()
-        .env("PATH", path_env)
+        .env("PATH", &path_env)
         .env("OPENAI_API_KEY", "seeded")
         .args(["codex", "run", "--profile", "a", "--home"])
         .arg(home.path())
@@ -464,6 +464,7 @@ fn codex_run_enforces_env_contract_and_passes_exit_code() {
     assert!(dumped.contains("SI=codex/a"));
 
     let output = cargo_bin()
+        .env("PATH", &path_env)
         .args(["codex", "run", "--profile", "a", "--home"])
         .arg(home.path())
         .args(["--", "-c", "cli_auth_credentials_store=os", "exec"])
