@@ -357,7 +357,7 @@ jobs:
 
   verify-release-distribution:
     name: Verify release assets, npm package, and Homebrew tap
-    needs: [resolve-tag, publish-assets, publish-npm, verify-homebrew-local-install, update-homebrew-tap]
+    needs: [resolve-tag, publish-assets, publish-package, verify-homebrew-local-install, update-homebrew-tap]
     runs-on: ubuntu-latest
     steps:
       - name: Verify release distribution state

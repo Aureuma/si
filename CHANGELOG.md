@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [Unreleased]
+### Fixed
+- Fixed the release-assets workflow `verify-release-distribution` job to depend on the real `publish-package` job instead of the nonexistent `publish-npm` reference, so release events trigger the pipeline again.
+- Fixed the Homebrew installer smoke to trust its temporary tap (`brew trust`) before install, matching current Homebrew tap-trust behavior; brews without the `trust` subcommand are excused.
+
 ## [0.61.0] - 2026-10-07
 ### Added
 - Added a first-class Vertex Gemini generation command under `orbit gcp vertex generate` for OAuth-backed Gemini calls through Vertex AI publisher models.

@@ -470,7 +470,56 @@ fn build_installer_smoke_homebrew_runs_rust_or_override_commands() {
     fs::write(
         &brew,
         format!(
-            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"trust\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf trusted > \"$prefix/trusted\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
+            prefix = shell_escape_for_test(&brew_prefix)
+        ),
+    )
+    .expect("write brew");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&brew).expect("stat brew").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&brew, perms).expect("chmod brew");
+    }
+
+    let path_env =
+        format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    release_bin()
+        .current_dir(repo.path())
+        .args(["installer", "smoke-homebrew"])
+        .env("PATH", path_env)
+        .env("SI_BUILD_ASSETS_EXEC", &build_assets)
+        .assert()
+        .success();
+    assert!(brew_prefix.join("trusted").is_file(), "smoke must trust the tap");
+}
+
+#[test]
+fn build_installer_smoke_homebrew_tolerates_brew_without_trust() {
+    let repo = tempdir().expect("repo tempdir");
+    write_workspace_manifest(repo.path(), "v1.2.3");
+    let build_assets = repo.path().join("build-assets-fixture");
+    fs::write(
+        &build_assets,
+        "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\ncat > \"$out/checksums.txt\" <<'EOF'\nsha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\nEOF\nexit 0\n",
+    )
+    .expect("write assets script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&build_assets).expect("stat assets script").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&build_assets, perms).expect("chmod assets script");
+    }
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let brew_prefix = repo.path().join("fake-brew-prefix");
+    let brew = bin_dir.path().join("brew");
+    fs::write(
+        &brew,
+        format!(
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"trust\" ]; then echo 'Error: Unknown command: trust' >&2; exit 1; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
             prefix = shell_escape_for_test(&brew_prefix)
         ),
     )
@@ -513,7 +562,7 @@ fn build_installer_smoke_homebrew_uses_provided_assets_dir() {
     fs::write(
         &brew,
         format!(
-            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nexpected_path={expected_path}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q \"file://$expected_path\" \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nexpected_path={expected_path}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"trust\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf trusted > \"$prefix/trusted\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q \"file://$expected_path\" \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
             prefix = shell_escape_for_test(&brew_prefix),
             expected_path = shell_escape_for_test(&provided_assets),
         ),
@@ -536,6 +585,7 @@ fn build_installer_smoke_homebrew_uses_provided_assets_dir() {
         .env("SI_INSTALL_SMOKE_ASSETS_DIR", &provided_assets)
         .assert()
         .success();
+    assert!(brew_prefix.join("trusted").is_file(), "smoke must trust the tap");
 }
 
 #[test]
@@ -557,7 +607,7 @@ fn build_installer_smoke_homebrew_resolves_relative_assets_dir() {
     fs::write(
         &brew,
         format!(
-            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nexpected_path={expected_path}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q \"file://$expected_path\" \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nmkdir -p \"$prefix\"\nstate=\"$prefix/tap-path\"\nformula_ref=\"si/homebrew-si-smoke/si-smoke\"\nexpected_path={expected_path}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"tap\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf '%s\\n' \"$3\" > \"$state\"; exit 0; fi\nif [ \"$1\" = \"trust\" ]; then [ \"$2\" = \"si/homebrew-si-smoke\" ]; printf trusted > \"$prefix/trusted\"; exit 0; fi\nif [ \"$1\" = \"install\" ]; then [ \"$2\" = \"$formula_ref\" ]; tap_path=\"$(cat \"$state\")\"; formula=\"$tap_path/Formula/si-smoke.rb\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q \"file://$expected_path\" \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"$formula_ref\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ] && [ \"$3\" = \"$formula_ref\" ]; then rm -rf \"$prefix/bin\"; exit 0; fi\nif [ \"$1\" = \"untap\" ] && [ \"$2\" = \"si/homebrew-si-smoke\" ]; then rm -f \"$state\"; exit 0; fi\nexit 1\n",
             prefix = shell_escape_for_test(&brew_prefix),
             expected_path = shell_escape_for_test(&provided_assets),
         ),
@@ -580,6 +630,7 @@ fn build_installer_smoke_homebrew_resolves_relative_assets_dir() {
         .env("SI_INSTALL_SMOKE_ASSETS_DIR", "dist")
         .assert()
         .success();
+    assert!(brew_prefix.join("trusted").is_file(), "smoke must trust the tap");
 }
 
 #[test]

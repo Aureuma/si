@@ -1968,6 +1968,23 @@ pub fn run_installer_smoke_homebrew() -> Result<()> {
         return Err(anyhow!("brew tap failed: {tap_status}"));
     }
 
+    // Recent Homebrew refuses to load formulae from third-party taps until
+    // they are trusted ("Refusing to load formula ... from untrusted tap").
+    // Brews predating the `trust` subcommand report unknown-command instead;
+    // there is no trust gate on those versions, so only that case is excused.
+    let mut trust = StdCommand::new("brew");
+    trust.current_dir(&root).args(["trust", tap_name.as_str()]);
+    for (key, value) in &brew_env {
+        trust.env(key, value);
+    }
+    let trust_output = trust.output().context("run brew trust")?;
+    if !trust_output.status.success() {
+        let stderr = String::from_utf8_lossy(&trust_output.stderr);
+        if !stderr.to_ascii_lowercase().contains("unknown command") {
+            return Err(anyhow!("brew trust {tap_name} failed: {}", trust_output.status));
+        }
+    }
+
     let mut install = StdCommand::new("brew");
     install.current_dir(&root).args(["install", formula_ref.as_str()]);
     for (key, value) in &brew_env {
