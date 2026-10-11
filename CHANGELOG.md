@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Fixed the release-assets workflow `verify-release-distribution` job to depend on the real `publish-package` job instead of the nonexistent `publish-npm` reference, so release events trigger the pipeline again.
 - Fixed the Homebrew installer smoke to trust its temporary tap (`brew trust`) before install, matching current Homebrew tap-trust behavior; brews without the `trust` subcommand are excused.
+- Fixed the install-smoke workflow npm job to invoke the real `smoke-npm` installer alias instead of the nonexistent `smoke-pnpm`.
+- Fixed clippy `collapsible_if` (si-config) and `needless_borrows` (si-cli tests) so the workspace `-D warnings` gate passes.
 
 ## [0.61.0] - 2026-10-07
 ### Added

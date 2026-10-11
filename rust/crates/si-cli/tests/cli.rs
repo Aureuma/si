@@ -1445,10 +1445,10 @@ fn doctor_migrate_leaves_history_conflicts_in_place() {
     .expect("write settings");
     let rel = "sessions/2026/10/07/rollout-2026-10-07T00-00-00-uuid-c.jsonl";
     fs::create_dir_all(america.join("sessions/2026/10/07")).expect("mkdir canonical sessions");
-    fs::write(america.join(&rel), "{\"side\":\"canonical\"}\n").expect("write canonical");
+    fs::write(america.join(rel), "{\"side\":\"canonical\"}\n").expect("write canonical");
     let slot = america.join("workers/review");
     fs::create_dir_all(slot.join("sessions/2026/10/07")).expect("mkdir slot sessions");
-    fs::write(slot.join(&rel), "{\"side\":\"slot\"}\n").expect("write slot");
+    fs::write(slot.join(rel), "{\"side\":\"slot\"}\n").expect("write slot");
     fs::write(
         america.join("session_index.jsonl"),
         "{\"id\":\"uuid-c\",\"thread_name\":\"Canonical\",\"updated_at\":\"2026-10-07T00:00:00Z\"}\n",
@@ -1476,8 +1476,8 @@ fn doctor_migrate_leaves_history_conflicts_in_place() {
     assert_eq!(history["index_conflicts"].as_array().expect("conflicts").len(), 1);
 
     // Both sides byte-identical; canonical index kept.
-    assert_eq!(fs::read_to_string(america.join(&rel)).expect("read"), "{\"side\":\"canonical\"}\n");
-    assert_eq!(fs::read_to_string(slot.join(&rel)).expect("read"), "{\"side\":\"slot\"}\n");
+    assert_eq!(fs::read_to_string(america.join(rel)).expect("read"), "{\"side\":\"canonical\"}\n");
+    assert_eq!(fs::read_to_string(slot.join(rel)).expect("read"), "{\"side\":\"slot\"}\n");
     let index = fs::read_to_string(america.join("session_index.jsonl")).expect("read index");
     assert!(index.contains("\"thread_name\":\"Canonical\""));
     assert!(!index.contains("\"thread_name\":\"Slot\""));

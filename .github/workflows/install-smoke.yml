@@ -95,4 +95,4 @@ jobs:
           node-version: 20
 
       - name: Run npm installer smoke tests
-        run: cargo run --quiet --locked -p si-tools --bin si-release -- installer smoke-pnpm
+        run: cargo run --quiet --locked -p si-tools --bin si-release -- installer smoke-npm

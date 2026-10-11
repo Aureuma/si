@@ -74,11 +74,10 @@ impl SiPaths {
         let si_home_override = std::env::var(SI_HOME_ENV).is_ok_and(|raw| !raw.trim().is_empty());
         let mut resolved = Self::discover(home);
 
-        if !si_home_override {
-            if let Some(root) = settings.paths.root.as_deref() {
+        if !si_home_override
+            && let Some(root) = settings.paths.root.as_deref() {
                 resolved.root = expand_home(root, home);
             }
-        }
         if let Some(settings_file) = settings.paths.settings_file.as_deref()
             && !si_home_override
         {
